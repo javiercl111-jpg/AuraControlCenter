@@ -1,8 +1,13 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+
 import ProtectedRoute from "./components/ProtectedRoute";
+
 import AppLayout from "./layouts/AppLayout";
+
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
+
+import ClientsPage from "./pages/ClientsPage";
 import ModulesPage from "./pages/ModulesPage";
 import PlansPage from "./pages/PlansPage";
 
@@ -20,7 +25,11 @@ export default function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+
+        <Route path="clients" element={<ClientsPage />} />
+
         <Route path="modules" element={<ModulesPage />} />
+
         <Route path="plans" element={<PlansPage />} />
       </Route>
 
