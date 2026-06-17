@@ -3,11 +3,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./layouts/AppLayout";
 
-import DashboardPage from "./pages/DashboardPage";
-import LoginPage from "./pages/LoginPage";
-
+import BillingPage from "./pages/BillingPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
 import ClientsPage from "./pages/ClientsPage";
+import DashboardPage from "./pages/DashboardPage";
+import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
 import PlansPage from "./pages/PlansPage";
 
@@ -29,6 +29,7 @@ export default function App() {
         <Route path="clients/:clientId" element={<ClientDetailPage />} />
         <Route path="modules" element={<ModulesPage />} />
         <Route path="plans" element={<PlansPage />} />
+        <Route path="billing" element={<BillingPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
