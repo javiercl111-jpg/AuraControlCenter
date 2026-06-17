@@ -1,6 +1,8 @@
 import {
     addDoc,
     collection,
+    deleteDoc,
+    doc,
     getDocs,
     orderBy,
     query,
@@ -8,6 +10,7 @@ import {
   } from "firebase/firestore";
   
   import { db } from "../config/firebase";
+  
   import type {
     AuraModuleCode,
     BillingCycle,
@@ -18,7 +21,11 @@ import {
   const COLLECTION_NAME = "platform_clients";
   
   export async function getClients(): Promise<PlatformClient[]> {
-    const q = query(collection(db, COLLECTION_NAME), orderBy("companyName", "asc"));
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      orderBy("companyName", "asc")
+    );
+  
     const snapshot = await getDocs(q);
   
     return snapshot.docs.map((clientDoc) => ({
@@ -38,10 +45,27 @@ import {
     await addDoc(collection(db, COLLECTION_NAME), {
       companyName: data.companyName,
       tradeName: data.tradeName,
+  
       status: data.status,
+  
       planCode: data.planCode,
+  
       billingCycle: data.billingCycle,
+  
       enabledModules: data.enabledModules,
+  
       createdAt: serverTimestamp(),
     });
+  }
+  
+  export async function deleteClient(
+    clientId: string
+  ): Promise<void> {
+    await deleteDoc(
+      doc(
+        db,
+        COLLECTION_NAME,
+        clientId
+      )
+    );
   }

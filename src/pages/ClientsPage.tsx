@@ -6,7 +6,13 @@ import {
   MODULE_OPTIONS,
   PLAN_OPTIONS,
 } from "../constants/clientOptions";
-import { createClient, getClients } from "../services/platformClientService";
+
+import {
+  createClient,
+  deleteClient,
+  getClients,
+} from "../services/platformClientService";
+
 import type {
   AuraModuleCode,
   BillingCycle,
@@ -20,23 +26,33 @@ export default function ClientsPage() {
   const [companyName, setCompanyName] = useState("");
   const [tradeName, setTradeName] = useState("");
   const [planCode, setPlanCode] = useState("HCM_PROFESSIONAL");
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>("MONTHLY");
-  const [status, setStatus] = useState<ClientStatus>("ACTIVE");
-  const [enabledModules, setEnabledModules] = useState<AuraModuleCode[]>([
-    "AURA_HCM",
-  ]);
+
+  const [billingCycle, setBillingCycle] =
+    useState<BillingCycle>("MONTHLY");
+
+  const [status, setStatus] =
+    useState<ClientStatus>("ACTIVE");
+
+  const [enabledModules, setEnabledModules] =
+    useState<AuraModuleCode[]>(["AURA_HCM"]);
 
   const [isLoading, setIsLoading] = useState(false);
+
   const [error, setError] = useState("");
 
   async function loadClients() {
     try {
       setError("");
+
       const data = await getClients();
+
       setClients(data);
     } catch (err) {
-      console.error("Load clients error:", err);
-      setError("No se pudieron cargar los clientes. Revisa reglas de Firestore.");
+      console.error(err);
+
+      setError(
+        "No se pudieron cargar los clientes."
+      );
     }
   }
 
@@ -47,11 +63,38 @@ export default function ClientsPage() {
   function toggleModule(moduleCode: AuraModuleCode) {
     setEnabledModules((currentModules) => {
       if (currentModules.includes(moduleCode)) {
-        return currentModules.filter((item) => item !== moduleCode);
+        return currentModules.filter(
+          (item) => item !== moduleCode
+        );
       }
 
       return [...currentModules, moduleCode];
     });
+  }
+
+  async function handleDeleteClient(
+    clientId: string,
+    companyName: string
+  ) {
+    const confirmed = window.confirm(
+      `¿Eliminar cliente "${companyName}"?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setError("");
+
+      await deleteClient(clientId);
+
+      await loadClients();
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        "No se pudo eliminar el cliente."
+      );
+    }
   }
 
   async function handleCreateClient() {
@@ -61,17 +104,21 @@ export default function ClientsPage() {
     }
 
     if (!enabledModules.length) {
-      setError("Selecciona al menos un ecosistema Aura.");
+      setError(
+        "Selecciona al menos un ecosistema Aura."
+      );
       return;
     }
 
     setIsLoading(true);
+
     setError("");
 
     try {
       await createClient({
         companyName: companyName.trim(),
-        tradeName: tradeName.trim() || companyName.trim(),
+        tradeName:
+          tradeName.trim() || companyName.trim(),
         planCode,
         billingCycle,
         status,
@@ -80,15 +127,22 @@ export default function ClientsPage() {
 
       setCompanyName("");
       setTradeName("");
+
       setPlanCode("HCM_PROFESSIONAL");
+
       setBillingCycle("MONTHLY");
+
       setStatus("ACTIVE");
+
       setEnabledModules(["AURA_HCM"]);
 
       await loadClients();
     } catch (err) {
-      console.error("Create client error:", err);
-      setError("No se pudo crear el cliente. Revisa permisos de Firestore.");
+      console.error(err);
+
+      setError(
+        "No se pudo crear el cliente."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -97,10 +151,13 @@ export default function ClientsPage() {
   return (
     <div>
       <header className="mb-8">
-        <h1 className="text-4xl font-bold text-white">Clientes</h1>
+        <h1 className="text-4xl font-bold text-white">
+          Clientes
+        </h1>
+
         <p className="mt-3 text-slate-400">
-          Alta inicial de clientes, plan contratado, ciclo de facturación y
-          ecosistemas habilitados.
+          Alta inicial de clientes, plan contratado,
+          ciclo de facturación y ecosistemas habilitados.
         </p>
       </header>
 
@@ -111,30 +168,41 @@ export default function ClientsPage() {
       )}
 
       <section className="mb-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-        <h2 className="mb-5 text-xl font-bold text-white">Crear Cliente</h2>
+        <h2 className="mb-5 text-xl font-bold text-white">
+          Crear Cliente
+        </h2>
 
         <div className="grid gap-4 md:grid-cols-2">
           <input
             value={companyName}
-            onChange={(event) => setCompanyName(event.target.value)}
+            onChange={(event) =>
+              setCompanyName(event.target.value)
+            }
             placeholder="Razón social"
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           />
 
           <input
             value={tradeName}
-            onChange={(event) => setTradeName(event.target.value)}
+            onChange={(event) =>
+              setTradeName(event.target.value)
+            }
             placeholder="Nombre comercial"
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           />
 
           <select
             value={planCode}
-            onChange={(event) => setPlanCode(event.target.value)}
+            onChange={(event) =>
+              setPlanCode(event.target.value)
+            }
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           >
             {PLAN_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <option
+                key={option.value}
+                value={option.value}
+              >
                 {option.label}
               </option>
             ))}
@@ -143,12 +211,17 @@ export default function ClientsPage() {
           <select
             value={billingCycle}
             onChange={(event) =>
-              setBillingCycle(event.target.value as BillingCycle)
+              setBillingCycle(
+                event.target.value as BillingCycle
+              )
             }
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           >
             {BILLING_CYCLE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <option
+                key={option.value}
+                value={option.value}
+              >
                 {option.label}
               </option>
             ))}
@@ -156,11 +229,18 @@ export default function ClientsPage() {
 
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value as ClientStatus)}
+            onChange={(event) =>
+              setStatus(
+                event.target.value as ClientStatus
+              )
+            }
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           >
             {CLIENT_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <option
+                key={option.value}
+                value={option.value}
+              >
                 {option.label}
               </option>
             ))}
@@ -174,13 +254,16 @@ export default function ClientsPage() {
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {MODULE_OPTIONS.map((module) => {
-              const checked = enabledModules.includes(module.value);
+              const checked =
+                enabledModules.includes(module.value);
 
               return (
                 <button
                   key={module.value}
                   type="button"
-                  onClick={() => toggleModule(module.value)}
+                  onClick={() =>
+                    toggleModule(module.value)
+                  }
                   className={[
                     "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition",
                     checked
@@ -200,7 +283,9 @@ export default function ClientsPage() {
           disabled={isLoading}
           className="mt-6 rounded-2xl bg-cyan-400 px-5 py-3 font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isLoading ? "Guardando..." : "Crear Cliente"}
+          {isLoading
+            ? "Guardando..."
+            : "Crear Cliente"}
         </button>
       </section>
 
@@ -217,8 +302,13 @@ export default function ClientsPage() {
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <h3 className="font-bold text-white">{client.companyName}</h3>
-                  <p className="text-sm text-slate-400">{client.tradeName}</p>
+                  <h3 className="font-bold text-white">
+                    {client.companyName}
+                  </h3>
+
+                  <p className="text-sm text-slate-400">
+                    {client.tradeName}
+                  </p>
                 </div>
 
                 <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-200">
@@ -235,20 +325,39 @@ export default function ClientsPage() {
                   {client.billingCycle}
                 </span>
 
-                {client.enabledModules?.map((moduleCode) => (
-                  <span
-                    key={moduleCode}
-                    className="rounded-full bg-slate-800 px-3 py-1 text-slate-300"
-                  >
-                    {moduleCode}
-                  </span>
-                ))}
+                {client.enabledModules?.map(
+                  (moduleCode) => (
+                    <span
+                      key={moduleCode}
+                      className="rounded-full bg-slate-800 px-3 py-1 text-slate-300"
+                    >
+                      {moduleCode}
+                    </span>
+                  )
+                )}
+              </div>
+
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleDeleteClient(
+                      client.id,
+                      client.companyName
+                    )
+                  }
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20"
+                >
+                  Eliminar
+                </button>
               </div>
             </article>
           ))}
 
           {!clients.length && (
-            <p className="text-slate-500">No existen clientes registrados.</p>
+            <p className="text-slate-500">
+              No existen clientes registrados.
+            </p>
           )}
         </div>
       </section>
