@@ -20,6 +20,26 @@ import {
   
   const COLLECTION_NAME = "platform_clients";
   
+  function addMonths(date: Date, months: number): Date {
+    const nextDate = new Date(date);
+  
+    nextDate.setMonth(nextDate.getMonth() + months);
+  
+    return nextDate;
+  }
+  
+  function addDays(date: Date, days: number): Date {
+    const nextDate = new Date(date);
+  
+    nextDate.setDate(nextDate.getDate() + days);
+  
+    return nextDate;
+  }
+  
+  function toDateInputValue(date: Date): string {
+    return date.toISOString().slice(0, 10);
+  }
+  
   export async function getClients(): Promise<PlatformClient[]> {
     const q = query(
       collection(db, COLLECTION_NAME),
@@ -42,6 +62,15 @@ import {
     status: ClientStatus;
     enabledModules: AuraModuleCode[];
   }) {
+    const today = new Date();
+  
+    const renewalDate =
+      data.billingCycle === "YEARLY"
+        ? addMonths(today, 12)
+        : addMonths(today, 1);
+  
+    const graceUntil = addDays(renewalDate, 15);
+  
     await addDoc(collection(db, COLLECTION_NAME), {
       companyName: data.companyName,
       tradeName: data.tradeName,
@@ -54,18 +83,14 @@ import {
   
       enabledModules: data.enabledModules,
   
+      startDate: toDateInputValue(today),
+      renewalDate: toDateInputValue(renewalDate),
+      graceUntil: toDateInputValue(graceUntil),
+  
       createdAt: serverTimestamp(),
     });
   }
   
-  export async function deleteClient(
-    clientId: string
-  ): Promise<void> {
-    await deleteDoc(
-      doc(
-        db,
-        COLLECTION_NAME,
-        clientId
-      )
-    );
+  export async function deleteClient(clientId: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTION_NAME, clientId));
   }
