@@ -1,4 +1,6 @@
+import { Eye } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import {
   BILLING_CYCLE_OPTIONS,
@@ -308,7 +310,15 @@ export default function ClientsPage() {
                 ))}
               </div>
 
-              <div className="mt-4">
+              <div className="mt-4 flex gap-2">
+                <Link
+                  to={`/clients/${client.id}`}
+                  className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20"
+                >
+                  <Eye className="h-4 w-4" />
+                  Ver Cliente
+                </Link>
+
                 <button
                   type="button"
                   onClick={() =>
