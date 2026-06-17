@@ -9,6 +9,7 @@ import ClientsPage from "./pages/ClientsPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
+import PaymentsPage from "./pages/PaymentsPage";
 import PlansPage from "./pages/PlansPage";
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="modules" element={<ModulesPage />} />
         <Route path="plans" element={<PlansPage />} />
         <Route path="billing" element={<BillingPage />} />
+        <Route path="payments" element={<PaymentsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

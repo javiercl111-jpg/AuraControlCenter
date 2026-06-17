@@ -4,6 +4,7 @@ import {
     Gauge,
     Layers3,
     PackageCheck,
+    ReceiptText,
     UsersRound,
   } from "lucide-react";
   import { NavLink, Outlet } from "react-router-dom";
@@ -14,6 +15,7 @@ import {
     { label: "Ecosistemas", path: "/modules", icon: PackageCheck },
     { label: "Planes", path: "/plans", icon: Layers3 },
     { label: "Facturación", path: "/billing", icon: CreditCard },
+    { label: "Pagos", path: "/payments", icon: ReceiptText },
     { label: "Asesores", path: "/sales-advisors", icon: UsersRound },
   ];
   
