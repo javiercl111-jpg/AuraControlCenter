@@ -8,21 +8,22 @@ import {
   } from "firebase/firestore";
   
   import { db } from "../config/firebase";
-  import type { PlatformClient } from "../types/platformClient";
+  import type {
+    AuraModuleCode,
+    BillingCycle,
+    ClientStatus,
+    PlatformClient,
+  } from "../types/platformClient";
   
   const COLLECTION_NAME = "platform_clients";
   
   export async function getClients(): Promise<PlatformClient[]> {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy("companyName", "asc")
-    );
-  
+    const q = query(collection(db, COLLECTION_NAME), orderBy("companyName", "asc"));
     const snapshot = await getDocs(q);
   
-    return snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as Omit<PlatformClient, "id">),
+    return snapshot.docs.map((clientDoc) => ({
+      id: clientDoc.id,
+      ...(clientDoc.data() as Omit<PlatformClient, "id">),
     }));
   }
   
@@ -30,17 +31,17 @@ import {
     companyName: string;
     tradeName: string;
     planCode: string;
+    billingCycle: BillingCycle;
+    status: ClientStatus;
+    enabledModules: AuraModuleCode[];
   }) {
     await addDoc(collection(db, COLLECTION_NAME), {
       companyName: data.companyName,
       tradeName: data.tradeName,
-  
-      status: "ACTIVE",
-  
+      status: data.status,
       planCode: data.planCode,
-  
-      billingCycle: "MONTHLY",
-  
+      billingCycle: data.billingCycle,
+      enabledModules: data.enabledModules,
       createdAt: serverTimestamp(),
     });
   }

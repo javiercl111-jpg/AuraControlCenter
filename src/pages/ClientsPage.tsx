@@ -1,11 +1,31 @@
 import { useEffect, useState } from "react";
+
+import {
+  BILLING_CYCLE_OPTIONS,
+  CLIENT_STATUS_OPTIONS,
+  MODULE_OPTIONS,
+  PLAN_OPTIONS,
+} from "../constants/clientOptions";
 import { createClient, getClients } from "../services/platformClientService";
-import type { PlatformClient } from "../types/platformClient";
+import type {
+  AuraModuleCode,
+  BillingCycle,
+  ClientStatus,
+  PlatformClient,
+} from "../types/platformClient";
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<PlatformClient[]>([]);
+
   const [companyName, setCompanyName] = useState("");
   const [tradeName, setTradeName] = useState("");
+  const [planCode, setPlanCode] = useState("HCM_PROFESSIONAL");
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("MONTHLY");
+  const [status, setStatus] = useState<ClientStatus>("ACTIVE");
+  const [enabledModules, setEnabledModules] = useState<AuraModuleCode[]>([
+    "AURA_HCM",
+  ]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -24,9 +44,24 @@ export default function ClientsPage() {
     loadClients();
   }, []);
 
+  function toggleModule(moduleCode: AuraModuleCode) {
+    setEnabledModules((currentModules) => {
+      if (currentModules.includes(moduleCode)) {
+        return currentModules.filter((item) => item !== moduleCode);
+      }
+
+      return [...currentModules, moduleCode];
+    });
+  }
+
   async function handleCreateClient() {
     if (!companyName.trim()) {
       setError("La razón social es obligatoria.");
+      return;
+    }
+
+    if (!enabledModules.length) {
+      setError("Selecciona al menos un ecosistema Aura.");
       return;
     }
 
@@ -37,11 +72,18 @@ export default function ClientsPage() {
       await createClient({
         companyName: companyName.trim(),
         tradeName: tradeName.trim() || companyName.trim(),
-        planCode: "HCM_PROFESSIONAL",
+        planCode,
+        billingCycle,
+        status,
+        enabledModules,
       });
 
       setCompanyName("");
       setTradeName("");
+      setPlanCode("HCM_PROFESSIONAL");
+      setBillingCycle("MONTHLY");
+      setStatus("ACTIVE");
+      setEnabledModules(["AURA_HCM"]);
 
       await loadClients();
     } catch (err) {
@@ -56,7 +98,10 @@ export default function ClientsPage() {
     <div>
       <header className="mb-8">
         <h1 className="text-4xl font-bold text-white">Clientes</h1>
-        <p className="mt-3 text-slate-400">Gestión inicial de clientes Aura.</p>
+        <p className="mt-3 text-slate-400">
+          Alta inicial de clientes, plan contratado, ciclo de facturación y
+          ecosistemas habilitados.
+        </p>
       </header>
 
       {error && (
@@ -71,37 +116,134 @@ export default function ClientsPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <input
             value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
+            onChange={(event) => setCompanyName(event.target.value)}
             placeholder="Razón social"
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           />
 
           <input
             value={tradeName}
-            onChange={(e) => setTradeName(e.target.value)}
+            onChange={(event) => setTradeName(event.target.value)}
             placeholder="Nombre comercial"
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           />
+
+          <select
+            value={planCode}
+            onChange={(event) => setPlanCode(event.target.value)}
+            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+          >
+            {PLAN_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={billingCycle}
+            onChange={(event) =>
+              setBillingCycle(event.target.value as BillingCycle)
+            }
+            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+          >
+            {BILLING_CYCLE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value as ClientStatus)}
+            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+          >
+            {CLIENT_STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-3 text-sm font-semibold text-slate-300">
+            Ecosistemas contratados
+          </p>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {MODULE_OPTIONS.map((module) => {
+              const checked = enabledModules.includes(module.value);
+
+              return (
+                <button
+                  key={module.value}
+                  type="button"
+                  onClick={() => toggleModule(module.value)}
+                  className={[
+                    "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition",
+                    checked
+                      ? "border-cyan-300 bg-cyan-400/10 text-cyan-200"
+                      : "border-slate-700 bg-slate-950 text-slate-400 hover:border-cyan-400/50",
+                  ].join(" ")}
+                >
+                  {module.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <button
           onClick={handleCreateClient}
           disabled={isLoading}
-          className="mt-5 rounded-2xl bg-cyan-400 px-5 py-3 font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-6 rounded-2xl bg-cyan-400 px-5 py-3 font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isLoading ? "Guardando..." : "Crear Cliente"}
         </button>
       </section>
 
       <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-        <h2 className="mb-5 text-xl font-bold text-white">Clientes Registrados</h2>
+        <h2 className="mb-5 text-xl font-bold text-white">
+          Clientes Registrados
+        </h2>
 
         <div className="space-y-3">
           {clients.map((client) => (
-            <article key={client.id} className="rounded-2xl border border-slate-800 p-4">
-              <h3 className="font-bold text-white">{client.companyName}</h3>
-              <p className="text-sm text-slate-400">{client.tradeName}</p>
-              <p className="mt-2 text-xs text-cyan-300">{client.planCode}</p>
+            <article
+              key={client.id}
+              className="rounded-2xl border border-slate-800 p-4"
+            >
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="font-bold text-white">{client.companyName}</h3>
+                  <p className="text-sm text-slate-400">{client.tradeName}</p>
+                </div>
+
+                <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-200">
+                  {client.status}
+                </span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-cyan-300">
+                  {client.planCode}
+                </span>
+
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">
+                  {client.billingCycle}
+                </span>
+
+                {client.enabledModules?.map((moduleCode) => (
+                  <span
+                    key={moduleCode}
+                    className="rounded-full bg-slate-800 px-3 py-1 text-slate-300"
+                  >
+                    {moduleCode}
+                  </span>
+                ))}
+              </div>
             </article>
           ))}
 

@@ -4,17 +4,21 @@ export type ClientStatus =
   | "SUSPENDED"
   | "CANCELLED";
 
+export type BillingCycle = "MONTHLY" | "YEARLY";
+
+export type AuraModuleCode =
+  | "AURA_HCM"
+  | "AURA_MAINTENANCE"
+  | "AURA_SIGNATURE"
+  | "AURA_INTELLIGENCE";
+
 export interface PlatformClient {
   id: string;
-
   companyName: string;
   tradeName: string;
-
   status: ClientStatus;
-
   planCode: string;
-
-  billingCycle: "MONTHLY" | "YEARLY";
-
+  billingCycle: BillingCycle;
+  enabledModules: AuraModuleCode[];
   createdAt?: unknown;
 }
