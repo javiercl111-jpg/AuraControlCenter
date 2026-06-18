@@ -4,6 +4,7 @@ import {
     CreditCard,
     Gauge,
     Layers3,
+    Network,
     PackageCheck,
     ReceiptText,
     ShieldCheck,
@@ -14,6 +15,7 @@ import {
   const navItems = [
     { label: "Dashboard", path: "/", icon: Gauge },
     { label: "Clientes", path: "/clients", icon: Building2 },
+    { label: "Tenants", path: "/tenants", icon: Network },
     { label: "Ecosistemas", path: "/modules", icon: PackageCheck },
     { label: "Planes", path: "/plans", icon: Layers3 },
     { label: "Facturación", path: "/billing", icon: CreditCard },
@@ -37,7 +39,7 @@ import {
             </h1>
   
             <p className="mt-2 text-sm text-slate-400">
-              Consola global para clientes, planes, licencias y facturación.
+              Consola global para clientes, tenants, licencias y facturación.
             </p>
           </div>
   

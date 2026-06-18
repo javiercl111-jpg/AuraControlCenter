@@ -30,6 +30,7 @@ export interface ClientFiscalData {
 
 export interface PlatformClient {
   id: string;
+  tenantId?: string;
   companyName: string;
   tradeName: string;
   status: ClientStatus;

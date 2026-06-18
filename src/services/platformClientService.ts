@@ -68,6 +68,7 @@ import {
     const graceUntil = addDays(renewalDate, 15);
   
     await addDoc(collection(db, COLLECTION_NAME), {
+      tenantId: "",
       companyName: data.companyName,
       tradeName: data.tradeName,
       status: data.status,

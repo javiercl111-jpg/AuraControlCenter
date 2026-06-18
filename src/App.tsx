@@ -14,6 +14,7 @@ import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import PlansPage from "./pages/PlansPage";
+import TenantsPage from "./pages/TenantsPage";
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="payments" element={<PaymentsPage />} />
         <Route path="licenses" element={<LicenseManagementPage />} />
         <Route path="commissions" element={<CommissionsPage />} />
+        <Route path="tenants" element={<TenantsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
