@@ -8,6 +8,7 @@ import ClientDetailPage from "./pages/ClientDetailPage";
 import ClientEditPage from "./pages/ClientEditPage";
 import ClientsPage from "./pages/ClientsPage";
 import CommissionsPage from "./pages/CommissionsPage";
+import CrmPage from "./pages/CrmPage";
 import DashboardPage from "./pages/DashboardPage";
 import LicenseManagementPage from "./pages/LicenseManagementPage";
 import LoginPage from "./pages/LoginPage";
@@ -33,6 +34,7 @@ export default function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="crm" element={<CrmPage />} />
         <Route path="clients" element={<ClientsPage />} />
         <Route path="clients/:clientId" element={<ClientDetailPage />} />
         <Route path="clients/:clientId/edit" element={<ClientEditPage />} />

@@ -4,6 +4,7 @@ import {
   CreditCard,
   Gauge,
   Layers3,
+  LogOut,
   Network,
   PackageCheck,
   ReceiptText,
@@ -11,11 +12,15 @@ import {
   ShieldAlert,
   ShieldCheck,
   UsersRound,
+  Workflow,
 } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+
+import { auth } from "../config/firebase";
 
 const navItems = [
   { label: "Dashboard", path: "/", icon: Gauge },
+  { label: "CRM", path: "/crm", icon: Workflow },
   { label: "Clientes", path: "/clients", icon: Building2 },
   { label: "Tenants", path: "/tenants", icon: Network },
   { label: "Enforcement", path: "/tenant-enforcement", icon: ShieldAlert },
@@ -30,10 +35,25 @@ const navItems = [
 ];
 
 export default function AppLayout() {
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await auth.signOut();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <aside className="fixed inset-y-0 left-0 hidden w-72 overflow-y-auto border-r border-cyan-400/10 bg-slate-950/80 p-6 backdrop-blur xl:block">
-        <div className="mb-8">
+      <div className="mb-8 text-center">
+        <div className="mb-5 flex justify-center">
+  <img
+    src="/aura-control-center-logo.png"
+    alt="Aura Control Center"
+    className="h-20 w-auto object-contain"
+  />
+</div>
+
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyan-300">
             Aura Platform
           </p>
@@ -72,6 +92,17 @@ export default function AppLayout() {
             );
           })}
         </nav>
+
+        <div className="border-t border-slate-800 pt-5">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300 transition hover:bg-red-500/20"
+          >
+            <LogOut className="h-5 w-5 shrink-0" />
+            Cerrar sesión
+          </button>
+        </div>
       </aside>
 
       <main className="min-h-screen xl:pl-72">

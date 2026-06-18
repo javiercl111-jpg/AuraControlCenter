@@ -62,18 +62,24 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center px-5">
       <section className="w-full max-w-md rounded-3xl border border-cyan-400/20 bg-slate-950/80 p-8 shadow-2xl shadow-cyan-950/40 backdrop-blur">
         <div className="mb-8 flex items-center gap-4">
-          <img
-            src="/Logo.png"
-            alt="Aura Control Center"
-            className="h-16 w-16 rounded-2xl object-contain"
-          />
+        <img
+  src="/aura-control-center-logo.png"
+  alt="Aura Control Center"
+  className="h-16 w-16 rounded-2xl object-contain"
+/>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">
-              Aura
-            </p>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">
+  Aura Platform
+</p>
 
-            <h1 className="text-2xl font-bold text-white">Control Center</h1>
+<h1 className="text-2xl font-bold text-white">
+  Control Center
+</h1>
+
+<p className="text-xs text-slate-500">
+  SaaS Administration Platform
+</p>
           </div>
         </div>
 
