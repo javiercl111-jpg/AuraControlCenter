@@ -7,6 +7,7 @@ import {
     Network,
     PackageCheck,
     ReceiptText,
+    Settings,
     ShieldCheck,
     UsersRound,
   } from "lucide-react";
@@ -23,6 +24,7 @@ import {
     { label: "Licencias", path: "/licenses", icon: ShieldCheck },
     { label: "Comisiones", path: "/commissions", icon: BadgeDollarSign },
     { label: "Asesores", path: "/sales-advisors", icon: UsersRound },
+    { label: "Configuración", path: "/settings", icon: Settings },
   ];
   
   export default function AppLayout() {
