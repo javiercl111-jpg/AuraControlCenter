@@ -8,6 +8,7 @@ import ClientDetailPage from "./pages/ClientDetailPage";
 import ClientEditPage from "./pages/ClientEditPage";
 import ClientsPage from "./pages/ClientsPage";
 import DashboardPage from "./pages/DashboardPage";
+import LicenseManagementPage from "./pages/LicenseManagementPage";
 import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
 import PaymentsPage from "./pages/PaymentsPage";
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="plans" element={<PlansPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="payments" element={<PaymentsPage />} />
+        <Route path="licenses" element={<LicenseManagementPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

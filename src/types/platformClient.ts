@@ -41,4 +41,6 @@ export interface PlatformClient {
   renewalDate?: string;
   graceUntil?: string;
   createdAt?: unknown;
+  updatedAt?: unknown;
+  licenseStatusEvaluatedAt?: unknown;
 }

@@ -31,3 +31,14 @@ export async function updateClient(
     updatedAt: serverTimestamp(),
   });
 }
+
+export async function updateClientStatus(
+  clientId: string,
+  status: ClientStatus
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTION_NAME, clientId), {
+    status,
+    licenseStatusEvaluatedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}

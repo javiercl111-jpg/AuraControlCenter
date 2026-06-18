@@ -5,6 +5,7 @@ import {
     Layers3,
     PackageCheck,
     ReceiptText,
+    ShieldCheck,
     UsersRound,
   } from "lucide-react";
   import { NavLink, Outlet } from "react-router-dom";
@@ -16,6 +17,7 @@ import {
     { label: "Planes", path: "/plans", icon: Layers3 },
     { label: "Facturación", path: "/billing", icon: CreditCard },
     { label: "Pagos", path: "/payments", icon: ReceiptText },
+    { label: "Licencias", path: "/licenses", icon: ShieldCheck },
     { label: "Asesores", path: "/sales-advisors", icon: UsersRound },
   ];
   
