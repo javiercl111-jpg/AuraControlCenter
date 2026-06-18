@@ -87,10 +87,10 @@ export default function PaymentsPage() {
         reference: reference.trim(),
       });
 
-      setReference("");
+      setInvoiceId("");
       setPaymentMethod("TRANSFER");
       setPaymentDate(todayInputValue());
-      setInvoiceId("");
+      setReference("");
 
       await loadData();
     } catch (err) {
@@ -135,6 +135,7 @@ export default function PaymentsPage() {
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           >
             <option value="">Selecciona factura pendiente</option>
+
             {pendingInvoices.map((invoice) => (
               <option key={invoice.id} value={invoice.id}>
                 {invoice.invoiceNumber} — {invoice.clientName} —{" "}
@@ -166,16 +167,23 @@ export default function PaymentsPage() {
           <input
             value={reference}
             onChange={(event) => setReference(event.target.value)}
-            placeholder="Referencia / comprobante"
+            placeholder="Referencia / folio / comprobante"
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           />
         </div>
 
         <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950 p-4">
           <p className="text-xs text-slate-500">Monto a registrar</p>
+
           <p className="mt-1 text-2xl font-bold text-white">
             {selectedInvoice ? formatCurrency(selectedInvoice.total) : "$0.00"}
           </p>
+
+          {selectedInvoice && (
+            <p className="mt-1 text-xs text-slate-500">
+              {selectedInvoice.invoiceNumber} · {selectedInvoice.clientName}
+            </p>
+          )}
         </div>
 
         <button
@@ -218,6 +226,7 @@ export default function PaymentsPage() {
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <div className="rounded-2xl bg-slate-950/60 p-3">
                   <p className="text-xs text-slate-500">Monto</p>
+
                   <p className="mt-1 text-sm font-bold text-cyan-300">
                     {formatCurrency(payment.amount)}
                   </p>
@@ -225,6 +234,7 @@ export default function PaymentsPage() {
 
                 <div className="rounded-2xl bg-slate-950/60 p-3">
                   <p className="text-xs text-slate-500">Fecha</p>
+
                   <p className="mt-1 text-sm text-white">
                     {payment.paymentDate}
                   </p>
@@ -232,6 +242,7 @@ export default function PaymentsPage() {
 
                 <div className="rounded-2xl bg-slate-950/60 p-3">
                   <p className="text-xs text-slate-500">Referencia</p>
+
                   <p className="mt-1 text-sm text-white">
                     {payment.reference || "Sin referencia"}
                   </p>
