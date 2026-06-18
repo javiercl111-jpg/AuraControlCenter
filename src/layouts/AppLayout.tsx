@@ -39,7 +39,8 @@ import {
             </h1>
   
             <p className="mt-2 text-sm text-slate-400">
-              Consola global para clientes, tenants, licencias y facturación.
+              Consola global para clientes, tenants, licencias, facturación y
+              operación comercial.
             </p>
           </div>
   
