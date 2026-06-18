@@ -5,6 +5,7 @@ import AppLayout from "./layouts/AppLayout";
 
 import BillingPage from "./pages/BillingPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
+import ClientEditPage from "./pages/ClientEditPage";
 import ClientsPage from "./pages/ClientsPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
@@ -28,6 +29,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="clients" element={<ClientsPage />} />
         <Route path="clients/:clientId" element={<ClientDetailPage />} />
+        <Route path="clients/:clientId/edit" element={<ClientEditPage />} />
         <Route path="modules" element={<ModulesPage />} />
         <Route path="plans" element={<PlansPage />} />
         <Route path="billing" element={<BillingPage />} />

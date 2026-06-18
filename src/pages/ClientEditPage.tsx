@@ -1,6 +1,6 @@
-import { Eye } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   BILLING_CYCLE_OPTIONS,
@@ -16,11 +16,8 @@ import {
   TAX_REGIME_OPTIONS,
 } from "../constants/fiscalCatalogs";
 
-import {
-  createClient,
-  deleteClient,
-  getClients,
-} from "../services/platformClientService";
+import { getClientById } from "../services/platformClientDetailService";
+import { updateClient } from "../services/platformClientUpdateService";
 
 import type {
   AuraModuleCode,
@@ -30,21 +27,6 @@ import type {
   ClientStatus,
   PlatformClient,
 } from "../types/platformClient";
-
-function getLicenseLabel(status: ClientStatus) {
-  switch (status) {
-    case "ACTIVE":
-      return "Activa";
-    case "GRACE_PERIOD":
-      return "Periodo de gracia";
-    case "SUSPENDED":
-      return "Suspendida";
-    case "CANCELLED":
-      return "Cancelada";
-    default:
-      return status;
-  }
-}
 
 const emptyFiscalData: ClientFiscalData = {
   legalName: "",
@@ -60,8 +42,12 @@ const emptyFiscalData: ClientFiscalData = {
   billingNotes: "",
 };
 
-export default function ClientsPage() {
-  const [clients, setClients] = useState<PlatformClient[]>([]);
+export default function ClientEditPage() {
+  const { clientId } = useParams();
+  const navigate = useNavigate();
+
+  const [client, setClient] = useState<PlatformClient | null>(null);
+
   const [companyName, setCompanyName] = useState("");
   const [tradeName, setTradeName] = useState("");
   const [planCode, setPlanCode] = useState("HCM_PROFESSIONAL");
@@ -72,23 +58,59 @@ export default function ClientsPage() {
   ]);
   const [fiscalData, setFiscalData] =
     useState<ClientFiscalData>(emptyFiscalData);
-  const [isLoading, setIsLoading] = useState(false);
+
+  const [startDate, setStartDate] = useState("");
+  const [renewalDate, setRenewalDate] = useState("");
+  const [graceUntil, setGraceUntil] = useState("");
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
 
-  async function loadClients() {
-    try {
-      setError("");
-      const data = await getClients();
-      setClients(data);
-    } catch (err) {
-      console.error(err);
-      setError("No se pudieron cargar los clientes.");
-    }
-  }
-
   useEffect(() => {
-    loadClients();
-  }, []);
+    async function loadClient() {
+      if (!clientId) {
+        setError("Cliente no válido.");
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const data = await getClientById(clientId);
+
+        if (!data) {
+          setError("No se encontró el cliente.");
+          return;
+        }
+
+        setClient(data);
+        setCompanyName(data.companyName || "");
+        setTradeName(data.tradeName || "");
+        setPlanCode(data.planCode || "HCM_PROFESSIONAL");
+        setBillingCycle(data.billingCycle || "MONTHLY");
+        setStatus(data.status || "ACTIVE");
+        setEnabledModules(data.enabledModules || ["AURA_HCM"]);
+        setFiscalData({
+          ...emptyFiscalData,
+          ...(data.fiscalData || {}),
+          paymentForm:
+            data.fiscalData?.paymentMethod === "PPD"
+              ? "99"
+              : data.fiscalData?.paymentForm || "99",
+        });
+        setStartDate(data.startDate || "");
+        setRenewalDate(data.renewalDate || "");
+        setGraceUntil(data.graceUntil || "");
+      } catch (err) {
+        console.error(err);
+        setError("No se pudo cargar el cliente.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadClient();
+  }, [clientId]);
 
   function updateFiscalData<K extends keyof ClientFiscalData>(
     field: K,
@@ -116,21 +138,9 @@ export default function ClientsPage() {
     );
   }
 
-  async function handleDeleteClient(clientId: string, companyName: string) {
-    const confirmed = window.confirm(`¿Eliminar cliente "${companyName}"?`);
-    if (!confirmed) return;
+  async function handleSave() {
+    if (!clientId || !client) return;
 
-    try {
-      setError("");
-      await deleteClient(clientId);
-      await loadClients();
-    } catch (err) {
-      console.error(err);
-      setError("No se pudo eliminar el cliente.");
-    }
-  }
-
-  async function handleCreateClient() {
     if (!companyName.trim()) {
       setError("La razón social es obligatoria.");
       return;
@@ -171,58 +181,92 @@ export default function ClientsPage() {
       return;
     }
 
-    const normalizedFiscalData: ClientFiscalData = {
-      legalName: fiscalData.legalName.trim(),
-      rfc: fiscalData.rfc.trim().toUpperCase(),
-      taxRegime: fiscalData.taxRegime,
-      cfdiUse: fiscalData.cfdiUse,
-      paymentMethod: fiscalData.paymentMethod,
-      paymentForm: fiscalData.paymentMethod === "PPD" ? "99" : fiscalData.paymentForm,
-      fiscalZipCode: fiscalData.fiscalZipCode.trim(),
-      billingEmail: fiscalData.billingEmail.trim(),
-      billingContactName: fiscalData.billingContactName.trim(),
-      billingPhone: fiscalData.billingPhone.trim(),
-      billingNotes: fiscalData.billingNotes.trim(),
-    };
-
-    setIsLoading(true);
+    setIsSaving(true);
     setError("");
 
     try {
-      await createClient({
+      await updateClient(clientId, {
         companyName: companyName.trim(),
         tradeName: tradeName.trim() || companyName.trim(),
+        status,
         planCode,
         billingCycle,
-        status,
         enabledModules,
-        fiscalData: normalizedFiscalData,
+        fiscalData: {
+          legalName: fiscalData.legalName.trim(),
+          rfc: fiscalData.rfc.trim().toUpperCase(),
+          taxRegime: fiscalData.taxRegime,
+          cfdiUse: fiscalData.cfdiUse,
+          paymentMethod: fiscalData.paymentMethod,
+          paymentForm:
+            fiscalData.paymentMethod === "PPD" ? "99" : fiscalData.paymentForm,
+          fiscalZipCode: fiscalData.fiscalZipCode.trim(),
+          billingEmail: fiscalData.billingEmail.trim(),
+          billingContactName: fiscalData.billingContactName.trim(),
+          billingPhone: fiscalData.billingPhone.trim(),
+          billingNotes: fiscalData.billingNotes.trim(),
+        },
+        startDate,
+        renewalDate,
+        graceUntil,
       });
 
-      setCompanyName("");
-      setTradeName("");
-      setPlanCode("HCM_PROFESSIONAL");
-      setBillingCycle("MONTHLY");
-      setStatus("ACTIVE");
-      setEnabledModules(["AURA_HCM"]);
-      setFiscalData(emptyFiscalData);
-
-      await loadClients();
+      navigate(`/clients/${clientId}`, { replace: true });
     } catch (err) {
       console.error(err);
-      setError("No se pudo crear el cliente.");
+      setError("No se pudo actualizar el cliente.");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 text-slate-300">
+        Cargando editor...
+      </div>
+    );
+  }
+
+  if (error && !client) {
+    return (
+      <div>
+        <Link
+          to="/clients"
+          className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-cyan-300"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a clientes
+        </Link>
+
+        <div className="rounded-3xl border border-red-500/20 bg-red-500/10 p-6 text-red-300">
+          {error}
+        </div>
+      </div>
+    );
   }
 
   return (
     <div>
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold text-white">Clientes</h1>
+      <Link
+        to={clientId ? `/clients/${clientId}` : "/clients"}
+        className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-cyan-300"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Volver al detalle
+      </Link>
+
+      <header className="mb-8 rounded-3xl border border-cyan-400/10 bg-slate-900/70 p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyan-300">
+          Editar Cliente
+        </p>
+
+        <h1 className="mt-3 text-4xl font-bold text-white">
+          {companyName || "Cliente"}
+        </h1>
+
         <p className="mt-3 text-slate-400">
-          Alta inicial de clientes, datos fiscales CFDI, plan contratado, ciclo
-          de facturación, ecosistemas habilitados y vigencia de licencia.
+          Actualiza datos generales, licencia, ecosistemas y datos fiscales.
         </p>
       </header>
 
@@ -232,9 +276,7 @@ export default function ClientsPage() {
         </div>
       )}
 
-      <section className="mb-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-        <h2 className="mb-5 text-xl font-bold text-white">Crear Cliente</h2>
-
+      <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
         <div className="grid gap-4 md:grid-cols-2">
           <input
             value={companyName}
@@ -287,12 +329,33 @@ export default function ClientsPage() {
               </option>
             ))}
           </select>
+
+          <input
+            type="date"
+            value={startDate}
+            onChange={(event) => setStartDate(event.target.value)}
+            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+          />
+
+          <input
+            type="date"
+            value={renewalDate}
+            onChange={(event) => setRenewalDate(event.target.value)}
+            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+          />
+
+          <input
+            type="date"
+            value={graceUntil}
+            onChange={(event) => setGraceUntil(event.target.value)}
+            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+          />
         </div>
 
         <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
-          <h3 className="mb-4 text-lg font-bold text-white">
+          <h2 className="mb-4 text-lg font-bold text-white">
             Datos fiscales CFDI
-          </h3>
+          </h2>
 
           <div className="grid gap-4 md:grid-cols-2">
             <input
@@ -376,14 +439,16 @@ export default function ClientsPage() {
                 </option>
               ))}
             </select>
+          </div>
 
-            {fiscalData.paymentMethod === "PPD" && (
-              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-200 md:col-span-2">
-                Método PPD seleccionado: la forma de pago queda bloqueada
-                automáticamente como 99 - Por definir.
-              </div>
-            )}
+          {fiscalData.paymentMethod === "PPD" && (
+            <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-200">
+              Método PPD seleccionado: la forma de pago queda bloqueada
+              automáticamente como 99 - Por definir.
+            </div>
+          )}
 
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
             <input
               value={fiscalData.fiscalZipCode}
               onChange={(event) =>
@@ -432,7 +497,7 @@ export default function ClientsPage() {
           />
         </div>
 
-        <div className="mt-5">
+        <div className="mt-6">
           <p className="mb-3 text-sm font-semibold text-slate-300">
             Ecosistemas contratados
           </p>
@@ -461,124 +526,13 @@ export default function ClientsPage() {
         </div>
 
         <button
-          onClick={handleCreateClient}
-          disabled={isLoading}
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving}
           className="mt-6 rounded-2xl bg-cyan-400 px-5 py-3 font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isLoading ? "Guardando..." : "Crear Cliente"}
+          {isSaving ? "Guardando..." : "Guardar Cambios"}
         </button>
-      </section>
-
-      <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-        <h2 className="mb-5 text-xl font-bold text-white">
-          Clientes Registrados
-        </h2>
-
-        <div className="space-y-3">
-          {clients.map((client) => (
-            <article
-              key={client.id}
-              className="rounded-2xl border border-slate-800 p-4"
-            >
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h3 className="font-bold text-white">
-                    {client.companyName}
-                  </h3>
-
-                  <p className="text-sm text-slate-400">{client.tradeName}</p>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    RFC: {client.fiscalData?.rfc || "Sin RFC"}
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    Régimen: {client.fiscalData?.taxRegime || "Sin régimen"} ·
-                    CFDI: {client.fiscalData?.cfdiUse || "Sin uso"}
-                  </p>
-                </div>
-
-                <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-200">
-                  {getLicenseLabel(client.status)}
-                </span>
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                  <p className="text-xs text-slate-500">Inicio</p>
-                  <p className="mt-1 text-sm font-semibold text-white">
-                    {client.startDate || "Sin fecha"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                  <p className="text-xs text-slate-500">Renovación</p>
-                  <p className="mt-1 text-sm font-semibold text-white">
-                    {client.renewalDate || "Sin fecha"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                  <p className="text-xs text-slate-500">Gracia hasta</p>
-                  <p className="mt-1 text-sm font-semibold text-white">
-                    {client.graceUntil || "Sin fecha"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-cyan-300">
-                  {client.planCode}
-                </span>
-
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">
-                  {client.billingCycle}
-                </span>
-
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">
-                  {client.fiscalData?.paymentMethod || "Sin método"}
-                </span>
-
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">
-                  Forma {client.fiscalData?.paymentForm || "Sin forma"}
-                </span>
-
-                {client.enabledModules?.map((moduleCode) => (
-                  <span
-                    key={moduleCode}
-                    className="rounded-full bg-slate-800 px-3 py-1 text-slate-300"
-                  >
-                    {moduleCode}
-                  </span>
-                ))}
-              </div>
-
-              <div className="mt-4 flex gap-2">
-                <Link
-                  to={`/clients/${client.id}`}
-                  className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20"
-                >
-                  <Eye className="h-4 w-4" />
-                  Ver Cliente
-                </Link>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleDeleteClient(client.id, client.companyName)
-                  }
-                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </article>
-          ))}
-
-          {!clients.length && (
-            <p className="text-slate-500">No existen clientes registrados.</p>
-          )}
-        </div>
       </section>
     </div>
   );
