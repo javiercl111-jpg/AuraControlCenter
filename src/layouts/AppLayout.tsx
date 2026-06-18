@@ -2,6 +2,7 @@ import {
   BadgeDollarSign,
   Building2,
   CreditCard,
+  FileText,
   Gauge,
   Layers3,
   LogOut,
@@ -31,6 +32,7 @@ const navItems = [
   { label: "Licencias", path: "/licenses", icon: ShieldCheck },
   { label: "Comisiones", path: "/commissions", icon: BadgeDollarSign },
   { label: "Asesores", path: "/sales-advisors", icon: UsersRound },
+  { label: "Reportes", path: "/reports", icon: FileText },
   { label: "Configuración", path: "/settings", icon: Settings },
 ];
 
@@ -45,14 +47,14 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <aside className="fixed inset-y-0 left-0 hidden w-72 overflow-y-auto border-r border-cyan-400/10 bg-slate-950/80 p-6 backdrop-blur xl:block">
-      <div className="mb-8 text-center">
-        <div className="mb-5 flex justify-center">
-  <img
-    src="/aura-control-center-logo.png"
-    alt="Aura Control Center"
-    className="h-20 w-auto object-contain"
-  />
-</div>
+        <div className="mb-8 text-center">
+          <div className="mb-5 flex justify-center">
+            <img
+              src="/aura-control-center-logo.png"
+              alt="Aura Control Center"
+              className="h-20 w-auto object-contain"
+            />
+          </div>
 
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyan-300">
             Aura Platform

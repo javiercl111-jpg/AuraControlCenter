@@ -15,6 +15,7 @@ import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import PlansPage from "./pages/PlansPage";
+import ReportsPage from "./pages/ReportsPage";
 import SalesAdvisorsPage from "./pages/SalesAdvisorsPage";
 import SettingsPage from "./pages/SettingsPage";
 import TenantEnforcementPage from "./pages/TenantEnforcementPage";
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="tenants" element={<TenantsPage />} />
         <Route path="tenant-enforcement" element={<TenantEnforcementPage />} />
         <Route path="sales-advisors" element={<SalesAdvisorsPage />} />
+        <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 
