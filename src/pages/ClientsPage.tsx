@@ -18,6 +18,7 @@ import {
 import type {
   AuraModuleCode,
   BillingCycle,
+  ClientFiscalData,
   ClientStatus,
   PlatformClient,
 } from "../types/platformClient";
@@ -37,6 +38,18 @@ function getLicenseLabel(status: ClientStatus) {
   }
 }
 
+const emptyFiscalData: ClientFiscalData = {
+  legalName: "",
+  rfc: "",
+  taxRegime: "",
+  cfdiUse: "",
+  fiscalZipCode: "",
+  billingEmail: "",
+  billingContactName: "",
+  billingPhone: "",
+  billingNotes: "",
+};
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<PlatformClient[]>([]);
 
@@ -50,6 +63,9 @@ export default function ClientsPage() {
   const [enabledModules, setEnabledModules] = useState<AuraModuleCode[]>([
     "AURA_HCM",
   ]);
+
+  const [fiscalData, setFiscalData] =
+    useState<ClientFiscalData>(emptyFiscalData);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -68,6 +84,16 @@ export default function ClientsPage() {
   useEffect(() => {
     loadClients();
   }, []);
+
+  function updateFiscalData<K extends keyof ClientFiscalData>(
+    field: K,
+    value: ClientFiscalData[K]
+  ) {
+    setFiscalData((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
 
   function toggleModule(moduleCode: AuraModuleCode) {
     setEnabledModules((currentModules) => {
@@ -105,6 +131,26 @@ export default function ClientsPage() {
       return;
     }
 
+    if (!fiscalData.legalName.trim()) {
+      setError("La razón social fiscal es obligatoria.");
+      return;
+    }
+
+    if (!fiscalData.rfc.trim()) {
+      setError("El RFC es obligatorio.");
+      return;
+    }
+
+    if (!fiscalData.fiscalZipCode.trim()) {
+      setError("El código postal fiscal es obligatorio.");
+      return;
+    }
+
+    if (!fiscalData.billingEmail.trim()) {
+      setError("El correo de facturación es obligatorio.");
+      return;
+    }
+
     setIsLoading(true);
     setError("");
 
@@ -116,6 +162,17 @@ export default function ClientsPage() {
         billingCycle,
         status,
         enabledModules,
+        fiscalData: {
+          legalName: fiscalData.legalName.trim(),
+          rfc: fiscalData.rfc.trim().toUpperCase(),
+          taxRegime: fiscalData.taxRegime.trim(),
+          cfdiUse: fiscalData.cfdiUse.trim(),
+          fiscalZipCode: fiscalData.fiscalZipCode.trim(),
+          billingEmail: fiscalData.billingEmail.trim(),
+          billingContactName: fiscalData.billingContactName.trim(),
+          billingPhone: fiscalData.billingPhone.trim(),
+          billingNotes: fiscalData.billingNotes.trim(),
+        },
       });
 
       setCompanyName("");
@@ -124,6 +181,7 @@ export default function ClientsPage() {
       setBillingCycle("MONTHLY");
       setStatus("ACTIVE");
       setEnabledModules(["AURA_HCM"]);
+      setFiscalData(emptyFiscalData);
 
       await loadClients();
     } catch (err) {
@@ -139,8 +197,8 @@ export default function ClientsPage() {
       <header className="mb-8">
         <h1 className="text-4xl font-bold text-white">Clientes</h1>
         <p className="mt-3 text-slate-400">
-          Alta inicial de clientes, plan contratado, ciclo de facturación,
-          ecosistemas habilitados y vigencia de licencia.
+          Alta inicial de clientes, datos fiscales, plan contratado, ciclo de
+          facturación, ecosistemas habilitados y vigencia de licencia.
         </p>
       </header>
 
@@ -157,7 +215,7 @@ export default function ClientsPage() {
           <input
             value={companyName}
             onChange={(event) => setCompanyName(event.target.value)}
-            placeholder="Razón social"
+            placeholder="Razón social interna"
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           />
 
@@ -205,6 +263,92 @@ export default function ClientsPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
+          <h3 className="mb-4 text-lg font-bold text-white">Datos fiscales</h3>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <input
+              value={fiscalData.legalName}
+              onChange={(event) =>
+                updateFiscalData("legalName", event.target.value)
+              }
+              placeholder="Razón social fiscal"
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            />
+
+            <input
+              value={fiscalData.rfc}
+              onChange={(event) => updateFiscalData("rfc", event.target.value)}
+              placeholder="RFC"
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 uppercase text-white outline-none focus:border-cyan-300"
+            />
+
+            <input
+              value={fiscalData.taxRegime}
+              onChange={(event) =>
+                updateFiscalData("taxRegime", event.target.value)
+              }
+              placeholder="Régimen fiscal"
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            />
+
+            <input
+              value={fiscalData.cfdiUse}
+              onChange={(event) =>
+                updateFiscalData("cfdiUse", event.target.value)
+              }
+              placeholder="Uso CFDI"
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            />
+
+            <input
+              value={fiscalData.fiscalZipCode}
+              onChange={(event) =>
+                updateFiscalData("fiscalZipCode", event.target.value)
+              }
+              placeholder="Código postal fiscal"
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            />
+
+            <input
+              value={fiscalData.billingEmail}
+              onChange={(event) =>
+                updateFiscalData("billingEmail", event.target.value)
+              }
+              placeholder="Correo de facturación"
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            />
+
+            <input
+              value={fiscalData.billingContactName}
+              onChange={(event) =>
+                updateFiscalData("billingContactName", event.target.value)
+              }
+              placeholder="Contacto de facturación"
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            />
+
+            <input
+              value={fiscalData.billingPhone}
+              onChange={(event) =>
+                updateFiscalData("billingPhone", event.target.value)
+              }
+              placeholder="Teléfono de facturación"
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            />
+          </div>
+
+          <textarea
+            value={fiscalData.billingNotes}
+            onChange={(event) =>
+              updateFiscalData("billingNotes", event.target.value)
+            }
+            placeholder="Notas de facturación"
+            rows={3}
+            className="mt-4 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+          />
         </div>
 
         <div className="mt-5">
@@ -261,6 +405,9 @@ export default function ClientsPage() {
                     {client.companyName}
                   </h3>
                   <p className="text-sm text-slate-400">{client.tradeName}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    RFC: {client.fiscalData?.rfc || "Sin RFC"}
+                  </p>
                 </div>
 
                 <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-200">

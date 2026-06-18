@@ -14,6 +14,7 @@ import {
   import type {
     AuraModuleCode,
     BillingCycle,
+    ClientFiscalData,
     ClientStatus,
     PlatformClient,
   } from "../types/platformClient";
@@ -22,17 +23,13 @@ import {
   
   function addMonths(date: Date, months: number): Date {
     const nextDate = new Date(date);
-  
     nextDate.setMonth(nextDate.getMonth() + months);
-  
     return nextDate;
   }
   
   function addDays(date: Date, days: number): Date {
     const nextDate = new Date(date);
-  
     nextDate.setDate(nextDate.getDate() + days);
-  
     return nextDate;
   }
   
@@ -61,32 +58,26 @@ import {
     billingCycle: BillingCycle;
     status: ClientStatus;
     enabledModules: AuraModuleCode[];
+    fiscalData: ClientFiscalData;
   }) {
     const today = new Date();
   
     const renewalDate =
-      data.billingCycle === "YEARLY"
-        ? addMonths(today, 12)
-        : addMonths(today, 1);
+      data.billingCycle === "YEARLY" ? addMonths(today, 12) : addMonths(today, 1);
   
     const graceUntil = addDays(renewalDate, 15);
   
     await addDoc(collection(db, COLLECTION_NAME), {
       companyName: data.companyName,
       tradeName: data.tradeName,
-  
       status: data.status,
-  
       planCode: data.planCode,
-  
       billingCycle: data.billingCycle,
-  
       enabledModules: data.enabledModules,
-  
+      fiscalData: data.fiscalData,
       startDate: toDateInputValue(today),
       renewalDate: toDateInputValue(renewalDate),
       graceUntil: toDateInputValue(graceUntil),
-  
       createdAt: serverTimestamp(),
     });
   }
