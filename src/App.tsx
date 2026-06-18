@@ -16,6 +16,7 @@ import PaymentsPage from "./pages/PaymentsPage";
 import PlansPage from "./pages/PlansPage";
 import SalesAdvisorsPage from "./pages/SalesAdvisorsPage";
 import SettingsPage from "./pages/SettingsPage";
+import TenantEnforcementPage from "./pages/TenantEnforcementPage";
 import TenantsPage from "./pages/TenantsPage";
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="licenses" element={<LicenseManagementPage />} />
         <Route path="commissions" element={<CommissionsPage />} />
         <Route path="tenants" element={<TenantsPage />} />
+        <Route path="tenant-enforcement" element={<TenantEnforcementPage />} />
         <Route path="sales-advisors" element={<SalesAdvisorsPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

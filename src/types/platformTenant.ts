@@ -2,6 +2,12 @@ import type { AuraModuleCode, ClientStatus } from "./platformClient";
 
 export type TenantStatus = ClientStatus;
 
+export interface PlatformTenantUsage {
+  hcmActiveEmployees: number;
+  hcmEmployeeLimit: number;
+  hcmWarningThreshold: number;
+}
+
 export interface PlatformTenant {
   id: string;
   tenantId: string;
@@ -12,6 +18,7 @@ export interface PlatformTenant {
   licenseStatus: ClientStatus;
   enabledModules: AuraModuleCode[];
   suspendedReason: string;
+  usage?: PlatformTenantUsage;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
