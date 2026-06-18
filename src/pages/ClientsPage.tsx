@@ -10,6 +10,13 @@ import {
 } from "../constants/clientOptions";
 
 import {
+  CFDI_PAYMENT_FORM_OPTIONS,
+  CFDI_PAYMENT_METHOD_OPTIONS,
+  CFDI_USE_OPTIONS,
+  TAX_REGIME_OPTIONS,
+} from "../constants/fiscalCatalogs";
+
+import {
   createClient,
   deleteClient,
   getClients,
@@ -18,6 +25,7 @@ import {
 import type {
   AuraModuleCode,
   BillingCycle,
+  CfdiPaymentMethod,
   ClientFiscalData,
   ClientStatus,
   PlatformClient,
@@ -43,6 +51,8 @@ const emptyFiscalData: ClientFiscalData = {
   rfc: "",
   taxRegime: "",
   cfdiUse: "",
+  paymentMethod: "PPD",
+  paymentForm: "99",
   fiscalZipCode: "",
   billingEmail: "",
   billingContactName: "",
@@ -141,6 +151,26 @@ export default function ClientsPage() {
       return;
     }
 
+    if (!fiscalData.taxRegime.trim()) {
+      setError("El régimen fiscal es obligatorio.");
+      return;
+    }
+
+    if (!fiscalData.cfdiUse.trim()) {
+      setError("El uso CFDI es obligatorio.");
+      return;
+    }
+
+    if (!fiscalData.paymentMethod.trim()) {
+      setError("El método de pago es obligatorio.");
+      return;
+    }
+
+    if (!fiscalData.paymentForm.trim()) {
+      setError("La forma de pago es obligatoria.");
+      return;
+    }
+
     if (!fiscalData.fiscalZipCode.trim()) {
       setError("El código postal fiscal es obligatorio.");
       return;
@@ -165,8 +195,10 @@ export default function ClientsPage() {
         fiscalData: {
           legalName: fiscalData.legalName.trim(),
           rfc: fiscalData.rfc.trim().toUpperCase(),
-          taxRegime: fiscalData.taxRegime.trim(),
-          cfdiUse: fiscalData.cfdiUse.trim(),
+          taxRegime: fiscalData.taxRegime,
+          cfdiUse: fiscalData.cfdiUse,
+          paymentMethod: fiscalData.paymentMethod,
+          paymentForm: fiscalData.paymentForm,
           fiscalZipCode: fiscalData.fiscalZipCode.trim(),
           billingEmail: fiscalData.billingEmail.trim(),
           billingContactName: fiscalData.billingContactName.trim(),
@@ -197,8 +229,8 @@ export default function ClientsPage() {
       <header className="mb-8">
         <h1 className="text-4xl font-bold text-white">Clientes</h1>
         <p className="mt-3 text-slate-400">
-          Alta inicial de clientes, datos fiscales, plan contratado, ciclo de
-          facturación, ecosistemas habilitados y vigencia de licencia.
+          Alta inicial de clientes, datos fiscales CFDI, plan contratado, ciclo
+          de facturación, ecosistemas habilitados y vigencia de licencia.
         </p>
       </header>
 
@@ -266,7 +298,9 @@ export default function ClientsPage() {
         </div>
 
         <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
-          <h3 className="mb-4 text-lg font-bold text-white">Datos fiscales</h3>
+          <h3 className="mb-4 text-lg font-bold text-white">
+            Datos fiscales CFDI
+          </h3>
 
           <div className="grid gap-4 md:grid-cols-2">
             <input
@@ -285,23 +319,66 @@ export default function ClientsPage() {
               className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 uppercase text-white outline-none focus:border-cyan-300"
             />
 
-            <input
+            <select
               value={fiscalData.taxRegime}
               onChange={(event) =>
                 updateFiscalData("taxRegime", event.target.value)
               }
-              placeholder="Régimen fiscal"
               className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-            />
+            >
+              <option value="">Selecciona régimen fiscal</option>
+              {TAX_REGIME_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
 
-            <input
+            <select
               value={fiscalData.cfdiUse}
               onChange={(event) =>
                 updateFiscalData("cfdiUse", event.target.value)
               }
-              placeholder="Uso CFDI"
               className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-            />
+            >
+              <option value="">Selecciona uso CFDI</option>
+              {CFDI_USE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={fiscalData.paymentMethod}
+              onChange={(event) =>
+                updateFiscalData(
+                  "paymentMethod",
+                  event.target.value as CfdiPaymentMethod
+                )
+              }
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            >
+              {CFDI_PAYMENT_METHOD_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={fiscalData.paymentForm}
+              onChange={(event) =>
+                updateFiscalData("paymentForm", event.target.value)
+              }
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            >
+              {CFDI_PAYMENT_FORM_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
 
             <input
               value={fiscalData.fiscalZipCode}
@@ -404,9 +481,16 @@ export default function ClientsPage() {
                   <h3 className="font-bold text-white">
                     {client.companyName}
                   </h3>
+
                   <p className="text-sm text-slate-400">{client.tradeName}</p>
+
                   <p className="mt-1 text-xs text-slate-500">
                     RFC: {client.fiscalData?.rfc || "Sin RFC"}
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Régimen: {client.fiscalData?.taxRegime || "Sin régimen"} ·
+                    CFDI: {client.fiscalData?.cfdiUse || "Sin uso"}
                   </p>
                 </div>
 
@@ -445,6 +529,14 @@ export default function ClientsPage() {
 
                 <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">
                   {client.billingCycle}
+                </span>
+
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">
+                  {client.fiscalData?.paymentMethod || "Sin método"}
+                </span>
+
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">
+                  Forma {client.fiscalData?.paymentForm || "Sin forma"}
                 </span>
 
                 {client.enabledModules?.map((moduleCode) => (

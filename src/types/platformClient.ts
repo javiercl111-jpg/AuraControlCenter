@@ -12,11 +12,15 @@ export type AuraModuleCode =
   | "AURA_SIGNATURE"
   | "AURA_INTELLIGENCE";
 
+export type CfdiPaymentMethod = "PUE" | "PPD";
+
 export interface ClientFiscalData {
   legalName: string;
   rfc: string;
   taxRegime: string;
   cfdiUse: string;
+  paymentMethod: CfdiPaymentMethod;
+  paymentForm: string;
   fiscalZipCode: string;
   billingEmail: string;
   billingContactName: string;
@@ -26,22 +30,15 @@ export interface ClientFiscalData {
 
 export interface PlatformClient {
   id: string;
-
   companyName: string;
   tradeName: string;
-
   status: ClientStatus;
-
   planCode: string;
   billingCycle: BillingCycle;
-
   enabledModules: AuraModuleCode[];
-
   fiscalData: ClientFiscalData;
-
   startDate?: string;
   renewalDate?: string;
   graceUntil?: string;
-
   createdAt?: unknown;
 }
