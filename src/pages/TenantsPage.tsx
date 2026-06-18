@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 
+import {
+  calculateClientLicenseStatus,
+  getLicenseStatusLabel,
+} from "../services/licenseStatusEngine";
 import { getClients } from "../services/platformClientService";
 import {
   createTenantFromClient,
   getTenants,
+  syncTenantFromClientStatus,
   updateTenantStatus,
 } from "../services/platformTenantService";
 
@@ -11,24 +16,14 @@ import type { PlatformClient } from "../types/platformClient";
 import type { PlatformTenant, TenantStatus } from "../types/platformTenant";
 
 function getTenantStatusLabel(status: TenantStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "Activo";
-    case "GRACE_PERIOD":
-      return "Periodo de gracia";
-    case "SUSPENDED":
-      return "Suspendido";
-    case "CANCELLED":
-      return "Cancelado";
-    default:
-      return status;
-  }
+  return getLicenseStatusLabel(status);
 }
 
 export default function TenantsPage() {
   const [clients, setClients] = useState<PlatformClient[]>([]);
   const [tenants, setTenants] = useState<PlatformTenant[]>([]);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   async function loadData() {
@@ -55,6 +50,7 @@ export default function TenantsPage() {
   async function handleCreateTenant(client: PlatformClient) {
     setIsLoading(true);
     setError("");
+    setSuccessMessage("");
 
     try {
       await createTenantFromClient({
@@ -66,10 +62,43 @@ export default function TenantsPage() {
         enabledModules: client.enabledModules,
       });
 
+      setSuccessMessage("Tenant creado correctamente.");
       await loadData();
     } catch (err) {
       console.error(err);
       setError("No se pudo crear el tenant.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleSyncTenants() {
+    setIsLoading(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const clientsWithTenant = clients.filter((client) => client.tenantId);
+
+      await Promise.all(
+        clientsWithTenant.map((client) => {
+          const calculatedStatus = calculateClientLicenseStatus(client);
+
+          return syncTenantFromClientStatus({
+            tenantDocumentId: client.tenantId,
+            clientStatus: calculatedStatus,
+          });
+        })
+      );
+
+      setSuccessMessage(
+        `Sincronización completada. Tenants sincronizados: ${clientsWithTenant.length}.`
+      );
+
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      setError("No se pudieron sincronizar los tenants.");
     } finally {
       setIsLoading(false);
     }
@@ -86,9 +115,11 @@ export default function TenantsPage() {
 
     setIsLoading(true);
     setError("");
+    setSuccessMessage("");
 
     try {
       await updateTenantStatus(tenantId, status, suspendedReason);
+      setSuccessMessage("Tenant actualizado correctamente.");
       await loadData();
     } catch (err) {
       console.error(err);
@@ -121,6 +152,36 @@ export default function TenantsPage() {
           {error}
         </div>
       )}
+
+      {successMessage && (
+        <div className="mb-6 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-200">
+          {successMessage}
+        </div>
+      )}
+
+      <section className="mb-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-white">
+              Automatización de tenants
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Sincroniza el estado del tenant con el estado calculado de la
+              licencia del cliente.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={handleSyncTenants}
+            className="rounded-2xl bg-cyan-400 px-5 py-3 font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoading ? "Sincronizando..." : "Sincronizar tenants"}
+          </button>
+        </div>
+      </section>
 
       <section className="mb-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
         <h2 className="mb-5 text-xl font-bold text-white">
