@@ -105,6 +105,14 @@ export default function ClientsPage() {
     }));
   }
 
+  function handlePaymentMethodChange(value: CfdiPaymentMethod) {
+    setFiscalData((current) => ({
+      ...current,
+      paymentMethod: value,
+      paymentForm: value === "PPD" ? "99" : current.paymentForm,
+    }));
+  }
+
   function toggleModule(moduleCode: AuraModuleCode) {
     setEnabledModules((currentModules) => {
       if (currentModules.includes(moduleCode)) {
@@ -171,6 +179,11 @@ export default function ClientsPage() {
       return;
     }
 
+    if (fiscalData.paymentMethod === "PPD" && fiscalData.paymentForm !== "99") {
+      setError("Cuando el método de pago es PPD, la forma de pago debe ser 99 - Por definir.");
+      return;
+    }
+
     if (!fiscalData.fiscalZipCode.trim()) {
       setError("El código postal fiscal es obligatorio.");
       return;
@@ -198,7 +211,8 @@ export default function ClientsPage() {
           taxRegime: fiscalData.taxRegime,
           cfdiUse: fiscalData.cfdiUse,
           paymentMethod: fiscalData.paymentMethod,
-          paymentForm: fiscalData.paymentForm,
+          paymentForm:
+            fiscalData.paymentMethod === "PPD" ? "99" : fiscalData.paymentForm,
           fiscalZipCode: fiscalData.fiscalZipCode.trim(),
           billingEmail: fiscalData.billingEmail.trim(),
           billingContactName: fiscalData.billingContactName.trim(),
@@ -352,8 +366,7 @@ export default function ClientsPage() {
             <select
               value={fiscalData.paymentMethod}
               onChange={(event) =>
-                updateFiscalData(
-                  "paymentMethod",
+                handlePaymentMethodChange(
                   event.target.value as CfdiPaymentMethod
                 )
               }
@@ -371,7 +384,13 @@ export default function ClientsPage() {
               onChange={(event) =>
                 updateFiscalData("paymentForm", event.target.value)
               }
-              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+              disabled={fiscalData.paymentMethod === "PPD"}
+              className={[
+                "rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300",
+                fiscalData.paymentMethod === "PPD"
+                  ? "cursor-not-allowed opacity-60"
+                  : "",
+              ].join(" ")}
             >
               {CFDI_PAYMENT_FORM_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -379,6 +398,13 @@ export default function ClientsPage() {
                 </option>
               ))}
             </select>
+
+            {fiscalData.paymentMethod === "PPD" && (
+              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-200 md:col-span-2">
+                Método PPD seleccionado: la forma de pago queda bloqueada
+                automáticamente como 99 - Por definir.
+              </div>
+            )}
 
             <input
               value={fiscalData.fiscalZipCode}
