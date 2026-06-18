@@ -32,12 +32,20 @@ export async function updateClient(
   });
 }
 
-export async function updateClientStatus(
+export async function updateClientLicenseEvaluation(
   clientId: string,
-  status: ClientStatus
+  data: {
+    status: ClientStatus;
+    startDate?: string;
+    renewalDate?: string;
+    graceUntil?: string;
+  }
 ): Promise<void> {
   await updateDoc(doc(db, COLLECTION_NAME, clientId), {
-    status,
+    status: data.status,
+    startDate: data.startDate,
+    renewalDate: data.renewalDate,
+    graceUntil: data.graceUntil,
     licenseStatusEvaluatedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

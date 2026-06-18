@@ -1,4 +1,5 @@
 import {
+    BadgeDollarSign,
     Building2,
     CreditCard,
     Gauge,
@@ -18,6 +19,7 @@ import {
     { label: "Facturación", path: "/billing", icon: CreditCard },
     { label: "Pagos", path: "/payments", icon: ReceiptText },
     { label: "Licencias", path: "/licenses", icon: ShieldCheck },
+    { label: "Comisiones", path: "/commissions", icon: BadgeDollarSign },
     { label: "Asesores", path: "/sales-advisors", icon: UsersRound },
   ];
   

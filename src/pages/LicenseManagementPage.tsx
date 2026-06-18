@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 
-import { getClients } from "../services/platformClientService";
-import { updateClientStatus } from "../services/platformClientUpdateService";
 import {
+  buildMissingLicenseDates,
   calculateClientLicenseStatus,
   getLicenseStatusLabel,
 } from "../services/licenseStatusEngine";
+import { getClients } from "../services/platformClientService";
+import { updateClientLicenseEvaluation } from "../services/platformClientUpdateService";
 import type { PlatformClient } from "../types/platformClient";
 
 function todayInputValue(): string {
@@ -39,9 +40,19 @@ export default function LicenseManagementPage() {
     try {
       const updates = clients.map(async (client) => {
         const calculatedStatus = calculateClientLicenseStatus(client);
+        const dates = buildMissingLicenseDates(client);
 
-        if (calculatedStatus !== client.status) {
-          await updateClientStatus(client.id, calculatedStatus);
+        const needsStatusUpdate = calculatedStatus !== client.status;
+        const needsDateRepair =
+          !client.startDate || !client.renewalDate || !client.graceUntil;
+
+        if (needsStatusUpdate || needsDateRepair) {
+          await updateClientLicenseEvaluation(client.id, {
+            status: calculatedStatus,
+            startDate: dates.startDate,
+            renewalDate: dates.renewalDate,
+            graceUntil: dates.graceUntil,
+          });
         }
       });
 
@@ -110,7 +121,13 @@ export default function LicenseManagementPage() {
         <div className="space-y-3">
           {clients.map((client) => {
             const calculatedStatus = calculateClientLicenseStatus(client);
-            const needsUpdate = calculatedStatus !== client.status;
+            const dates = buildMissingLicenseDates(client);
+
+            const needsUpdate =
+              calculatedStatus !== client.status ||
+              !client.startDate ||
+              !client.renewalDate ||
+              !client.graceUntil;
 
             return (
               <article
@@ -148,14 +165,14 @@ export default function LicenseManagementPage() {
                   <div className="rounded-2xl bg-slate-950/60 p-3">
                     <p className="text-xs text-slate-500">Renovación</p>
                     <p className="mt-1 text-sm text-white">
-                      {client.renewalDate || "Sin fecha"}
+                      {client.renewalDate || dates.renewalDate}
                     </p>
                   </div>
 
                   <div className="rounded-2xl bg-slate-950/60 p-3">
                     <p className="text-xs text-slate-500">Gracia hasta</p>
                     <p className="mt-1 text-sm text-white">
-                      {client.graceUntil || "Sin fecha"}
+                      {client.graceUntil || dates.graceUntil}
                     </p>
                   </div>
 
@@ -166,6 +183,12 @@ export default function LicenseManagementPage() {
                     </p>
                   </div>
                 </div>
+
+                {needsUpdate && (
+                  <p className="mt-3 text-xs text-yellow-200">
+                    Pendiente de aplicar evaluación o reparar fechas faltantes.
+                  </p>
+                )}
               </article>
             );
           })}

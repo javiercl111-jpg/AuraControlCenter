@@ -10,6 +10,7 @@ import {
   } from "firebase/firestore";
   
   import { db } from "../config/firebase";
+  import { createCommissionFromPaidInvoice } from "./platformCommissionService";
   import type { PaymentMethod, PlatformPayment } from "../types/platformPayment";
   
   const PAYMENTS_COLLECTION = "platform_payments";
@@ -54,5 +55,14 @@ import {
     await updateDoc(doc(db, INVOICES_COLLECTION, data.invoiceId), {
       status: "PAID",
       paidAt: data.paymentDate,
+    });
+  
+    await createCommissionFromPaidInvoice({
+      clientId: data.clientId,
+      clientName: data.clientName,
+      invoiceId: data.invoiceId,
+      invoiceNumber: data.invoiceNumber,
+      invoiceAmount: data.amount,
+      commissionType: "FIRST_YEAR",
     });
   }
