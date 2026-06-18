@@ -32,6 +32,17 @@ export async function updateClient(
   });
 }
 
+export async function updateClientStatus(
+  clientId: string,
+  status: ClientStatus
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTION_NAME, clientId), {
+    status,
+    licenseStatusEvaluatedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateClientLicenseEvaluation(
   clientId: string,
   data: {

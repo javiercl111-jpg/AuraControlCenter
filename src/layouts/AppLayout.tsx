@@ -30,8 +30,8 @@ import {
   export default function AppLayout() {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100">
-        <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-cyan-400/10 bg-slate-950/80 p-6 backdrop-blur xl:block">
-          <div className="mb-10">
+        <aside className="fixed inset-y-0 left-0 hidden w-72 overflow-y-auto border-r border-cyan-400/10 bg-slate-950/80 p-6 backdrop-blur xl:block">
+          <div className="mb-8">
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyan-300">
               Aura Platform
             </p>
@@ -46,7 +46,7 @@ import {
             </p>
           </div>
   
-          <nav className="space-y-2">
+          <nav className="space-y-2 pb-8">
             {navItems.map((item) => {
               const Icon = item.icon;
   
@@ -64,7 +64,7 @@ import {
                     ].join(" ")
                   }
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-5 w-5 shrink-0" />
                   {item.label}
                 </NavLink>
               );

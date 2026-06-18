@@ -6,7 +6,7 @@ import {
   getLicenseStatusLabel,
 } from "../services/licenseStatusEngine";
 import { getClients } from "../services/platformClientService";
-import { updateClientLicenseEvaluation } from "../services/platformClientUpdateService";
+import { evaluateClientAndSyncTenant } from "../services/tenantAutomationService";
 import type { PlatformClient } from "../types/platformClient";
 
 function todayInputValue(): string {
@@ -16,6 +16,7 @@ function todayInputValue(): string {
 export default function LicenseManagementPage() {
   const [clients, setClients] = useState<PlatformClient[]>([]);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
   async function loadClients() {
@@ -36,27 +37,19 @@ export default function LicenseManagementPage() {
   async function handleEvaluateLicenses() {
     setIsProcessing(true);
     setError("");
+    setSuccessMessage("");
 
     try {
-      const updates = clients.map(async (client) => {
-        const calculatedStatus = calculateClientLicenseStatus(client);
-        const dates = buildMissingLicenseDates(client);
+      const results = await Promise.all(
+        clients.map((client) => evaluateClientAndSyncTenant(client))
+      );
 
-        const needsStatusUpdate = calculatedStatus !== client.status;
-        const needsDateRepair =
-          !client.startDate || !client.renewalDate || !client.graceUntil;
+      const updatedCount = results.filter((result) => result.updated).length;
 
-        if (needsStatusUpdate || needsDateRepair) {
-          await updateClientLicenseEvaluation(client.id, {
-            status: calculatedStatus,
-            startDate: dates.startDate,
-            renewalDate: dates.renewalDate,
-            graceUntil: dates.graceUntil,
-          });
-        }
-      });
+      setSuccessMessage(
+        `Evaluación completada. Clientes actualizados: ${updatedCount}. Tenants sincronizados: ${results.length}.`
+      );
 
-      await Promise.all(updates);
       await loadClients();
     } catch (err) {
       console.error(err);
@@ -80,7 +73,7 @@ export default function LicenseManagementPage() {
         <p className="mt-3 text-slate-400">
           Evalúa automáticamente si los clientes deben permanecer activos,
           entrar a periodo de gracia o quedar suspendidos según sus fechas de
-          renovación y gracia.
+          renovación y gracia. También sincroniza el estado del tenant asociado.
         </p>
       </header>
 
@@ -90,11 +83,17 @@ export default function LicenseManagementPage() {
         </div>
       )}
 
+      {successMessage && (
+        <div className="mb-6 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-200">
+          {successMessage}
+        </div>
+      )}
+
       <section className="mb-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-xl font-bold text-white">
-              Evaluación de licencias
+              Evaluación de licencias y tenants
             </h2>
 
             <p className="mt-2 text-sm text-slate-400">
@@ -142,6 +141,10 @@ export default function LicenseManagementPage() {
 
                     <p className="text-sm text-slate-400">
                       {client.tradeName}
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      Tenant: {client.tenantId || "Sin tenant"}
                     </p>
                   </div>
 

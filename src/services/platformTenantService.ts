@@ -83,7 +83,26 @@ import {
   ): Promise<void> {
     await updateDoc(doc(db, TENANTS_COLLECTION, tenantDocumentId), {
       status,
+      licenseStatus: status,
       suspendedReason: status === "SUSPENDED" ? suspendedReason : "",
+      updatedAt: serverTimestamp(),
+    });
+  }
+  
+  export async function syncTenantFromClientStatus(data: {
+    tenantDocumentId?: string;
+    clientStatus: ClientStatus;
+    suspendedReason?: string;
+  }): Promise<void> {
+    if (!data.tenantDocumentId) return;
+  
+    await updateDoc(doc(db, TENANTS_COLLECTION, data.tenantDocumentId), {
+      status: data.clientStatus,
+      licenseStatus: data.clientStatus,
+      suspendedReason:
+        data.clientStatus === "SUSPENDED"
+          ? data.suspendedReason || "Suspensión automática por vencimiento"
+          : "",
       updatedAt: serverTimestamp(),
     });
   }

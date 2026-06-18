@@ -11,6 +11,8 @@ import {
   
   import { db } from "../config/firebase";
   import { createCommissionFromPaidInvoice } from "./platformCommissionService";
+  import { updateClientStatus } from "./platformClientUpdateService";
+  import { syncTenantFromClientStatus } from "./platformTenantService";
   import type { PaymentMethod, PlatformPayment } from "../types/platformPayment";
   
   const PAYMENTS_COLLECTION = "platform_payments";
@@ -39,6 +41,7 @@ import {
     paymentMethod: PaymentMethod;
     paymentDate: string;
     reference: string;
+    tenantId?: string;
   }) {
     await addDoc(collection(db, PAYMENTS_COLLECTION), {
       invoiceId: data.invoiceId,
@@ -49,12 +52,20 @@ import {
       paymentMethod: data.paymentMethod,
       paymentDate: data.paymentDate,
       reference: data.reference,
+      tenantId: data.tenantId || "",
       createdAt: serverTimestamp(),
     });
   
     await updateDoc(doc(db, INVOICES_COLLECTION, data.invoiceId), {
       status: "PAID",
       paidAt: data.paymentDate,
+    });
+  
+    await updateClientStatus(data.clientId, "ACTIVE");
+  
+    await syncTenantFromClientStatus({
+      tenantDocumentId: data.tenantId,
+      clientStatus: "ACTIVE",
     });
   
     await createCommissionFromPaidInvoice({
