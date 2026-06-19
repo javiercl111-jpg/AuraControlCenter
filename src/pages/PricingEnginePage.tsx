@@ -4,6 +4,7 @@ import {
   calculatePricingQuote,
   PRICING_MODULE_OPTIONS,
 } from "../services/pricingEngineService";
+import { downloadProposalPdf } from "../services/proposalPdfService";
 import { createQuote, getQuotes } from "../services/quoteService";
 import type { AuraModuleCode } from "../types/platformClient";
 import type {
@@ -178,6 +179,17 @@ export default function PricingEnginePage() {
       setError("No se pudo generar la propuesta comercial.");
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleDownloadPdf(quote: PlatformQuote) {
+    setError("");
+
+    try {
+      await downloadProposalPdf(quote);
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo descargar el PDF de la propuesta.");
     }
   }
 
@@ -467,7 +479,9 @@ export default function PricingEnginePage() {
                     </div>
 
                     <div className="mt-2 flex justify-between text-sm text-yellow-200">
-                      <span>Descuento anual ({quoteResult.discountPercent}%)</span>
+                      <span>
+                        Descuento anual ({quoteResult.discountPercent}%)
+                      </span>
                       <span>-{formatCurrency(quoteResult.discountAmount)}</span>
                     </div>
                   </>
@@ -501,15 +515,16 @@ export default function PricingEnginePage() {
                 <div className="mt-4 space-y-2 text-sm text-slate-300">
                   <p>Plan: {quoteResult.planName}</p>
                   <p>Industria: {industry}</p>
-                  <p>Facturación: {billingCycle === "YEARLY" ? "Anual" : "Mensual"}</p>
+                  <p>
+                    Facturación:{" "}
+                    {billingCycle === "YEARLY" ? "Anual" : "Mensual"}
+                  </p>
                   <p>Descuento aplicado: {discountLabel}</p>
                   <p>
                     Extras: {quoteResult.extraLocations} ubicaciones y{" "}
                     {quoteResult.extraCompanies} empresas adicionales.
                   </p>
-                  <p>
-                    Productos: {quoteResult.selectedModules.join(", ")}
-                  </p>
+                  <p>Productos: {quoteResult.selectedModules.join(", ")}</p>
                 </div>
               </div>
             </>
@@ -575,6 +590,14 @@ export default function PricingEnginePage() {
                   </p>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => handleDownloadPdf(quote)}
+                className="mt-4 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm font-bold text-cyan-200 transition hover:bg-cyan-400/20"
+              >
+                Descargar PDF
+              </button>
             </article>
           ))}
 
