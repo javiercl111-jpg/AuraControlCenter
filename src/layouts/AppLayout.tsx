@@ -1,6 +1,7 @@
 import {
   BadgeDollarSign,
   Building2,
+  Calculator,
   CreditCard,
   FileText,
   Gauge,
@@ -22,6 +23,7 @@ import { auth } from "../config/firebase";
 const navItems = [
   { label: "Dashboard", path: "/", icon: Gauge },
   { label: "CRM", path: "/crm", icon: Workflow },
+  { label: "Cotizador", path: "/pricing", icon: Calculator },
   { label: "Clientes", path: "/clients", icon: Building2 },
   { label: "Tenants", path: "/tenants", icon: Network },
   { label: "Enforcement", path: "/tenant-enforcement", icon: ShieldAlert },

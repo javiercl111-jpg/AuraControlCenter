@@ -15,6 +15,7 @@ import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import PlansPage from "./pages/PlansPage";
+import PricingEnginePage from "./pages/PricingEnginePage";
 import ReportsPage from "./pages/ReportsPage";
 import SalesAdvisorsPage from "./pages/SalesAdvisorsPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -36,6 +37,7 @@ export default function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="crm" element={<CrmPage />} />
+        <Route path="pricing" element={<PricingEnginePage />} />
         <Route path="clients" element={<ClientsPage />} />
         <Route path="clients/:clientId" element={<ClientDetailPage />} />
         <Route path="clients/:clientId/edit" element={<ClientEditPage />} />
