@@ -6,7 +6,24 @@ import {
 } from "../services/pricingEngineService";
 import { createQuote, getQuotes } from "../services/quoteService";
 import type { AuraModuleCode } from "../types/platformClient";
-import type { PlatformQuote, PricingQuoteResult } from "../types/quote";
+import type {
+  PlatformQuote,
+  PricingQuoteResult,
+  QuoteIndustry,
+} from "../types/quote";
+
+const INDUSTRY_OPTIONS: { value: QuoteIndustry; label: string }[] = [
+  { value: "HOTELERIA", label: "Hotelería" },
+  { value: "RESTAURANTES", label: "Restaurantes" },
+  { value: "CORPORATIVO", label: "Corporativo" },
+  { value: "HOSPITAL", label: "Hospitales" },
+  { value: "RETAIL", label: "Retail" },
+  { value: "MANUFACTURA", label: "Manufactura" },
+  { value: "SERVICIOS", label: "Servicios" },
+  { value: "EDUCACION", label: "Educación" },
+  { value: "GOBIERNO", label: "Gobierno" },
+  { value: "OTRO", label: "Otro" },
+];
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-MX", {
@@ -15,10 +32,28 @@ function formatCurrency(value: number) {
   }).format(value || 0);
 }
 
+function FieldLabel({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-semibold text-slate-300">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 export default function PricingEnginePage() {
   const [prospectName, setProspectName] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const [industry, setIndustry] = useState<QuoteIndustry>("HOTELERIA");
 
   const [employeeCount, setEmployeeCount] = useState(350);
   const [locationCount, setLocationCount] = useState(8);
@@ -26,6 +61,10 @@ export default function PricingEnginePage() {
   const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "YEARLY">(
     "MONTHLY"
   );
+
+  const [applySpecialDiscount, setApplySpecialDiscount] = useState(false);
+  const [specialDiscountPercent, setSpecialDiscountPercent] = useState(10);
+
   const [selectedModules, setSelectedModules] = useState<AuraModuleCode[]>([
     "AURA_HCM",
     "AURA_MAINTENANCE",
@@ -46,21 +85,27 @@ export default function PricingEnginePage() {
       prospectName,
       contactName,
       contactEmail,
+      industry,
       employeeCount,
       locationCount,
       companyCount,
       selectedModules,
       billingCycle,
+      applySpecialDiscount,
+      specialDiscountPercent,
     }),
     [
       prospectName,
       contactName,
       contactEmail,
+      industry,
       employeeCount,
       locationCount,
       companyCount,
       selectedModules,
       billingCycle,
+      applySpecialDiscount,
+      specialDiscountPercent,
     ]
   );
 
@@ -92,6 +137,7 @@ export default function PricingEnginePage() {
   useEffect(() => {
     calculateQuote();
     loadQuotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function toggleModule(moduleCode: AuraModuleCode) {
@@ -135,6 +181,11 @@ export default function PricingEnginePage() {
     }
   }
 
+  const discountLabel =
+    quoteResult?.billingCycle === "YEARLY"
+      ? `${quoteResult.discountPercent}%`
+      : "No aplica";
+
   return (
     <div>
       <header className="mb-8 rounded-3xl border border-cyan-400/10 bg-slate-900/70 p-6">
@@ -171,65 +222,134 @@ export default function PricingEnginePage() {
           </h2>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <input
-              value={prospectName}
-              onChange={(event) => setProspectName(event.target.value)}
-              placeholder="Prospecto / Cliente"
-              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-            />
+            <FieldLabel label="Prospecto / Cliente">
+              <input
+                value={prospectName}
+                onChange={(event) => setProspectName(event.target.value)}
+                placeholder="Ej. Bice Vertical"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+              />
+            </FieldLabel>
 
-            <input
-              value={contactName}
-              onChange={(event) => setContactName(event.target.value)}
-              placeholder="Contacto"
-              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-            />
+            <FieldLabel label="Contacto principal">
+              <input
+                value={contactName}
+                onChange={(event) => setContactName(event.target.value)}
+                placeholder="Nombre del contacto"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+              />
+            </FieldLabel>
 
-            <input
-              value={contactEmail}
-              onChange={(event) => setContactEmail(event.target.value)}
-              placeholder="Correo"
-              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-            />
+            <FieldLabel label="Correo electrónico">
+              <input
+                value={contactEmail}
+                onChange={(event) => setContactEmail(event.target.value)}
+                placeholder="correo@empresa.com"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+              />
+            </FieldLabel>
 
-            <select
-              value={billingCycle}
-              onChange={(event) =>
-                setBillingCycle(event.target.value as "MONTHLY" | "YEARLY")
-              }
-              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-            >
-              <option value="MONTHLY">Mensual</option>
-              <option value="YEARLY">Anual</option>
-            </select>
+            <FieldLabel label="Industria">
+              <select
+                value={industry}
+                onChange={(event) =>
+                  setIndustry(event.target.value as QuoteIndustry)
+                }
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+              >
+                {INDUSTRY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </FieldLabel>
 
-            <input
-              type="number"
-              min={1}
-              value={employeeCount}
-              onChange={(event) => setEmployeeCount(Number(event.target.value))}
-              placeholder="Empleados"
-              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-            />
+            <FieldLabel label="Ciclo de facturación">
+              <select
+                value={billingCycle}
+                onChange={(event) =>
+                  setBillingCycle(event.target.value as "MONTHLY" | "YEARLY")
+                }
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+              >
+                <option value="MONTHLY">Mensual</option>
+                <option value="YEARLY">Anual — descuento estándar 10%</option>
+              </select>
+            </FieldLabel>
 
-            <input
-              type="number"
-              min={1}
-              value={locationCount}
-              onChange={(event) => setLocationCount(Number(event.target.value))}
-              placeholder="Ubicaciones"
-              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-            />
+            <FieldLabel label="Número de empleados">
+              <input
+                type="number"
+                min={1}
+                value={employeeCount}
+                onChange={(event) =>
+                  setEmployeeCount(Number(event.target.value))
+                }
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+              />
+            </FieldLabel>
 
-            <input
-              type="number"
-              min={1}
-              value={companyCount}
-              onChange={(event) => setCompanyCount(Number(event.target.value))}
-              placeholder="Empresas legales"
-              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-            />
+            <FieldLabel label="Número de ubicaciones">
+              <input
+                type="number"
+                min={1}
+                value={locationCount}
+                onChange={(event) =>
+                  setLocationCount(Number(event.target.value))
+                }
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+              />
+            </FieldLabel>
+
+            <FieldLabel label="Empresas legales">
+              <input
+                type="number"
+                min={1}
+                value={companyCount}
+                onChange={(event) =>
+                  setCompanyCount(Number(event.target.value))
+                }
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+              />
+            </FieldLabel>
           </div>
+
+          {billingCycle === "YEARLY" && (
+            <div className="mt-5 rounded-2xl border border-yellow-400/20 bg-yellow-400/10 p-4">
+              <label className="flex items-start gap-3 text-sm font-semibold text-yellow-100">
+                <input
+                  type="checkbox"
+                  checked={applySpecialDiscount}
+                  onChange={(event) =>
+                    setApplySpecialDiscount(event.target.checked)
+                  }
+                  className="mt-1"
+                />
+                <span>
+                  Aplicar descuento especial autorizado
+                  <span className="mt-1 block text-xs font-normal text-yellow-200/80">
+                    El descuento anual estándar es 10%. El máximo permitido es
+                    15%.
+                  </span>
+                </span>
+              </label>
+
+              {applySpecialDiscount && (
+                <select
+                  value={specialDiscountPercent}
+                  onChange={(event) =>
+                    setSpecialDiscountPercent(Number(event.target.value))
+                  }
+                  className="mt-4 w-full rounded-2xl border border-yellow-400/20 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-300 md:w-60"
+                >
+                  <option value={5}>5%</option>
+                  <option value={10}>10%</option>
+                  <option value={15}>15%</option>
+                </select>
+              )}
+            </div>
+          )}
 
           <div className="mt-6">
             <p className="mb-3 text-sm font-semibold text-slate-300">
@@ -305,6 +425,11 @@ export default function PricingEnginePage() {
                   {quoteResult.locationCount} ubicaciones ·{" "}
                   {quoteResult.companyCount} empresas
                 </p>
+
+                <p className="mt-3 text-xs text-slate-500">
+                  Incluye {quoteResult.includedLocations} ubicaciones y{" "}
+                  {quoteResult.includedCompanies} empresa legal.
+                </p>
               </div>
 
               <div className="mt-5 space-y-3">
@@ -330,7 +455,25 @@ export default function PricingEnginePage() {
               </div>
 
               <div className="mt-6 border-t border-slate-800 pt-5">
-                <div className="flex justify-between text-sm text-slate-400">
+                {billingCycle === "YEARLY" && (
+                  <>
+                    <div className="flex justify-between text-sm text-slate-400">
+                      <span>Subtotal anual antes de descuento</span>
+                      <span>
+                        {formatCurrency(
+                          quoteResult.annualSubtotalBeforeDiscount
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex justify-between text-sm text-yellow-200">
+                      <span>Descuento anual ({quoteResult.discountPercent}%)</span>
+                      <span>-{formatCurrency(quoteResult.discountAmount)}</span>
+                    </div>
+                  </>
+                )}
+
+                <div className="mt-2 flex justify-between text-sm text-slate-400">
                   <span>Subtotal</span>
                   <span>{formatCurrency(quoteResult.subtotal)}</span>
                 </div>
@@ -346,10 +489,28 @@ export default function PricingEnginePage() {
                 </div>
 
                 <p className="mt-2 text-right text-xs text-slate-500">
-                  {billingCycle === "YEARLY"
-                    ? "MXN / año"
-                    : "MXN / mes"}
+                  {billingCycle === "YEARLY" ? "MXN / año" : "MXN / mes"}
                 </p>
+              </div>
+
+              <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-950/60 p-5">
+                <h3 className="text-sm font-bold uppercase tracking-[0.25em] text-cyan-300">
+                  Resumen comercial
+                </h3>
+
+                <div className="mt-4 space-y-2 text-sm text-slate-300">
+                  <p>Plan: {quoteResult.planName}</p>
+                  <p>Industria: {industry}</p>
+                  <p>Facturación: {billingCycle === "YEARLY" ? "Anual" : "Mensual"}</p>
+                  <p>Descuento aplicado: {discountLabel}</p>
+                  <p>
+                    Extras: {quoteResult.extraLocations} ubicaciones y{" "}
+                    {quoteResult.extraCompanies} empresas adicionales.
+                  </p>
+                  <p>
+                    Productos: {quoteResult.selectedModules.join(", ")}
+                  </p>
+                </div>
               </div>
             </>
           ) : (
@@ -382,7 +543,7 @@ export default function PricingEnginePage() {
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="mt-4 grid gap-3 md:grid-cols-5">
                 <div className="rounded-2xl bg-slate-950/60 p-3">
                   <p className="text-xs text-slate-500">Plan</p>
                   <p className="mt-1 text-sm text-white">{quote.planName}</p>
@@ -392,6 +553,13 @@ export default function PricingEnginePage() {
                   <p className="text-xs text-slate-500">Empleados</p>
                   <p className="mt-1 text-sm text-white">
                     {quote.employeeCount}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-slate-950/60 p-3">
+                  <p className="text-xs text-slate-500">Descuento</p>
+                  <p className="mt-1 text-sm text-white">
+                    {quote.discountPercent || 0}%
                   </p>
                 </div>
 
