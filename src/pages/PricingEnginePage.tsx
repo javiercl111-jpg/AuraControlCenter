@@ -5,12 +5,18 @@ import {
   PRICING_MODULE_OPTIONS,
 } from "../services/pricingEngineService";
 import { downloadProposalPdf } from "../services/proposalPdfService";
+import {
+  acceptQuote,
+  markQuoteAsSent,
+  rejectQuote,
+} from "../services/quoteLifecycleService";
 import { createQuote, getQuotes } from "../services/quoteService";
 import type { AuraModuleCode } from "../types/platformClient";
 import type {
   PlatformQuote,
   PricingQuoteResult,
   QuoteIndustry,
+  QuoteStatus,
 } from "../types/quote";
 
 const INDUSTRY_OPTIONS: { value: QuoteIndustry; label: string }[] = [
@@ -25,6 +31,14 @@ const INDUSTRY_OPTIONS: { value: QuoteIndustry; label: string }[] = [
   { value: "GOBIERNO", label: "Gobierno" },
   { value: "OTRO", label: "Otro" },
 ];
+
+const STATUS_LABELS: Record<QuoteStatus, string> = {
+  DRAFT: "Borrador",
+  SENT: "Enviada",
+  ACCEPTED: "Aceptada",
+  REJECTED: "Rechazada",
+  EXPIRED: "Expirada",
+};
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-MX", {
@@ -47,6 +61,30 @@ function FieldLabel({
       </span>
       {children}
     </label>
+  );
+}
+
+function QuoteStatusBadge({ status }: { status: QuoteStatus }) {
+  const className =
+    status === "ACCEPTED"
+      ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+      : status === "REJECTED"
+      ? "border-red-400/30 bg-red-400/10 text-red-200"
+      : status === "SENT"
+      ? "border-blue-400/30 bg-blue-400/10 text-blue-200"
+      : status === "EXPIRED"
+      ? "border-slate-500/30 bg-slate-500/10 text-slate-300"
+      : "border-cyan-400/20 bg-cyan-400/10 text-cyan-200";
+
+  return (
+    <span
+      className={[
+        "rounded-full border px-3 py-1 text-xs font-semibold",
+        className,
+      ].join(" ")}
+    >
+      {STATUS_LABELS[status] || status}
+    </span>
   );
 }
 
@@ -190,6 +228,60 @@ export default function PricingEnginePage() {
     } catch (err) {
       console.error(err);
       setError("No se pudo descargar el PDF de la propuesta.");
+    }
+  }
+
+  async function handleMarkAsSent(quoteId: string) {
+    setIsLoading(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      await markQuoteAsSent(quoteId);
+      setSuccessMessage("Propuesta marcada como enviada.");
+      await loadQuotes();
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo marcar la propuesta como enviada.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleAcceptQuote(quoteId: string) {
+    setIsLoading(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      await acceptQuote(quoteId);
+      setSuccessMessage("Propuesta aceptada correctamente.");
+      await loadQuotes();
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo aceptar la propuesta.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleRejectQuote(quoteId: string) {
+    const rejectionReason =
+      window.prompt("Motivo de rechazo de la propuesta:") || "";
+
+    setIsLoading(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      await rejectQuote(quoteId, rejectionReason);
+      setSuccessMessage("Propuesta rechazada correctamente.");
+      await loadQuotes();
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo rechazar la propuesta.");
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -553,9 +645,7 @@ export default function PricingEnginePage() {
                   </p>
                 </div>
 
-                <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-200">
-                  {quote.status}
-                </span>
+                <QuoteStatusBadge status={quote.status} />
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-5">
@@ -591,13 +681,58 @@ export default function PricingEnginePage() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleDownloadPdf(quote)}
-                className="mt-4 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm font-bold text-cyan-200 transition hover:bg-cyan-400/20"
-              >
-                Descargar PDF
-              </button>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf(quote)}
+                  className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm font-bold text-cyan-200 transition hover:bg-cyan-400/20"
+                >
+                  Descargar PDF
+                </button>
+
+                {quote.status === "DRAFT" && (
+                  <button
+                    type="button"
+                    onClick={() => handleMarkAsSent(quote.id)}
+                    disabled={isLoading}
+                    className="rounded-2xl border border-blue-400/30 bg-blue-400/10 px-4 py-3 text-sm font-bold text-blue-200 transition hover:bg-blue-400/20 disabled:opacity-60"
+                  >
+                    Marcar enviada
+                  </button>
+                )}
+
+                {quote.status === "SENT" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleAcceptQuote(quote.id)}
+                      disabled={isLoading}
+                      className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm font-bold text-emerald-200 transition hover:bg-emerald-400/20 disabled:opacity-60"
+                    >
+                      Aceptar propuesta
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRejectQuote(quote.id)}
+                      disabled={isLoading}
+                      className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-bold text-red-200 transition hover:bg-red-400/20 disabled:opacity-60"
+                    >
+                      Rechazar propuesta
+                    </button>
+                  </>
+                )}
+
+                {quote.status === "ACCEPTED" && (
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm font-bold text-emerald-200 opacity-80"
+                  >
+                    Provisionar Cliente — Próximo Sprint
+                  </button>
+                )}
+              </div>
             </article>
           ))}
 

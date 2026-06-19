@@ -2,7 +2,7 @@ import jsPDF from "jspdf";
 
 import type { PlatformQuote } from "../types/quote";
 
-const LOGO_PATH = "/Logo.png";
+const LOGO_PATH = "/Logo Aura Oficial.png";
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
