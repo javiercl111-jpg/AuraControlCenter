@@ -8,6 +8,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
+import { calculatePricingQuote } from "./pricingEngineService";
 import type {
   PlatformQuote,
   PricingQuoteInput,
@@ -53,21 +54,48 @@ export async function createQuote(data: {
 }): Promise<string> {
   const today = todayInputValue();
 
+  // Force recalculation using the most recent configuration & inputs
+  const freshResult = await calculatePricingQuote(data.input);
+
+  // Validate the calculated data before saving
+  if (
+    !freshResult.selectedModules ||
+    freshResult.selectedModules.length === 0 ||
+    freshResult.subtotal === undefined ||
+    freshResult.subtotal === null ||
+    freshResult.total === undefined ||
+    freshResult.total === null ||
+    freshResult.setupFeeBeforeDiscount === undefined ||
+    freshResult.setupFeeBeforeDiscount === null ||
+    freshResult.setupFee === undefined ||
+    freshResult.setupFee === null ||
+    freshResult.firstPaymentTotal === undefined ||
+    freshResult.firstPaymentTotal === null ||
+    freshResult.annualProjectedRevenue === undefined ||
+    freshResult.annualProjectedRevenue === null
+  ) {
+    throw new Error(
+      "Los resultados del recálculo no contienen todos los campos obligatorios requeridos (selectedModules, subtotal, total, setup, firstPaymentTotal, annualProjectedRevenue)."
+    );
+  }
+
   const quoteRef = await addDoc(collection(db, COLLECTION_NAME), {
-    ...data.result,
+    ...freshResult,
     folio: buildQuoteFolio(),
     prospectName: data.input.prospectName,
     contactName: data.input.contactName,
     contactEmail: data.input.contactEmail,
     industry: data.input.industry,
-    discountPercent: data.result.discountPercent,
-    employeesLimit: data.result.employeesLimit,
-    locationsLimit: data.result.locationsLimit,
-    companiesLimit: data.result.companiesLimit,
-    selectedModules: data.result.selectedModules,
-    billingCycle: data.result.billingCycle,
+    discountPercent: freshResult.discountPercent,
+    employeesLimit: freshResult.employeesLimit,
+    locationsLimit: freshResult.locationsLimit,
+    companiesLimit: freshResult.companiesLimit,
+    selectedModules: freshResult.selectedModules,
+    billingCycle: freshResult.billingCycle,
+    founderClient: data.input.founderClient || false,
+    founderSetupDiscountMode: data.input.founderSetupDiscountMode || "NONE",
     status: "DRAFT",
-    validUntil: addDays(today, 15),
+    validUntil: addDays(today, 30),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

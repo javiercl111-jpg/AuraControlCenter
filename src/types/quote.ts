@@ -15,11 +15,35 @@ export type QuoteIndustry =
   | "GOBIERNO"
   | "OTRO";
 
+export type HcmMigrationType =
+  | "NONE"
+  | "SIMPLE_EXCEL"
+  | "EXTERNAL_SYSTEM"
+  | "COMPLEX_SYSTEM";
+
+export type ImplementationType = "REMOTE" | "HYBRID" | "ONSITE";
+
+export type MaintenanceInitialLoadType = "MANUAL" | "EXCEL" | "CMMS_MIGRATION";
+
+export type FounderSetupDiscountMode = "NONE" | "FIFTY_PERCENT" | "FREE";
+
+export type SetupCalculationType =
+  | "NONE"
+  | "HCM_ENTERPRISE"
+  | "MAINTENANCE_ENTERPRISE"
+  | "COMBINED_ENTERPRISE";
+
 export interface QuoteLineItem {
   label: string;
   quantity: number;
   unitPrice: number;
   total: number;
+}
+
+export interface SetupBreakdownItem {
+  product: "AURA_HCM" | "AURA_MAINTENANCE";
+  factor: string;
+  score: number;
 }
 
 export interface PricingQuoteInput {
@@ -34,6 +58,18 @@ export interface PricingQuoteInput {
   billingCycle: "MONTHLY" | "YEARLY";
   applySpecialDiscount: boolean;
   specialDiscountPercent: number;
+
+  hcmMigrationType: HcmMigrationType;
+  hcmImplementationType: ImplementationType;
+  hcmIntegrationCount: number;
+
+  maintenanceAssetCount: number;
+  maintenanceTechnicianCount: number;
+  maintenanceInitialLoadType: MaintenanceInitialLoadType;
+  maintenanceMassiveQr: boolean;
+
+  founderClient: boolean;
+  founderSetupDiscountMode: FounderSetupDiscountMode;
 }
 
 export interface PricingQuoteResult {
@@ -51,6 +87,7 @@ export interface PricingQuoteResult {
   extraLocations: number;
   extraCompanies: number;
   items: QuoteLineItem[];
+
   monthlySubtotal: number;
   annualSubtotalBeforeDiscount: number;
   discountPercent: number;
@@ -61,6 +98,20 @@ export interface PricingQuoteResult {
   monthlyTotal: number;
   billingCycle: "MONTHLY" | "YEARLY";
   industry: QuoteIndustry;
+
+  setupCalculationType: SetupCalculationType;
+  setupBasePrice: number;
+  setupComplexityScore: number;
+  setupBreakdown: SetupBreakdownItem[];
+  setupFeeBeforeDiscount: number;
+  setupDiscountPercent: number;
+  setupDiscountAmount: number;
+  setupFee: number;
+
+  firstPaymentSubtotal: number;
+  firstPaymentIvaAmount: number;
+  firstPaymentTotal: number;
+  annualProjectedRevenue: number;
 }
 
 export interface PlatformQuote extends PricingQuoteResult {
@@ -71,6 +122,8 @@ export interface PlatformQuote extends PricingQuoteResult {
   contactEmail: string;
   status: QuoteStatus;
   validUntil: string;
+  founderClient?: boolean;
+  founderSetupDiscountMode?: FounderSetupDiscountMode;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
