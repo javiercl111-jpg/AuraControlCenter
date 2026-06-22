@@ -861,6 +861,39 @@ function addDetailsAndTermsPage(doc: jsPDF, quote: PlatformQuote, logo: string |
   });
   currentY += 6;
 
+  // Subsección: Evolución Continua de la Plataforma
+  checkPageBreak(12);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  setTextColor(doc, TEXT_DARK);
+  doc.text("Evolución Continua de la Plataforma", MARGIN_X, currentY);
+  currentY += 5;
+
+  const paragraphs = [
+    "El plan contratado incluye acceso a las mejoras, actualizaciones funcionales y nuevas capacidades estándar que Aura incorpore a la plataforma Aura HCM durante la vigencia de la suscripción activa.",
+    "Aura mantiene un programa de innovación continua enfocado en automatización, experiencia de usuario, inteligencia operativa, cumplimiento normativo y productividad empresarial.",
+    "Las actualizaciones estándar de la plataforma se incorporan sin costo adicional para los clientes con suscripción activa.",
+    "Desarrollos a medida, integraciones específicas, funcionalidades exclusivas para un cliente o servicios profesionales especializados podrán cotizarse de forma independiente."
+  ];
+
+  if (quote.pricingMode === "FOUNDER") {
+    paragraphs.push(
+      "Como Cliente Fundador de Aura, además de la tarifa preferencial de implementación, tendrá acceso a las mejoras y evolución continua de Aura HCM incluidas dentro de su plan contratado, sin cargos adicionales por actualización de versión mientras mantenga activa su suscripción."
+    );
+  }
+
+  paragraphs.forEach((p) => {
+    const lines = doc.splitTextToSize(p, PAGE_WIDTH - MARGIN_X * 2);
+    const height = lines.length * 4 + 2; 
+    checkPageBreak(height);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    setTextColor(doc, TEXT_DARK);
+    doc.text(lines, MARGIN_X, currentY, { align: "justify" });
+    currentY += height;
+  });
+  currentY += 4;
+
   // Section 3: Beneficio de Negocio
   checkPageBreak(45);
   doc.setFont("helvetica", "bold");
