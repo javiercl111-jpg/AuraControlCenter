@@ -330,7 +330,7 @@ function addExecutiveSummaryPage(
   setTextColor(doc, TEXT_DARK);
   doc.text("Soporte incluido:", MARGIN_X, y);
   doc.setFont("helvetica", "normal");
-  doc.text(" Soporte Técnico Enterprise (24/7 para incidencias críticas, chat y correo preferente).", MARGIN_X + 30, y);
+  doc.text(" Correo electrónico, Aura Intelligence, contacto con asesor Aura y acceso a actualizaciones de la plataforma.", MARGIN_X + 30, y, { maxWidth: PAGE_WIDTH - MARGIN_X - (MARGIN_X + 30) });
 }
 
 function addPricingPage(doc: jsPDF, quote: PlatformQuote) {
@@ -851,7 +851,7 @@ function addDetailsAndTermsPage(doc: jsPDF, quote: PlatformQuote, logo: string |
     "Actualizaciones de software continuas, parches de seguridad y mejoras de plataforma sin costo.",
     "Hospedaje de bases de datos de alta disponibilidad y seguridad avanzada en nube cifrada.",
     "Respaldos diarios automatizados y almacenamiento redundante histórico de datos.",
-    "Soporte preferente empresarial y Mesa de Ayuda técnica autorizada.",
+    "Soporte técnico por correo electrónico, contacto con asesor asignado y actualizaciones de la plataforma.",
   ];
 
   planBullets.forEach((bullet) => {
