@@ -44,6 +44,7 @@ export interface SetupBreakdownItem {
   product: "AURA_HCM" | "AURA_MAINTENANCE";
   factor: string;
   score: number;
+  amount?: number;
 }
 
 export interface PricingQuoteInput {
@@ -70,6 +71,7 @@ export interface PricingQuoteInput {
 
   founderClient: boolean;
   founderSetupDiscountMode: FounderSetupDiscountMode;
+  pricingMode?: "FOUNDER" | "DYNAMIC";
 }
 
 export interface PricingQuoteResult {
@@ -112,6 +114,13 @@ export interface PricingQuoteResult {
   firstPaymentIvaAmount: number;
   firstPaymentTotal: number;
   annualProjectedRevenue: number;
+
+  pricingMode?: "FOUNDER" | "DYNAMIC";
+  founderPricing?: boolean;
+  setupHcmTier?: string;
+  setupMaintTier?: string;
+  setupHcmFee?: number;
+  setupMaintFee?: number;
 }
 
 export interface PlatformQuote extends PricingQuoteResult {

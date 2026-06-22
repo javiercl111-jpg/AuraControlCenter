@@ -132,6 +132,7 @@ export default function PricingEnginePage() {
     "AURA_SIGNATURE",
   ]);
 
+  const [pricingMode, setPricingMode] = useState<"FOUNDER" | "DYNAMIC">("FOUNDER");
   const [quoteResult, setQuoteResult] = useState<PricingQuoteResult | null>(
     null
   );
@@ -164,6 +165,7 @@ export default function PricingEnginePage() {
       maintenanceMassiveQr,
       founderClient,
       founderSetupDiscountMode,
+      pricingMode,
     }),
     [
       prospectName,
@@ -186,6 +188,7 @@ export default function PricingEnginePage() {
       maintenanceMassiveQr,
       founderClient,
       founderSetupDiscountMode,
+      pricingMode,
     ]
   );
 
@@ -608,6 +611,36 @@ export default function PricingEnginePage() {
               Setup e implementación
             </h2>
 
+            <div className="mb-6 rounded-2xl border border-slate-700 bg-slate-950 p-4">
+              <span className="mb-2 block text-sm font-semibold text-slate-300">
+                Estrategia Comercial de Setup
+              </span>
+              <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300">
+                  <input
+                    type="radio"
+                    name="pricingMode"
+                    value="FOUNDER"
+                    checked={pricingMode === "FOUNDER"}
+                    onChange={() => setPricingMode("FOUNDER")}
+                    className="accent-cyan-400"
+                  />
+                  <span>Founder Pricing (Fijo preferencial)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300">
+                  <input
+                    type="radio"
+                    name="pricingMode"
+                    value="DYNAMIC"
+                    checked={pricingMode === "DYNAMIC"}
+                    onChange={() => setPricingMode("DYNAMIC")}
+                    className="accent-cyan-400"
+                  />
+                  <span>Dynamic Complexity (Puntos)</span>
+                </label>
+              </div>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <FieldLabel label="Migración HCM">
                 <select
@@ -718,28 +751,35 @@ export default function PricingEnginePage() {
                 </span>
               </label>
 
-              <label className="flex items-start gap-3 rounded-2xl border border-yellow-400/20 bg-yellow-400/10 p-4 text-sm text-yellow-100">
-                <input
-                  type="checkbox"
-                  checked={founderClient}
-                  onChange={(event) => {
-                    setFounderClient(event.target.checked);
-                    setFounderSetupDiscountMode(
-                      event.target.checked ? "FIFTY_PERCENT" : "NONE"
-                    );
-                  }}
-                  className="mt-1"
-                />
-                <span>
-                  Cliente Fundador
-                  <span className="block text-xs text-yellow-200/80">
-                    Permite aplicar descuento especial sobre setup.
+              {pricingMode === "DYNAMIC" ? (
+                <label className="flex items-start gap-3 rounded-2xl border border-yellow-400/20 bg-yellow-400/10 p-4 text-sm text-yellow-100">
+                  <input
+                    type="checkbox"
+                    checked={founderClient}
+                    onChange={(event) => {
+                      setFounderClient(event.target.checked);
+                      setFounderSetupDiscountMode(
+                        event.target.checked ? "FIFTY_PERCENT" : "NONE"
+                      );
+                    }}
+                    className="mt-1"
+                  />
+                  <span>
+                    Cliente Fundador
+                    <span className="block text-xs text-yellow-200/80">
+                      Permite aplicar descuento especial sobre setup.
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+              ) : (
+                <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-200">
+                  <span className="font-bold block mb-1">Precio Preferencial Fundador Activo</span>
+                  Aura aplica automáticamente tarifas preferenciales fijas de setup en este modo. No se requiere descuento adicional.
+                </div>
+              )}
             </div>
 
-            {founderClient && (
+            {pricingMode === "DYNAMIC" && founderClient && (
               <div className="mt-4">
                 <FieldLabel label="Descuento setup fundador">
                   <select
@@ -875,24 +915,42 @@ export default function PricingEnginePage() {
                   Setup de implementación
                 </h3>
 
-                <div className="mt-4 space-y-2 text-sm text-yellow-100">
-                  <p>Tipo de cálculo: {quoteResult.setupCalculationType}</p>
-                  <p>
-                    Puntos de complejidad:{" "}
-                    {quoteResult.setupComplexityScore}
-                  </p>
-                  <p>
-                    Setup antes de descuento:{" "}
-                    {formatCurrency(quoteResult.setupFeeBeforeDiscount)}
-                  </p>
-                  <p>
-                    Descuento setup: {quoteResult.setupDiscountPercent}% (
-                    {formatCurrency(quoteResult.setupDiscountAmount)})
-                  </p>
-                  <p className="text-base font-bold">
-                    Setup final: {formatCurrency(quoteResult.setupFee)}
-                  </p>
-                </div>
+                {quoteResult.pricingMode === "FOUNDER" ? (
+                  <div className="mt-4 space-y-2 text-sm text-yellow-100">
+                    <p>Tipo de cálculo: Founder Pricing (Tarifa Preferencial)</p>
+                    {quoteResult.setupHcmTier && (
+                      <p>Nivel HCM: {quoteResult.setupHcmTier} ({formatCurrency(quoteResult.setupHcmFee || 0)})</p>
+                    )}
+                    {quoteResult.setupMaintTier && (
+                      <p>Nivel Maintenance: {quoteResult.setupMaintTier} ({formatCurrency(quoteResult.setupMaintFee || 0)})</p>
+                    )}
+                    <p className="text-base font-bold mt-2">
+                      Setup final: {formatCurrency(quoteResult.setupFee)}
+                    </p>
+                    <p className="text-xs text-yellow-200/80 mt-1">
+                      * Precio preferencial fundador aplicado.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-2 text-sm text-yellow-100">
+                    <p>Tipo de cálculo: {quoteResult.setupCalculationType}</p>
+                    <p>
+                      Puntos de complejidad:{" "}
+                      {quoteResult.setupComplexityScore}
+                    </p>
+                    <p>
+                      Setup antes de descuento:{" "}
+                      {formatCurrency(quoteResult.setupFeeBeforeDiscount)}
+                    </p>
+                    <p>
+                      Descuento setup: {quoteResult.setupDiscountPercent}% (
+                      {formatCurrency(quoteResult.setupDiscountAmount)})
+                    </p>
+                    <p className="text-base font-bold">
+                      Setup final: {formatCurrency(quoteResult.setupFee)}
+                    </p>
+                  </div>
+                )}
 
                 <div className="mt-4 grid gap-2 md:grid-cols-2">
                   {quoteResult.setupBreakdown.map((item) => (
@@ -902,7 +960,10 @@ export default function PricingEnginePage() {
                     >
                       <p className="font-semibold">{item.factor}</p>
                       <p className="text-yellow-200/80">
-                        {item.product} · {item.score} puntos
+                        {item.product === "AURA_HCM" ? "HCM" : "Maintenance"}
+                        {quoteResult.pricingMode === "DYNAMIC"
+                          ? ` · ${item.score} pt${item.score === 1 ? "" : "s"} · ${formatCurrency(item.amount || item.score * (item.product === "AURA_HCM" ? 2500 : 2000))}`
+                          : ` · ${formatCurrency(item.amount || 0)}`}
                       </p>
                     </div>
                   ))}
@@ -967,7 +1028,19 @@ export default function PricingEnginePage() {
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <h3 className="font-bold text-white">{quote.folio}</h3>
+                    <h3 className="font-bold text-white flex flex-wrap items-center gap-2">
+                      <span>{quote.folio}</span>
+                      {quote.pricingMode === "FOUNDER" && (
+                        <span className="rounded-full bg-cyan-400/10 border border-cyan-400/30 px-2 py-0.5 text-[10px] text-cyan-200 font-semibold">
+                          Founder Setup
+                        </span>
+                      )}
+                      {quote.pricingMode === "DYNAMIC" && (
+                        <span className="rounded-full bg-indigo-400/10 border border-indigo-400/30 px-2 py-0.5 text-[10px] text-indigo-200 font-semibold">
+                          Dynamic Setup
+                        </span>
+                      )}
+                    </h3>
                     <p className="text-sm text-slate-400">
                       {quote.prospectName}
                     </p>

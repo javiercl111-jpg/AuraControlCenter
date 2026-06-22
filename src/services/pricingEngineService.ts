@@ -318,59 +318,71 @@ function clampDiscount(value: number, max: number): number {
 }
 
 function calculateHcmEmployeeScore(employeeCount: number): number {
-  if (employeeCount >= 2500) return 5;
-  if (employeeCount >= 1001) return 3;
-  if (employeeCount >= 501) return 2;
-  if (employeeCount >= 251) return 1;
+  // Diagnóstico de Complejidad: Empleados HCM
+  // Criterios de puntos para evitar cargos desmedidos.
+  if (employeeCount >= 2500) return 4;
+  if (employeeCount >= 1001) return 2;
+  if (employeeCount >= 501) return 1;
   return 0;
 }
 
 function calculateHcmBranchScore(locationCount: number): number {
-  if (locationCount > 20) return 4;
-  if (locationCount >= 6) return 2;
-  if (locationCount >= 2) return 1;
+  // Diagnóstico de Complejidad: Sucursales/Ubicaciones HCM
+  if (locationCount > 20) return 3;
+  if (locationCount >= 6) return 1;
+  return 0;
+}
+
+function calculateHcmCompanyScore(companyCount: number): number {
+  // Diagnóstico de Complejidad: Empresas Legales HCM
+  if (companyCount >= 5) return 2;
+  if (companyCount >= 2) return 1;
   return 0;
 }
 
 function calculateHcmMigrationScore(type: HcmMigrationType): number {
-  if (type === "COMPLEX_SYSTEM") return 5;
-  if (type === "EXTERNAL_SYSTEM") return 3;
+  // Diagnóstico de Complejidad: Migración HCM
+  if (type === "COMPLEX_SYSTEM") return 4;
+  if (type === "EXTERNAL_SYSTEM") return 2;
   if (type === "SIMPLE_EXCEL") return 1;
   return 0;
 }
 
 function calculateImplementationScore(type: ImplementationType): number {
-  if (type === "ONSITE") return 5;
-  if (type === "HYBRID") return 2;
+  // Diagnóstico de Complejidad: Implementación/Capacitación HCM
+  if (type === "ONSITE") return 3;
+  if (type === "HYBRID") return 1;
   return 0;
 }
 
 function calculateIntegrationScore(count: number): number {
-  if (count > 5) return 8;
-  if (count >= 3) return 5;
-  if (count >= 1) return 2;
+  // Diagnóstico de Complejidad: Integraciones HCM
+  if (count > 5) return 5;
+  if (count >= 3) return 3;
+  if (count >= 1) return 1;
   return 0;
 }
 
 function calculateMaintenanceAssetScore(assetCount: number): number {
-  if (assetCount > 5000) return 8;
-  if (assetCount >= 2501) return 4;
-  if (assetCount >= 1001) return 2;
+  // Diagnóstico de Complejidad: Activos Maintenance
+  if (assetCount > 5000) return 4;
+  if (assetCount >= 2501) return 2;
   if (assetCount >= 500) return 1;
   return 0;
 }
 
 function calculateMaintenanceLocationScore(locationCount: number): number {
-  if (locationCount > 25) return 8;
-  if (locationCount >= 11) return 4;
-  if (locationCount >= 2) return 2;
+  // Diagnóstico de Complejidad: Ubicaciones Maintenance
+  if (locationCount > 25) return 4;
+  if (locationCount >= 11) return 2;
+  if (locationCount >= 2) return 1;
   return 0;
 }
 
 function calculateMaintenanceTechnicianScore(technicianCount: number): number {
-  if (technicianCount > 100) return 6;
-  if (technicianCount >= 51) return 4;
-  if (technicianCount >= 26) return 2;
+  // Diagnóstico de Complejidad: Técnicos Maintenance
+  if (technicianCount > 100) return 4;
+  if (technicianCount >= 51) return 2;
   if (technicianCount >= 10) return 1;
   return 0;
 }
@@ -378,8 +390,15 @@ function calculateMaintenanceTechnicianScore(technicianCount: number): number {
 function calculateMaintenanceInitialLoadScore(
   type: MaintenanceInitialLoadType
 ): number {
-  if (type === "CMMS_MIGRATION") return 5;
-  if (type === "EXCEL") return 2;
+  // Diagnóstico de Complejidad: Carga Inicial Maintenance
+  if (type === "CMMS_MIGRATION") return 3;
+  if (type === "EXCEL") return 1;
+  return 0;
+}
+
+function calculateMaintenanceTrainingScore(technicianCount: number): number {
+  // Diagnóstico de Complejidad: Capacitación/Acompañamiento Maintenance
+  if (technicianCount >= 10) return 1;
   return 0;
 }
 
@@ -393,7 +412,33 @@ function calculateFounderSetupDiscountPercent(
   return 0;
 }
 
-function calculateSetup(input: PricingQuoteInput): {
+function getFounderHcmSetup(planCode: PricingPlanCode): { tier: string; fee: number } {
+  if (planCode === "STARTER") {
+    return { tier: "Básico", fee: 0 };
+  } else if (planCode === "PROFESSIONAL" || planCode === "BUSINESS") {
+    return { tier: "Profesional", fee: 4900 };
+  } else if (planCode === "ENTERPRISE" || planCode === "CORPORATE") {
+    return { tier: "Enterprise", fee: 9900 };
+  }
+  return { tier: "Básico", fee: 0 };
+}
+
+function getFounderMaintenanceSetup(assetCount: number, technicianCount: number): { tier: string; fee: number } {
+  const assets = assetCount || 0;
+  const techs = technicianCount || 0;
+  if (assets <= 100 && techs <= 10) {
+    return { tier: "Starter", fee: 0 };
+  } else if (assets <= 500 && techs <= 25) {
+    return { tier: "Profesional", fee: 3900 };
+  } else {
+    return { tier: "Enterprise", fee: 7900 };
+  }
+}
+
+function calculateSetup(
+  input: PricingQuoteInput,
+  planCode: PricingPlanCode
+): {
   setupCalculationType: SetupCalculationType;
   setupBasePrice: number;
   setupComplexityScore: number;
@@ -402,16 +447,89 @@ function calculateSetup(input: PricingQuoteInput): {
   setupDiscountPercent: number;
   setupDiscountAmount: number;
   setupFee: number;
+  pricingMode: "FOUNDER" | "DYNAMIC";
+  founderPricing: boolean;
+  setupHcmTier?: string;
+  setupMaintTier?: string;
+  setupHcmFee?: number;
+  setupMaintFee?: number;
 } {
-  const setupBreakdown: SetupBreakdownItem[] = [];
+  const pricingMode = input.pricingMode || "FOUNDER";
+  const founderPricing = pricingMode === "FOUNDER";
 
+  const includesHcm = input.selectedModules.includes("AURA_HCM");
+  const includesMaintenance = input.selectedModules.includes("AURA_MAINTENANCE");
+
+  const setupCalculationType: SetupCalculationType =
+    includesHcm && includesMaintenance
+      ? "COMBINED_ENTERPRISE"
+      : includesHcm
+        ? "HCM_ENTERPRISE"
+        : includesMaintenance
+          ? "MAINTENANCE_ENTERPRISE"
+          : "NONE";
+
+  if (founderPricing) {
+    const setupBreakdown: SetupBreakdownItem[] = [];
+    let setupFeeBeforeDiscount = 0;
+    let setupHcmTier: string | undefined;
+    let setupHcmFee: number | undefined;
+    let setupMaintTier: string | undefined;
+    let setupMaintFee: number | undefined;
+
+    if (includesHcm) {
+      const hcmSetup = getFounderHcmSetup(planCode);
+      setupHcmTier = hcmSetup.tier;
+      setupHcmFee = hcmSetup.fee;
+      setupFeeBeforeDiscount += setupHcmFee;
+      setupBreakdown.push({
+        product: "AURA_HCM",
+        factor: `Setup Fijo (HCM ${setupHcmTier})`,
+        score: 0,
+        amount: setupHcmFee,
+      });
+    }
+
+    if (includesMaintenance) {
+      const maintSetup = getFounderMaintenanceSetup(
+        input.maintenanceAssetCount,
+        input.maintenanceTechnicianCount
+      );
+      setupMaintTier = maintSetup.tier;
+      setupMaintFee = maintSetup.fee;
+      setupFeeBeforeDiscount += setupMaintFee;
+      setupBreakdown.push({
+        product: "AURA_MAINTENANCE",
+        factor: `Setup Fijo (Maint ${setupMaintTier})`,
+        score: 0,
+        amount: setupMaintFee,
+      });
+    }
+
+    return {
+      setupCalculationType,
+      setupBasePrice: 0,
+      setupComplexityScore: 0,
+      setupBreakdown,
+      setupFeeBeforeDiscount,
+      setupDiscountPercent: 0,
+      setupDiscountAmount: 0,
+      setupFee: setupFeeBeforeDiscount,
+      pricingMode,
+      founderPricing,
+      setupHcmTier,
+      setupMaintTier,
+      setupHcmFee,
+      setupMaintFee,
+    };
+  }
+
+  // DYNAMIC Mode (Existing point-based logic)
+  const setupBreakdown: SetupBreakdownItem[] = [];
   let setupBasePrice = 0;
   let setupFeeBeforeDiscount = 0;
 
-  const includesHcm = input.selectedModules.includes("AURA_HCM");
-  const includesMaintenance =
-    input.selectedModules.includes("AURA_MAINTENANCE");
-
+  // HCM Setup Calculation
   if (includesHcm) {
     const hcmBreakdown: SetupBreakdownItem[] = [
       {
@@ -426,12 +544,17 @@ function calculateSetup(input: PricingQuoteInput): {
       },
       {
         product: "AURA_HCM",
+        factor: "Empresas legales",
+        score: calculateHcmCompanyScore(input.companyCount),
+      },
+      {
+        product: "AURA_HCM",
         factor: "Migración de datos",
         score: calculateHcmMigrationScore(input.hcmMigrationType),
       },
       {
         product: "AURA_HCM",
-        factor: "Implementación",
+        factor: "Capacitación y Acompañamiento",
         score: calculateImplementationScore(input.hcmImplementationType),
       },
       {
@@ -441,13 +564,24 @@ function calculateSetup(input: PricingQuoteInput): {
       },
     ];
 
-    const hcmScore = hcmBreakdown.reduce((total, item) => total + item.score, 0);
+    // Validación de Puntos y Lógica de Topes (Cap de 6 puntos para evitar cobros excesivos)
+    const rawHcmScore = hcmBreakdown.reduce((total, item) => total + item.score, 0);
+    const hcmScore = Math.min(rawHcmScore, 6);
 
-    setupBreakdown.push(...hcmBreakdown);
+    // Calcular el monto unitario por factor y asociar al desglose
+    const hcmItems = hcmBreakdown.map((item) => ({
+      ...item,
+      amount: item.score * HCM_SETUP_POINT_PRICE,
+    }));
+
+    setupBreakdown.push(...hcmItems);
     setupBasePrice += HCM_SETUP_BASE_PRICE;
+    
+    // Cálculo final HCM: Base + (Puntos Capped * Precio por Punto)
     setupFeeBeforeDiscount += HCM_SETUP_BASE_PRICE + hcmScore * HCM_SETUP_POINT_PRICE;
   }
 
+  // Maintenance Setup Calculation
   if (includesMaintenance) {
     const maintenanceBreakdown: SetupBreakdownItem[] = [
       {
@@ -477,41 +611,48 @@ function calculateSetup(input: PricingQuoteInput): {
       {
         product: "AURA_MAINTENANCE",
         factor: "QR masivos",
-        score: input.maintenanceMassiveQr ? 3 : 0,
+        score: input.maintenanceMassiveQr ? 2 : 0,
+      },
+      {
+        product: "AURA_MAINTENANCE",
+        factor: "Capacitación y Acompañamiento",
+        score: calculateMaintenanceTrainingScore(input.maintenanceTechnicianCount),
       },
     ];
 
-    const maintenanceScore = maintenanceBreakdown.reduce(
+    // Validación de Puntos y Lógica de Topes (Cap de 4 puntos para evitar cobros excesivos)
+    const rawMaintenanceScore = maintenanceBreakdown.reduce(
       (total, item) => total + item.score,
       0
     );
+    const maintenanceScore = Math.min(rawMaintenanceScore, 4);
 
-    setupBreakdown.push(...maintenanceBreakdown);
+    // Calcular el monto unitario por factor y asociar al desglose
+    const maintenanceItems = maintenanceBreakdown.map((item) => ({
+      ...item,
+      amount: item.score * MAINTENANCE_SETUP_POINT_PRICE,
+    }));
+
+    setupBreakdown.push(...maintenanceItems);
     setupBasePrice += MAINTENANCE_SETUP_BASE_PRICE;
+
+    // Cálculo final Maintenance: Base + (Puntos Capped * Precio por Punto)
     setupFeeBeforeDiscount +=
       MAINTENANCE_SETUP_BASE_PRICE +
       maintenanceScore * MAINTENANCE_SETUP_POINT_PRICE;
   }
 
-  const setupComplexityScore = setupBreakdown.reduce(
-    (total, item) => total + item.score,
-    0
-  );
-
-  const setupCalculationType: SetupCalculationType =
-    includesHcm && includesMaintenance
-      ? "COMBINED_ENTERPRISE"
-      : includesHcm
-        ? "HCM_ENTERPRISE"
-        : includesMaintenance
-          ? "MAINTENANCE_ENTERPRISE"
-          : "NONE";
+  // Puntuación de complejidad combinada reflejando los topes
+  const setupComplexityScore =
+    (includesHcm ? Math.min(setupBreakdown.filter(i => i.product === "AURA_HCM").reduce((t, i) => t + i.score, 0), 6) : 0) +
+    (includesMaintenance ? Math.min(setupBreakdown.filter(i => i.product === "AURA_MAINTENANCE").reduce((t, i) => t + i.score, 0), 4) : 0);
 
   const setupDiscountPercent = calculateFounderSetupDiscountPercent(
     input.founderClient,
     input.founderSetupDiscountMode
   );
 
+  // El descuento de fundador (50% o 100%) se calcula sobre setupFeeBeforeDiscount
   const setupDiscountAmount = Number(
     ((setupFeeBeforeDiscount * setupDiscountPercent) / 100).toFixed(2)
   );
@@ -529,6 +670,8 @@ function calculateSetup(input: PricingQuoteInput): {
     setupDiscountPercent,
     setupDiscountAmount,
     setupFee,
+    pricingMode,
+    founderPricing,
   };
 }
 
@@ -627,7 +770,7 @@ export async function calculatePricingQuote(
   const ivaAmount = Number((subtotal * 0.16).toFixed(2));
   const total = Number((subtotal + ivaAmount).toFixed(2));
 
-  const setup = calculateSetup(input);
+  const setup = calculateSetup(input, plan.planCode as PricingPlanCode);
 
   const firstPaymentSubtotal = Number((subtotal + setup.setupFee).toFixed(2));
   const firstPaymentIvaAmount = Number((firstPaymentSubtotal * 0.16).toFixed(2));
