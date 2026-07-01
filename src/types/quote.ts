@@ -72,6 +72,13 @@ export interface PricingQuoteInput {
   founderClient: boolean;
   founderSetupDiscountMode: FounderSetupDiscountMode;
   pricingMode?: "FOUNDER" | "DYNAMIC";
+  salesChannel?: "ADVISOR" | "DIRECT";
+  advisorId?: string | null;
+  selectedPlanCode?: string;
+  advisorEmail?: string | null;
+  ownerAdvisorId?: string | null;
+  ownerAdvisorName?: string | null;
+  ownerAdvisorEmail?: string | null;
 }
 
 export interface PricingQuoteResult {
@@ -121,6 +128,13 @@ export interface PricingQuoteResult {
   setupMaintTier?: string;
   setupHcmFee?: number;
   setupMaintFee?: number;
+  selectedPlanCode?: string;
+  selectedPlanName?: string;
+  planTier?: string;
+  advisorEmail?: string | null;
+  ownerAdvisorId?: string | null;
+  ownerAdvisorName?: string | null;
+  ownerAdvisorEmail?: string | null;
 }
 
 export interface PlatformQuote extends PricingQuoteResult {
@@ -133,6 +147,41 @@ export interface PlatformQuote extends PricingQuoteResult {
   validUntil: string;
   founderClient?: boolean;
   founderSetupDiscountMode?: FounderSetupDiscountMode;
+  applySpecialDiscount?: boolean;
+  specialDiscountPercent?: number;
+  hcmMigrationType?: HcmMigrationType;
+  hcmImplementationType?: ImplementationType;
+  hcmIntegrationCount?: number;
+  maintenanceAssetCount?: number;
+  maintenanceTechnicianCount?: number;
+  maintenanceInitialLoadType?: MaintenanceInitialLoadType;
+  maintenanceMassiveQr?: boolean;
+  provisioningStatus?: "READY" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "CANCELLED";
+  provisioningJobId?: string;
+  clientId?: string;
+  tenantId?: string;
+  subscriptionId?: string;
+  licenseIds?: string[];
+  provisionedAt?: any;
+  provisioningErrorMessage?: string | null;
+  salesChannel?: "ADVISOR" | "DIRECT";
+  advisorId?: string | null;
+  advisorName?: string | null;
+  advisorEmail?: string | null;
+  ownerAdvisorId?: string | null;
+  ownerAdvisorName?: string | null;
+  ownerAdvisorEmail?: string | null;
+  commissionSkipped?: boolean;
+  commissionSkipReason?: string;
+  commissionGenerated?: boolean;
+  commissionId?: string;
+  commissionErrorMessage?: string;
+  selectedPlanCode?: string;
+  selectedPlanName?: string;
+  planTier?: string;
+  versionNumber?: number;
+  originalQuoteId?: string;
+  previousQuoteId?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 }

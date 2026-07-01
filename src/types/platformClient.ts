@@ -4,6 +4,27 @@ export type ClientStatus =
   | "SUSPENDED"
   | "CANCELLED";
 
+export type SubscriptionStatus =
+  | "PENDING_ACTIVATION"
+  | "ACTIVE"
+  | "GRACE_PERIOD"
+  | "SUSPENDED"
+  | "CANCELLED";
+
+export type TenantStatus =
+  | "READY"
+  | "ACTIVE"
+  | "GRACE_PERIOD"
+  | "SUSPENDED"
+  | "CANCELLED";
+
+export type LicenseStatus =
+  | "PENDING_ACTIVATION"
+  | "ACTIVE"
+  | "SUSPENDED"
+  | "EXPIRED"
+  | "CANCELLED";
+
 export type BillingCycle = "MONTHLY" | "YEARLY";
 
 export type AuraModuleCode =
@@ -41,6 +62,13 @@ export interface PlatformClient {
   startDate?: string;
   renewalDate?: string;
   graceUntil?: string;
+  salesChannel?: "ADVISOR" | "DIRECT";
+  advisorId?: string | null;
+  advisorName?: string | null;
+  advisorEmail?: string | null;
+  ownerAdvisorId?: string | null;
+  ownerAdvisorName?: string | null;
+  ownerAdvisorEmail?: string | null;
   createdAt?: unknown;
   updatedAt?: unknown;
   licenseStatusEvaluatedAt?: unknown;

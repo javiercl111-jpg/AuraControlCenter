@@ -17,6 +17,7 @@ export default function SalesAdvisorsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [userId, setUserId] = useState("");
 
   const [status, setStatus] =
     useState<SalesAdvisorStatus>("ACTIVE");
@@ -57,22 +58,19 @@ export default function SalesAdvisorsPage() {
         name,
         email,
         phone,
-
         status,
-
         commissionYear1: 10,
-
         commissionRenewal: 5,
-
         bonusLevel: 15,
-
         notes,
+        userId: userId.trim() || null,
       });
 
       setName("");
       setEmail("");
       setPhone("");
       setNotes("");
+      setUserId("");
 
       await loadAdvisors();
     } catch (err) {
@@ -137,6 +135,15 @@ export default function SalesAdvisorsPage() {
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
           />
 
+          <input
+            value={userId}
+            onChange={(e) =>
+              setUserId(e.target.value)
+            }
+            placeholder="Firebase UID (Opcional)"
+            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+          />
+
           <select
             value={status}
             onChange={(e) =>
@@ -155,6 +162,10 @@ export default function SalesAdvisorsPage() {
             </option>
           </select>
         </div>
+
+        <p className="mt-3 text-xs text-slate-400">
+          El Firebase UID permite asignar automáticamente al asesor cuando inicia sesión. Si no se captura UID, se intentará relacionar por correo electrónico.
+        </p>
 
         <textarea
           value={notes}
@@ -212,6 +223,12 @@ export default function SalesAdvisorsPage() {
                 <span className="rounded-full bg-slate-800 px-3 py-1">
                   Bono: {advisor.bonusLevel}%
                 </span>
+
+                {advisor.userId && (
+                  <span className="rounded-full bg-cyan-950 border border-cyan-400/20 px-3 py-1 text-cyan-300">
+                    Firebase UID: {advisor.userId}
+                  </span>
+                )}
               </div>
             </article>
           ))}

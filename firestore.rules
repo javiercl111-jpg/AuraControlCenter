@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper to check if request is from authenticated user
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Platform clients collection permissions
+    match /platform_clients/{clientId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Platform tenants collection permissions
+    match /platform_tenants/{tenantId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Platform subscriptions collection permissions
+    match /platform_subscriptions/{subscriptionId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Platform licenses collection permissions
+    match /platform_licenses/{licenseId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Platform provisioning jobs permissions
+    match /platform_provisioning_jobs/{jobId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Platform quotes permissions
+    match /platform_quotes/{quoteId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Platform commissions permissions
+    match /platform_commissions/{commissionId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Platform sales advisors permissions
+    match /platform_sales_advisors/{advisorId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Platform global admins permissions
+    match /platform_global_admins/{adminEmail} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

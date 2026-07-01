@@ -423,16 +423,15 @@ function getFounderHcmSetup(planCode: PricingPlanCode): { tier: string; fee: num
   return { tier: "Básico", fee: 0 };
 }
 
-function getFounderMaintenanceSetup(assetCount: number, technicianCount: number): { tier: string; fee: number } {
-  const assets = assetCount || 0;
-  const techs = technicianCount || 0;
-  if (assets <= 100 && techs <= 10) {
+function getFounderMaintenanceSetup(planCode: PricingPlanCode): { tier: string; fee: number } {
+  if (planCode === "STARTER") {
     return { tier: "Starter", fee: 0 };
-  } else if (assets <= 500 && techs <= 25) {
+  } else if (planCode === "PROFESSIONAL" || planCode === "BUSINESS") {
     return { tier: "Profesional", fee: 3900 };
-  } else {
+  } else if (planCode === "ENTERPRISE" || planCode === "CORPORATE") {
     return { tier: "Enterprise", fee: 7900 };
   }
+  return { tier: "Starter", fee: 0 };
 }
 
 function calculateSetup(
@@ -491,10 +490,7 @@ function calculateSetup(
     }
 
     if (includesMaintenance) {
-      const maintSetup = getFounderMaintenanceSetup(
-        input.maintenanceAssetCount,
-        input.maintenanceTechnicianCount
-      );
+      const maintSetup = getFounderMaintenanceSetup(planCode);
       setupMaintTier = maintSetup.tier;
       setupMaintFee = maintSetup.fee;
       setupFeeBeforeDiscount += setupMaintFee;
@@ -684,7 +680,13 @@ export async function calculatePricingQuote(
     getPricingSettings(),
   ]);
 
-  const plan = findPlanForEmployees(plans, input.employeeCount);
+  let plan = findPlanForEmployees(plans, input.employeeCount);
+  if (input.selectedPlanCode) {
+    const selectedPlan = plans.find((p) => p.planCode === input.selectedPlanCode);
+    if (selectedPlan) {
+      plan = selectedPlan;
+    }
+  }
 
   const extraLocations = Math.max(0, input.locationCount - plan.includedLocations);
   const extraCompanies = Math.max(0, input.companyCount - plan.includedCompanies);
@@ -785,6 +787,9 @@ export async function calculatePricingQuote(
   return {
     planCode: plan.planCode as PricingPlanCode,
     planName: plan.name,
+    selectedPlanCode: plan.planCode,
+    selectedPlanName: plan.name,
+    planTier: plan.planCode === "STARTER" ? "Básico" : (plan.planCode === "ENTERPRISE" || plan.planCode === "CORPORATE" ? "Enterprise" : "Profesional"),
     employeeCount: input.employeeCount,
     locationCount: input.locationCount,
     companyCount: input.companyCount,
@@ -822,3 +827,15 @@ export const PRICING_MODULE_OPTIONS: {
   value: rule.moduleCode,
   label: rule.label,
 }));
+
+const pricingEngineService = {
+  clearPricingCache,
+  seedDefaultPricingRules,
+  getPricingSettings,
+  getPricingPlans,
+  getModulePricingRules,
+  calculatePricingQuote,
+  PRICING_MODULE_OPTIONS,
+};
+
+export default pricingEngineService;

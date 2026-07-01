@@ -1,5 +1,7 @@
 import jsPDF from "jspdf";
+import { doc, getDoc } from "firebase/firestore";
 
+import { db } from "../config/firebase";
 import type { PlatformQuote } from "../types/quote";
 
 const LOGO_PATH = "/Logo Aura Oficial.png";
@@ -160,7 +162,12 @@ function safeFileName(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-function addCoverPage(doc: jsPDF, quote: PlatformQuote, logo: string | null) {
+function addCoverPage(
+  doc: jsPDF,
+  quote: PlatformQuote,
+  logo: string | null,
+  advisorEmail?: string | null
+) {
   setFillColor(doc, AURA_NAVY);
   doc.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, "F");
 
@@ -203,11 +210,27 @@ function addCoverPage(doc: jsPDF, quote: PlatformQuote, logo: string | null) {
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.text(
-    `Facturación: ${formatBillingCycle(quote.billingCycle)}`,
+    `Plan: ${quote.selectedPlanName || quote.planName} · Facturación: ${formatBillingCycle(quote.billingCycle)}`,
     PAGE_WIDTH / 2,
     215,
     { align: "center" }
   );
+
+  // Canal comercial / Asesor comercial info
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  setTextColor(doc, [210, 225, 240]);
+  
+  const isDirect = quote.salesChannel === "DIRECT" || !quote.advisorId || quote.advisorId === "UNASSIGNED";
+  if (isDirect) {
+    doc.text("Canal comercial: Venta directa", PAGE_WIDTH / 2, 224, { align: "center" });
+  } else {
+    let advisorText = `Asesor comercial: ${quote.advisorName}`;
+    if (advisorEmail) {
+      advisorText += ` (${advisorEmail})`;
+    }
+    doc.text(advisorText, PAGE_WIDTH / 2, 224, { align: "center" });
+  }
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
@@ -1162,24 +1185,44 @@ function addDetailsAndTermsPage(doc: jsPDF, quote: PlatformQuote, logo: string |
 }
 
 export async function downloadProposalPdf(quote: PlatformQuote): Promise<void> {
-  const doc = new jsPDF("p", "mm", "a4");
+  const docPdf = new jsPDF("p", "mm", "a4");
   const logo = await loadImageAsDataUrl(LOGO_PATH);
 
-  addCoverPage(doc, quote, logo);
-  addExecutiveSummaryPage(doc, quote, logo);
-  addPricingPage(doc, quote);
-  addDetailsAndTermsPage(doc, quote, logo);
+  let advisorEmail: string | null = quote.advisorEmail || null;
+  const isDirect = quote.salesChannel === "DIRECT" || !quote.advisorId || quote.advisorId === "UNASSIGNED";
+  if (!isDirect && quote.advisorId && !advisorEmail) {
+    try {
+      const advisorRef = doc(db, "platform_sales_advisors", quote.advisorId);
+      const advisorSnap = await getDoc(advisorRef);
+      if (advisorSnap.exists()) {
+        advisorEmail = advisorSnap.data().email || null;
+      }
+    } catch (err) {
+      console.warn("[Proposal PDF] Error querying advisor email:", err);
+    }
+  }
+
+  addCoverPage(docPdf, quote, logo, advisorEmail);
+  addExecutiveSummaryPage(docPdf, quote, logo);
+  addPricingPage(docPdf, quote);
+  addDetailsAndTermsPage(docPdf, quote, logo);
 
   // Post-process to write footers to all generated pages (except the cover)
-  const totalPages = doc.getNumberOfPages();
+  const totalPages = docPdf.getNumberOfPages();
   for (let i = 2; i <= totalPages; i++) {
-    doc.setPage(i);
-    addFooter(doc, i, totalPages);
+    docPdf.setPage(i);
+    addFooter(docPdf, i, totalPages);
   }
 
   const fileName = `${quote.folio}-${safeFileName(
     quote.prospectName || "propuesta"
   )}.pdf`;
 
-  doc.save(fileName);
+  docPdf.save(fileName);
 }
+
+const proposalPdfService = {
+  downloadProposalPdf,
+};
+
+export default proposalPdfService;

@@ -1,10 +1,13 @@
 import {
   addDoc,
   collection,
+  doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -81,19 +84,14 @@ export async function createQuote(data: {
 
   const quoteRef = await addDoc(collection(db, COLLECTION_NAME), {
     ...freshResult,
+    ...data.input,
     folio: buildQuoteFolio(),
-    prospectName: data.input.prospectName,
-    contactName: data.input.contactName,
-    contactEmail: data.input.contactEmail,
-    industry: data.input.industry,
     discountPercent: freshResult.discountPercent,
     employeesLimit: freshResult.employeesLimit,
     locationsLimit: freshResult.locationsLimit,
     companiesLimit: freshResult.companiesLimit,
     selectedModules: freshResult.selectedModules,
     billingCycle: freshResult.billingCycle,
-    founderClient: data.input.founderClient || false,
-    founderSetupDiscountMode: data.input.founderSetupDiscountMode || "NONE",
     status: "DRAFT",
     validUntil: addDays(today, 30),
     createdAt: serverTimestamp(),
@@ -102,3 +100,63 @@ export async function createQuote(data: {
 
   return quoteRef.id;
 }
+
+export async function updateQuote(
+  quoteId: string,
+  data: {
+    input: PricingQuoteInput;
+    result: PricingQuoteResult;
+  }
+): Promise<void> {
+  const quoteRef = doc(db, COLLECTION_NAME, quoteId);
+  const quoteSnap = await getDoc(quoteRef);
+  if (!quoteSnap.exists()) {
+    throw new Error("La propuesta comercial no existe.");
+  }
+  const quote = quoteSnap.data();
+  if (quote.status === "ACCEPTED") {
+    throw new Error("Esta propuesta ya fue aceptada y no se puede modificar.");
+  }
+
+  await updateDoc(quoteRef, {
+    ...data.result,
+    ...data.input,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function createQuoteVersion(data: {
+  input: PricingQuoteInput;
+  result: PricingQuoteResult;
+  versionNumber: number;
+  originalQuoteId: string;
+  previousQuoteId: string;
+  baseFolio: string;
+}): Promise<string> {
+  const today = todayInputValue();
+  const freshResult = await calculatePricingQuote(data.input);
+
+  const quoteRef = await addDoc(collection(db, COLLECTION_NAME), {
+    ...freshResult,
+    ...data.input,
+    folio: `${data.baseFolio}-V${data.versionNumber}`,
+    versionNumber: data.versionNumber,
+    originalQuoteId: data.originalQuoteId,
+    previousQuoteId: data.previousQuoteId,
+    status: "DRAFT",
+    validUntil: addDays(today, 30),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return quoteRef.id;
+}
+
+const quoteService = {
+  getQuotes,
+  createQuote,
+  updateQuote,
+  createQuoteVersion,
+};
+
+export default quoteService;

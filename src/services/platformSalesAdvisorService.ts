@@ -7,7 +7,7 @@ import {
     serverTimestamp,
   } from "firebase/firestore";
   
-  import { db } from "../config/firebase";
+  import { auth, db } from "../config/firebase";
   
   import type {
     PlatformSalesAdvisor,
@@ -43,6 +43,7 @@ import {
     commissionYear1: number;
     commissionRenewal: number;
     bonusLevel: number;
+    userId?: string | null;
     notes?: string;
   }) {
     await addDoc(collection(db, COLLECTION_NAME), {
@@ -51,6 +52,7 @@ import {
       phone: data.phone,
   
       status: data.status,
+      userId: data.userId || null,
   
       commissionYear1: data.commissionYear1,
   
@@ -65,3 +67,39 @@ import {
       updatedAt: serverTimestamp(),
     });
   }
+
+  export async function getCurrentSalesAdvisor(): Promise<PlatformSalesAdvisor | null> {
+    const user = auth.currentUser;
+    if (!user) return null;
+
+    const advisors = await getSalesAdvisors();
+    const activeAdvisors = advisors.filter((a) =>
+      a.status &&
+      typeof a.status === "string" &&
+      ["active", "activo"].includes(a.status.toLowerCase())
+    );
+
+    // 1. Try matching by userId
+    if (user.uid) {
+      const matchById = activeAdvisors.find((a) => (a as any).userId === user.uid);
+      if (matchById) return matchById;
+    }
+
+    // 2. Try matching by email
+    if (user.email) {
+      const matchByEmail = activeAdvisors.find(
+        (a) => a.email && typeof a.email === "string" && a.email.toLowerCase() === user.email!.toLowerCase()
+      );
+      if (matchByEmail) return matchByEmail;
+    }
+
+    return null;
+  }
+
+  const platformSalesAdvisorService = {
+    getSalesAdvisors,
+    createSalesAdvisor,
+    getCurrentSalesAdvisor,
+  };
+
+  export default platformSalesAdvisorService;

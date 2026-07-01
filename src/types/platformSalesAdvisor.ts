@@ -21,6 +21,8 @@ export interface PlatformSalesAdvisor {
 
   notes?: string;
 
+  userId?: string | null;
+
   createdAt?: unknown;
 
   updatedAt?: unknown;
