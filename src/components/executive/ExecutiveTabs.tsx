@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Brain, BriefcaseBusiness, Rocket, ShieldAlert } from "lucide-react";
 
 import type { ExecutiveDashboardData } from "../../pages/DashboardPage";
@@ -7,6 +7,10 @@ interface ExecutiveTabsProps {
   data: ExecutiveDashboardData;
 }
 
+type ExecutiveTabId = "business" | "consulting" | "operations" | "intelligence";
+
+const STORAGE_KEY = "aura.executiveCenter.activeTab";
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
@@ -14,10 +18,24 @@ function formatCurrency(value: number) {
   }).format(value || 0);
 }
 
+function isExecutiveTabId(value: string | null): value is ExecutiveTabId {
+  return (
+    value === "business" ||
+    value === "consulting" ||
+    value === "operations" ||
+    value === "intelligence"
+  );
+}
+
 export default function ExecutiveTabs({ data }: ExecutiveTabsProps) {
-  const [activeTab, setActiveTab] = useState<
-    "business" | "consulting" | "operations" | "intelligence"
-  >("business");
+  const [activeTab, setActiveTab] = useState<ExecutiveTabId>(() => {
+    const savedTab = window.localStorage.getItem(STORAGE_KEY);
+    return isExecutiveTabId(savedTab) ? savedTab : "business";
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, activeTab);
+  }, [activeTab]);
 
   const tabs = [
     { id: "business", label: "Negocio", icon: BriefcaseBusiness },
