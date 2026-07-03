@@ -71,7 +71,7 @@ export default function ExecutiveTabs({ data }: ExecutiveTabsProps) {
       {activeTab === "business" && <BusinessTab data={data} />}
       {activeTab === "consulting" && <ConsultingTab data={data} />}
       {activeTab === "operations" && <OperationsTab data={data} />}
-      {activeTab === "intelligence" && <IntelligenceTab />}
+      {activeTab === "intelligence" && <IntelligenceTab data={data} />}
     </section>
   );
 }
