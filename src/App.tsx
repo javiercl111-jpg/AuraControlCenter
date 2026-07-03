@@ -8,6 +8,7 @@ import ClientDetailPage from "./pages/ClientDetailPage";
 import ClientEditPage from "./pages/ClientEditPage";
 import ClientsPage from "./pages/ClientsPage";
 import CommissionsPage from "./pages/CommissionsPage";
+import ConsultingCenterPage from "./pages/ConsultingCenterPage";
 import CrmPage from "./pages/CrmPage";
 import DashboardPage from "./pages/DashboardPage";
 import LicenseManagementPage from "./pages/LicenseManagementPage";
@@ -19,8 +20,8 @@ import PricingEnginePage from "./pages/PricingEnginePage";
 import ReportsPage from "./pages/ReportsPage";
 import SalesAdvisorsPage from "./pages/SalesAdvisorsPage";
 import SettingsPage from "./pages/SettingsPage";
-import TenantEnforcementPage from "./pages/TenantEnforcementPage";
 import SubscriptionsPage from "./pages/SubscriptionsPage";
+import TenantEnforcementPage from "./pages/TenantEnforcementPage";
 import TenantsPage from "./pages/TenantsPage";
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="consulting" element={<ConsultingCenterPage />} />
         <Route path="crm" element={<CrmPage />} />
         <Route path="pricing" element={<PricingEnginePage />} />
         <Route path="clients" element={<ClientsPage />} />
