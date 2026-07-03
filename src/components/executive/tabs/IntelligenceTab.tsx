@@ -68,10 +68,19 @@ import {
       });
     }
   
-    if (data.metrics.newLeads.length > 0) {
+    if (data.metrics.highPriorityOrganizations.length > 0) {
+      recommendations.push({
+        title: "Atender organizaciones prioritarias",
+        description: `Hay ${data.metrics.highPriorityOrganizations.length} organización(es) de prioridad alta en Consulting Center. Conviene revisar sus expedientes hoy.`,
+        severity: "info",
+        icon: Rocket,
+      });
+    }
+  
+    if (data.metrics.consultingDiscovery.length > 0) {
       recommendations.push({
         title: "Agendar descubrimiento",
-        description: `Hay ${data.metrics.newLeads.length} organización(es) nueva(s). Conviene iniciar diagnóstico antes de presentar módulos.`,
+        description: `Hay ${data.metrics.consultingDiscovery.length} organización(es) en descubrimiento. Inicia diagnóstico antes de presentar módulos.`,
         severity: "info",
         icon: Rocket,
       });

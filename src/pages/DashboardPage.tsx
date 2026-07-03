@@ -4,6 +4,7 @@ import ExecutiveHeader from "../components/executive/ExecutiveHeader";
 import ExecutiveKPIs from "../components/executive/ExecutiveKPIs";
 import ExecutiveTabs from "../components/executive/ExecutiveTabs";
 
+import { getOrganizations } from "../services/consultingOrganizationService";
 import { getInvoices } from "../services/platformBillingService";
 import { getClients } from "../services/platformClientService";
 import { getCommissions } from "../services/platformCommissionService";
@@ -11,6 +12,7 @@ import { getLeads } from "../services/platformLeadService";
 import { getPayments } from "../services/platformPaymentService";
 import { getTenants } from "../services/platformTenantService";
 
+import type { PlatformOrganization } from "../types/platformOrganization";
 import type { PlatformClient } from "../types/platformClient";
 import type { PlatformCommission } from "../types/platformCommission";
 import type { PlatformInvoice } from "../types/platformInvoice";
@@ -29,6 +31,11 @@ export interface ExecutiveMetrics {
   newLeads: PlatformLead[];
   wonLeads: PlatformLead[];
   lostLeads: PlatformLead[];
+  consultingDiscovery: PlatformOrganization[];
+  consultingDiagnosis: PlatformOrganization[];
+  consultingProposal: PlatformOrganization[];
+  consultingImplementation: PlatformOrganization[];
+  highPriorityOrganizations: PlatformOrganization[];
   pipelineValue: number;
   wonValue: number;
   conversionRate: number;
@@ -52,6 +59,7 @@ export interface ExecutiveDashboardData {
   payments: PlatformPayment[];
   commissions: PlatformCommission[];
   leads: PlatformLead[];
+  organizations: PlatformOrganization[];
   metrics: ExecutiveMetrics;
 }
 
@@ -71,6 +79,7 @@ export default function DashboardPage() {
   const [payments, setPayments] = useState<PlatformPayment[]>([]);
   const [commissions, setCommissions] = useState<PlatformCommission[]>([]);
   const [leads, setLeads] = useState<PlatformLead[]>([]);
+  const [organizations, setOrganizations] = useState<PlatformOrganization[]>([]);
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -86,6 +95,7 @@ export default function DashboardPage() {
         paymentsData,
         commissionsData,
         leadsData,
+        organizationsData,
       ] = await Promise.all([
         getClients(),
         getTenants(),
@@ -93,6 +103,7 @@ export default function DashboardPage() {
         getPayments(),
         getCommissions(),
         getLeads(),
+        getOrganizations(),
       ]);
 
       setClients(clientsData);
@@ -101,6 +112,7 @@ export default function DashboardPage() {
       setPayments(paymentsData);
       setCommissions(commissionsData);
       setLeads(leadsData);
+      setOrganizations(organizationsData);
     } catch (err) {
       console.error(err);
       setError("No se pudo cargar el Executive Center.");
@@ -115,20 +127,12 @@ export default function DashboardPage() {
 
   const metrics = useMemo<ExecutiveMetrics>(() => {
     const activeClients = clients.filter((client) => client.status === "ACTIVE");
-    const graceClients = clients.filter(
-      (client) => client.status === "GRACE_PERIOD"
-    );
-    const suspendedClients = clients.filter(
-      (client) => client.status === "SUSPENDED"
-    );
-    const cancelledClients = clients.filter(
-      (client) => client.status === "CANCELLED"
-    );
+    const graceClients = clients.filter((client) => client.status === "GRACE_PERIOD");
+    const suspendedClients = clients.filter((client) => client.status === "SUSPENDED");
+    const cancelledClients = clients.filter((client) => client.status === "CANCELLED");
 
     const activeTenants = tenants.filter((tenant) => tenant.status === "ACTIVE");
-    const suspendedTenants = tenants.filter(
-      (tenant) => tenant.status === "SUSPENDED"
-    );
+    const suspendedTenants = tenants.filter((tenant) => tenant.status === "SUSPENDED");
 
     const tenantsNearLimit = tenants.filter((tenant) => {
       const current = tenant.usage?.hcmActiveEmployees || 0;
@@ -136,13 +140,32 @@ export default function DashboardPage() {
       const threshold = tenant.usage?.hcmWarningThreshold || 80;
 
       if (!limit) return false;
-
       return (current / limit) * 100 >= threshold;
     });
 
     const wonLeads = leads.filter((lead) => lead.stage === "WON");
     const lostLeads = leads.filter((lead) => lead.stage === "LOST");
     const newLeads = leads.filter((lead) => lead.stage === "NEW_LEAD");
+
+    const consultingDiscovery = organizations.filter(
+      (organization) => organization.stage === "DISCOVERY"
+    );
+
+    const consultingDiagnosis = organizations.filter(
+      (organization) => organization.stage === "DIAGNOSIS"
+    );
+
+    const consultingProposal = organizations.filter(
+      (organization) => organization.stage === "PROPOSAL"
+    );
+
+    const consultingImplementation = organizations.filter(
+      (organization) => organization.stage === "IMPLEMENTATION"
+    );
+
+    const highPriorityOrganizations = organizations.filter(
+      (organization) => organization.priority === "HIGH"
+    );
 
     const pipelineValue = leads
       .filter((lead) => lead.stage !== "LOST")
@@ -173,9 +196,7 @@ export default function DashboardPage() {
     );
 
     const paidInvoices = invoices.filter((invoice) => invoice.status === "PAID");
-    const pendingInvoices = invoices.filter(
-      (invoice) => invoice.status === "PENDING"
-    );
+    const pendingInvoices = invoices.filter((invoice) => invoice.status === "PENDING");
 
     const paymentsReceived = payments.reduce(
       (total, payment) => total + (payment.amount || 0),
@@ -219,6 +240,11 @@ export default function DashboardPage() {
       newLeads,
       wonLeads,
       lostLeads,
+      consultingDiscovery,
+      consultingDiagnosis,
+      consultingProposal,
+      consultingImplementation,
+      highPriorityOrganizations,
       pipelineValue,
       wonValue,
       conversionRate,
@@ -234,7 +260,7 @@ export default function DashboardPage() {
       mrr,
       arr: mrr * 12,
     };
-  }, [clients, tenants, invoices, payments, commissions, leads]);
+  }, [clients, tenants, invoices, payments, commissions, leads, organizations]);
 
   const dashboardData: ExecutiveDashboardData = {
     clients,
@@ -243,6 +269,7 @@ export default function DashboardPage() {
     payments,
     commissions,
     leads,
+    organizations,
     metrics,
   };
 
