@@ -1,5 +1,7 @@
 import {
+    Timestamp,
     addDoc,
+    arrayUnion,
     collection,
     doc,
     getDocs,
@@ -13,6 +15,7 @@ import {
   import { db } from "../config/firebase";
   import type {
     ConsultingStage,
+    OrganizationTimelineEvent,
     PlatformDiscoveryRequest,
     PlatformOrganization,
   } from "../types/platformOrganization";
@@ -25,9 +28,34 @@ import {
     "id" | "createdAt" | "updatedAt"
   >;
   
+  function createTimelineEvent(
+    type: OrganizationTimelineEvent["type"],
+    title: string,
+    description: string
+  ): OrganizationTimelineEvent {
+    return {
+      id: `${type}-${Date.now()}`,
+      type,
+      title,
+      description,
+      createdAt: Timestamp.now(),
+    };
+  }
+  
   export async function createOrganization(input: CreateOrganizationInput) {
+    const timeline = input.timeline?.length
+      ? input.timeline
+      : [
+          createTimelineEvent(
+            "ORGANIZATION_CREATED",
+            "Organización creada",
+            "El expediente fue creado manualmente en Aura Consulting Center."
+          ),
+        ];
+  
     const ref = await addDoc(collection(db, ORGANIZATIONS_COLLECTION), {
       ...input,
+      timeline,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -73,6 +101,13 @@ import {
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, organizationId), {
       stage,
       updatedAt: serverTimestamp(),
+      timeline: arrayUnion(
+        createTimelineEvent(
+          "STAGE_UPDATED",
+          "Etapa actualizada",
+          `La organización avanzó a la etapa ${stage}.`
+        )
+      ),
     });
   }
   
@@ -94,6 +129,18 @@ import {
       notes: request.notes || "",
       source: request.source,
       discoveryRequestId: request.id,
+      timeline: [
+        createTimelineEvent(
+          "DISCOVERY_REQUEST_RECEIVED",
+          "Solicitud recibida",
+          `La organización ingresó desde ${request.source}.`
+        ),
+        createTimelineEvent(
+          "DISCOVERY_STARTED",
+          "Diagnóstico iniciado",
+          "La solicitud fue convertida en expediente Aura."
+        ),
+      ],
     });
   
     await updateDoc(doc(db, DISCOVERY_REQUESTS_COLLECTION, request.id), {

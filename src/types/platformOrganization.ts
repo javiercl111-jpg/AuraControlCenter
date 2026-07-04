@@ -16,6 +16,20 @@ export type DiscoveryRequestStatus =
   | "CONVERTED"
   | "DISCARDED";
 
+export type OrganizationTimelineEventType =
+  | "DISCOVERY_REQUEST_RECEIVED"
+  | "ORGANIZATION_CREATED"
+  | "DISCOVERY_STARTED"
+  | "STAGE_UPDATED";
+
+export interface OrganizationTimelineEvent {
+  id: string;
+  type: OrganizationTimelineEventType;
+  title: string;
+  description: string;
+  createdAt: unknown;
+}
+
 export interface PlatformOrganization {
   id: string;
   companyName: string;
@@ -32,6 +46,7 @@ export interface PlatformOrganization {
   notes: string;
   source?: string;
   discoveryRequestId?: string;
+  timeline?: OrganizationTimelineEvent[];
   createdAt?: unknown;
   updatedAt?: unknown;
 }

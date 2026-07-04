@@ -1,5 +1,6 @@
 import { Brain, CheckCircle2, Lightbulb } from "lucide-react";
 
+import OrganizationTimeline from "./OrganizationTimeline";
 import type {
   ConsultingStage,
   PlatformOrganization,
@@ -112,6 +113,8 @@ export default function AuraDossier({
               ))}
             </div>
           </div>
+
+          <OrganizationTimeline timeline={selectedOrganization.timeline} />
 
           {selectedOrganization.notes && (
             <div className="rounded-3xl border border-slate-800 bg-slate-950/50 p-4">
