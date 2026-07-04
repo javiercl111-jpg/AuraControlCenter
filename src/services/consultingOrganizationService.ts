@@ -23,6 +23,12 @@ import {
   const ORGANIZATIONS_COLLECTION = "platform_organizations";
   const DISCOVERY_REQUESTS_COLLECTION = "platform_discovery_requests";
   
+  const DEFAULT_CONSULTANT = {
+    id: "jcuellar",
+    name: "Javier Cuéllar Lazarini",
+    email: "jcuellar@aura-hcm.com",
+  };
+  
   type CreateOrganizationInput = Omit<
     PlatformOrganization,
     "id" | "createdAt" | "updatedAt"
@@ -34,7 +40,7 @@ import {
     description: string
   ): OrganizationTimelineEvent {
     return {
-      id: `${type}-${Date.now()}`,
+      id: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       type,
       title,
       description,
@@ -129,11 +135,20 @@ import {
       notes: request.notes || "",
       source: request.source,
       discoveryRequestId: request.id,
+      assignedConsultantId: DEFAULT_CONSULTANT.id,
+      assignedConsultantName: DEFAULT_CONSULTANT.name,
+      assignedConsultantEmail: DEFAULT_CONSULTANT.email,
+      assignedAt: Timestamp.now(),
       timeline: [
         createTimelineEvent(
           "DISCOVERY_REQUEST_RECEIVED",
           "Solicitud recibida",
           `La organización ingresó desde ${request.source}.`
+        ),
+        createTimelineEvent(
+          "CONSULTANT_ASSIGNED",
+          "Consultor asignado",
+          `${DEFAULT_CONSULTANT.name} fue asignado para iniciar el acompañamiento.`
         ),
         createTimelineEvent(
           "DISCOVERY_STARTED",

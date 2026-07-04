@@ -27,9 +27,7 @@ export default function DiscoveryInbox({
         <Inbox className="h-5 w-5 text-cyan-300" />
 
         <div>
-          <h2 className="text-xl font-bold text-white">
-            Discovery Inbox
-          </h2>
+          <h2 className="text-xl font-bold text-white">Discovery Inbox</h2>
 
           <p className="text-sm text-slate-500">
             Solicitudes recibidas desde auranexus.io pendientes de revisión.
@@ -45,12 +43,13 @@ export default function DiscoveryInbox({
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h3 className="font-bold text-white">
-                  {request.companyName}
-                </h3>
+                <h3 className="font-bold text-white">{request.companyName}</h3>
 
-                <p className="text-sm text-slate-400">
-                  {request.contactName}
+                <p className="text-sm text-slate-400">{request.contactName}</p>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  {request.email || "Sin correo"} ·{" "}
+                  {request.phone || "Sin teléfono"}
                 </p>
               </div>
 
@@ -74,6 +73,16 @@ export default function DiscoveryInbox({
               ))}
             </div>
 
+            <div className="mt-4 rounded-2xl border border-cyan-400/10 bg-cyan-400/5 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                Asignación
+              </p>
+
+              <p className="mt-1 text-sm text-slate-300">
+                Se asignará a Javier Cuéllar Lazarini como consultor fundador.
+              </p>
+            </div>
+
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -82,7 +91,7 @@ export default function DiscoveryInbox({
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <CheckCircle2 className="h-4 w-4" />
-                Comenzar diagnóstico
+                Asignar y comenzar
               </button>
 
               <button

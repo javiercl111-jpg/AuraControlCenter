@@ -20,6 +20,7 @@ export type OrganizationTimelineEventType =
   | "DISCOVERY_REQUEST_RECEIVED"
   | "ORGANIZATION_CREATED"
   | "DISCOVERY_STARTED"
+  | "CONSULTANT_ASSIGNED"
   | "STAGE_UPDATED";
 
 export interface OrganizationTimelineEvent {
@@ -46,6 +47,10 @@ export interface PlatformOrganization {
   notes: string;
   source?: string;
   discoveryRequestId?: string;
+  assignedConsultantId?: string;
+  assignedConsultantName?: string;
+  assignedConsultantEmail?: string;
+  assignedAt?: unknown;
   timeline?: OrganizationTimelineEvent[];
   createdAt?: unknown;
   updatedAt?: unknown;

@@ -1,4 +1,4 @@
-import { Brain, CheckCircle2, Lightbulb } from "lucide-react";
+import { Brain, CheckCircle2, Lightbulb, UserCheck } from "lucide-react";
 
 import OrganizationTimeline from "./OrganizationTimeline";
 import type {
@@ -61,6 +61,26 @@ export default function AuraDossier({
 
             <p className="text-sm text-slate-400">
               {selectedOrganization.phone || "Sin teléfono"}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-cyan-400/20 bg-cyan-400/10 p-4">
+            <div className="mb-2 flex items-center gap-2 text-cyan-200">
+              <UserCheck className="h-4 w-4" />
+
+              <p className="text-xs font-semibold uppercase tracking-[0.25em]">
+                Consultor asignado
+              </p>
+            </div>
+
+            <p className="text-sm font-semibold text-white">
+              {selectedOrganization.assignedConsultantName ||
+                "Sin consultor asignado"}
+            </p>
+
+            <p className="mt-1 text-sm text-cyan-100">
+              {selectedOrganization.assignedConsultantEmail ||
+                "Asigna un consultor para iniciar seguimiento."}
             </p>
           </div>
 
