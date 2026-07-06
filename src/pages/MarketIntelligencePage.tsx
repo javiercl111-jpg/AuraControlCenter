@@ -118,6 +118,7 @@ export default function MarketIntelligencePage() {
 
   // Estados de importación ZIP nacional (Prioridad 5)
   const [zipProgress, setZipProgress] = useState<any | null>(null);
+  const [zipSummary, setZipSummary] = useState<any | null>(null);
   const [pendingStateResolutionFiles, setPendingStateResolutionFiles] = useState<{ filename: string; guessedState: string }[] | null>(null);
   const [currentResolutionIndex, setCurrentResolutionIndex] = useState<number>(-1);
   const [resolvedFilesList, setResolvedFilesList] = useState<{ filename: string; state: string }[]>([]);
@@ -510,33 +511,36 @@ export default function MarketIntelligencePage() {
     setActiveZipFile(file);
 
     try {
-      const analyzed = await NationalZipImportService.analyzeZipFiles(file);
-      
-      if (analyzed.length === 0) {
-        throw new Error("No se encontraron archivos Excel válidos (.xlsx, .xls) dentro del ZIP.");
-      }
-
-      // Pre-poblar los ya resueltos
-      const preResolved = analyzed
-        .filter((f) => !f.needsStateSelection)
-        .map((f) => ({ filename: f.filename, state: f.guessedState }));
-
-      const needsResolution = analyzed.filter((f) => f.needsStateSelection);
-
-      if (needsResolution.length === 0) {
-        // Todos los estados se dedujeron solos, proceder de inmediato
-        await startResolvedZipImport(file, preResolved);
-      } else {
-        // Requiere resolución interactiva de estados
-        setResolvedFilesList(preResolved);
-        setPendingStateResolutionFiles(needsResolution);
-        setCurrentResolutionIndex(0);
-      }
+      const summary = await NationalZipImportService.analyzeZipFiles(file);
+      setZipSummary(summary);
     } catch (err: any) {
       console.error(err);
       setError("Fallo al analizar el ZIP nacional: " + err.message);
-      setIsProcessing(false);
       setActiveZipFile(null);
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  // Proceder tras confirmar el resumen del ZIP
+  async function handleConfirmZipImport() {
+    if (!zipSummary || !activeZipFile) return;
+
+    const analyzedFiles = zipSummary.files;
+    const preResolved = analyzedFiles
+      .filter((f: any) => !f.needsStateSelection)
+      .map((f: any) => ({ filename: f.filename, state: f.guessedState }));
+
+    const needsResolution = analyzedFiles.filter((f: any) => f.needsStateSelection);
+
+    setZipSummary(null);
+
+    if (needsResolution.length === 0) {
+      await startResolvedZipImport(activeZipFile, preResolved);
+    } else {
+      setResolvedFilesList(preResolved);
+      setPendingStateResolutionFiles(needsResolution);
+      setCurrentResolutionIndex(0);
     }
   }
 
@@ -649,6 +653,84 @@ export default function MarketIntelligencePage() {
       {success && (
         <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4 text-sm text-cyan-200">
           {success}
+        </div>
+      )}
+
+      {/* Resumen Previo a la Importación ZIP (Prioridad 6) */}
+      {zipSummary && activeZipFile && (
+        <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-300">
+              📁 ZIP Nacional Detectado
+            </h3>
+            <span className="text-xs text-slate-400 font-semibold font-mono font-sans">
+              {activeZipFile.name}
+            </span>
+          </div>
+
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-4 text-center">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                Archivos Excel Detectados
+              </span>
+              <span className="block text-2xl font-extrabold text-white mt-1">
+                {zipSummary.totalFiles}
+              </span>
+            </div>
+            
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                Estados Identificados
+              </span>
+              <span className="block text-2xl font-extrabold text-white mt-1">
+                {zipSummary.statesCount}
+              </span>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                Registros Estimados
+              </span>
+              <span className="block text-2xl font-extrabold text-cyan-400 mt-1 font-mono">
+                {zipSummary.totalEstimatedRows.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                Resolución Requerida
+              </span>
+              <span className="block text-2xl font-extrabold text-amber-400 mt-1">
+                {zipSummary.unresolvedFilesCount}
+              </span>
+            </div>
+          </div>
+
+          {zipSummary.unresolvedFilesCount > 0 && (
+            <p className="text-xs text-amber-400 leading-relaxed bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 font-sans">
+              ⚠ Se requiere que confirmes el estado geográfico de <strong>{zipSummary.unresolvedFilesCount}</strong> archivo(s) manualmente antes de iniciar.
+            </p>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveZipFile(null);
+                setZipSummary(null);
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-900 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmZipImport}
+              className="rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 transition active:scale-95"
+            >
+              Comenzar Importación
+            </button>
+          </div>
         </div>
       )}
 

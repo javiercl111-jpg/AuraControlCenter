@@ -45,6 +45,15 @@ export interface ZipAnalyzedFile {
   filename: string;
   guessedState: string;
   needsStateSelection: boolean;
+  rowCount: number;
+}
+
+export interface ZipAnalysisSummary {
+  totalFiles: number;
+  unresolvedFilesCount: number;
+  totalEstimatedRows: number;
+  statesCount: number;
+  files: ZipAnalyzedFile[];
 }
 
 export interface ZipImportProgress {
@@ -75,33 +84,92 @@ export interface NationalZipImportResult {
  * Analiza los archivos internos del ZIP, identificando cuáles son Excel
  * y cuáles carecen de estado geográfico (para resolverlos interactivamente).
  */
-export async function analyzeZipFiles(zipFile: File): Promise<ZipAnalyzedFile[]> {
-  const zip = await JSZip.loadAsync(zipFile);
-  
-  // Ignorar archivos ocultos, __MACOSX o temporales
-  const excelFiles = Object.keys(zip.files).filter(
-    (name) => (name.endsWith(".xlsx") || name.endsWith(".xls")) && 
-              !name.startsWith("__MACOSX") && 
-              !name.startsWith(".") &&
-              !name.includes("/.") &&
-              !name.includes("~$")
-  );
+export async function analyzeZipFiles(zipFile: File): Promise<ZipAnalysisSummary> {
+  console.log("=== DIAGNÓSTICO DE ARCHIVO ZIP ===");
+  console.log(`Nombre: ${zipFile.name}`);
+  console.log(`Tipo MIME: ${zipFile.type}`);
+  console.log(`Tamaño: ${zipFile.size} bytes`);
+  const extension = zipFile.name.split(".").pop() || "";
+  console.log(`Extensión: ${extension}`);
 
-  const result: ZipAnalyzedFile[] = [];
+  // Magic numbers validation
+  try {
+    const slice = zipFile.slice(0, 4);
+    const arrBuf = await slice.arrayBuffer();
+    const view = new DataView(arrBuf);
+    const magic = [];
+    for (let i = 0; i < arrBuf.byteLength; i++) {
+      magic.push(view.getUint8(i).toString(16).padStart(2, "0").toUpperCase());
+    }
+    console.log(`Primeros bytes (Hex): ${magic.join(" ")}`);
+    if (magic.join(" ") === "50 4B 03 04") {
+      console.log("Firma mágica confirmada: Formato ZIP válido (PK..)");
+    } else {
+      console.warn("Firma mágica no coincide con PK (50 4B 03 04).");
+    }
+  } catch (err) {
+    console.error("Fallo al leer magic bytes:", err);
+  }
+
+  let zip: JSZip;
+  try {
+    const zipData = await zipFile.arrayBuffer();
+    zip = await JSZip.loadAsync(zipData);
+    console.log("JSZip cargó el archivo correctamente.");
+  } catch (jszipErr: any) {
+    console.error("Fallo crítico de JSZip:", jszipErr);
+    throw new Error(`El archivo ZIP está dañado o no es un formato válido: ${jszipErr.message}`);
+  }
+
+  // Filtrar archivos Excel recursivos, ignorando carpetas de sistema y ocultos
+  const excelFiles = Object.keys(zip.files).filter((name) => {
+    const isFolder = zip.files[name].dir;
+    if (isFolder) return false;
+
+    const basename = name.split("/").pop() || "";
+    const lowercaseName = name.toLowerCase();
+
+    // Ignorar basura de macOS/Windows
+    if (
+      lowercaseName.includes("__macosx") ||
+      lowercaseName.includes("thumbs.db") ||
+      lowercaseName.includes("desktop.ini")
+    ) {
+      return false;
+    }
+
+    // Ignorar archivos ocultos o temporales
+    if (basename.startsWith(".") || basename.startsWith("~$")) {
+      return false;
+    }
+
+    // Aceptar únicamente Excel (.xlsx, .xls)
+    const isExcel = basename.toLowerCase().endsWith(".xlsx") || basename.toLowerCase().endsWith(".xls");
+    return isExcel;
+  });
+
+  const files: ZipAnalyzedFile[] = [];
+  let totalEstimatedRows = 0;
+  let unresolvedFilesCount = 0;
+  const statesSet = new Set<string>();
 
   for (const filename of excelFiles) {
     let guessedState = detectStateFromFilename(filename);
     let needsStateSelection = !guessedState;
-    
-    if (needsStateSelection) {
-      try {
-        const fileData = await zip.files[filename].async("arraybuffer");
-        const workbook = read(fileData, { type: "array" });
-        const sheetName = workbook.SheetNames[0];
-        if (sheetName) {
-          const sheet = workbook.Sheets[sheetName];
-          const jsonRows: any[][] = utils.sheet_to_json(sheet, { header: 1 });
-          if (jsonRows.length > 0) {
+    let rowCount = 0;
+
+    try {
+      const fileData = await zip.files[filename].async("arraybuffer");
+      const workbook = read(fileData, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      if (sheetName) {
+        const sheet = workbook.Sheets[sheetName];
+        const jsonRows: any[][] = utils.sheet_to_json(sheet, { header: 1 });
+        if (jsonRows.length > 0) {
+          rowCount = Math.max(0, jsonRows.length - 1); // Descontar fila de cabecera
+          totalEstimatedRows += rowCount;
+
+          if (needsStateSelection) {
             const { headerMap } = NormalizationService.detectHeaderRowAndBuildMap(jsonRows);
             if (headerMap.estadoIdx !== -1 && jsonRows[1]) {
               const rowState = String(jsonRows[1][headerMap.estadoIdx] || "").trim();
@@ -112,19 +180,36 @@ export async function analyzeZipFiles(zipFile: File): Promise<ZipAnalyzedFile[]>
             }
           }
         }
-      } catch (err) {
-        console.warn(`[NationalZipImport] Error al analizar cabeceras de ${filename}:`, err);
       }
+    } catch (err) {
+      console.warn(`[NationalZipImport] Error al pre-analizar ${filename}:`, err);
     }
 
-    result.push({
+    if (needsStateSelection) {
+      unresolvedFilesCount++;
+    } else if (guessedState) {
+      statesSet.add(guessedState);
+    }
+
+    files.push({
       filename,
       guessedState,
       needsStateSelection,
+      rowCount,
     });
   }
 
-  return result;
+  if (files.length === 0) {
+    throw new Error("No se encontraron archivos Excel (.xlsx, .xls) válidos dentro del ZIP.");
+  }
+
+  return {
+    totalFiles: files.length,
+    unresolvedFilesCount,
+    totalEstimatedRows,
+    statesCount: statesSet.size,
+    files,
+  };
 }
 
 /**
@@ -137,7 +222,8 @@ export async function importResolvedFiles(
   onProgress?: (progress: ZipImportProgress) => void
 ): Promise<NationalZipImportResult> {
   const startTime = Date.now();
-  const zip = await JSZip.loadAsync(zipFile);
+  const zipData = await zipFile.arrayBuffer();
+  const zip = await JSZip.loadAsync(zipData);
   const totalFiles = resolvedFiles.length;
 
   let processedFiles = 0;
@@ -196,7 +282,6 @@ export async function importResolvedFiles(
         
         try {
           const company = NormalizationService.normalizeRowWithMap(rowArray, headerMap);
-          // Forzar el estado resuelto para que herede la geografía correcta
           company.estado = state;
           companies.push(company);
         } catch (rowErr) {
@@ -209,7 +294,6 @@ export async function importResolvedFiles(
         continue;
       }
 
-      // Upsert batch en sub-lotes configurables
       const upsertResult = await MarketFirestoreService.importMarketCompaniesBatch(companies);
       
       added += upsertResult.added;
@@ -227,7 +311,7 @@ export async function importResolvedFiles(
 
   const timeMs = Date.now() - startTime;
 
-  // Registrar en Historial con type: NATIONAL_ZIP_IMPORT (Prioridad 6)
+  // Registrar en Historial con type: NATIONAL_ZIP_IMPORT
   try {
     const db = (await import("../../../config/firebase")).db;
     const { doc, collection, serverTimestamp, setDoc } = await import("firebase/firestore");
