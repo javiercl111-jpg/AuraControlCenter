@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import type { CompanyStatus, InegiCompany } from "../types/inegi";
+import { Link } from "react-router-dom";
 
 interface MarketCompanyDrawerProps {
   company: InegiCompany | null;
@@ -354,14 +355,13 @@ export default function MarketCompanyDrawer({
         {/* Acciones del pie */}
         <div className="mt-6 border-t border-slate-800 pt-5">
           {company.status === "CONVERTED" ? (
-            <button
-              type="button"
-              disabled
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 px-5 py-3 text-sm font-bold text-emerald-400 cursor-not-allowed"
+            <Link
+              to="/consulting"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 px-5 py-3.5 text-sm font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all duration-200"
             >
               <UserCheck className="h-4 w-4" />
-              Expediente Convertido Correctamente
-            </button>
+              Ver en Consulting Center
+            </Link>
           ) : (
             <button
               type="button"
