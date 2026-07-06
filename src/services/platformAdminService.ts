@@ -5,6 +5,7 @@ import type { PlatformGlobalAdmin, PlatformAdminRole } from "../types/platformAd
 /**
  * Obtiene el perfil de administrador buscando por UID (futura arquitectura)
  * o por Email (compatibilidad actual).
+ * Implementa fallbacks robustos para campos duplicados en base (roleCode/type/role y status/isActive).
  */
 export async function getPlatformAdminByEmailOrUid(
   email: string,
@@ -20,8 +21,8 @@ export async function getPlatformAdminByEmailOrUid(
         id: snapshot.id,
         email: data.email || "",
         displayName: data.displayName || "",
-        role: data.role as PlatformAdminRole,
-        isActive: Boolean(data.isActive),
+        role: (data.role || data.roleCode || data.type || "VIEWER") as PlatformAdminRole,
+        isActive: Boolean(data.isActive) || data.status === "ACTIVE",
         createdAt: data.createdAt,
       };
     }
@@ -40,8 +41,8 @@ export async function getPlatformAdminByEmailOrUid(
     id: snapshot.id,
     email: data.email || "",
     displayName: data.displayName || "",
-    role: data.role as PlatformAdminRole,
-    isActive: Boolean(data.isActive),
+    role: (data.role || data.roleCode || data.type || "VIEWER") as PlatformAdminRole,
+    isActive: Boolean(data.isActive) || data.status === "ACTIVE",
     createdAt: data.createdAt,
   };
 }
