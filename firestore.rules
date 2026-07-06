@@ -14,28 +14,34 @@ service cloud.firestore {
       let hasUidDoc = exists(/databases/$(database)/documents/platform_global_admins/$(uid));
       return hasUidDoc
         ? get(/databases/$(database)/documents/platform_global_admins/$(uid)).data
-        : get(/databases/$(database)/documents/platform_global_admins/$(lowerEmail)).data;
+        : (lowerEmail != ''
+            ? get(/databases/$(database)/documents/platform_global_admins/$(lowerEmail)).data
+            : {});
     }
 
-    // Check if user has an active admin profile in platform_global_admins (supports both isActive boolean and status ACTIVE string)
+    // Check if user has an active admin profile in platform_global_admins (supports both isActive boolean/string and status ACTIVE string)
     function isActiveAdmin() {
       let uid = request.auth.uid;
       let email = request.auth.token.email;
       let lowerEmail = email != null ? email.lower() : '';
       let hasProfile = exists(/databases/$(database)/documents/platform_global_admins/$(uid)) ||
                        (lowerEmail != '' && exists(/databases/$(database)/documents/platform_global_admins/$(lowerEmail)));
+      let data = getAdminData();
       return isAuthenticated() && hasProfile && (
-        getAdminData().isActive == true || 
-        getAdminData().status == "ACTIVE"
+        data.isActive == true || 
+        data.isActive == 'true' || 
+        data.status == 'ACTIVE' || 
+        data.status == 'active'
       );
     }
 
-    // Helper to extract role from admin data (supports role, roleCode, and type)
+    // Helper to extract role from admin data (supports role, roleCode, and type, normalized to uppercase)
     function getAdminRole() {
       let data = getAdminData();
-      return data.role != null 
+      let rawRole = data.role != null 
         ? data.role 
         : (data.roleCode != null ? data.roleCode : data.type);
+      return rawRole != null ? string(rawRole).upper() : 'VIEWER';
     }
 
     // Check if user has a specific role
