@@ -12,6 +12,8 @@ interface FiltersState {
   hasWebsite: boolean;
   minScore: number;
   search: string;
+  scian: string;
+  sortBy: string;
 }
 
 interface MarketCompaniesFiltersProps {
@@ -49,6 +51,14 @@ const STATUSES: { label: string; value: CompanyStatus | "" }[] = [
   { label: "Descartado (DISCARDED)", value: "DISCARDED" },
 ];
 
+const SORT_OPTIONS = [
+  { label: "Score (Mayor a menor)", value: "scoreDesc" },
+  { label: "Score (Menor a mayor)", value: "scoreAsc" },
+  { label: "Nombre (A-Z)", value: "nameAsc" },
+  { label: "Nombre (Z-A)", value: "nameDesc" },
+  { label: "Fecha de alta (Recientes)", value: "dateDesc" },
+];
+
 export default function MarketCompaniesFilters({
   filters,
   onFilterChange,
@@ -79,7 +89,7 @@ export default function MarketCompaniesFilters({
         </button>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         {/* Búsqueda por Texto */}
         <div className="relative">
           <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
@@ -164,6 +174,38 @@ export default function MarketCompaniesFilters({
           >
             {SIZES.map((item) => (
               <option key={item.label} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* SCIAN */}
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Clase SCIAN
+          </label>
+          <input
+            type="text"
+            value={filters.scian}
+            onChange={(e) => handleChange("scian", e.target.value)}
+            placeholder="Ej. 72 o 721110"
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-cyan-400"
+          />
+        </div>
+
+        {/* Ordenar por */}
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Ordenar Por
+          </label>
+          <select
+            value={filters.sortBy}
+            onChange={(e) => handleChange("sortBy", e.target.value)}
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
+          >
+            {SORT_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
                 {item.label}
               </option>
             ))}

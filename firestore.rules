@@ -125,6 +125,12 @@ service cloud.firestore {
       allow write: if canImportMarket();
     }
 
+    // Market Imports History
+    match /market_imports_history/{docId} {
+      allow read: if canReadMarket();
+      allow write: if canImportMarket();
+    }
+
     // Market Companies
     match /market_companies/{companyId} {
       allow read: if canReadMarket();

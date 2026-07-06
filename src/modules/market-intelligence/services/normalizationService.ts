@@ -226,6 +226,86 @@ export function determineRecommendedSuites(
   return suites;
 }
 
+/**
+ * Genera la información estratégica del Aura Commercial Advisor basándose en reglas de negocio.
+ */
+export function generateCommercialAdvisorInfo(
+  opportunityScore: number,
+  tamano: string,
+  sector: string,
+  email: string,
+  telefono: string,
+  sitioWeb: string,
+  actividad: string
+): {
+  priorityLevel: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  motives: string[];
+  nextAction: string;
+} {
+  const motives: string[] = [];
+
+  // 1. Evaluar prioridad
+  let priorityLevel: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" = "LOW";
+  if (opportunityScore >= 85) priorityLevel = "CRITICAL";
+  else if (opportunityScore >= 70) priorityLevel = "HIGH";
+  else if (opportunityScore >= 45) priorityLevel = "MEDIUM";
+
+  // 2. Construir motivos basados en reglas
+  const cleanSector = (sector || "").toLowerCase();
+  const cleanTamano = (tamano || "").toLowerCase();
+  const cleanActividad = (actividad || "").toLowerCase();
+
+  // Motivos del giro
+  if (cleanSector.includes("alojamiento") || cleanActividad.includes("hotel")) {
+    motives.push("Giro de Alojamiento/Hotelería: Alta rotación operativa. Crítico digitalizar control de turnos.");
+  } else if (cleanSector.includes("alimentos") || cleanActividad.includes("restaurante")) {
+    motives.push("Giro de Restaurante/Alimentos: Foco en contratación rápida y expedientes digitales.");
+  } else if (cleanSector.includes("manufactur") || cleanSector.includes("industria")) {
+    motives.push("Sector Industrial: Complejidad operativa. Oportunidad en Operations & People Suite.");
+  } else if (cleanSector.includes("financier") || cleanSector.includes("seguro")) {
+    motives.push("Servicios Financieros: Alto potencial presupuestario para la línea Intelligence Suite.");
+  } else {
+    motives.push("Giro comercial idóneo para el ecosistema de automatización Aura.");
+  }
+
+  // Motivos del tamaño
+  if (cleanTamano.includes("grande") || cleanTamano.includes("mediana")) {
+    motives.push(`Estructura corporativa clasificada como ${tamano} (Requiere tabuladores complejos).`);
+  } else {
+    motives.push("Pyme ágil ideal para adopción rápida en la nube.");
+  }
+
+  // Motivos de contacto
+  if (email && email !== "no disponible" && email !== "no aplica") {
+    motives.push("Canal de email verificado: Permite enviar presentación comercial digital.");
+  }
+  if (telefono && telefono !== "no disponible" && telefono !== "no aplica") {
+    motives.push("Contacto telefónico disponible: Apto para prospección telefónica directa.");
+  }
+  
+  const cleanWeb = (sitioWeb || "").toLowerCase().trim();
+  const hasWeb = cleanWeb && cleanWeb !== "no disponible" && cleanWeb !== "n/a" && cleanWeb !== "no aplica";
+  if (hasWeb) {
+    motives.push("Sitio web activo: Refleja infraestructura y madurez tecnológica compatible.");
+  }
+
+  // 3. Siguiente acción recomendada
+  let nextAction = "Registrar prospecto y validar datos generales en base local.";
+  if (priorityLevel === "CRITICAL") {
+    nextAction = "Llamada comercial prioritaria: Agendar demo de 15 min enfocada en Operations & People Suite.";
+  } else if (priorityLevel === "HIGH") {
+    nextAction = "Enviar correo de contacto personalizado con folleto de Sales & Compensation Suite.";
+  } else if (priorityLevel === "MEDIUM") {
+    nextAction = "Validar tomador de decisiones (RRHH/Operaciones) mediante llamada exploratoria.";
+  }
+
+  return {
+    priorityLevel,
+    motives,
+    nextAction,
+  };
+}
+
 // Normalización de una fila del Excel del DENUE
 export function normalizeRow(row: any): InegiCompany {
   // Mapear campos con fallbacks por diferencias de cabeceras en distintos estados del INEGI
@@ -270,6 +350,16 @@ export function normalizeRow(row: any): InegiCompany {
   const opportunityScore = scoreBreakdown.total;
   const recommendedSuites = determineRecommendedSuites(sector, tamano, rangoPersonal, opportunityScore);
   const id = generateDeterministicId(razonSocial, nombreComercial, municipio, scian);
+  
+  const advisor = generateCommercialAdvisorInfo(
+    opportunityScore,
+    tamano,
+    sector,
+    email,
+    telefono,
+    sitioWeb,
+    actividad
+  );
 
   return {
     id,
@@ -294,6 +384,9 @@ export function normalizeRow(row: any): InegiCompany {
     opportunityScore,
     scoreBreakdown,
     recommendedSuites,
+    priorityLevel: advisor.priorityLevel,
+    motives: advisor.motives,
+    nextAction: advisor.nextAction,
     status: "NEW",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -493,6 +586,16 @@ export function normalizeRowWithMap(rowArray: any[], map: HeaderMap): InegiCompa
   const recommendedSuites = determineRecommendedSuites(sector, tamano, rangoPersonal, opportunityScore);
   const id = generateDeterministicId(razonSocial, nombreComercial, municipio, scian);
 
+  const advisor = generateCommercialAdvisorInfo(
+    opportunityScore,
+    tamano,
+    sector,
+    email,
+    telefono,
+    sitioWeb,
+    actividad
+  );
+
   return {
     id,
     razonSocial,
@@ -516,6 +619,9 @@ export function normalizeRowWithMap(rowArray: any[], map: HeaderMap): InegiCompa
     opportunityScore,
     scoreBreakdown,
     recommendedSuites,
+    priorityLevel: advisor.priorityLevel,
+    motives: advisor.motives,
+    nextAction: advisor.nextAction,
     status: "NEW",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -528,6 +634,7 @@ const NormalizationService = {
   generateDeterministicId,
   calculateOpportunityScore,
   determineRecommendedSuites,
+  generateCommercialAdvisorInfo,
   normalizeRow,
   detectHeaderRowAndBuildMap,
   normalizeRowWithMap,

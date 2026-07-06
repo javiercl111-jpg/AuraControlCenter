@@ -1,5 +1,6 @@
 import {
   getDoc,
+  setDoc,
   Timestamp,
   collection,
   doc,
@@ -23,6 +24,24 @@ import MarketQueryEngine from "./marketQueryEngine";
 const MARKET_COMPANIES_COLLECTION = "market_companies";
 const ORGANIZATIONS_COLLECTION = "platform_organizations";
 
+// Parámetros configurables del UPSERT Enterprise
+const UPSERT_READ_CHUNK_SIZE = 30;   // Límite de elementos para la cláusula "in" en Firestore
+const UPSERT_WRITE_CHUNK_SIZE = 100; // Tamaño del lote para writeBatch de Firestore
+
+export interface ImportHistoryEntry {
+  id: string;
+  timestamp: any;
+  filename: string;
+  totalProcessed: number;
+  newAdded: number;
+  updated: number;
+  omitted: number;
+  failed: number;
+  timeMs: number;
+  source: string;
+  sourceVersion: string;
+}
+
 const DEFAULT_CONSULTANT = {
   id: "jcuellar",
   name: "Javier Cuéllar Lazarini",
@@ -33,30 +52,149 @@ const DEFAULT_CONSULTANT = {
  * Importa prospectos de INEGI en lotes utilizando writeBatch (máximo 500 registros por lote).
  * Utiliza IDs determinísticos de forma que no genere costos de lectura y evite duplicados.
  */
+/**
+ * Importa prospectos de INEGI aplicando la política UPSERT Enterprise.
+ * Divide los registros en lotes y comprueba su existencia y cambios para minimizar costos de escritura.
+ */
 export async function importMarketCompaniesBatch(
   companies: InegiCompany[]
-): Promise<{ added: number; overwritten: number }> {
-  if (companies.length > 500) {
-    throw new Error("Límite de lectura e importación excedido. Máximo 500 registros por lote.");
-  }
+): Promise<{ 
+  added: number; 
+  overwritten: number; 
+  omitted: number; 
+  failed: number;
+  historyId: string;
+  timeMs: number;
+}> {
+  const startTime = Date.now();
+  let added = 0;
+  let overwritten = 0;
+  let omitted = 0;
+  let failed = 0;
 
-  const batch = writeBatch(db);
-  let count = 0;
+  const nowStr = new Date().toISOString();
 
-  for (const company of companies) {
-    const docRef = doc(db, MARKET_COMPANIES_COLLECTION, company.id);
+  // Procesar escrituras en sub-lotes configurables
+  for (let i = 0; i < companies.length; i += UPSERT_WRITE_CHUNK_SIZE) {
+    const chunk = companies.slice(i, i + UPSERT_WRITE_CHUNK_SIZE);
+    const ids = chunk.map(c => c.id);
+
+    // 1. Consultar existencia y estado actual en base mediante chunks de lectura de 30
+    const existingDocsMap = new Map<string, any>();
     
-    // Guardar o sobrescribir el registro de forma determinística
-    batch.set(docRef, {
-      ...company,
-      updatedAt: serverTimestamp(),
-    });
-    count++;
+    for (let j = 0; j < ids.length; j += UPSERT_READ_CHUNK_SIZE) {
+      const idGroup = ids.slice(j, j + UPSERT_READ_CHUNK_SIZE);
+      try {
+        const q = query(
+          collection(db, MARKET_COMPANIES_COLLECTION),
+          where("__name__", "in", idGroup)
+        );
+        const snap = await getDocs(q);
+        snap.forEach(doc => {
+          existingDocsMap.set(doc.id, doc.data());
+        });
+      } catch (err) {
+        console.error("Error al consultar existencia de IDs en importación:", err);
+      }
+    }
+
+    // 2. Preparar el lote de escritura (Upsert)
+    const batch = writeBatch(db);
+    let batchHasWrites = false;
+
+    for (const company of chunk) {
+      const existing = existingDocsMap.get(company.id);
+
+      if (!existing) {
+        // Nuevo registro: Crear con auditoría
+        const docRef = doc(db, MARKET_COMPANIES_COLLECTION, company.id);
+        batch.set(docRef, {
+          ...company,
+          firstImportedAt: nowStr,
+          lastImportAt: nowStr,
+          lastUpdatedAt: nowStr,
+          importCount: 1,
+          source: "INEGI",
+          sourceVersion: "DENUE-2026",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        added++;
+        batchHasWrites = true;
+      } else {
+        // Comprobar si cambió algún campo crítico
+        const hasChanged = 
+          existing.razonSocial !== company.razonSocial ||
+          existing.nombreComercial !== company.nombreComercial ||
+          existing.sector !== company.sector ||
+          existing.tamano !== company.tamano ||
+          existing.rangoPersonal !== company.rangoPersonal ||
+          existing.telefono !== company.telefono ||
+          existing.email !== company.email ||
+          existing.sitioWeb !== company.sitioWeb ||
+          existing.direccion !== company.direccion ||
+          existing.municipio !== company.municipio ||
+          existing.estado !== company.estado ||
+          existing.cp !== company.cp ||
+          existing.scian !== company.scian ||
+          existing.actividad !== company.actividad;
+
+        if (!hasChanged) {
+          // Idéntico: Omitir escritura
+          omitted++;
+        } else {
+          // Cambió: Actualizar campos modificados
+          const docRef = doc(db, MARKET_COMPANIES_COLLECTION, company.id);
+          const updates: Record<string, any> = {
+            razonSocial: company.razonSocial,
+            nombreComercial: company.nombreComercial,
+            sector: company.sector,
+            tamano: company.tamano,
+            rangoPersonal: company.rangoPersonal,
+            telefono: company.telefono,
+            email: company.email,
+            sitioWeb: company.sitioWeb,
+            direccion: company.direccion,
+            municipio: company.municipio,
+            estado: company.estado,
+            cp: company.cp,
+            scian: company.scian,
+            actividad: company.actividad,
+            latitud: company.latitud,
+            longitud: company.longitud,
+            altaDenue: company.altaDenue,
+            sourceScore: company.sourceScore,
+            opportunityScore: company.opportunityScore,
+            scoreBreakdown: company.scoreBreakdown,
+            recommendedSuites: company.recommendedSuites,
+            priorityLevel: company.priorityLevel || "LOW",
+            motives: company.motives || [],
+            nextAction: company.nextAction || "",
+            lastImportAt: nowStr,
+            lastUpdatedAt: nowStr,
+            importCount: (existing.importCount || 1) + 1,
+            updatedAt: serverTimestamp(),
+          };
+
+          batch.update(docRef, updates);
+          overwritten++;
+          batchHasWrites = true;
+        }
+      }
+    }
+
+    // 3. Ejecutar lote de escrituras
+    if (batchHasWrites) {
+      try {
+        await batch.commit();
+      } catch (err) {
+        console.error("Error al escribir lote de importación:", err);
+        failed += chunk.length;
+      }
+    }
   }
 
-  await batch.commit();
-
-  // Obtener y actualizar estados únicos de forma asíncrona tras confirmar la importación
+  // 4. Actualizar metadatos de estados acumulados
   const statesInBatch = Array.from(
     new Set(companies.map((c) => c.estado).filter((s) => s && s.trim().length > 0))
   );
@@ -68,7 +206,69 @@ export async function importMarketCompaniesBatch(
     }
   }
 
-  return { added: count, overwritten: 0 };
+  const timeMs = Date.now() - startTime;
+
+  // 5. Registrar Historial de Importaciones en base (Prioridad 4)
+  const historyRef = doc(collection(db, "market_imports_history"));
+  const historyId = historyRef.id;
+  try {
+    await setDoc(historyRef, {
+      id: historyId,
+      timestamp: serverTimestamp(),
+      filename: "Importación Masiva Excel",
+      totalProcessed: companies.length,
+      newAdded: added,
+      updated: overwritten,
+      omitted,
+      failed,
+      timeMs,
+      source: "INEGI",
+      sourceVersion: "DENUE-2026",
+    });
+  } catch (err) {
+    console.error("Error al registrar historial de importación:", err);
+  }
+
+  return { added, overwritten, omitted, failed, historyId, timeMs };
+}
+
+/**
+ * Recupera el historial de las últimas 20 importaciones registradas.
+ */
+export async function getImportHistory(): Promise<ImportHistoryEntry[]> {
+  try {
+    const q = query(
+      collection(db, "market_imports_history"),
+      limit(20)
+    );
+    const snap = await getDocs(q);
+    const list: ImportHistoryEntry[] = [];
+    snap.forEach((doc) => {
+      const data = doc.data();
+      list.push({
+        id: doc.id,
+        timestamp: data.timestamp,
+        filename: data.filename || "Archivo de Importación",
+        totalProcessed: data.totalProcessed || 0,
+        newAdded: data.newAdded || 0,
+        updated: data.updated || 0,
+        omitted: data.omitted || 0,
+        failed: data.failed || 0,
+        timeMs: data.timeMs || 0,
+        source: data.source || "INEGI",
+        sourceVersion: data.sourceVersion || "DENUE-2026",
+      });
+    });
+    // Ordenar descendente (más recientes primero)
+    return list.sort((a, b) => {
+      const timeA = a.timestamp?.seconds || 0;
+      const timeB = b.timestamp?.seconds || 0;
+      return timeB - timeA;
+    });
+  } catch (err) {
+    console.warn("No se pudo obtener el historial de importaciones:", err);
+    return [];
+  }
 }
 
 /**
@@ -142,6 +342,8 @@ export async function getMarketCompanies(
     hasWebsite?: boolean;
     minScore?: number;
     search?: string;
+    scian?: string;
+    sortBy?: string;
   },
   pageSize: number = 25,
   lastVisibleSnapshot: any = null
@@ -178,14 +380,15 @@ export async function getMarketCompanies(
   const totalCount = countSnapshot.data().count;
 
   // 2. Traer registros aplicando paginación
-  // Si hay filtros en memoria (búsqueda de texto, email, score mínimo, etc.),
+  // Si hay filtros en memoria (búsqueda de texto, email, score mínimo, etc. o SCIAN parcial),
   // traemos un número mayor de registros para filtrarlos en el cliente, protegiendo costo.
   const isComplexFilterActive = 
     filters.hasEmail === true || 
     filters.hasPhone === true || 
     filters.hasWebsite === true || 
     (filters.minScore !== undefined && filters.minScore > 0) || 
-    (filters.search !== undefined && filters.search.trim() !== "");
+    (filters.search !== undefined && filters.search.trim() !== "") ||
+    (filters.scian !== undefined && filters.scian.trim() !== "");
 
   const limitCount = isComplexFilterActive ? 250 : pageSize;
   const currentQueryConstraints = [...queryConstraints, limit(limitCount)];
@@ -210,7 +413,13 @@ export async function getMarketCompanies(
       hasWebsite: filters.hasWebsite,
       minScore: filters.minScore,
       search: filters.search,
+      scian: filters.scian,
     });
+  }
+
+  // 4. Aplicar ordenamiento en memoria a través del Market Query Engine
+  if (filters.sortBy) {
+    docs = MarketQueryEngine.sortMarketCompanies(docs, filters.sortBy);
   }
 
   // Paginación en memoria en caso de filtros complejos
@@ -338,6 +547,7 @@ const MarketFirestoreService = {
   convertMarketCompanyToOrganization,
   getUniqueStates,
   updateUniqueStates,
+  getImportHistory,
 };
 
 export default MarketFirestoreService;

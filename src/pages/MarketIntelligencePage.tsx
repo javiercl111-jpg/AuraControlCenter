@@ -25,6 +25,8 @@ interface FiltersState {
   hasWebsite: boolean;
   minScore: number;
   search: string;
+  scian: string;
+  sortBy: string;
 }
 
 const DEFAULT_FILTERS: FiltersState = {
@@ -38,6 +40,8 @@ const DEFAULT_FILTERS: FiltersState = {
   hasWebsite: false,
   minScore: 0,
   search: "",
+  scian: "",
+  sortBy: "scoreDesc",
 };
 
 export default function MarketIntelligencePage() {
@@ -97,13 +101,35 @@ export default function MarketIntelligencePage() {
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
   const [availableStates, setAvailableStates] = useState<string[]>(["Querétaro", "Nuevo León"]);
 
-  // Cargar estados únicos acumulados desde Firestore
+  // Reporte de importación masiva realizada (Prioridad 4)
+  const [importReport, setImportReport] = useState<{
+    total: number;
+    added: number;
+    updated: number;
+    omitted: number;
+    failed: number;
+    timeMs: number;
+  } | null>(null);
+
+  // Historial de importaciones (Prioridad 4)
+  const [importHistory, setImportHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Cargar estados únicos acumulados e historial de importaciones
   useEffect(() => {
-    async function loadStates() {
-      const states = await MarketFirestoreService.getUniqueStates();
-      setAvailableStates(states);
+    async function loadInitialData() {
+      try {
+        const [states, history] = await Promise.all([
+          MarketFirestoreService.getUniqueStates(),
+          MarketFirestoreService.getImportHistory()
+        ]);
+        setAvailableStates(states);
+        setImportHistory(history);
+      } catch (err) {
+        console.warn("Error al cargar datos iniciales de estados/historial:", err);
+      }
     }
-    loadStates();
+    loadInitialData();
   }, []);
 
   // Estados de Paginación (Costo Protegido)
@@ -152,6 +178,8 @@ export default function MarketIntelligencePage() {
           hasWebsite: filters.hasWebsite ? true : undefined,
           minScore: filters.minScore || undefined,
           search: filters.search || undefined,
+          scian: filters.scian || undefined,
+          sortBy: filters.sortBy || undefined,
         },
         25,
         cursor
@@ -256,6 +284,8 @@ export default function MarketIntelligencePage() {
     filters.hasWebsite,
     filters.minScore,
     filters.search,
+    filters.scian,
+    filters.sortBy,
   ]);
 
 
@@ -301,6 +331,8 @@ export default function MarketIntelligencePage() {
           hasWebsite: filters.hasWebsite ? true : undefined,
           minScore: filters.minScore || undefined,
           search: filters.search || undefined,
+          scian: filters.scian || undefined,
+          sortBy: filters.sortBy || undefined,
         },
         25,
         lastDoc
@@ -341,6 +373,8 @@ export default function MarketIntelligencePage() {
           hasWebsite: filters.hasWebsite ? true : undefined,
           minScore: filters.minScore || undefined,
           search: filters.search || undefined,
+          scian: filters.scian || undefined,
+          sortBy: filters.sortBy || undefined,
         },
         25,
         prevCursor
@@ -358,21 +392,36 @@ export default function MarketIntelligencePage() {
     }
   }
 
-  // Importar desde Excel o Muestra Piloto (Batch)
+  // Importar desde Excel o Muestra Piloto (Batch con reporte e historial)
   async function handleImport(importedCompanies: InegiCompany[]) {
     setIsProcessing(true);
     setError("");
     setSuccess("");
+    setImportReport(null);
 
     try {
-      const { added } = await MarketFirestoreService.importMarketCompaniesBatch(
+      const result = await MarketFirestoreService.importMarketCompaniesBatch(
         importedCompanies
       );
-      setSuccess(`Lote importado con éxito: ${added} prospectos cargados en base local.`);
+      
+      setImportReport({
+        total: importedCompanies.length,
+        added: result.added,
+        updated: result.overwritten,
+        omitted: result.omitted,
+        failed: result.failed,
+        timeMs: result.timeMs,
+      });
+
+      setSuccess(`Lote importado con éxito: ${result.added} nuevos, ${result.overwritten} actualizados.`);
       
       // Recargar la lista de estados únicos
       const states = await MarketFirestoreService.getUniqueStates();
       setAvailableStates(states);
+
+      // Recargar historial
+      const history = await MarketFirestoreService.getImportHistory();
+      setImportHistory(history);
 
       await loadData(true);
     } catch (err: any) {
@@ -494,6 +543,48 @@ export default function MarketIntelligencePage() {
         </div>
       )}
 
+      {/* Reporte de Importación Detallado (Prioridad 4) */}
+      {importReport && (
+        <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+              📊 Reporte de Procesamiento de Importación
+            </h3>
+            <button
+              onClick={() => setImportReport(null)}
+              className="text-xs text-slate-500 hover:text-white"
+            >
+              Cerrar Reporte
+            </button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-5 text-center">
+            <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800">
+              <span className="block text-slate-400 text-[10px] font-semibold uppercase tracking-wider">Procesados</span>
+              <span className="block text-2xl font-bold text-white mt-1">{importReport.total}</span>
+            </div>
+            <div className="rounded-xl bg-emerald-500/5 p-4 border border-emerald-500/20">
+              <span className="block text-emerald-400 text-[10px] font-semibold uppercase tracking-wider">Nuevos</span>
+              <span className="block text-2xl font-bold text-emerald-300 mt-1">{importReport.added}</span>
+            </div>
+            <div className="rounded-xl bg-cyan-500/5 p-4 border border-cyan-500/20">
+              <span className="block text-cyan-400 text-[10px] font-semibold uppercase tracking-wider">Actualizados</span>
+              <span className="block text-2xl font-bold text-cyan-300 mt-1">{importReport.updated}</span>
+            </div>
+            <div className="rounded-xl bg-amber-500/5 p-4 border border-amber-500/20">
+              <span className="block text-amber-400 text-[10px] font-semibold uppercase tracking-wider">Sin cambios</span>
+              <span className="block text-2xl font-bold text-amber-300 mt-1">{importReport.omitted}</span>
+            </div>
+            <div className="rounded-xl bg-rose-500/5 p-4 border border-rose-500/20">
+              <span className="block text-rose-400 text-[10px] font-semibold uppercase tracking-wider">Fallidos</span>
+              <span className="block text-2xl font-bold text-rose-300 mt-1">{importReport.failed}</span>
+            </div>
+          </div>
+          <div className="text-[10px] text-slate-500 text-right">
+            Tiempo de ejecución en servidor: <span className="font-semibold text-slate-400">{importReport.timeMs} ms</span>
+          </div>
+        </div>
+      )}
+
       {/* Tarjetas KPI */}
       <MarketIntelligenceKPIs
         totalCount={stats.totalCount}
@@ -537,6 +628,62 @@ export default function MarketIntelligencePage() {
 
         </div>
 
+      </div>
+
+      {/* Historial de Importaciones Recientes (Prioridad 4) */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5">
+        <button
+          type="button"
+          onClick={() => setShowHistory(!showHistory)}
+          className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400 outline-none"
+        >
+          <span className="flex items-center gap-2">
+            <span>📋</span> Historial de Auditoría de Importaciones (Últimas 20)
+          </span>
+          <span className="text-cyan-400">
+            {showHistory ? "Ocultar" : `Mostrar (${importHistory.length})`}
+          </span>
+        </button>
+
+        {showHistory && (
+          <div className="mt-4 overflow-x-auto">
+            {importHistory.length === 0 ? (
+              <p className="text-xs text-slate-500 py-2">No se han registrado importaciones en este tenant.</p>
+            ) : (
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-500 font-semibold uppercase tracking-wider">
+                    <th className="py-2.5">Fecha / Hora</th>
+                    <th className="py-2.5">Total Registros</th>
+                    <th className="py-2.5 text-emerald-400">Nuevos</th>
+                    <th className="py-2.5 text-cyan-400">Actualizados</th>
+                    <th className="py-2.5 text-amber-400">Sin Cambios</th>
+                    <th className="py-2.5 text-rose-400">Fallidos</th>
+                    <th className="py-2.5 text-right">Tiempo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-850 text-slate-300">
+                  {importHistory.map((entry) => {
+                    const date = entry.timestamp?.seconds
+                      ? new Date(entry.timestamp.seconds * 1000).toLocaleString()
+                      : "Reciente";
+                    return (
+                      <tr key={entry.id} className="hover:bg-slate-900/20">
+                        <td className="py-2.5 font-medium">{date}</td>
+                        <td className="py-2.5">{entry.totalProcessed}</td>
+                        <td className="py-2.5 font-semibold text-emerald-400">{entry.newAdded}</td>
+                        <td className="py-2.5 font-semibold text-cyan-400">{entry.updated}</td>
+                        <td className="py-2.5 font-semibold text-amber-400">{entry.omitted}</td>
+                        <td className="py-2.5 font-semibold text-rose-400">{entry.failed}</td>
+                        <td className="py-2.5 text-right text-slate-400">{entry.timeMs} ms</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Drawer de Detalle y Conversión */}

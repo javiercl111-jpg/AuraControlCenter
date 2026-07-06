@@ -11,6 +11,8 @@ export interface QueryFilters {
   hasWebsite?: boolean;
   minScore?: number;
   search?: string;
+  scian?: string;
+  sortBy?: string;
 }
 
 /**
@@ -110,6 +112,15 @@ export function filterMarketCompanies(
       if (!match) return false;
     }
 
+    // 11. Filtro de Clase SCIAN (Coincidencia parcial)
+    if (filters.scian) {
+      const docScian = (company.scian || "").trim();
+      const filterScian = filters.scian.trim();
+      if (!docScian.startsWith(filterScian) && !docScian.includes(filterScian)) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -117,9 +128,43 @@ export function filterMarketCompanies(
   return result;
 }
 
+/**
+ * Ordena un listado de prospectos de mercado según el criterio seleccionado.
+ */
+export function sortMarketCompanies(
+  companies: InegiCompany[],
+  sortBy: string
+): InegiCompany[] {
+  const sorted = [...companies];
+  return sorted.sort((a, b) => {
+    switch (sortBy) {
+      case "scoreDesc":
+        return b.opportunityScore - a.opportunityScore;
+      case "scoreAsc":
+        return a.opportunityScore - b.opportunityScore;
+      case "nameAsc":
+        return (a.nombreComercial || a.razonSocial || "").localeCompare(
+          b.nombreComercial || b.razonSocial || ""
+        );
+      case "nameDesc":
+        return (b.nombreComercial || b.razonSocial || "").localeCompare(
+          a.nombreComercial || a.razonSocial || ""
+        );
+      case "dateDesc": {
+        const timeA = new Date(a.createdAt as string).getTime();
+        const timeB = new Date(b.createdAt as string).getTime();
+        return timeB - timeA;
+      }
+      default:
+        return b.opportunityScore - a.opportunityScore;
+    }
+  });
+}
+
 const MarketQueryEngine = {
   normalizeString,
   filterMarketCompanies,
+  sortMarketCompanies,
 };
 
 export default MarketQueryEngine;

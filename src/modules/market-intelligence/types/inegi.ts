@@ -43,6 +43,16 @@ export interface InegiCompany {
   convertedOrganizationId?: string;
   createdAt: unknown;
   updatedAt: unknown;
+  // Comercial Advisor & Upsert Metadata
+  priorityLevel?: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  motives?: string[];
+  nextAction?: string;
+  firstImportedAt?: string;
+  lastImportAt?: string;
+  lastUpdatedAt?: string;
+  importCount?: number;
+  source?: string;
+  sourceVersion?: string;
 }
 
 export interface MarketSegment {
