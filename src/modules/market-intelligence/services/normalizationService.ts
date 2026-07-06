@@ -300,6 +300,228 @@ export function normalizeRow(row: any): InegiCompany {
   };
 }
 
+export interface HeaderMap {
+  razonSocialIdx: number;
+  nombreComercialIdx: number;
+  sectorIdx: number;
+  tamanoIdx: number;
+  rangoPersonalIdx: number;
+  telefonoIdx: number;
+  emailIdx: number;
+  sitioWebIdx: number;
+  direccionIdx: number;
+  municipioIdx: number;
+  estadoIdx: number;
+  cpIdx: number;
+  scianIdx: number;
+  actividadIdx: number;
+  latitudIdx: number;
+  longitudIdx: number;
+  altaDenueIdx: number;
+  scoreIdx: number;
+}
+
+// Scanea filas 2D y detecta encabezados del DENUE
+export function detectHeaderRowAndBuildMap(rows2D: any[][]): {
+  headerRowIndex: number;
+  headerMap: HeaderMap;
+  headers: string[];
+} {
+  for (let r = 0; r < Math.min(rows2D.length, 30); r++) {
+    const row = rows2D[r];
+    if (!row || !Array.isArray(row)) continue;
+
+    const cleanCells = row.map((cell) => String(cell || "").trim().toLowerCase());
+
+    const matches = cleanCells.filter((cell) => {
+      return (
+        cell.includes("razon social") ||
+        cell.includes("razón social") ||
+        cell.includes("denominacion") ||
+        cell.includes("denominación") ||
+        cell.includes("nombre comercial") ||
+        cell.includes("establecimiento") ||
+        cell.includes("unidad economica") ||
+        cell.includes("unidad económica") ||
+        cell.includes("scian") ||
+        cell.includes("actividad")
+      );
+    });
+
+    if (matches.length >= 2) {
+      const headers = row.map((cell) => String(cell || "").trim());
+      const headerMap = mapHeadersToIndices(headers);
+      return {
+        headerRowIndex: r,
+        headerMap,
+        headers,
+      };
+    }
+  }
+
+  throw new Error(
+    "No se pudo detectar la fila de encabezados del DENUE en el archivo Excel. Asegúrate de incluir al menos columnas de identificación comercial como 'Razón Social' (Denominación) o 'Nombre Comercial'."
+  );
+}
+
+function mapHeadersToIndices(headers: string[]): HeaderMap {
+  const cleanHeaders = headers.map(h => h.trim().toLowerCase());
+
+  const findIndex = (aliases: string[]): number => {
+    return cleanHeaders.findIndex(header => 
+      aliases.some(alias => header === alias || header.includes(alias))
+    );
+  };
+
+  const map: HeaderMap = {
+    razonSocialIdx: findIndex([
+      "razón social", "razon social", "denominación", "denominacion", "nombre o razón", "nombre o razon"
+    ]),
+    nombreComercialIdx: findIndex([
+      "nombre comercial", "nombre_comercial", "nombre del establecimiento", "nom_estab", "nom_establecimiento", "establecimiento", "unidad económica", "unidad economica"
+    ]),
+    sectorIdx: findIndex([
+      "sector económico", "sector economico", "sector_economico", "sector"
+    ]),
+    tamanoIdx: findIndex([
+      "tamaño de la unidad", "tamaño", "tamano", "estratificación", "estratificacion"
+    ]),
+    rangoPersonalIdx: findIndex([
+      "rango de personal", "rango personal", "personal ocupado", "personal_ocupado", "rango_personal"
+    ]),
+    telefonoIdx: findIndex([
+      "teléfono", "telefono", "tel", "móvil", "movil", "fijo"
+    ]),
+    emailIdx: findIndex([
+      "correo electrónico", "correo electronico", "correo", "email", "e-mail"
+    ]),
+    sitioWebIdx: findIndex([
+      "sitio web", "sitio_web", "sitio internet", "pagina web", "pagina_web", "url", "web"
+    ]),
+    direccionIdx: findIndex([
+      "dirección", "direccion", "domicilio", "calle"
+    ]),
+    municipioIdx: findIndex([
+      "municipio", "nom_mun", "delegación", "delegacion"
+    ]),
+    estadoIdx: findIndex([
+      "estado", "entidad", "nom_ent", "provincia"
+    ]),
+    cpIdx: findIndex([
+      "c.p.", "cp", "código postal", "codigo postal", "postal"
+    ]),
+    scianIdx: findIndex([
+      "scian", "clase de actividad", "clase_actividad"
+    ]),
+    actividadIdx: findIndex([
+      "actividad", "nombre de la clase de actividad", "nombre_actividad"
+    ]),
+    latitudIdx: findIndex([
+      "latitud", "lat"
+    ]),
+    longitudIdx: findIndex([
+      "longitud", "lon", "lng"
+    ]),
+    altaDenueIdx: findIndex([
+      "alta denue", "fecha de incorporación", "alta_denue", "fecha_alta"
+    ]),
+    scoreIdx: findIndex([
+      "score", "calificación", "calificacion"
+    ])
+  };
+
+  // Validación de campos mandatorios
+  if (map.razonSocialIdx === -1 && map.nombreComercialIdx === -1) {
+    throw new Error(
+      "No se pudo mapear las columnas requeridas del DENUE. Faltan columnas críticas de identificación: Razón Social (Denominación) o Nombre Comercial."
+    );
+  }
+
+  return map;
+}
+
+// Normaliza fila Array de Excel usando el mapa de índices
+export function normalizeRowWithMap(rowArray: any[], map: HeaderMap): InegiCompany {
+  const getValue = (idx: number, fallback: string = ""): string => {
+    if (idx === -1 || idx >= rowArray.length) return fallback;
+    const val = rowArray[idx];
+    return val !== undefined && val !== null ? String(val).trim() : fallback;
+  };
+
+  const getNumber = (idx: number, fallback: number = 0): number => {
+    if (idx === -1 || idx >= rowArray.length) return fallback;
+    const val = Number(rowArray[idx]);
+    return isNaN(val) ? fallback : val;
+  };
+
+  const razonSocial = getValue(map.razonSocialIdx);
+  const nombreComercial = getValue(map.nombreComercialIdx);
+  const sector = getValue(map.sectorIdx);
+  const tamano = getValue(map.tamanoIdx, "Micro");
+  const rangoPersonal = getValue(map.rangoPersonalIdx, "0 a 5 personas");
+  
+  const rawTelefono = getValue(map.telefonoIdx);
+  const rawEmail = getValue(map.emailIdx);
+  const sitioWeb = getValue(map.sitioWebIdx);
+  
+  const direccion = getValue(map.direccionIdx);
+  const municipio = getValue(map.municipioIdx);
+  const estado = getValue(map.estadoIdx);
+  const cp = getValue(map.cpIdx);
+  const scian = getValue(map.scianIdx);
+  const actividad = getValue(map.actividadIdx);
+  
+  const latitud = getNumber(map.latitudIdx);
+  const longitud = getNumber(map.longitudIdx);
+  const altaDenue = getValue(map.altaDenueIdx);
+  
+  const email = normalizeEmail(rawEmail);
+  const telefono = normalizePhone(rawTelefono);
+  
+  const rawSourceScore = getNumber(map.scoreIdx, 0);
+  
+  const scoreBreakdown = calculateOpportunityScore(
+    rawSourceScore,
+    tamano,
+    sector,
+    email,
+    telefono,
+    sitioWeb
+  );
+
+  const opportunityScore = scoreBreakdown.total;
+  const recommendedSuites = determineRecommendedSuites(sector, tamano, rangoPersonal, opportunityScore);
+  const id = generateDeterministicId(razonSocial, nombreComercial, municipio, scian);
+
+  return {
+    id,
+    razonSocial,
+    nombreComercial,
+    sector,
+    tamano,
+    rangoPersonal,
+    telefono,
+    email,
+    sitioWeb,
+    direccion,
+    municipio,
+    estado,
+    cp,
+    scian,
+    actividad,
+    latitud,
+    longitud,
+    altaDenue,
+    sourceScore: rawSourceScore,
+    opportunityScore,
+    scoreBreakdown,
+    recommendedSuites,
+    status: "NEW",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 const NormalizationService = {
   normalizeEmail,
   normalizePhone,
@@ -307,6 +529,8 @@ const NormalizationService = {
   calculateOpportunityScore,
   determineRecommendedSuites,
   normalizeRow,
+  detectHeaderRowAndBuildMap,
+  normalizeRowWithMap,
 };
 
 export default NormalizationService;

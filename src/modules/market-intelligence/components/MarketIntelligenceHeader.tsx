@@ -7,7 +7,7 @@ import {
   Sparkles,
   UploadCloud,
 } from "lucide-react";
-import { normalizeRow } from "../services/normalizationService";
+import { normalizeRow, detectHeaderRowAndBuildMap, normalizeRowWithMap } from "../services/normalizationService";
 import type { InegiCompany } from "../types/inegi";
 
 interface MarketIntelligenceHeaderProps {
@@ -297,28 +297,43 @@ export default function MarketIntelligenceHeader({
           throw new Error("No se pudo leer ninguna hoja de datos en el Excel.");
         }
 
-        const rawRows = utils.sheet_to_json<any>(worksheet);
+        // Convertir a matriz 2D para buscar encabezados y mapearlos dinámicamente
+        const rows2D = utils.sheet_to_json<any[]>(worksheet, { header: 1 });
         
-        if (rawRows.length === 0) {
+        if (rows2D.length === 0) {
           throw new Error("El archivo Excel no contiene registros en la hoja '" + sheetName + "'.");
         }
 
-        setParseStatus(`Hoja '${sheetName}' detectada. Procesando registros...`);
+        // Detectar encabezados y construir mapa de índices
+        const { headerRowIndex, headerMap, headers } = detectHeaderRowAndBuildMap(rows2D);
 
-        // Aplicar límite estricto de 500 registros para proteger costo Firestore
-        const limitCount = Math.min(rawRows.length, 500);
+        // Imprimir en consola de depuración para diagnóstico
+        console.log("=== ENCABEZADOS DETECTADOS EN EXCEL ===");
+        console.log(headers);
+        console.log("=== MAPEO DE COLUMNAS A VARIABLES ===");
+        console.log(headerMap);
+
+        setParseStatus(`Hoja '${sheetName}' detectada (Fila encabezados: ${headerRowIndex + 1}). Procesando...`);
+
+        const dataRows = rows2D.slice(headerRowIndex + 1);
         const processedRows: InegiCompany[] = [];
 
+        // Aplicar límite estricto de 500 registros para proteger costo Firestore
+        const limitCount = Math.min(dataRows.length, 500);
+
         for (let i = 0; i < limitCount; i++) {
-          const row = rawRows[i];
+          const rowArray = dataRows[i];
+          if (!rowArray || rowArray.length === 0) continue;
+
+          const normalized = normalizeRowWithMap(rowArray, headerMap);
           // Validar que al menos tenga Razón Social o Nombre Comercial
-          if (row["Razón Social"] || row["Razon Social"] || row["Nombre Comercial"] || row["Nombre comercial"]) {
-            processedRows.push(normalizeRow(row));
+          if (normalized.razonSocial || normalized.nombreComercial) {
+            processedRows.push(normalized);
           }
         }
 
         if (processedRows.length === 0) {
-          throw new Error("Ninguno de los registros leídos contiene campos válidos (Razón Social o Nombre Comercial).");
+          throw new Error("Ninguno de los registros leídos contiene campos válidos mapeables (Razón Social o Nombre Comercial).");
         }
 
         setParseStatus(
