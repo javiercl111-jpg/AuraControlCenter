@@ -16,11 +16,14 @@ export type DiscoveryRequestStatus =
   | "CONVERTED"
   | "DISCARDED";
 
+export type DiagnosisUrgency = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
 export type OrganizationTimelineEventType =
   | "DISCOVERY_REQUEST_RECEIVED"
   | "ORGANIZATION_CREATED"
   | "DISCOVERY_STARTED"
   | "CONSULTANT_ASSIGNED"
+  | "DIAGNOSIS_RECORDED"
   | "STAGE_UPDATED";
 
 export interface OrganizationTimelineEvent {
@@ -29,6 +32,15 @@ export interface OrganizationTimelineEvent {
   title: string;
   description: string;
   createdAt: unknown;
+}
+
+export interface OrganizationDiagnosis {
+  painPoints: string;
+  recommendedModules: string[];
+  urgency: DiagnosisUrgency;
+  estimatedBudget: string;
+  nextAction: string;
+  recordedAt?: unknown;
 }
 
 export interface PlatformOrganization {
@@ -51,6 +63,7 @@ export interface PlatformOrganization {
   assignedConsultantName?: string;
   assignedConsultantEmail?: string;
   assignedAt?: unknown;
+  diagnosis?: OrganizationDiagnosis;
   timeline?: OrganizationTimelineEvent[];
   createdAt?: unknown;
   updatedAt?: unknown;

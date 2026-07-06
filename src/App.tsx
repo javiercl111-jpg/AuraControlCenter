@@ -13,6 +13,7 @@ import CrmPage from "./pages/CrmPage";
 import DashboardPage from "./pages/DashboardPage";
 import LicenseManagementPage from "./pages/LicenseManagementPage";
 import LoginPage from "./pages/LoginPage";
+import MarketIntelligencePage from "./pages/MarketIntelligencePage";
 import ModulesPage from "./pages/ModulesPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import PlansPage from "./pages/PlansPage";
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="clients/:clientId" element={<ClientDetailPage />} />
         <Route path="clients/:clientId/edit" element={<ClientEditPage />} />
         <Route path="modules" element={<ModulesPage />} />
+        <Route path="market-intelligence" element={<MarketIntelligencePage />} />
         <Route path="plans" element={<PlansPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="payments" element={<PaymentsPage />} />
