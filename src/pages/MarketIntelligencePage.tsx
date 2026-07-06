@@ -13,6 +13,7 @@ import MarketFirestoreService from "../modules/market-intelligence/services/mark
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability } from "../services/rbacService";
+import NationalZipImportService from "../modules/market-intelligence/services/nationalZipImportService";
 
 interface FiltersState {
   estado: string;
@@ -114,6 +115,13 @@ export default function MarketIntelligencePage() {
   // Historial de importaciones (Prioridad 4)
   const [importHistory, setImportHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+
+  // Estados de importación ZIP nacional (Prioridad 5)
+  const [zipProgress, setZipProgress] = useState<any | null>(null);
+  const [pendingStateResolutionFiles, setPendingStateResolutionFiles] = useState<{ filename: string; guessedState: string }[] | null>(null);
+  const [currentResolutionIndex, setCurrentResolutionIndex] = useState<number>(-1);
+  const [resolvedFilesList, setResolvedFilesList] = useState<{ filename: string; state: string }[]>([]);
+  const [activeZipFile, setActiveZipFile] = useState<File | null>(null);
 
   // Cargar estados únicos acumulados e historial de importaciones
   useEffect(() => {
@@ -432,6 +440,106 @@ export default function MarketIntelligencePage() {
     }
   }
 
+  // Importar secuencialmente archivos del ZIP con estados confirmados
+  async function startResolvedZipImport(file: File, resolvedList: { filename: string; state: string }[]) {
+    setIsProcessing(true);
+    setError("");
+    setSuccess("");
+    setImportReport(null);
+    setZipProgress({
+      currentFile: "Inicializando...",
+      processedFiles: 0,
+      totalFiles: resolvedList.length,
+      totalRowsProcessed: 0,
+      added: 0,
+      overwritten: 0,
+      omitted: 0,
+      failed: 0,
+    });
+
+    try {
+      const result = await NationalZipImportService.importResolvedFiles(
+        file,
+        resolvedList,
+        (progress) => {
+          setZipProgress(progress);
+        }
+      );
+
+      setImportReport({
+        total: result.totalRowsProcessed,
+        added: result.added,
+        updated: result.overwritten,
+        omitted: result.omitted,
+        failed: result.failed,
+        timeMs: result.timeMs,
+      });
+
+      setSuccess(
+        `Importación Nacional ZIP completada: ${result.processedFiles}/${result.totalFiles} archivos procesados con éxito.`
+      );
+
+      // Recargar la lista de estados únicos
+      const states = await MarketFirestoreService.getUniqueStates();
+      setAvailableStates(states);
+
+      // Recargar historial
+      const history = await MarketFirestoreService.getImportHistory();
+      setImportHistory(history);
+
+      await loadData(true);
+    } catch (err: any) {
+      console.error(err);
+      setError("Fallo al procesar el archivo ZIP nacional: " + err.message);
+    } finally {
+      setIsProcessing(false);
+      setZipProgress(null);
+      setActiveZipFile(null);
+      setPendingStateResolutionFiles(null);
+      setCurrentResolutionIndex(-1);
+      setResolvedFilesList([]);
+    }
+  }
+
+  // Manejar archivo ZIP cargado realizando el análisis previo
+  async function handleZipSelect(file: File) {
+    setIsProcessing(true);
+    setError("");
+    setSuccess("");
+    setImportReport(null);
+    setActiveZipFile(file);
+
+    try {
+      const analyzed = await NationalZipImportService.analyzeZipFiles(file);
+      
+      if (analyzed.length === 0) {
+        throw new Error("No se encontraron archivos Excel válidos (.xlsx, .xls) dentro del ZIP.");
+      }
+
+      // Pre-poblar los ya resueltos
+      const preResolved = analyzed
+        .filter((f) => !f.needsStateSelection)
+        .map((f) => ({ filename: f.filename, state: f.guessedState }));
+
+      const needsResolution = analyzed.filter((f) => f.needsStateSelection);
+
+      if (needsResolution.length === 0) {
+        // Todos los estados se dedujeron solos, proceder de inmediato
+        await startResolvedZipImport(file, preResolved);
+      } else {
+        // Requiere resolución interactiva de estados
+        setResolvedFilesList(preResolved);
+        setPendingStateResolutionFiles(needsResolution);
+        setCurrentResolutionIndex(0);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError("Fallo al analizar el ZIP nacional: " + err.message);
+      setIsProcessing(false);
+      setActiveZipFile(null);
+    }
+  }
+
   // Abrir detalle
   function handleSelectCompany(company: InegiCompany) {
     setSelectedCompany(company);
@@ -526,6 +634,7 @@ export default function MarketIntelligencePage() {
       {/* Cabecera / Importador */}
       <MarketIntelligenceHeader
         onImport={handleImport}
+        onZipSelect={handleZipSelect}
         isLoading={isProcessing}
         canImport={capabilities.canImport}
       />
@@ -540,6 +649,123 @@ export default function MarketIntelligencePage() {
       {success && (
         <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4 text-sm text-cyan-200">
           {success}
+        </div>
+      )}
+
+      {/* Panel de Progreso en Tiempo Real del ZIP */}
+      {zipProgress && (
+        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+              <span className="h-2 w-2 animate-ping rounded-full bg-cyan-400" />
+              Procesando Importación Nacional ZIP
+            </h3>
+            <span className="text-xs text-slate-400 font-semibold font-mono font-sans">
+              {zipProgress.processedFiles} / {zipProgress.totalFiles} Archivos
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-xs text-slate-400">
+              <span>Archivo actual: <strong className="font-mono">{zipProgress.currentFile}</strong></span>
+              <span>{Math.round((zipProgress.processedFiles / zipProgress.totalFiles) * 100)}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+              <div 
+                className="h-full rounded-full bg-cyan-400 transition-all duration-300"
+                style={{ width: `${(zipProgress.processedFiles / zipProgress.totalFiles) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 text-center text-xs">
+            <div className="rounded-lg bg-slate-950 p-3 border border-slate-900">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Procesados</span>
+              <span className="block font-bold text-white mt-0.5">{zipProgress.totalRowsProcessed}</span>
+            </div>
+            <div className="rounded-lg bg-emerald-500/5 p-3 border border-emerald-500/10">
+              <span className="block text-emerald-500 font-semibold uppercase tracking-wider text-[10px]">Nuevos</span>
+              <span className="block font-bold text-emerald-400 mt-0.5">{zipProgress.added}</span>
+            </div>
+            <div className="rounded-lg bg-cyan-500/5 p-3 border border-cyan-500/10">
+              <span className="block text-cyan-500 font-semibold uppercase tracking-wider text-[10px]">Actualizados</span>
+              <span className="block font-bold text-cyan-400 mt-0.5">{zipProgress.overwritten}</span>
+            </div>
+            <div className="rounded-lg bg-rose-500/5 p-3 border border-rose-500/10">
+              <span className="block text-rose-500 font-semibold uppercase tracking-wider text-[10px]">Errores</span>
+              <span className="block font-bold text-rose-400 mt-0.5">{zipProgress.failed}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Asistente de Selección Manual de Estado para ZIP (Prioridad 4) */}
+      {pendingStateResolutionFiles && currentResolutionIndex !== -1 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-amber-500/20 bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                Asistente de Importación Nacional (ZIP)
+              </span>
+              <h3 className="text-base font-bold text-white mt-1">
+                Selección de Estado Requerida
+              </h3>
+              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                No pudimos detectar automáticamente el estado para el archivo:
+                <strong className="block text-amber-200 mt-1 font-mono break-all font-sans">
+                  {pendingStateResolutionFiles[currentResolutionIndex].filename}
+                </strong>
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-400 font-sans">
+                Selecciona el estado de la República correspondiente:
+              </label>
+              <select
+                onChange={(e) => {
+                  const stateVal = e.target.value;
+                  if (!stateVal) return;
+                  
+                  // Guardar resolución y pasar al siguiente
+                  const filename = pendingStateResolutionFiles[currentResolutionIndex].filename;
+                  const newResolvedList = [...resolvedFilesList, { filename, state: stateVal }];
+                  setResolvedFilesList(newResolvedList);
+
+                  if (currentResolutionIndex + 1 < pendingStateResolutionFiles.length) {
+                    setCurrentResolutionIndex(currentResolutionIndex + 1);
+                  } else {
+                    // Todos resueltos: Iniciar importación
+                    startResolvedZipImport(activeZipFile!, newResolvedList);
+                  }
+                }}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              >
+                <option value="">-- Seleccionar Estado --</option>
+                {NationalZipImportService.MEXICAN_STATES.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  // Cancelar todo
+                  setActiveZipFile(null);
+                  setPendingStateResolutionFiles(null);
+                  setCurrentResolutionIndex(-1);
+                  setResolvedFilesList([]);
+                }}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition"
+              >
+                Cancelar Importación
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -12,6 +12,7 @@ import type { InegiCompany } from "../types/inegi";
 
 interface MarketIntelligenceHeaderProps {
   onImport: (companies: InegiCompany[]) => Promise<void>;
+  onZipSelect: (file: File) => Promise<void>;
   isLoading: boolean;
   canImport: boolean;
 }
@@ -297,6 +298,7 @@ const MEXICAN_STATES = [
 
 export default function MarketIntelligenceHeader({
   onImport,
+  onZipSelect,
   isLoading,
   canImport,
 }: MarketIntelligenceHeaderProps) {
@@ -366,11 +368,22 @@ export default function MarketIntelligenceHeader({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  // Manejar el archivo Excel subido
+  // Manejar el archivo Excel o ZIP subido
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    processExcelFile(file);
+    
+    if (file.name.endsWith(".zip")) {
+      setError("");
+      setParseStatus("Leyendo archivo ZIP nacional...");
+      onZipSelect(file).catch((err) => {
+        console.error(err);
+        setError("Error procesando ZIP: " + err.message);
+        setParseStatus("");
+      });
+    } else {
+      processExcelFile(file);
+    }
   }
 
   function processExcelFile(file: File) {
@@ -518,7 +531,7 @@ export default function MarketIntelligenceHeader({
             Cargar muestra piloto INEGI
           </button>
 
-          {/* Uploader Excel */}
+          {/* Uploader Excel o ZIP */}
           {canImport ? (
             <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-300 active:scale-95">
               {isLoading ? (
@@ -526,11 +539,11 @@ export default function MarketIntelligenceHeader({
               ) : (
                 <UploadCloud className="h-4 w-4" />
               )}
-              Importar Excel DENUE
+              Importar Excel o ZIP DENUE
               <input
                 type="file"
                 ref={fileInputRef}
-                accept=".xlsx, .xls"
+                accept=".xlsx, .xls, .zip"
                 onChange={handleFileChange}
                 disabled={isLoading}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
@@ -544,7 +557,7 @@ export default function MarketIntelligenceHeader({
               className="flex items-center justify-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/55 px-5 py-3 text-sm font-bold text-slate-500 cursor-not-allowed"
             >
               <UploadCloud className="h-4 w-4 text-slate-600" />
-              Importar Excel DENUE
+              Importar Excel o ZIP DENUE
             </button>
           )}
         </div>
