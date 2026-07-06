@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { collection, getCountFromServer, query, where } from "firebase/firestore";
-import { db } from "../config/firebase";
+import { db, auth } from "../config/firebase";
 
 import MarketIntelligenceHeader from "../modules/market-intelligence/components/MarketIntelligenceHeader";
 import MarketIntelligenceKPIs from "../modules/market-intelligence/components/MarketIntelligenceKPIs";
@@ -75,8 +75,17 @@ export default function MarketIntelligencePage() {
             canConvert: conv,
           });
         }
-      } catch (err) {
-        console.error("Error al validar capacidades RBAC:", err);
+      } catch (err: any) {
+        console.error({
+          code: err.code || null,
+          message: err.message || null,
+          stack: err.stack || null,
+          operation: "verifyPermissions (checkUserCapability)",
+          collection: "platform_global_admins",
+          authUid: auth.currentUser?.uid || null,
+          authEmail: auth.currentUser?.email || null,
+          error: err
+        });
         setHasAccess(false);
       }
     }
@@ -149,7 +158,16 @@ export default function MarketIntelligencePage() {
       await fetchAggregatedKPIs(result.companies);
 
     } catch (err: any) {
-      console.error(err);
+      console.error({
+        code: err.code || null,
+        message: err.message || null,
+        stack: err.stack || null,
+        operation: "getMarketCompanies",
+        collection: "market_companies",
+        authUid: auth.currentUser?.uid || null,
+        authEmail: auth.currentUser?.email || null,
+        error: err
+      });
       setError("Error al cargar los prospectos de mercado: " + err.message);
     } finally {
       setIsLoading(false);
@@ -183,7 +201,17 @@ export default function MarketIntelligencePage() {
         qualifiedCount: qualified,
         avgScore: listAvg,
       });
-    } catch (err) {
+    } catch (err: any) {
+      console.error({
+        code: err.code || null,
+        message: err.message || null,
+        stack: err.stack || null,
+        operation: "fetchAggregatedKPIs (getCountFromServer)",
+        collection: "market_companies",
+        authUid: auth.currentUser?.uid || null,
+        authEmail: auth.currentUser?.email || null,
+        error: err
+      });
       console.warn("No se pudieron cargar los conteos del servidor:", err);
     }
   }

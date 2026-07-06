@@ -10,17 +10,20 @@ service cloud.firestore {
     function getAdminData() {
       let uid = request.auth.uid;
       let email = request.auth.token.email;
-      return exists(/databases/$(database)/documents/platform_global_admins/$(uid))
+      let lowerEmail = email != null ? email.lower() : '';
+      let hasUidDoc = exists(/databases/$(database)/documents/platform_global_admins/$(uid));
+      return hasUidDoc
         ? get(/databases/$(database)/documents/platform_global_admins/$(uid)).data
-        : get(/databases/$(database)/documents/platform_global_admins/$(email)).data;
+        : get(/databases/$(database)/documents/platform_global_admins/$(lowerEmail)).data;
     }
 
     // Check if user has an active admin profile in platform_global_admins (supports both isActive boolean and status ACTIVE string)
     function isActiveAdmin() {
       let uid = request.auth.uid;
       let email = request.auth.token.email;
+      let lowerEmail = email != null ? email.lower() : '';
       let hasProfile = exists(/databases/$(database)/documents/platform_global_admins/$(uid)) ||
-                       (email != null && exists(/databases/$(database)/documents/platform_global_admins/$(email)));
+                       (lowerEmail != '' && exists(/databases/$(database)/documents/platform_global_admins/$(lowerEmail)));
       return isAuthenticated() && hasProfile && (
         getAdminData().isActive == true || 
         getAdminData().status == "ACTIVE"
