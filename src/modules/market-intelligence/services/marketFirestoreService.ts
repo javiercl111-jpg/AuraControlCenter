@@ -18,6 +18,7 @@ import {
 import { db } from "../../../config/firebase";
 import type { CompanyStatus, InegiCompany } from "../types/inegi";
 import type { PlatformOrganization } from "../../../types/platformOrganization";
+import MarketQueryEngine from "./marketQueryEngine";
 
 const MARKET_COMPANIES_COLLECTION = "market_companies";
 const ORGANIZATIONS_COLLECTION = "platform_organizations";
@@ -180,9 +181,9 @@ export async function getMarketCompanies(
   // Si hay filtros en memoria (búsqueda de texto, email, score mínimo, etc.),
   // traemos un número mayor de registros para filtrarlos en el cliente, protegiendo costo.
   const isComplexFilterActive = 
-    filters.hasEmail !== undefined || 
-    filters.hasPhone !== undefined || 
-    filters.hasWebsite !== undefined || 
+    filters.hasEmail === true || 
+    filters.hasPhone === true || 
+    filters.hasWebsite === true || 
     (filters.minScore !== undefined && filters.minScore > 0) || 
     (filters.search !== undefined && filters.search.trim() !== "");
 
@@ -201,37 +202,14 @@ export async function getMarketCompanies(
     ...(doc.data() as Omit<InegiCompany, "id">),
   }));
 
-  // 3. Aplicar filtros en memoria
+  // 3. Aplicar filtros en memoria a través del Market Query Engine (Centralizado y Acumulativo)
   if (isComplexFilterActive) {
-    docs = docs.filter(company => {
-      // Filtro de correo
-      if (filters.hasEmail && !company.email) return false;
-      if (filters.hasEmail === false && company.email) return false;
-
-      // Filtro de teléfono
-      if (filters.hasPhone && !company.telefono) return false;
-      if (filters.hasPhone === false && company.telefono) return false;
-
-      // Filtro de web
-      if (filters.hasWebsite) {
-        const cleanWeb = (company.sitioWeb || "").toLowerCase();
-        const hasWeb = cleanWeb && cleanWeb !== "no disponible" && cleanWeb !== "n/a" && cleanWeb !== "no aplica";
-        if (!hasWeb) return false;
-      }
-
-      // Filtro de Score Mínimo
-      if (filters.minScore !== undefined && company.opportunityScore < filters.minScore) return false;
-
-      // Filtro de búsqueda textual
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        const nameMatch = (company.nombreComercial || "").toLowerCase().includes(searchLower);
-        const razonMatch = (company.razonSocial || "").toLowerCase().includes(searchLower);
-        const actividadMatch = (company.actividad || "").toLowerCase().includes(searchLower);
-        if (!nameMatch && !razonMatch && !actividadMatch) return false;
-      }
-
-      return true;
+    docs = MarketQueryEngine.filterMarketCompanies(docs, {
+      hasEmail: filters.hasEmail,
+      hasPhone: filters.hasPhone,
+      hasWebsite: filters.hasWebsite,
+      minScore: filters.minScore,
+      search: filters.search,
     });
   }
 

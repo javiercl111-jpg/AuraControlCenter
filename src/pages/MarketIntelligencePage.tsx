@@ -184,16 +184,31 @@ export default function MarketIntelligencePage() {
     }
   }
 
-  // Consulta barata de conteos usando getCountFromServer
+  // Consulta barata de conteos usando getCountFromServer (Filtrados dinámicamente)
   async function fetchAggregatedKPIs(loadedCompanies: InegiCompany[]) {
     try {
       const collRef = collection(db, "market_companies");
+      
+      // Aplicar filtros acumulativos de base de datos a las consultas de conteos
+      const queryConstraints: any[] = [];
+      if (filters.estado) {
+        queryConstraints.push(where("estado", "==", filters.estado));
+      }
+      if (filters.tamano) {
+        queryConstraints.push(where("tamano", "==", filters.tamano));
+      }
+      if (filters.sector) {
+        queryConstraints.push(where("sector", "==", filters.sector));
+      }
+      if (filters.municipio) {
+        queryConstraints.push(where("municipio", "==", filters.municipio));
+      }
 
       const [totalSnap, convertedSnap, qualifiedSnap, contactedSnap] = await Promise.all([
-        getCountFromServer(collRef),
-        getCountFromServer(query(collRef, where("status", "==", "CONVERTED"))),
-        getCountFromServer(query(collRef, where("status", "==", "QUALIFIED"))),
-        getCountFromServer(query(collRef, where("status", "==", "CONTACTED"))),
+        getCountFromServer(query(collRef, ...queryConstraints)),
+        getCountFromServer(query(collRef, ...queryConstraints, where("status", "==", "CONVERTED"))),
+        getCountFromServer(query(collRef, ...queryConstraints, where("status", "==", "QUALIFIED"))),
+        getCountFromServer(query(collRef, ...queryConstraints, where("status", "==", "CONTACTED"))),
       ]);
 
       const total = totalSnap.data().count;
@@ -226,7 +241,7 @@ export default function MarketIntelligencePage() {
     }
   }
 
-  // Efecto inicial y ante cambios de filtro
+  // Efecto inicial y ante cambios de filtro (Incluyendo búsqueda textual reactiva)
   useEffect(() => {
     loadData(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,12 +255,9 @@ export default function MarketIntelligencePage() {
     filters.hasPhone,
     filters.hasWebsite,
     filters.minScore,
+    filters.search,
   ]);
 
-  // Ejecución de búsqueda por texto con debounce o manual
-  function handleSearchTrigger() {
-    loadData(true);
-  }
 
   // Manejar el cambio de filtros manual
   function handleFilterChange(newFilters: FiltersState) {
@@ -511,18 +523,7 @@ export default function MarketIntelligencePage() {
             availableStates={availableStates}
           />
 
-          {/* Gatillo de búsqueda manual (cuando edita search text) */}
-          {filters.search && (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleSearchTrigger}
-                className="rounded-xl bg-cyan-400 px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-cyan-300"
-              >
-                Ejecutar búsqueda textual
-              </button>
-            </div>
-          )}
+          {/* La búsqueda se ejecuta reactivamente mediante el efecto del filtro */}
 
           <MarketCompaniesTable
             companies={companies}
