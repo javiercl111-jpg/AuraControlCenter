@@ -120,6 +120,85 @@ export default function MarketCompanyDrawer({
         {/* Content */}
         <div className="flex-1 space-y-8 py-6">
           
+          {/* Aura Commercial Advisor Lite (Prioridad 5) */}
+          {(() => {
+            const priorityLevel = company.priorityLevel || 
+              (company.opportunityScore >= 85 ? "CRITICAL" : company.opportunityScore >= 70 ? "HIGH" : company.opportunityScore >= 45 ? "MEDIUM" : "LOW");
+            
+            const motives = [...(company.motives || [])];
+            let nextAction = company.nextAction || "";
+
+            // Generar dinámicamente si faltan en base de datos
+            if (motives.length === 0) {
+              const generated = NormalizationService.generateCommercialAdvisorInfo(
+                company.opportunityScore,
+                company.tamano,
+                company.sector,
+                company.email,
+                company.telefono,
+                company.sitioWeb,
+                company.actividad
+              );
+              motives.push(...generated.motives);
+              if (!nextAction) {
+                nextAction = generated.nextAction;
+              }
+            }
+
+            if (!nextAction) {
+              nextAction = priorityLevel === "CRITICAL" 
+                ? "Llamada comercial prioritaria: Agendar demo de 15 min enfocada en Operations & People Suite." 
+                : priorityLevel === "HIGH" 
+                ? "Enviar correo de contacto personalizado con folleto de Sales & Compensation Suite."
+                : "Validar tomador de decisiones (RRHH/Operaciones) mediante llamada exploratoria.";
+            }
+
+            return (
+              <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-indigo-300">
+                    <Sparkles className="h-5 w-5 text-indigo-400 animate-pulse" />
+                    <h3 className="text-sm font-bold uppercase tracking-wider">
+                      Aura Commercial Advisor
+                    </h3>
+                  </div>
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider ${
+                    priorityLevel === "CRITICAL"
+                      ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                      : priorityLevel === "HIGH"
+                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                      : priorityLevel === "MEDIUM"
+                      ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/25"
+                      : "bg-slate-800 text-slate-400 border border-slate-700"
+                  }`}>
+                    Prioridad: {priorityLevel}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold text-slate-300">Argumentos de Venta Recomendados:</h4>
+                  <ul className="space-y-1.5">
+                    {motives.map((motive, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-xs text-slate-400 leading-relaxed font-sans">
+                        <span className="mt-1 text-indigo-400 font-bold font-sans">✔</span>
+                        <span>{motive}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="rounded-xl bg-indigo-950/40 border border-indigo-500/20 p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300">
+                    Próxima Acción Comercial Recomendada:
+                  </div>
+                  <div className="mt-1 text-xs text-white leading-relaxed font-semibold font-sans">
+                    {nextAction}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Ficha Rápida Estatus & Score */}
           <div className="grid gap-4 sm:grid-cols-2">
             
@@ -241,84 +320,7 @@ export default function MarketCompanyDrawer({
             </div>
           </div>
 
-          {/* Aura Commercial Advisor Lite (Prioridad 5) */}
-          {(() => {
-            const priorityLevel = company.priorityLevel || 
-              (company.opportunityScore >= 85 ? "CRITICAL" : company.opportunityScore >= 70 ? "HIGH" : company.opportunityScore >= 45 ? "MEDIUM" : "LOW");
-            
-            const motives = [...(company.motives || [])];
-            let nextAction = company.nextAction || "";
 
-            // Generar dinámicamente si faltan en base de datos
-            if (motives.length === 0) {
-              const generated = NormalizationService.generateCommercialAdvisorInfo(
-                company.opportunityScore,
-                company.tamano,
-                company.sector,
-                company.email,
-                company.telefono,
-                company.sitioWeb,
-                company.actividad
-              );
-              motives.push(...generated.motives);
-              if (!nextAction) {
-                nextAction = generated.nextAction;
-              }
-            }
-
-            if (!nextAction) {
-              nextAction = priorityLevel === "CRITICAL" 
-                ? "Llamada comercial prioritaria: Agendar demo de 15 min enfocada en Operations & People Suite." 
-                : priorityLevel === "HIGH" 
-                ? "Enviar correo de contacto personalizado con folleto de Sales & Compensation Suite."
-                : "Validar tomador de decisiones (RRHH/Operaciones) mediante llamada exploratoria.";
-            }
-
-            return (
-              <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-indigo-300">
-                    <Sparkles className="h-5 w-5 text-indigo-400 animate-pulse" />
-                    <h3 className="text-sm font-bold uppercase tracking-wider">
-                      Aura Commercial Advisor
-                    </h3>
-                  </div>
-                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider ${
-                    priorityLevel === "CRITICAL"
-                      ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                      : priorityLevel === "HIGH"
-                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      : priorityLevel === "MEDIUM"
-                      ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-                      : "bg-slate-800 text-slate-400 border border-slate-700"
-                  }`}>
-                    Prioridad: {priorityLevel}
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold text-slate-300">Argumentos de Venta Recomendados:</h4>
-                  <ul className="space-y-1.5">
-                    {motives.map((motive, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-xs text-slate-400 leading-relaxed">
-                        <span className="mt-1 text-indigo-400 font-bold">✔</span>
-                        <span>{motive}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="rounded-xl bg-indigo-950/40 border border-indigo-500/20 p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300">
-                    Próxima Acción Comercial Recomendada:
-                  </div>
-                  <div className="mt-1 text-xs text-white leading-relaxed font-semibold">
-                    {nextAction}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
 
           {/* Suites Aura Recomendadas */}
           <div>

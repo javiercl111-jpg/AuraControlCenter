@@ -3,11 +3,11 @@ import { collection, getCountFromServer, query, where } from "firebase/firestore
 import { db, auth } from "../config/firebase";
 
 import MarketIntelligenceHeader from "../modules/market-intelligence/components/MarketIntelligenceHeader";
-import MarketIntelligenceKPIs from "../modules/market-intelligence/components/MarketIntelligenceKPIs";
 import MarketCompaniesFilters from "../modules/market-intelligence/components/MarketCompaniesFilters";
 import MarketCompaniesTable from "../modules/market-intelligence/components/MarketCompaniesTable";
 import MarketCompanyDrawer from "../modules/market-intelligence/components/MarketCompanyDrawer";
 import MarketSegmentsPanel from "../modules/market-intelligence/components/MarketSegmentsPanel";
+import CommercialDashboard from "../modules/market-intelligence/components/CommercialDashboard";
 
 import MarketFirestoreService from "../modules/market-intelligence/services/marketFirestoreService";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
@@ -585,12 +585,11 @@ export default function MarketIntelligencePage() {
         </div>
       )}
 
-      {/* Tarjetas KPI */}
-      <MarketIntelligenceKPIs
-        totalCount={stats.totalCount}
-        convertedCount={stats.convertedCount}
-        qualifiedCount={stats.qualifiedCount}
-        avgScore={stats.avgScore}
+      {/* Tablero Ejecutivo Comercial de Aura Prospect Intelligence */}
+      <CommercialDashboard
+        companies={companies}
+        onSelectCompany={handleSelectCompany}
+        stats={stats}
       />
 
       {/* Grid Principal con Segmentos y Tabla */}

@@ -498,11 +498,11 @@ export default function MarketIntelligenceHeader({
             </span>
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-            Aura Market Intelligence
+            Aura Prospect Intelligence
           </h1>
           <p className="mt-2 text-sm text-slate-400 max-w-xl">
-            Motor inteligente para segmentar, analizar y calificar prospectos del
-            Directorio DENUE 2026 y convertirlos en organizaciones consultivas activas.
+            Asesor comercial inteligente para segmentar, priorizar y calificar prospectos del
+            Directorio DENUE 2026 y convertirlos en oportunidades de venta activas.
           </p>
         </div>
 
@@ -614,8 +614,8 @@ export default function MarketIntelligenceHeader({
       <div className="mt-6 flex items-center gap-2 text-[11px] text-slate-500 border-t border-slate-800/60 pt-4">
         <HelpCircle className="h-3.5 w-3.5 text-slate-600 shrink-0" />
         <span>
-          * Costo Firestore Protegido: Se aplica un límite estricto de lectura/escritura de 500 registros por lote. 
-          Los duplicados son resueltos automáticamente sin costo de lectura mediante IDs determinísticos.
+          * Costo Firestore Protegido: El importador procesa los registros de forma eficiente utilizando Upsert por lotes.
+          Los duplicados sin cambios se omiten de forma automática para proteger los costos de base de datos.
         </span>
       </div>
     </header>
