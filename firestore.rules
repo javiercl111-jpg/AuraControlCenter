@@ -119,6 +119,12 @@ service cloud.firestore {
 
     // --- Aura Market Intelligence & Consulting Collections Security ---
 
+    // Market Companies Metadata
+    match /market_companies_metadata/{docId} {
+      allow read: if canReadMarket();
+      allow write: if canImportMarket();
+    }
+
     // Market Companies
     match /market_companies/{companyId} {
       allow read: if canReadMarket();

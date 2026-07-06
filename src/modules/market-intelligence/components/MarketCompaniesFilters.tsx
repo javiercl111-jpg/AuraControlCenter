@@ -18,6 +18,7 @@ interface MarketCompaniesFiltersProps {
   filters: FiltersState;
   onFilterChange: (newFilters: FiltersState) => void;
   onClearFilters: () => void;
+  availableStates: string[];
 }
 
 const SECTORS = [
@@ -29,18 +30,6 @@ const SECTORS = [
   { label: "Comercio al por mayor", value: "Comercio al por mayor" },
   { label: "Servicios Profesionales, Científicos y Técnicos", value: "Servicios Profesionales, Científicos y Técnicos" },
   { label: "Servicios de Alojamiento y Alimentos", value: "Servicios de Alojamiento y Alimentos" },
-];
-
-const ESTADOS = [
-  { label: "Todos los estados", value: "" },
-  { label: "Querétaro", value: "Querétaro" },
-  { label: "Nuevo León", value: "Nuevo León" },
-  { label: "Ciudad de México", value: "Ciudad de México" },
-  { label: "Guanajuato", value: "Guanajuato" },
-  { label: "Jalisco", value: "Jalisco" },
-  { label: "Coahuila", value: "Coahuila" },
-  { label: "Yucatán", value: "Yucatán" },
-  { label: "Estado de México", value: "Estado de México" },
 ];
 
 const SIZES = [
@@ -64,6 +53,7 @@ export default function MarketCompaniesFilters({
   filters,
   onFilterChange,
   onClearFilters,
+  availableStates,
 }: MarketCompaniesFiltersProps) {
   function handleChange(field: keyof FiltersState, value: any) {
     onFilterChange({
@@ -117,9 +107,10 @@ export default function MarketCompaniesFilters({
             onChange={(e) => handleChange("estado", e.target.value)}
             className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
           >
-            {ESTADOS.map((item) => (
-              <option key={item.label} value={item.value}>
-                {item.label}
+            <option value="">Todos los estados</option>
+            {availableStates.map((st) => (
+              <option key={st} value={st}>
+                {st}
               </option>
             ))}
           </select>

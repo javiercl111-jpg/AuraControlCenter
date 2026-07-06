@@ -1,4 +1,5 @@
 import {
+  getDoc,
   Timestamp,
   collection,
   doc,
@@ -53,7 +54,74 @@ export async function importMarketCompaniesBatch(
   }
 
   await batch.commit();
+
+  // Obtener y actualizar estados únicos de forma asíncrona tras confirmar la importación
+  const statesInBatch = Array.from(
+    new Set(companies.map((c) => c.estado).filter((s) => s && s.trim().length > 0))
+  );
+  if (statesInBatch.length > 0) {
+    try {
+      await updateUniqueStates(statesInBatch);
+    } catch (err) {
+      console.warn("No se pudieron actualizar los estados únicos en metadatos:", err);
+    }
+  }
+
   return { added: count, overwritten: 0 };
+}
+
+/**
+ * Obtiene la lista de estados únicos cargados en el sistema desde el documento de metadatos.
+ * Si el documento no existe o está vacío, devuelve la muestra piloto por defecto.
+ */
+export async function getUniqueStates(): Promise<string[]> {
+  try {
+    const docRef = doc(db, "market_companies_metadata", "states");
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data && Array.isArray(data.states) && data.states.length > 0) {
+        return data.states;
+      }
+    }
+  } catch (err) {
+    console.warn("No se pudieron cargar los estados únicos desde Firestore:", err);
+  }
+  // Fallback piloto por defecto
+  return ["Querétaro", "Nuevo León"];
+}
+
+/**
+ * Agrega nuevos estados únicos a la lista acumulada de metadatos utilizando una transacción.
+ */
+export async function updateUniqueStates(newStates: string[]): Promise<void> {
+  if (newStates.length === 0) return;
+  const docRef = doc(db, "market_companies_metadata", "states");
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(docRef);
+      let currentStates: string[] = ["Querétaro", "Nuevo León"];
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data && Array.isArray(data.states)) {
+          currentStates = data.states;
+        }
+      }
+
+      // Combinar, eliminar duplicados y ordenar alfabéticamente
+      const merged = Array.from(
+        new Set([
+          ...currentStates,
+          ...newStates.map((s) => s.trim()).filter((s) => s.length > 0)
+        ])
+      ).sort();
+
+      transaction.set(docRef, { states: merged });
+    });
+  } catch (err) {
+    console.error("Error al actualizar estados únicos en transacción:", err);
+    throw err;
+  }
 }
 
 /**
@@ -290,6 +358,8 @@ const MarketFirestoreService = {
   getMarketCompanies,
   updateMarketCompanyStatus,
   convertMarketCompanyToOrganization,
+  getUniqueStates,
+  updateUniqueStates,
 };
 
 export default MarketFirestoreService;

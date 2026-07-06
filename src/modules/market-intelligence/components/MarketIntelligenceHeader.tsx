@@ -260,6 +260,41 @@ const MOCK_PILOT_DATA = [
   }
 ];
 
+const MEXICAN_STATES = [
+  "Aguascalientes",
+  "Baja California",
+  "Baja California Sur",
+  "Campeche",
+  "Chiapas",
+  "Chihuahua",
+  "Ciudad de México",
+  "Coahuila",
+  "Colima",
+  "Durango",
+  "Estado de México",
+  "Guanajuato",
+  "Guerrero",
+  "Hidalgo",
+  "Jalisco",
+  "Michoacán",
+  "Morelos",
+  "Nayarit",
+  "Nuevo León",
+  "Oaxaca",
+  "Puebla",
+  "Querétaro",
+  "Quintana Roo",
+  "San Luis Potosí",
+  "Sinaloa",
+  "Sonora",
+  "Tabasco",
+  "Tamaulipas",
+  "Tlaxcala",
+  "Veracruz",
+  "Yucatán",
+  "Zacatecas"
+];
+
 export default function MarketIntelligenceHeader({
   onImport,
   isLoading,
@@ -268,6 +303,68 @@ export default function MarketIntelligenceHeader({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [parseStatus, setParseStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [showStateSelector, setShowStateSelector] = useState(false);
+  const [selectedImportState, setSelectedImportState] = useState("");
+  const [pendingImportData, setPendingImportData] = useState<{
+    rows2D: any[][];
+    headerMap: any;
+    headers: string[];
+  } | null>(null);
+
+  // Confirmar la importación tras seleccionar el estado manual
+  async function handleConfirmImportWithState() {
+    if (!pendingImportData || !selectedImportState) return;
+    
+    setPendingImportData(null);
+    setShowStateSelector(false);
+    setParseStatus(`Normalizando registros con Estado: ${selectedImportState}...`);
+    setError("");
+
+    try {
+      const { rows2D, headerMap } = pendingImportData;
+      const dataRows = rows2D.slice(headerMap.headerRowIndex + 1);
+      const processedRows: InegiCompany[] = [];
+
+      const limitCount = Math.min(dataRows.length, 500);
+
+      for (let i = 0; i < limitCount; i++) {
+        const rowArray = dataRows[i];
+        if (!rowArray || rowArray.length === 0) continue;
+
+        const normalized = normalizeRowWithMap(rowArray, headerMap);
+        // Sobrescribir estado al seleccionado manualmente
+        normalized.estado = selectedImportState;
+        
+        if (normalized.razonSocial || normalized.nombreComercial) {
+          processedRows.push(normalized);
+        }
+      }
+
+      if (processedRows.length === 0) {
+        throw new Error("Ninguno de los registros leídos contiene campos válidos (Razón Social o Nombre Comercial).");
+      }
+
+      setParseStatus(`Importando ${processedRows.length} registros a Firestore...`);
+      await onImport(processedRows);
+
+      setParseStatus(`Importación completada con éxito. ${processedRows.length} registros cargados.`);
+      setTimeout(() => setParseStatus(""), 5000);
+      setSelectedImportState("");
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Error al importar los datos.");
+      setParseStatus("");
+    }
+  }
+
+  // Cancelar la importación
+  function handleCancelImport() {
+    setShowStateSelector(false);
+    setPendingImportData(null);
+    setSelectedImportState("");
+    setParseStatus("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   // Manejar el archivo Excel subido
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -312,6 +409,14 @@ export default function MarketIntelligenceHeader({
         console.log(headers);
         console.log("=== MAPEO DE COLUMNAS A VARIABLES ===");
         console.log(headerMap);
+
+        // Si no se detectó columna de estado, pausar e interrogar al usuario
+        if (headerMap.estadoIdx === -1) {
+          setPendingImportData({ rows2D, headerMap, headers });
+          setShowStateSelector(true);
+          setParseStatus("Falta columna de Estado. Esperando selección manual...");
+          return;
+        }
 
         setParseStatus(`Hoja '${sheetName}' detectada (Fila encabezados: ${headerRowIndex + 1}). Procesando...`);
 
@@ -444,6 +549,51 @@ export default function MarketIntelligenceHeader({
           )}
         </div>
       </div>
+
+      {/* Selector de Estado en caso de que falte en el Excel */}
+      {showStateSelector && pendingImportData && (
+        <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 md:p-6">
+          <div className="mb-4">
+            <h4 className="text-sm font-semibold text-amber-200">
+              ⚠️ Estado no detectado en el archivo
+            </h4>
+            <p className="mt-1 text-xs text-slate-400">
+              El archivo Excel subido no contiene una columna de <strong>Estado</strong>. Por favor, selecciona a qué estado de la República pertenecen estos registros para poder guardarlos con la clasificación correcta:
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <select
+              value={selectedImportState}
+              onChange={(e) => setSelectedImportState(e.target.value)}
+              className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            >
+              <option value="">-- Seleccionar Estado --</option>
+              {MEXICAN_STATES.map((st) => (
+                <option key={st} value={st}>
+                  {st}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleConfirmImportWithState}
+                disabled={!selectedImportState}
+                className="rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 disabled:opacity-50 transition"
+              >
+                Confirmar e Importar
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelImport}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Alertas de Estado o Error */}
       {parseStatus && (

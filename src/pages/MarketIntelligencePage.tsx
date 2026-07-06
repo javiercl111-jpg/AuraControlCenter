@@ -95,6 +95,16 @@ export default function MarketIntelligencePage() {
   // Estados de Filtros y Segmentos
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [availableStates, setAvailableStates] = useState<string[]>(["Querétaro", "Nuevo León"]);
+
+  // Cargar estados únicos acumulados desde Firestore
+  useEffect(() => {
+    async function loadStates() {
+      const states = await MarketFirestoreService.getUniqueStates();
+      setAvailableStates(states);
+    }
+    loadStates();
+  }, []);
 
   // Estados de Paginación (Costo Protegido)
   const [currentPage, setCurrentPage] = useState(1);
@@ -347,6 +357,11 @@ export default function MarketIntelligencePage() {
         importedCompanies
       );
       setSuccess(`Lote importado con éxito: ${added} prospectos cargados en base local.`);
+      
+      // Recargar la lista de estados únicos
+      const states = await MarketFirestoreService.getUniqueStates();
+      setAvailableStates(states);
+
       await loadData(true);
     } catch (err: any) {
       console.error(err);
@@ -493,6 +508,7 @@ export default function MarketIntelligencePage() {
             filters={filters}
             onFilterChange={handleFilterChange}
             onClearFilters={handleClearFilters}
+            availableStates={availableStates}
           />
 
           {/* Gatillo de búsqueda manual (cuando edita search text) */}
