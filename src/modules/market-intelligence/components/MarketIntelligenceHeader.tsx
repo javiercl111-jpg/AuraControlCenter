@@ -13,6 +13,7 @@ import type { InegiCompany } from "../types/inegi";
 interface MarketIntelligenceHeaderProps {
   onImport: (companies: InegiCompany[]) => Promise<void>;
   isLoading: boolean;
+  canImport: boolean;
 }
 
 // 12 registros de muestra piloto INEGI de alta fidelidad para el DENUE 2026
@@ -250,6 +251,7 @@ const MOCK_PILOT_DATA = [
 export default function MarketIntelligenceHeader({
   onImport,
   isLoading,
+  canImport,
 }: MarketIntelligenceHeaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [parseStatus, setParseStatus] = useState<string>("");
@@ -377,30 +379,42 @@ export default function MarketIntelligenceHeader({
           <button
             type="button"
             onClick={handleLoadPilotSample}
-            disabled={isLoading}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/5 px-5 py-3 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/15 disabled:opacity-50"
+            disabled={isLoading || !canImport}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/5 px-5 py-3 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/15 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Database className="h-4 w-4" />
             Cargar muestra piloto INEGI
           </button>
 
           {/* Uploader Excel */}
-          <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-300 active:scale-95">
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <UploadCloud className="h-4 w-4" />
-            )}
-            Importar Excel DENUE
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept=".xlsx, .xls"
-              onChange={handleFileChange}
-              disabled={isLoading}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            />
-          </label>
+          {canImport ? (
+            <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-300 active:scale-95">
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UploadCloud className="h-4 w-4" />
+              )}
+              Importar Excel DENUE
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".xlsx, .xls"
+                onChange={handleFileChange}
+                disabled={isLoading}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              />
+            </label>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="No tienes permisos de importación"
+              className="flex items-center justify-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/55 px-5 py-3 text-sm font-bold text-slate-500 cursor-not-allowed"
+            >
+              <UploadCloud className="h-4 w-4 text-slate-600" />
+              Importar Excel DENUE
+            </button>
+          )}
         </div>
       </div>
 

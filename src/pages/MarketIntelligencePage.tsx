@@ -11,6 +11,8 @@ import MarketSegmentsPanel from "../modules/market-intelligence/components/Marke
 
 import MarketFirestoreService from "../modules/market-intelligence/services/marketFirestoreService";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
+import PermissionDenied from "../components/PermissionDenied";
+import { checkUserCapability } from "../services/rbacService";
 
 interface FiltersState {
   status: string;
@@ -43,6 +45,41 @@ export default function MarketIntelligencePage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Control de Accesos y Capacidades (RBAC)
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [capabilities, setCapabilities] = useState({
+    canImport: false,
+    canUpdate: false,
+    canConvert: false,
+  });
+
+  // Verificar permisos al montar el componente (Costo Firestore Protegido)
+  useEffect(() => {
+    async function verifyPermissions() {
+      try {
+        const readAllowed = await checkUserCapability("market.read");
+        setHasAccess(readAllowed);
+
+        if (readAllowed) {
+          const [imp, upd, conv] = await Promise.all([
+            checkUserCapability("market.import"),
+            checkUserCapability("market.update"),
+            checkUserCapability("market.convert"),
+          ]);
+          setCapabilities({
+            canImport: imp,
+            canUpdate: upd,
+            canConvert: conv,
+          });
+        }
+      } catch (err) {
+        console.error("Error al validar capacidades RBAC:", err);
+        setHasAccess(false);
+      }
+    }
+    verifyPermissions();
+  }, []);
 
   // Estados de Filtros y Segmentos
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
@@ -361,10 +398,27 @@ export default function MarketIntelligencePage() {
     }
   }
 
+  if (hasAccess === null) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
+        <p className="mt-4 text-sm text-slate-400">Validando credenciales de acceso...</p>
+      </div>
+    );
+  }
+
+  if (hasAccess === false) {
+    return <PermissionDenied />;
+  }
+
   return (
     <div className="space-y-6">
       {/* Cabecera / Importador */}
-      <MarketIntelligenceHeader onImport={handleImport} isLoading={isProcessing} />
+      <MarketIntelligenceHeader
+        onImport={handleImport}
+        isLoading={isProcessing}
+        canImport={capabilities.canImport}
+      />
 
       {/* Alertas */}
       {error && (
@@ -445,6 +499,8 @@ export default function MarketIntelligencePage() {
         onStatusChange={handleStatusChange}
         onConvert={handleConvertCompany}
         isProcessing={isProcessing}
+        canUpdate={capabilities.canUpdate}
+        canConvert={capabilities.canConvert}
       />
     </div>
   );

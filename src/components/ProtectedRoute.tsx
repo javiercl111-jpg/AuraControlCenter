@@ -21,7 +21,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         return;
       }
 
-      const allowed = await isGlobalAdmin(user.email);
+      const allowed = await isGlobalAdmin(user.email, user.uid);
       setStatus(allowed ? "allowed" : "denied");
     });
 

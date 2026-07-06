@@ -6,6 +6,53 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Helper to get admin document (prepares migration to UID while maintaining email compatibility)
+    function getAdminData() {
+      let uid = request.auth.uid;
+      let email = request.auth.token.email;
+      return exists(/databases/$(database)/documents/platform_global_admins/$(uid))
+        ? get(/databases/$(database)/documents/platform_global_admins/$(uid)).data
+        : get(/databases/$(database)/documents/platform_global_admins/$(email)).data;
+    }
+
+    // Check if user has an active admin profile in platform_global_admins
+    function isActiveAdmin() {
+      let uid = request.auth.uid;
+      let email = request.auth.token.email;
+      return isAuthenticated() && (
+        exists(/databases/$(database)/documents/platform_global_admins/$(uid)) ||
+        (email != null && exists(/databases/$(database)/documents/platform_global_admins/$(email)))
+      ) && getAdminData().isActive == true;
+    }
+
+    // Check if user has a specific role
+    function hasRole(role) {
+      return isActiveAdmin() && getAdminData().role == role;
+    }
+
+    // Capabilities checks matching rbacService
+    function canReadMarket() {
+      return isActiveAdmin() && 
+        (getAdminData().role in ['SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'SALES_ADVISOR', 'VIEWER', 'ADMIN', 'SUPPORT']);
+    }
+
+    function canImportMarket() {
+      return isActiveAdmin() && 
+        (getAdminData().role in ['SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'ADMIN']);
+    }
+
+    function canUpdateMarket() {
+      return isActiveAdmin() && 
+        (getAdminData().role in ['SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'SALES_ADVISOR', 'ADMIN', 'SUPPORT']);
+    }
+
+    function canCreateOrganization() {
+      return isActiveAdmin() && 
+        (getAdminData().role in ['SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'ADMIN']);
+    }
+
+    // --- Aura Control Center Existing Collections Security ---
+
     // Platform clients collection permissions
     match /platform_clients/{clientId} {
       allow read, write: if isAuthenticated();
@@ -48,6 +95,29 @@ service cloud.firestore {
 
     // Platform global admins permissions
     match /platform_global_admins/{adminEmail} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // --- Aura Market Intelligence & Consulting Collections Security ---
+
+    // Market Companies
+    match /market_companies/{companyId} {
+      allow read: if canReadMarket();
+      allow create: if canImportMarket();
+      allow update: if canUpdateMarket();
+      allow delete: if hasRole('SUPER_ADMIN') || hasRole('FOUNDER');
+    }
+
+    // Platform Organizations (used by Consulting Center and converted prospects)
+    match /platform_organizations/{orgId} {
+      allow read: if isAuthenticated();
+      allow create: if canCreateOrganization();
+      allow update: if isActiveAdmin();
+      allow delete: if hasRole('SUPER_ADMIN') || hasRole('FOUNDER');
+    }
+
+    // Platform Discovery Requests
+    match /platform_discovery_requests/{requestId} {
       allow read, write: if isAuthenticated();
     }
   }

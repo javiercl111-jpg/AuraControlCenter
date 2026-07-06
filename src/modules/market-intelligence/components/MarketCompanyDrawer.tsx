@@ -23,6 +23,8 @@ interface MarketCompanyDrawerProps {
   onStatusChange: (status: CompanyStatus) => Promise<void>;
   onConvert: () => Promise<void>;
   isProcessing: boolean;
+  canUpdate: boolean;
+  canConvert: boolean;
 }
 
 export default function MarketCompanyDrawer({
@@ -32,6 +34,8 @@ export default function MarketCompanyDrawer({
   onStatusChange,
   onConvert,
   isProcessing,
+  canUpdate,
+  canConvert,
 }: MarketCompanyDrawerProps) {
   if (!isOpen || !company) return null;
 
@@ -162,8 +166,9 @@ export default function MarketCompanyDrawer({
                           key={st}
                           type="button"
                           onClick={() => onStatusChange(st)}
-                          disabled={isProcessing}
-                          className={`rounded-xl px-3 py-2 text-xs font-semibold border transition ${
+                          disabled={isProcessing || !canUpdate}
+                          title={!canUpdate ? "No tienes permisos para modificar estatus" : ""}
+                          className={`rounded-xl px-3 py-2 text-xs font-semibold border transition disabled:opacity-40 disabled:cursor-not-allowed ${
                             active
                               ? "bg-cyan-400 border-cyan-400 text-slate-950 font-bold"
                               : "border-slate-800 bg-slate-900/55 text-slate-400 hover:border-slate-700 hover:text-white"
@@ -361,8 +366,9 @@ export default function MarketCompanyDrawer({
             <button
               type="button"
               onClick={onConvert}
-              disabled={isProcessing}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-400 px-5 py-3.5 text-sm font-extrabold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-50"
+              disabled={isProcessing || !canConvert}
+              title={!canConvert ? "No tienes permisos para convertir prospectos" : ""}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-400 px-5 py-3.5 text-sm font-extrabold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessing ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
