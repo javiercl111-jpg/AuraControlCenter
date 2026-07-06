@@ -28,6 +28,7 @@ export interface InegiCompany {
   sitioWeb: string;
   direccion: string;
   municipio: string;
+  estado: string;
   cp: string;
   scian: string;
   actividad: string;

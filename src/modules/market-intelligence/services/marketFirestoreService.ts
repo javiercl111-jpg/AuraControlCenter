@@ -66,6 +66,7 @@ export async function getMarketCompanies(
     status?: CompanyStatus;
     tamano?: string;
     sector?: string;
+    estado?: string;
     municipio?: string;
     hasEmail?: boolean;
     hasPhone?: boolean;
@@ -94,6 +95,9 @@ export async function getMarketCompanies(
   }
   if (filters.sector) {
     queryConstraints.push(where("sector", "==", filters.sector));
+  }
+  if (filters.estado) {
+    queryConstraints.push(where("estado", "==", filters.estado));
   }
   if (filters.municipio) {
     queryConstraints.push(where("municipio", "==", filters.municipio));

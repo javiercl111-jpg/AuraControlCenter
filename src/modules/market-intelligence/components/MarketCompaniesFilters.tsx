@@ -2,6 +2,7 @@ import { FilterX, Search, SlidersHorizontal } from "lucide-react";
 import type { CompanyStatus } from "../types/inegi";
 
 interface FiltersState {
+  estado: string;
   status: string;
   tamano: string;
   sector: string;
@@ -28,6 +29,18 @@ const SECTORS = [
   { label: "Comercio al por mayor", value: "Comercio al por mayor" },
   { label: "Servicios Profesionales, Científicos y Técnicos", value: "Servicios Profesionales, Científicos y Técnicos" },
   { label: "Servicios de Alojamiento y Alimentos", value: "Servicios de Alojamiento y Alimentos" },
+];
+
+const ESTADOS = [
+  { label: "Todos los estados", value: "" },
+  { label: "Querétaro", value: "Querétaro" },
+  { label: "Nuevo León", value: "Nuevo León" },
+  { label: "Ciudad de México", value: "Ciudad de México" },
+  { label: "Guanajuato", value: "Guanajuato" },
+  { label: "Jalisco", value: "Jalisco" },
+  { label: "Coahuila", value: "Coahuila" },
+  { label: "Yucatán", value: "Yucatán" },
+  { label: "Estado de México", value: "Estado de México" },
 ];
 
 const SIZES = [
@@ -76,7 +89,7 @@ export default function MarketCompaniesFilters({
         </button>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         {/* Búsqueda por Texto */}
         <div className="relative">
           <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
@@ -92,6 +105,24 @@ export default function MarketCompaniesFilters({
               className="w-full rounded-xl border border-slate-800 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
             />
           </div>
+        </div>
+
+        {/* Estado */}
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Estado (Piloto)
+          </label>
+          <select
+            value={filters.estado}
+            onChange={(e) => handleChange("estado", e.target.value)}
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
+          >
+            {ESTADOS.map((item) => (
+              <option key={item.label} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Estatus */}

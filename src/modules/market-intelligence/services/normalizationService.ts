@@ -241,6 +241,7 @@ export function normalizeRow(row: any): InegiCompany {
   
   const direccion = String(row["Dirección"] || row["Direccion"] || row["DIRECCION"] || "").trim();
   const municipio = String(row["Municipio"] || row["MUNICIPIO"] || "").trim();
+  const estado = String(row["Estado"] || row["ESTADO"] || "").trim();
   const cp = String(row["C.P."] || row["CP"] || row["Codigo postal"] || "").trim();
   const scian = String(row["SCIAN"] || row["Código de la clase de actividad SCIAN"] || "").trim();
   const actividad = String(row["Actividad"] || row["Nombre de la clase de actividad"] || "").trim();
@@ -282,6 +283,7 @@ export function normalizeRow(row: any): InegiCompany {
     sitioWeb,
     direccion,
     municipio,
+    estado,
     cp,
     scian,
     actividad,

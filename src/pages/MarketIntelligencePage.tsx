@@ -15,6 +15,7 @@ import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability } from "../services/rbacService";
 
 interface FiltersState {
+  estado: string;
   status: string;
   tamano: string;
   sector: string;
@@ -27,6 +28,7 @@ interface FiltersState {
 }
 
 const DEFAULT_FILTERS: FiltersState = {
+  estado: "",
   status: "",
   tamano: "",
   sector: "",
@@ -124,6 +126,7 @@ export default function MarketIntelligencePage() {
           status: filters.status as CompanyStatus || undefined,
           tamano: filters.tamano || undefined,
           sector: filters.sector || undefined,
+          estado: filters.estado || undefined,
           municipio: filters.municipio || undefined,
           hasEmail: filters.hasEmail ? true : undefined,
           hasPhone: filters.hasPhone ? true : undefined,
@@ -190,6 +193,7 @@ export default function MarketIntelligencePage() {
     loadData(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    filters.estado,
     filters.status,
     filters.tamano,
     filters.sector,
@@ -240,6 +244,7 @@ export default function MarketIntelligencePage() {
           status: filters.status as CompanyStatus || undefined,
           tamano: filters.tamano || undefined,
           sector: filters.sector || undefined,
+          estado: filters.estado || undefined,
           municipio: filters.municipio || undefined,
           hasEmail: filters.hasEmail ? true : undefined,
           hasPhone: filters.hasPhone ? true : undefined,
@@ -279,6 +284,7 @@ export default function MarketIntelligencePage() {
           status: filters.status as CompanyStatus || undefined,
           tamano: filters.tamano || undefined,
           sector: filters.sector || undefined,
+          estado: filters.estado || undefined,
           municipio: filters.municipio || undefined,
           hasEmail: filters.hasEmail ? true : undefined,
           hasPhone: filters.hasPhone ? true : undefined,
