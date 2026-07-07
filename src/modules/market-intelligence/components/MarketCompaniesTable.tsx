@@ -8,6 +8,7 @@ import {
   Phone,
 } from "lucide-react";
 import type { InegiCompany } from "../types/inegi";
+import { resolveCommercialIndustry } from "../services/industryResolverService";
 
 interface MarketCompaniesTableProps {
   companies: InegiCompany[];
@@ -118,7 +119,7 @@ export default function MarketCompaniesTable({
                   </div>
 
                   <p className="mt-3 text-xs text-slate-400 line-clamp-2">
-                    {company.sector}
+                    {resolveCommercialIndustry(company.sector)}
                   </p>
 
                   <div className="mt-4 flex items-center gap-2 text-xs text-slate-400">
@@ -198,7 +199,7 @@ export default function MarketCompaniesTable({
                     </td>
                     <td className="px-6 py-4">
                       <span className="line-clamp-2 text-xs text-slate-400 max-w-[220px]">
-                        {company.sector}
+                        {resolveCommercialIndustry(company.sector)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-slate-300 font-medium">

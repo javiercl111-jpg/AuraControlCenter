@@ -23,16 +23,9 @@ interface MarketCompaniesFiltersProps {
   availableStates: string[];
 }
 
-const SECTORS = [
-  { label: "Todos los sectores", value: "" },
-  { label: "Industrias Manufactureras", value: "Industrias Manufactureras" },
-  { label: "Servicios Financieros y Corporativos", value: "Servicios Financieros y Corporativos" },
-  { label: "Información en Medios Masivos", value: "Información en Medios Masivos" },
-  { label: "Comercio al por menor", value: "Comercio al por menor" },
-  { label: "Comercio al por mayor", value: "Comercio al por mayor" },
-  { label: "Servicios Profesionales, Científicos y Técnicos", value: "Servicios Profesionales, Científicos y Técnicos" },
-  { label: "Servicios de Alojamiento y Alimentos", value: "Servicios de Alojamiento y Alimentos" },
-];
+import { getCommercialSectorsDropdown } from "../services/industryResolverService";
+
+const SECTORS = getCommercialSectorsDropdown();
 
 const SIZES = [
   { label: "Todos los tamaños", value: "" },

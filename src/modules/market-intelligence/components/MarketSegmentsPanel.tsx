@@ -55,7 +55,7 @@ const PREDEFINED_SEGMENTS: Segment[] = [
     description: "Sectores de Información y Servicios Profesionales.",
     icon: Compass,
     filters: {
-      sector: "Servicios Profesionales, Científicos y Técnicos",
+      sector: "Servicios Profesionales",
       status: "NEW",
     },
   },

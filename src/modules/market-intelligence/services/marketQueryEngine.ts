@@ -122,32 +122,14 @@ export function getNormalizedSizeCategory(tamano: string): string {
   return "micro";
 }
 
+import { resolveCommercialIndustry } from "./industryResolverService";
+
 /**
  * Realiza una comparación flexible e inteligente de sectores económicos.
  */
 export function matchesSector(docSector: string, filterSector: string): boolean {
-  const cleanDoc = normalizeString(docSector);
-  const cleanFilter = normalizeString(filterSector);
-  
-  if (cleanDoc.includes(cleanFilter) || cleanFilter.includes(cleanDoc)) {
-    return true;
-  }
-  
-  // Mapeos específicos cruzados
-  if (cleanFilter.includes("alojamiento") || cleanFilter.includes("alimentos")) {
-    return cleanDoc.includes("alojamiento") || cleanDoc.includes("alimentos");
-  }
-  if (cleanFilter.includes("financiero") || cleanFilter.includes("corporativo")) {
-    return cleanDoc.includes("financiero") || cleanDoc.includes("seguro") || cleanDoc.includes("corporativo");
-  }
-  if (cleanFilter.includes("profesional") || cleanFilter.includes("cientific") || cleanFilter.includes("tecnic")) {
-    return cleanDoc.includes("profesional") || cleanDoc.includes("cientific") || cleanDoc.includes("tecnic");
-  }
-  if (cleanFilter.includes("medio") || cleanFilter.includes("masivo") || cleanFilter.includes("informacion")) {
-    return cleanDoc.includes("informacion") || cleanDoc.includes("medio") || cleanDoc.includes("telecomunicacion");
-  }
-  
-  return false;
+  const docCommercial = resolveCommercialIndustry(docSector);
+  return normalizeString(docCommercial) === normalizeString(filterSector);
 }
 
 /**

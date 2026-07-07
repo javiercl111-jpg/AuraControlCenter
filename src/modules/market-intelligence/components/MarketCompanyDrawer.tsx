@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import type { CompanyStatus, InegiCompany } from "../types/inegi";
+import { resolveCommercialIndustry } from "../services/industryResolverService";
 import { Link } from "react-router-dom";
 import NormalizationService from "../services/normalizationService";
 
@@ -364,7 +365,7 @@ export default function MarketCompanyDrawer({
             <div className="grid gap-4 text-xs sm:grid-cols-2">
               <div>
                 <span className="block text-slate-500">Sector Económico</span>
-                <span className="mt-1 block font-medium text-slate-300">{company.sector || "N/A"}</span>
+                <span className="mt-1 block font-medium text-slate-300">{resolveCommercialIndustry(company.sector) || "N/A"}</span>
               </div>
               <div>
                 <span className="block text-slate-500">Actividad Económica</span>
