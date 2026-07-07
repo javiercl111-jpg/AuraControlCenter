@@ -148,6 +148,8 @@ export async function analyzeZipFiles(zipFile: File): Promise<ZipAnalysisSummary
     return isExcel;
   });
 
+  console.log(`[NationalZipImport] Archivos Excel filtrados dentro del ZIP:`, excelFiles);
+
   const files: ZipAnalyzedFile[] = [];
   let totalEstimatedRows = 0;
   let unresolvedFilesCount = 0;
@@ -199,6 +201,13 @@ export async function analyzeZipFiles(zipFile: File): Promise<ZipAnalysisSummary
     });
   }
 
+  console.log(`[NationalZipImport] Resumen de análisis previo del ZIP:`, {
+    totalFiles: files.length,
+    unresolvedFilesCount,
+    totalEstimatedRows,
+    statesCount: statesSet.size,
+  });
+
   if (files.length === 0) {
     throw new Error("No se encontraron archivos Excel (.xlsx, .xls) válidos dentro del ZIP.");
   }
@@ -222,6 +231,8 @@ export async function importResolvedFiles(
   onProgress?: (progress: ZipImportProgress) => void
 ): Promise<NationalZipImportResult> {
   const startTime = Date.now();
+  console.log(`[NationalZipImport] Iniciando importación en servicio. Archivos a procesar:`, resolvedFiles);
+  
   const zipData = await zipFile.arrayBuffer();
   const zip = await JSZip.loadAsync(zipData);
   const totalFiles = resolvedFiles.length;
@@ -237,6 +248,7 @@ export async function importResolvedFiles(
 
   for (const item of resolvedFiles) {
     const { filename, state } = item;
+    console.log(`[NationalZipImport] > Leyendo archivo de ZIP: ${filename} (Estado asignado: ${state})`);
     
     if (onProgress) {
       onProgress({
@@ -253,17 +265,23 @@ export async function importResolvedFiles(
 
     try {
       const fileData = await zip.files[filename].async("arraybuffer");
+      console.log(`[NationalZipImport]   - Bytes del archivo: ${fileData.byteLength}`);
       const workbook = read(fileData, { type: "array" });
       const sheetName = workbook.SheetNames[0];
+      
       if (!sheetName) {
+        console.warn(`[NationalZipImport]   - Omitido: No se detectaron hojas en ${filename}`);
         omittedFiles++;
         continue;
       }
+      console.log(`[NationalZipImport]   - Hoja activa: ${sheetName}`);
 
       const sheet = workbook.Sheets[sheetName];
       const jsonRows: any[][] = utils.sheet_to_json(sheet, { header: 1 });
+      console.log(`[NationalZipImport]   - Filas leídas en Excel: ${jsonRows.length}`);
       
       if (jsonRows.length <= 1) {
+        console.warn(`[NationalZipImport]   - Omitido: Menos de 1 fila de datos en ${filename}`);
         omittedFiles++;
         continue;
       }
@@ -285,16 +303,20 @@ export async function importResolvedFiles(
           company.estado = state;
           companies.push(company);
         } catch (rowErr) {
-          console.warn(`[NationalZipImport] Error parseando fila ${r} en ${filename}:`, rowErr);
+          console.warn(`[NationalZipImport]   - Error parseando fila ${r} en ${filename}:`, rowErr);
         }
       }
 
+      console.log(`[NationalZipImport]   - Registros normalizados listos para upsert: ${companies.length}`);
       if (companies.length === 0) {
+        console.warn(`[NationalZipImport]   - Omitido: 0 registros normalizados válidos en ${filename}`);
         omittedFiles++;
         continue;
       }
 
+      console.log(`[NationalZipImport]   - Ejecutando upsert batch en Firestore para ${filename}...`);
       const upsertResult = await MarketFirestoreService.importMarketCompaniesBatch(companies);
+      console.log(`[NationalZipImport]   - Resultado upsert batch para ${filename}:`, upsertResult);
       
       added += upsertResult.added;
       overwritten += upsertResult.overwritten;
@@ -304,12 +326,13 @@ export async function importResolvedFiles(
       processedFiles++;
 
     } catch (err) {
-      console.error(`[NationalZipImport] Falló procesamiento de ${filename}:`, err);
+      console.error(`[NationalZipImport] Critical error processing ${filename}:`, err);
       omittedFiles++;
     }
   }
 
   const timeMs = Date.now() - startTime;
+  console.log(`[NationalZipImport] Importación finalizada en ${timeMs} ms. Archivos procesados con éxito: ${processedFiles}/${totalFiles}`);
 
   // Registrar en Historial con type: NATIONAL_ZIP_IMPORT
   try {

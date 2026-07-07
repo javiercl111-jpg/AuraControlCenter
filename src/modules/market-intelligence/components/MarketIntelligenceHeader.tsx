@@ -376,11 +376,15 @@ export default function MarketIntelligenceHeader({
     if (file.name.endsWith(".zip")) {
       setError("");
       setParseStatus("Leyendo archivo ZIP nacional...");
-      onZipSelect(file).catch((err) => {
-        console.error(err);
-        setError("Error procesando ZIP: " + err.message);
-        setParseStatus("");
-      });
+      onZipSelect(file)
+        .then(() => {
+          setParseStatus("");
+        })
+        .catch((err: any) => {
+          console.error(err);
+          setError("Error procesando ZIP: " + err.message);
+          setParseStatus("");
+        });
     } else {
       processExcelFile(file);
     }

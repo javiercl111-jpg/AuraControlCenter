@@ -441,6 +441,23 @@ export default function MarketIntelligencePage() {
     }
   }
 
+  // Limpiar estados de progreso e importación
+  function resetZipImportStates() {
+    setIsProcessing(false);
+    setZipProgress(null);
+    setZipSummary(null);
+    setActiveZipFile(null);
+    setPendingStateResolutionFiles(null);
+    setCurrentResolutionIndex(-1);
+    setResolvedFilesList([]);
+  }
+
+  // Cancelar asistente de importación ZIP
+  function handleCancelZipImport() {
+    resetZipImportStates();
+    setError("");
+  }
+
   // Importar secuencialmente archivos del ZIP con estados confirmados
   async function startResolvedZipImport(file: File, resolvedList: { filename: string; state: string }[]) {
     setIsProcessing(true);
@@ -466,6 +483,10 @@ export default function MarketIntelligencePage() {
           setZipProgress(progress);
         }
       );
+
+      if (result.processedFiles === 0) {
+        throw new Error("No se procesó ningún archivo de forma exitosa. Revisa la selección de estados o que las hojas del Excel no estén vacías.");
+      }
 
       setImportReport({
         total: result.totalRowsProcessed,
@@ -493,12 +514,7 @@ export default function MarketIntelligencePage() {
       console.error(err);
       setError("Fallo al procesar el archivo ZIP nacional: " + err.message);
     } finally {
-      setIsProcessing(false);
-      setZipProgress(null);
-      setActiveZipFile(null);
-      setPendingStateResolutionFiles(null);
-      setCurrentResolutionIndex(-1);
-      setResolvedFilesList([]);
+      resetZipImportStates();
     }
   }
 
@@ -715,10 +731,7 @@ export default function MarketIntelligencePage() {
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={() => {
-                setActiveZipFile(null);
-                setZipSummary(null);
-              }}
+              onClick={handleCancelZipImport}
               className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-900 transition"
             >
               Cancelar
@@ -814,6 +827,9 @@ export default function MarketIntelligencePage() {
                   const newResolvedList = [...resolvedFilesList, { filename, state: stateVal }];
                   setResolvedFilesList(newResolvedList);
 
+                  // Limpiar el select para el siguiente renderizado de estado
+                  e.target.value = "";
+
                   if (currentResolutionIndex + 1 < pendingStateResolutionFiles.length) {
                     setCurrentResolutionIndex(currentResolutionIndex + 1);
                   } else {
@@ -835,13 +851,7 @@ export default function MarketIntelligencePage() {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => {
-                  // Cancelar todo
-                  setActiveZipFile(null);
-                  setPendingStateResolutionFiles(null);
-                  setCurrentResolutionIndex(-1);
-                  setResolvedFilesList([]);
-                }}
+                onClick={handleCancelZipImport}
                 className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition"
               >
                 Cancelar Importación
