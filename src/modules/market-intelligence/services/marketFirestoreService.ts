@@ -55,7 +55,8 @@ const DEFAULT_CONSULTANT = {
  */
 export async function importMarketCompaniesBatch(
   companies: InegiCompany[],
-  onProgress?: (progress: { processed: number; total: number }) => void
+  onProgress?: (progress: { processed: number; total: number }) => void,
+  options?: { skipHistory?: boolean }
 ): Promise<{ 
   added: number; 
   overwritten: number; 
@@ -216,22 +217,24 @@ export async function importMarketCompaniesBatch(
   // 5. Registrar Historial de Importaciones en base (Prioridad 4)
   const historyRef = doc(collection(db, "market_imports_history"));
   const historyId = historyRef.id;
-  try {
-    await setDoc(historyRef, {
-      id: historyId,
-      timestamp: serverTimestamp(),
-      filename: "Importación Masiva Excel",
-      totalProcessed: companies.length,
-      newAdded: added,
-      updated: overwritten,
-      omitted,
-      failed,
-      timeMs,
-      source: "INEGI",
-      sourceVersion: "DENUE-2026",
-    });
-  } catch (err) {
-    console.error("Error al registrar historial de importación:", err);
+  if (!options?.skipHistory) {
+    try {
+      await setDoc(historyRef, {
+        id: historyId,
+        timestamp: serverTimestamp(),
+        filename: "Importación Masiva Excel",
+        totalProcessed: companies.length,
+        newAdded: added,
+        updated: overwritten,
+        omitted,
+        failed,
+        timeMs,
+        source: "INEGI",
+        sourceVersion: "DENUE-2026",
+      });
+    } catch (err) {
+      console.error("Error al registrar historial de importación:", err);
+    }
   }
 
   return { added, overwritten, omitted, failed, historyId, timeMs };
@@ -520,6 +523,42 @@ export async function repairImportedStates(): Promise<{ totalChecked: number; re
   return { totalChecked, repaired };
 }
 
+/**
+ * Guarda un registro de auditoría de importación en el historial.
+ */
+export async function writeImportAudit(audit: {
+  filename: string;
+  totalProcessed: number;
+  newAdded: number;
+  updated: number;
+  omitted: number;
+  failed: number;
+  timeMs: number;
+  source: string;
+  sourceVersion: string;
+  user: string;
+  states?: string[];
+}): Promise<string> {
+  const historyRef = doc(collection(db, "market_imports_history"));
+  const historyId = historyRef.id;
+  await setDoc(historyRef, {
+    id: historyId,
+    timestamp: serverTimestamp(),
+    filename: audit.filename,
+    totalProcessed: audit.totalProcessed,
+    newAdded: audit.newAdded,
+    updated: audit.updated,
+    omitted: audit.omitted,
+    failed: audit.failed,
+    timeMs: audit.timeMs,
+    source: audit.source,
+    sourceVersion: audit.sourceVersion,
+    user: audit.user,
+    states: audit.states || [],
+  });
+  return historyId;
+}
+
 const MarketFirestoreService = {
   importMarketCompaniesBatch,
   getMarketCompanies,
@@ -529,6 +568,7 @@ const MarketFirestoreService = {
   updateUniqueStates,
   getImportHistory,
   repairImportedStates,
+  writeImportAudit,
 };
 
 export default MarketFirestoreService;

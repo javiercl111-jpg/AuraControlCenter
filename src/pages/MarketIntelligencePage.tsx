@@ -53,7 +53,34 @@ export default function MarketIntelligencePage() {
   const [rawDataset, setRawDataset] = useState<InegiCompany[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeMetadata, setActiveMetadata] = useState<DatasetMetadata | null>(null);
-  const [excelImportProgress, setExcelImportProgress] = useState<{ processed: number; total: number } | null>(null);
+  const [activeJob, setActiveJob] = useState<{
+    jobId: string;
+    filename: string;
+    stage: "PREPARING" | "READING_EXCEL" | "NORMALIZING" | "WRITING_FIRESTORE" | "VALIDATING_WRITE" | "UPDATING_DATASET_MANAGER" | "COMPLETED";
+    processed: number;
+    total: number;
+    added: number;
+    overwritten: number;
+    omitted: number;
+    failed: number;
+    startTime: number;
+    elapsedTimeMs: number;
+    speed: number;
+    etaSeconds: number;
+    batchesRemaining: number;
+  } | null>(null);
+  const [pendingResumeJob, setPendingResumeJob] = useState<{
+    jobId: string;
+    filename: string;
+    companies: InegiCompany[];
+    checkpoint: {
+      processed: number;
+      added: number;
+      overwritten: number;
+      omitted: number;
+      failed: number;
+    };
+  } | null>(null);
 
   // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal
   const availableStates = useMemo(() => {
@@ -377,48 +404,206 @@ export default function MarketIntelligencePage() {
     setHasMore(true);
   }
 
-  // Importar desde Excel o Muestra Piloto (Batch con reporte e historial)
-  async function handleImport(importedCompanies: InegiCompany[]) {
+  // Ejecutar el Job de Importación GTM con checkpoints y estadísticas
+  async function executeImportJob(
+    jobId: string,
+    filename: string,
+    companies: InegiCompany[],
+    startIndex: number = 0,
+    initialAdded: number = 0,
+    initialOverwritten: number = 0,
+    initialOmitted: number = 0,
+    initialFailed: number = 0
+  ) {
     setIsProcessing(true);
     setError("");
     setSuccess("");
     setImportReport(null);
-    setExcelImportProgress({ processed: 0, total: importedCompanies.length });
+
+    const total = companies.length;
+    const startTime = Date.now();
+
+    const initialJobState = {
+      jobId,
+      filename,
+      stage: "WRITING_FIRESTORE" as const,
+      processed: startIndex,
+      total,
+      added: initialAdded,
+      overwritten: initialOverwritten,
+      omitted: initialOmitted,
+      failed: initialFailed,
+      startTime,
+      elapsedTimeMs: 0,
+      speed: 0,
+      etaSeconds: 0,
+      batchesRemaining: Math.ceil((total - startIndex) / 100),
+    };
+    setActiveJob(initialJobState);
+
+    let addedAcc = initialAdded;
+    let overwrittenAcc = initialOverwritten;
+    let omittedAcc = initialOmitted;
+    let failedAcc = initialFailed;
 
     try {
-      const result = await MarketFirestoreService.importMarketCompaniesBatch(
-        importedCompanies,
-        (progress) => {
-          setExcelImportProgress(progress);
+      const UPSERT_WRITE_CHUNK_SIZE = 100;
+
+      for (let i = startIndex; i < total; i += UPSERT_WRITE_CHUNK_SIZE) {
+        const chunk = companies.slice(i, i + UPSERT_WRITE_CHUNK_SIZE);
+        
+        // Escribir en base omitiendo registros duplicados sin cambios
+        const chunkResult = await MarketFirestoreService.importMarketCompaniesBatch(
+          chunk,
+          undefined,
+          { skipHistory: true }
+        );
+        
+        addedAcc += chunkResult.added;
+        overwrittenAcc += chunkResult.overwritten;
+        omittedAcc += chunkResult.omitted;
+        failedAcc += chunkResult.failed;
+
+        const currentProcessed = Math.min(i + UPSERT_WRITE_CHUNK_SIZE, total);
+        const elapsed = Date.now() - startTime;
+        const speed = elapsed > 0 ? (currentProcessed - startIndex) / (elapsed / 1000) : 0;
+        const eta = speed > 0 ? (total - currentProcessed) / speed : 0;
+        const remaining = Math.ceil((total - currentProcessed) / UPSERT_WRITE_CHUNK_SIZE);
+
+        const currentJobState = {
+          jobId,
+          filename,
+          stage: "WRITING_FIRESTORE" as const,
+          processed: currentProcessed,
+          total,
+          added: addedAcc,
+          overwritten: overwrittenAcc,
+          omitted: omittedAcc,
+          failed: failedAcc,
+          startTime,
+          elapsedTimeMs: elapsed,
+          speed: Math.round(speed * 10) / 10,
+          etaSeconds: Math.round(eta),
+          batchesRemaining: remaining,
+        };
+
+        setActiveJob(currentJobState);
+
+        // Guardar checkpoint cada 500 registros
+        if (currentProcessed % 500 === 0 || currentProcessed === total) {
+          localStorage.setItem(jobId, JSON.stringify({
+            processed: currentProcessed,
+            added: addedAcc,
+            overwritten: overwrittenAcc,
+            omitted: omittedAcc,
+            failed: failedAcc,
+            timestamp: Date.now(),
+          }));
         }
-      );
+      }
+
+      // Validando escritura y actualizando
+      setActiveJob(prev => prev ? { ...prev, stage: "VALIDATING_WRITE" } : null);
       
-      setImportReport({
-        total: importedCompanies.length,
-        added: result.added,
-        updated: result.overwritten,
-        omitted: result.omitted,
-        failed: result.failed,
-        timeMs: result.timeMs,
+      const uniqueStates = Array.from(new Set(companies.map(c => getCompanyState(c)).filter(Boolean)));
+      if (uniqueStates.length > 0) {
+        await MarketFirestoreService.updateUniqueStates(uniqueStates);
+      }
+
+      // Auditoría: Guardar automáticamente en historial de importaciones
+      setActiveJob(prev => prev ? { ...prev, stage: "UPDATING_DATASET_MANAGER" } : null);
+      
+      // Invalida los estados específicos importados del Dataset Manager (No borra otros de la memoria)
+      uniqueStates.forEach(state => {
+        datasetManager.invalidateDataset(state);
       });
 
-      setSuccess(`Lote importado con éxito: ${result.added} nuevos, ${result.overwritten} actualizados.`);
-      
+      // Crear auditoría en la base
+      const timeMs = Date.now() - startTime;
+      await MarketFirestoreService.writeImportAudit({
+        filename,
+        totalProcessed: total,
+        newAdded: addedAcc,
+        updated: overwrittenAcc,
+        omitted: omittedAcc,
+        failed: failedAcc,
+        timeMs,
+        source: "INEGI",
+        sourceVersion: "DENUE-2026",
+        user: auth.currentUser?.email || "jcuellar@aura-hcm.com",
+        states: uniqueStates,
+      });
+
       // Recargar historial
       const history = await MarketFirestoreService.getImportHistory();
       setImportHistory(history);
 
-      // Limpiar cache para forzar recarga del estado importado
-      datasetManager.clear();
+      // Eliminar el checkpoint de LocalStorage
+      localStorage.removeItem(jobId);
+
+      setActiveJob(prev => prev ? {
+        ...prev,
+        stage: "COMPLETED",
+        processed: total,
+        added: addedAcc,
+        overwritten: overwrittenAcc,
+        omitted: omittedAcc,
+        failed: failedAcc,
+      } : null);
+
+      setSuccess(`Lote importado con éxito: ${addedAcc} nuevos, ${overwrittenAcc} actualizados.`);
+      setImportReport({
+        total,
+        added: addedAcc,
+        updated: overwrittenAcc,
+        omitted: omittedAcc,
+        failed: failedAcc,
+        timeMs,
+      });
 
       await loadDataset(true, true);
+
     } catch (err: any) {
-      console.error(err);
-      setError("Fallo al importar lote: " + err.message);
+      console.error("Error en GTM Import Job:", err);
+      setError("GTM Import Job falló: " + err.message);
     } finally {
       setIsProcessing(false);
-      setExcelImportProgress(null);
+      // Mantener visible el panel finalizado temporalmente
+      setTimeout(() => {
+        setActiveJob(null);
+      }, 6000);
     }
+  }
+
+  // Importar desde Excel o Muestra Piloto (Batch con reporte e historial)
+  async function handleImport(importedCompanies: InegiCompany[], filename: string = "Importación Masiva Excel") {
+    setIsProcessing(true);
+    setError("");
+    setSuccess("");
+    setImportReport(null);
+
+    const jobId = `aura_job_${filename.replace(/[^a-zA-Z0-9]/g, "")}_${importedCompanies.length}`;
+    
+    // Comprobar checkpoint existente
+    const saved = localStorage.getItem(jobId);
+    if (saved) {
+      try {
+        const checkpointData = JSON.parse(saved);
+        setPendingResumeJob({
+          jobId,
+          filename,
+          companies: importedCompanies,
+          checkpoint: checkpointData,
+        });
+        setIsProcessing(false);
+        return;
+      } catch (e) {
+        console.warn("No se pudo parsear el checkpoint de LocalStorage:", e);
+      }
+    }
+
+    // Si no hay checkpoint, ejecutar de cero
+    executeImportJob(jobId, filename, importedCompanies, 0, 0, 0, 0, 0);
   }
 
   // Limpiar estados de progreso e importación
@@ -730,29 +915,220 @@ export default function MarketIntelligencePage() {
         canImport={capabilities.canImport}
       />
 
-      {/* Panel de Progreso de Importación Excel manual */}
-      {excelImportProgress && (
-        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
-              <span className="h-2 w-2 animate-ping rounded-full bg-cyan-400" />
-              Procesando Importación de Archivo Excel
-            </h3>
-            <span className="text-xs text-slate-400 font-semibold font-mono font-sans">
-              {excelImportProgress.processed.toLocaleString()} / {excelImportProgress.total.toLocaleString()} Registros
-            </span>
+      {/* Diálogo para Reanudar Importación Interrumpida (Checkpoints) */}
+      {pendingResumeJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="w-full max-w-lg rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-lg">
+                🔄
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white">Importación Interrumpida Detectada</h3>
+                <p className="text-xs text-slate-400">
+                  Se encontró un checkpoint local para el archivo: <strong className="text-slate-200 font-mono">{pendingResumeJob.filename}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2">
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Registros procesados:</span>
+                <span className="font-bold text-white font-mono">{pendingResumeJob.checkpoint.processed.toLocaleString()} / {pendingResumeJob.companies.length.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Nuevos agregados:</span>
+                <span className="font-bold text-emerald-400 font-mono">+{pendingResumeJob.checkpoint.added}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Actualizados:</span>
+                <span className="font-bold text-cyan-400 font-mono">+{pendingResumeJob.checkpoint.overwritten}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const { processed, added, overwritten, omitted, failed } = pendingResumeJob.checkpoint;
+                  setPendingResumeJob(null);
+                  executeImportJob(
+                    pendingResumeJob.jobId,
+                    pendingResumeJob.filename,
+                    pendingResumeJob.companies,
+                    processed,
+                    added,
+                    overwritten,
+                    omitted,
+                    failed
+                  );
+                }}
+                className="rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 shadow-lg shadow-cyan-500/10 transition"
+              >
+                Reanudar desde Registro {pendingResumeJob.checkpoint.processed.toLocaleString()}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem(pendingResumeJob.jobId);
+                  setPendingResumeJob(null);
+                  executeImportJob(
+                    pendingResumeJob.jobId,
+                    pendingResumeJob.filename,
+                    pendingResumeJob.companies,
+                    0, 0, 0, 0, 0
+                  );
+                }}
+                className="rounded-xl border border-slate-800 bg-slate-950 px-5 py-2.5 text-xs text-slate-400 hover:bg-slate-900 hover:text-white transition"
+              >
+                Empezar de Nuevo
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingResumeJob(null)}
+                className="rounded-xl border border-slate-800 bg-slate-905 px-5 py-2.5 text-xs text-slate-500 hover:bg-slate-800 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Panel de Progreso del Aura GTM Import Job Engine */}
+      {activeJob && (
+        <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/80 p-6 space-y-6 shadow-xl animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+            <div className="space-y-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-cyan-400 border border-cyan-500/20">
+                Aura GTM Import Job Engine
+              </span>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span className="h-2.5 w-2.5 animate-ping rounded-full bg-cyan-400" />
+                Trabajando en: {activeJob.filename}
+              </h3>
+            </div>
+            
+            <div className="flex items-center gap-4 text-[11px] font-mono text-slate-400">
+              <div>
+                <span className="text-slate-500 mr-1.5">Duración:</span>
+                <span>{Math.round(activeJob.elapsedTimeMs / 1000)}s</span>
+              </div>
+              <div className="h-3 w-[1px] bg-slate-800" />
+              <div>
+                <span className="text-slate-500 mr-1.5">Lotes Restantes:</span>
+                <span>{activeJob.batchesRemaining}</span>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-slate-400">
-              <span>Guardando en Firestore...</span>
-              <span>{Math.round((excelImportProgress.processed / excelImportProgress.total) * 100) || 0}%</span>
+          <div className="grid gap-2 grid-cols-7 text-center">
+            {[
+              { id: "PREPARING", label: "Preparando" },
+              { id: "READING_EXCEL", label: "Excel" },
+              { id: "NORMALIZING", label: "Normalizando" },
+              { id: "WRITING_FIRESTORE", label: "Escribiendo" },
+              { id: "VALIDATING_WRITE", label: "Validando" },
+              { id: "UPDATING_DATASET_MANAGER", label: "Caché" },
+              { id: "COMPLETED", label: "Finalizado" }
+            ].map((st, idx) => {
+              const stagesList = ["PREPARING", "READING_EXCEL", "NORMALIZING", "WRITING_FIRESTORE", "VALIDATING_WRITE", "UPDATING_DATASET_MANAGER", "COMPLETED"];
+              const currentIdx = stagesList.indexOf(activeJob.stage);
+              const isCompleted = idx < currentIdx || activeJob.stage === "COMPLETED";
+              const isActive = st.id === activeJob.stage;
+
+              return (
+                <div key={st.id} className="flex flex-col gap-1 items-center">
+                  <div className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${
+                    isCompleted
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                      : isActive
+                      ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/40 animate-pulse"
+                      : "bg-slate-900 text-slate-600 border border-slate-800"
+                  }`}>
+                    {isCompleted ? "✓" : idx + 1}
+                  </div>
+                  <span className={`text-[10px] font-semibold mt-1 ${
+                    isActive ? "text-cyan-300 font-bold" : isCompleted ? "text-slate-400" : "text-slate-600"
+                  }`}>
+                    {st.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs font-semibold text-slate-400">
+              <span className="flex items-center gap-1.5">
+                {activeJob.stage === "WRITING_FIRESTORE" ? (
+                  <>Escribiendo registros en Firestore...</>
+                ) : activeJob.stage === "VALIDATING_WRITE" ? (
+                  <>Validando escrituras de base de datos...</>
+                ) : activeJob.stage === "UPDATING_DATASET_MANAGER" ? (
+                  <>Refrescando caché del Dataset Manager...</>
+                ) : activeJob.stage === "COMPLETED" ? (
+                  <span className="text-emerald-400 font-bold">¡Lote finalizado con éxito!</span>
+                ) : (
+                  <>Procesando etapa...</>
+                )}
+              </span>
+              <span className="font-mono text-cyan-400 font-bold">
+                {Math.round((activeJob.processed / activeJob.total) * 100) || 0}%
+              </span>
             </div>
-            <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+            <div className="h-3 w-full rounded-full bg-slate-900 overflow-hidden border border-slate-800/80">
               <div 
                 className="h-full rounded-full bg-cyan-400 transition-all duration-300"
-                style={{ width: `${Math.min(100, Math.round((excelImportProgress.processed / excelImportProgress.total) * 100))}%` }}
+                style={{ width: `${Math.min(100, Math.round((activeJob.processed / activeJob.total) * 100))}%` }}
               />
+            </div>
+          </div>
+
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-5 text-center pt-2">
+            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
+              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                Escritos / Total
+              </span>
+              <span className="block text-sm font-extrabold text-white mt-1 font-mono">
+                {activeJob.processed.toLocaleString()} / {activeJob.total.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
+              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                Nuevos
+              </span>
+              <span className="block text-sm font-extrabold text-emerald-400 mt-1 font-mono">
+                +{activeJob.added.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
+              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                Actualizados
+              </span>
+              <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono">
+                +{activeJob.overwritten.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
+              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                Velocidad
+              </span>
+              <span className="block text-sm font-extrabold text-slate-350 mt-1 font-mono">
+                {activeJob.speed} reg/s
+              </span>
+            </div>
+
+            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 col-span-2 md:col-span-1">
+              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                Tiempo Restante (ETA)
+              </span>
+              <span className="block text-sm font-extrabold text-amber-400 mt-1 font-mono">
+                {activeJob.etaSeconds > 0 ? `${activeJob.etaSeconds}s` : "0s"}
+              </span>
             </div>
           </div>
         </div>

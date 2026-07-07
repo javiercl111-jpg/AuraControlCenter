@@ -11,7 +11,7 @@ import { normalizeRow, normalizeRowWithMap, parseExcelWorkbook } from "../servic
 import type { InegiCompany } from "../types/inegi";
 
 interface MarketIntelligenceHeaderProps {
-  onImport: (companies: InegiCompany[]) => Promise<void>;
+  onImport: (companies: InegiCompany[], filename?: string) => Promise<void>;
   onZipSelect: (file: File) => Promise<void>;
   isLoading: boolean;
   canImport: boolean;
@@ -307,6 +307,7 @@ export default function MarketIntelligenceHeader({
   const [error, setError] = useState<string>("");
   const [showStateSelector, setShowStateSelector] = useState(false);
   const [selectedImportState, setSelectedImportState] = useState("");
+  const [uploadedFilename, setUploadedFilename] = useState<string>("");
   const [pendingImportData, setPendingImportData] = useState<{
     rows2D: any[][];
     headerMap: any;
@@ -347,7 +348,7 @@ export default function MarketIntelligenceHeader({
       }
 
       setParseStatus(`Importando ${processedRows.length} registros a Firestore...`);
-      await onImport(processedRows);
+      await onImport(processedRows, uploadedFilename || "Importación Manual con Estado");
 
       setParseStatus(`Importación completada con éxito. ${processedRows.length} registros cargados.`);
       setTimeout(() => setParseStatus(""), 5000);
@@ -372,6 +373,7 @@ export default function MarketIntelligenceHeader({
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    setUploadedFilename(file.name);
     
     if (file.name.endsWith(".zip")) {
       setError("");
@@ -420,10 +422,10 @@ export default function MarketIntelligenceHeader({
         }
 
         setParseStatus(
-          `Normalizados ${companiesToImport.length} registros (Límite máximo: 500). Importando a Firestore...`
+          `Normalizados ${companiesToImport.length} registros. Importando a Firestore...`
         );
         
-        await onImport(companiesToImport);
+        await onImport(companiesToImport, file.name);
 
         setParseStatus(`Importación completada con éxito. ${companiesToImport.length} registros cargados.`);
         setTimeout(() => setParseStatus(""), 5000);

@@ -100,11 +100,21 @@ export function clear(): void {
   datasetCache.clear();
 }
 
+/**
+ * Invalida (elimina) un estado específico del caché y la muestra global.
+ */
+export function invalidateDataset(stateName: string): void {
+  const key = stateName || "";
+  datasetCache.delete(key);
+  datasetCache.delete(""); // Invalida también la muestra global
+}
+
 const datasetManager = {
   getDataset,
   setDataset,
   hasDataset,
   clear,
+  invalidateDataset,
   generateMetadata,
 };
 
