@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { read } from "xlsx";
+import { read, utils } from "xlsx";
 import NormalizationService from "./normalizationService";
 import MarketFirestoreService from "./marketFirestoreService";
 
@@ -11,30 +11,31 @@ const MEXICAN_STATES = [
   "Sinaloa", "Sonora", "Tabasco", "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatán", "Zacatecas"
 ];
 
-function normalizeName(str: string): string {
+function cleanStateName(str: string): string {
   return str
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .trim();
+    .replace(/[^a-z0-9]/g, ""); // Elimina espacios, guiones bajos, números y símbolos
 }
 
 /**
  * Detecta qué estado de la República corresponde al nombre del archivo Excel.
+ * Limpia y normaliza ambos extremos para evitar discrepancias de espacios o guiones.
  */
 export function detectStateFromFilename(filename: string): string {
-  const normFile = normalizeName(filename);
+  const cleanFile = cleanStateName(filename);
   for (const state of MEXICAN_STATES) {
-    const normState = normalizeName(state);
-    if (normFile.includes(normState)) {
+    const cleanState = cleanStateName(state);
+    if (cleanFile.includes(cleanState)) {
       return state;
     }
   }
-  // Casos comunes
-  if (normFile.includes("cdmx") || normFile.includes("distrito federal") || normFile.includes("df")) {
+  // Equivalencias abreviadas y especiales
+  if (cleanFile.includes("cdmx") || cleanFile.includes("distritofederal") || cleanFile.includes("df")) {
     return "Ciudad de México";
   }
-  if (normFile.includes("edomex") || normFile.includes("estado de mexico")) {
+  if (cleanFile.includes("edomex") || cleanFile.includes("estadodemexico")) {
     return "México";
   }
   return "";
@@ -82,6 +83,7 @@ export interface NationalZipImportResult {
 /**
  * Analiza los archivos internos del ZIP, identificando cuáles son Excel
  * y cuáles carecen de estado geográfico (para resolverlos interactivamente).
+ * OPTIMIZACIÓN ENTERPRISE: Carga únicamente las cabeceras del Excel para análisis rápido.
  */
 export async function analyzeZipFiles(zipFile: File): Promise<ZipAnalysisSummary> {
   console.log("=== DIAGNÓSTICO DE ARCHIVO ZIP ===");
@@ -161,11 +163,21 @@ export async function analyzeZipFiles(zipFile: File): Promise<ZipAnalysisSummary
 
     try {
       const fileData = await zip.files[filename].async("arraybuffer");
-      const workbook = read(fileData, { type: "array" });
+      // OPTIMIZACIÓN: Solo leer encabezados y primeros 30 renglones
+      const workbook = read(fileData, { type: "array", sheetRows: 30 });
       
       const parsed = NormalizationService.parseExcelWorkbook(workbook, guessedState || undefined);
       
-      rowCount = parsed.companies.length;
+      // Decodificar el rango "!ref" para estimar registros totales sin leer el resto del archivo
+      const sheetName = parsed.sheetName;
+      const worksheet = workbook.Sheets[sheetName];
+      if (worksheet && worksheet["!ref"]) {
+        const range = utils.decode_range(worksheet["!ref"]);
+        rowCount = Math.max(0, range.e.r - range.s.r); // Estimación rápida del número de filas
+      } else {
+        rowCount = parsed.companies.length;
+      }
+      
       totalEstimatedRows += rowCount;
 
       if (needsStateSelection && parsed.headerMap.estadoIdx !== -1) {

@@ -119,6 +119,7 @@ export default function MarketIntelligencePage() {
   // Estados de importación ZIP nacional (Prioridad 5)
   const [zipProgress, setZipProgress] = useState<any | null>(null);
   const [zipSummary, setZipSummary] = useState<any | null>(null);
+  const [zipStep, setZipStep] = useState<"ZIP_RECEIVED" | "FILES_FOUND" | "STATES_DETECTED" | "RESOLVING_STATES" | "IMPORTING" | "COMPLETED" | null>(null);
   const [pendingStateResolutionFiles, setPendingStateResolutionFiles] = useState<{ filename: string; guessedState: string }[] | null>(null);
   const [currentResolutionIndex, setCurrentResolutionIndex] = useState<number>(-1);
   const [resolvedFilesList, setResolvedFilesList] = useState<{ filename: string; state: string }[]>([]);
@@ -446,6 +447,7 @@ export default function MarketIntelligencePage() {
     setIsProcessing(false);
     setZipProgress(null);
     setZipSummary(null);
+    setZipStep(null);
     setActiveZipFile(null);
     setPendingStateResolutionFiles(null);
     setCurrentResolutionIndex(-1);
@@ -464,6 +466,7 @@ export default function MarketIntelligencePage() {
     setError("");
     setSuccess("");
     setImportReport(null);
+    setZipStep("IMPORTING");
     setZipProgress({
       currentFile: "Inicializando...",
       processedFiles: 0,
@@ -500,6 +503,7 @@ export default function MarketIntelligencePage() {
       setSuccess(
         `Importación Nacional ZIP completada: ${result.processedFiles}/${result.totalFiles} archivos procesados con éxito.`
       );
+      setZipStep("COMPLETED");
 
       // Recargar la lista de estados únicos
       const states = await MarketFirestoreService.getUniqueStates();
@@ -513,8 +517,9 @@ export default function MarketIntelligencePage() {
     } catch (err: any) {
       console.error(err);
       setError("Fallo al procesar el archivo ZIP nacional: " + err.message);
-    } finally {
       resetZipImportStates();
+    } finally {
+      setIsProcessing(false);
     }
   }
 
@@ -525,14 +530,16 @@ export default function MarketIntelligencePage() {
     setSuccess("");
     setImportReport(null);
     setActiveZipFile(file);
+    setZipStep("ZIP_RECEIVED");
 
     try {
       const summary = await NationalZipImportService.analyzeZipFiles(file);
       setZipSummary(summary);
+      setZipStep("FILES_FOUND");
     } catch (err: any) {
       console.error(err);
       setError("Fallo al analizar el ZIP nacional: " + err.message);
-      setActiveZipFile(null);
+      resetZipImportStates();
     } finally {
       setIsProcessing(false);
     }
@@ -552,8 +559,10 @@ export default function MarketIntelligencePage() {
     setZipSummary(null);
 
     if (needsResolution.length === 0) {
+      setZipStep("STATES_DETECTED");
       await startResolvedZipImport(activeZipFile, preResolved);
     } else {
+      setZipStep("RESOLVING_STATES");
       setResolvedFilesList(preResolved);
       setPendingStateResolutionFiles(needsResolution);
       setCurrentResolutionIndex(0);
@@ -649,6 +658,55 @@ export default function MarketIntelligencePage() {
     return <PermissionDenied />;
   }
 
+  function renderZipTimeline() {
+    if (!zipStep) return null;
+
+    const steps = [
+      { id: "ZIP_RECEIVED", label: "ZIP Recibido", description: "Carga binaria confirmada." },
+      { id: "FILES_FOUND", label: "Archivos listados", description: "Búsqueda Excel." },
+      { id: "STATES_DETECTED", label: "Estados resueltos", description: "Geografía validada." },
+      { id: "IMPORTING", label: "Importando", description: "Carga en Firestore." },
+      { id: "COMPLETED", label: "Finalizado", description: "Historial guardado." },
+    ];
+
+    const currentStepIdx = steps.findIndex((s) => s.id === zipStep);
+
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-5 mb-4">
+        <div className="grid gap-4 sm:grid-cols-5">
+          {steps.map((step, idx) => {
+            const isCompleted = idx < currentStepIdx || zipStep === "COMPLETED";
+            const isActive = step.id === zipStep || (step.id === "STATES_DETECTED" && zipStep === "RESOLVING_STATES");
+
+            return (
+              <div key={step.id} className="flex flex-col gap-1 items-start text-left">
+                <div className="flex items-center gap-2">
+                  <div className={`flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                    isCompleted
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                      : isActive
+                      ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/40 animate-pulse"
+                      : "bg-slate-900 text-slate-500 border border-slate-800"
+                  }`}>
+                    {isCompleted ? "✓" : idx + 1}
+                  </div>
+                  <span className={`text-[11px] font-bold ${
+                    isActive ? "text-indigo-300 font-extrabold" : isCompleted ? "text-slate-300" : "text-slate-500"
+                  }`}>
+                    {step.label}
+                  </span>
+                </div>
+                <span className="text-[9px] text-slate-500 pl-7 font-sans leading-tight">
+                  {step.description}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Cabecera / Importador */}
@@ -675,6 +733,7 @@ export default function MarketIntelligencePage() {
       {/* Resumen Previo a la Importación ZIP (Prioridad 6) */}
       {zipSummary && activeZipFile && (
         <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4">
+          {renderZipTimeline()}
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-300">
               📁 ZIP Nacional Detectado
@@ -750,6 +809,7 @@ export default function MarketIntelligencePage() {
       {/* Panel de Progreso en Tiempo Real del ZIP */}
       {zipProgress && (
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 space-y-4">
+          {renderZipTimeline()}
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
               <span className="h-2 w-2 animate-ping rounded-full bg-cyan-400" />
@@ -791,6 +851,18 @@ export default function MarketIntelligencePage() {
               <span className="block font-bold text-rose-400 mt-0.5">{zipProgress.failed}</span>
             </div>
           </div>
+
+          {zipStep === "COMPLETED" && (
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={resetZipImportStates}
+                className="rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 transition active:scale-95"
+              >
+                Entendido
+              </button>
+            </div>
+          )}
         </div>
       )}
 
