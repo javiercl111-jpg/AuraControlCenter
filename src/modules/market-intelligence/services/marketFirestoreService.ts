@@ -19,6 +19,25 @@ import type { CompanyStatus, InegiCompany } from "../types/inegi";
 import type { PlatformOrganization } from "../../../types/platformOrganization";
 
 const MARKET_COMPANIES_COLLECTION = "market_companies";
+
+/**
+ * Ejecuta una función asíncrona con reintentos y retroceso exponencial (Exponential Backoff).
+ */
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delay = 1000,
+  exponential = 2
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) throw error;
+    console.warn(`Firestore operation failed. Retrying in ${delay}ms... Remaining retries: ${retries}. Error:`, error);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    return retryWithBackoff(fn, retries - 1, delay * exponential, exponential);
+  }
+}
 const ORGANIZATIONS_COLLECTION = "platform_organizations";
 
 // Parámetros configurables del UPSERT Enterprise
@@ -64,12 +83,14 @@ export async function importMarketCompaniesBatch(
   failed: number;
   historyId: string;
   timeMs: number;
+  failedCompanies?: InegiCompany[];
 }> {
   const startTime = Date.now();
   let added = 0;
   let overwritten = 0;
   let omitted = 0;
   let failed = 0;
+  const failedCompaniesList: InegiCompany[] = [];
 
   const nowStr = new Date().toISOString();
 
@@ -88,7 +109,7 @@ export async function importMarketCompaniesBatch(
           collection(db, MARKET_COMPANIES_COLLECTION),
           where("__name__", "in", idGroup)
         );
-        const snap = await getDocs(q);
+        const snap = await retryWithBackoff(() => getDocs(q), 3, 1000);
         snap.forEach(doc => {
           existingDocsMap.set(doc.id, doc.data());
         });
@@ -185,10 +206,11 @@ export async function importMarketCompaniesBatch(
     // 3. Ejecutar lote de escrituras
     if (batchHasWrites) {
       try {
-        await batch.commit();
+        await retryWithBackoff(() => batch.commit(), 3, 1000);
       } catch (err) {
-        console.error("Error al escribir lote de importación:", err);
+        console.error("Error al escribir lote de importación después de reintentos:", err);
         failed += chunk.length;
+        failedCompaniesList.push(...chunk);
       }
     }
 
@@ -237,7 +259,7 @@ export async function importMarketCompaniesBatch(
     }
   }
 
-  return { added, overwritten, omitted, failed, historyId, timeMs };
+  return { added, overwritten, omitted, failed, historyId, timeMs, failedCompanies: failedCompaniesList };
 }
 
 /**
