@@ -84,6 +84,14 @@ export async function importMarketCompaniesBatch(
   historyId: string;
   timeMs: number;
   failedCompanies?: InegiCompany[];
+  
+  // Telemetría de diagnóstico de batch
+  duplicateReadStart: string;
+  duplicateReadEnd: string;
+  duplicateReadMs: number;
+  batchCommitStart: string;
+  batchCommitEnd: string;
+  batchCommitMs: number;
 }> {
   const startTime = Date.now();
   let added = 0;
@@ -94,7 +102,15 @@ export async function importMarketCompaniesBatch(
 
   const nowStr = new Date().toISOString();
 
-  // Procesar escrituras en sub-lotes configurables
+  // Variables para telemetría del batch
+  let duplicateReadStartStr = "";
+  let duplicateReadEndStr = "";
+  let duplicateReadMs = 0;
+  let batchCommitStartStr = "";
+  let batchCommitEndStr = "";
+  let batchCommitMs = 0;
+
+  // Procesar escrituras en sub-lotes configurables (en executeImportJob companies tiene un tamaño máximo de 100)
   for (let i = 0; i < companies.length; i += UPSERT_WRITE_CHUNK_SIZE) {
     const chunk = companies.slice(i, i + UPSERT_WRITE_CHUNK_SIZE);
     const ids = chunk.map(c => c.id);
@@ -102,6 +118,9 @@ export async function importMarketCompaniesBatch(
     // 1. Consultar existencia y estado actual en base mediante chunks de lectura de 30
     const existingDocsMap = new Map<string, any>();
     
+    const readStart = Date.now();
+    duplicateReadStartStr = new Date().toLocaleTimeString() + "." + String(Date.now() % 1000).padStart(3, "0");
+
     for (let j = 0; j < ids.length; j += UPSERT_READ_CHUNK_SIZE) {
       const idGroup = ids.slice(j, j + UPSERT_READ_CHUNK_SIZE);
       try {
@@ -118,9 +137,16 @@ export async function importMarketCompaniesBatch(
       }
     }
 
+    const readEnd = Date.now();
+    duplicateReadEndStr = new Date().toLocaleTimeString() + "." + String(Date.now() % 1000).padStart(3, "0");
+    duplicateReadMs = readEnd - readStart;
+
     // 2. Preparar el lote de escritura (Upsert)
     const batch = writeBatch(db);
     let batchHasWrites = false;
+    let chunkAdded = 0;
+    let chunkOverwritten = 0;
+    let chunkOmitted = 0;
 
     for (const company of chunk) {
       const existing = existingDocsMap.get(company.id);
@@ -139,7 +165,7 @@ export async function importMarketCompaniesBatch(
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        added++;
+        chunkAdded++;
         batchHasWrites = true;
       } else {
         // Comprobar si cambió algún campo crítico
@@ -161,7 +187,7 @@ export async function importMarketCompaniesBatch(
 
         if (!hasChanged) {
           // Idéntico: Omitir escritura
-          omitted++;
+          chunkOmitted++;
         } else {
           // Cambió: Actualizar campos modificados
           const docRef = doc(db, MARKET_COMPANIES_COLLECTION, company.id);
@@ -197,22 +223,34 @@ export async function importMarketCompaniesBatch(
           };
 
           batch.update(docRef, updates);
-          overwritten++;
+          chunkOverwritten++;
           batchHasWrites = true;
         }
       }
     }
 
+    const commitStart = Date.now();
+    batchCommitStartStr = new Date().toLocaleTimeString() + "." + String(Date.now() % 1000).padStart(3, "0");
+
     // 3. Ejecutar lote de escrituras
     if (batchHasWrites) {
       try {
         await retryWithBackoff(() => batch.commit(), 3, 1000);
+        added += chunkAdded;
+        overwritten += chunkOverwritten;
+        omitted += chunkOmitted;
       } catch (err) {
         console.error("Error al escribir lote de importación después de reintentos:", err);
         failed += chunk.length;
         failedCompaniesList.push(...chunk);
       }
+    } else {
+      omitted += chunkOmitted;
     }
+
+    const commitEnd = Date.now();
+    batchCommitEndStr = new Date().toLocaleTimeString() + "." + String(Date.now() % 1000).padStart(3, "0");
+    batchCommitMs = batchHasWrites ? (commitEnd - commitStart) : 0;
 
     if (onProgress) {
       onProgress({
@@ -259,7 +297,21 @@ export async function importMarketCompaniesBatch(
     }
   }
 
-  return { added, overwritten, omitted, failed, historyId, timeMs, failedCompanies: failedCompaniesList };
+  return { 
+    added, 
+    overwritten, 
+    omitted, 
+    failed, 
+    historyId, 
+    timeMs, 
+    failedCompanies: failedCompaniesList,
+    duplicateReadStart: duplicateReadStartStr,
+    duplicateReadEnd: duplicateReadEndStr,
+    duplicateReadMs,
+    batchCommitStart: batchCommitStartStr,
+    batchCommitEnd: batchCommitEndStr,
+    batchCommitMs
+  };
 }
 
 /**

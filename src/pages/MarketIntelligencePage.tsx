@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { auth } from "../config/firebase";
 
 import MarketIntelligenceHeader from "../modules/market-intelligence/components/MarketIntelligenceHeader";
@@ -47,6 +47,8 @@ const DEFAULT_FILTERS: FiltersState = {
 };
 
 export default function MarketIntelligencePage() {
+  const isCancelledRef = useRef<boolean>(false);
+
   // Estados de carga e interfaz
   const [companies, setCompanies] = useState<InegiCompany[]>([]);
   const [activeMarketDataset, setActiveMarketDataset] = useState<InegiCompany[]>([]);
@@ -63,12 +65,37 @@ export default function MarketIntelligencePage() {
     overwritten: number;
     omitted: number;
     failed: number;
+    written: number;
     startTime: number;
     elapsedTimeMs: number;
     speed: number;
     etaSeconds: number;
     batchesRemaining: number;
   } | null>(null);
+
+  const [telemetryLogs, setTelemetryLogs] = useState<{
+    batchNumber: number;
+    startIndex: number;
+    endIndex: number;
+    recordsInBatch: number;
+    duplicateReadStart: string;
+    duplicateReadEnd: string;
+    duplicateReadMs: number;
+    batchCommitStart: string;
+    batchCommitEnd: string;
+    batchCommitMs: number;
+    newAdded: number;
+    updated: number;
+    omitted: number;
+    failed: number;
+    processedConfirmed: number;
+    totalProcessedAccumulated: number;
+    memoryMb: number;
+    checkpointSaved: boolean;
+    timestamp: string;
+    avgBatchDurationMs: number;
+    etaSeconds: number;
+  }[]>([]);
   const [pendingResumeJob, setPendingResumeJob] = useState<{
     jobId: string;
     filename: string;
@@ -82,16 +109,6 @@ export default function MarketIntelligencePage() {
     };
   } | null>(null);
 
-  const [telemetryLogs, setTelemetryLogs] = useState<{
-    batchNum: number;
-    recordsCount: number;
-    durationMs: number;
-    avgBatchDurationMs: number;
-    etaSeconds: number;
-    memoryMb: number;
-    checkpointSaved: boolean;
-    timestamp: string;
-  }[]>([]);
 
   // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal
   const availableStates = useMemo(() => {
@@ -431,6 +448,7 @@ export default function MarketIntelligencePage() {
     setSuccess("");
     setImportReport(null);
     setTelemetryLogs([]);
+    isCancelledRef.current = false;
 
     const total = companies.length;
     const startTime = Date.now();
@@ -445,6 +463,7 @@ export default function MarketIntelligencePage() {
       overwritten: initialOverwritten,
       omitted: initialOmitted,
       failed: initialFailed,
+      written: initialAdded + initialOverwritten + initialOmitted + initialFailed,
       startTime,
       elapsedTimeMs: 0,
       speed: 0,
@@ -465,11 +484,26 @@ export default function MarketIntelligencePage() {
     try {
       // 1. Loop principal de escrituras por lotes de 100
       for (let i = startIndex; i < total; i += UPSERT_WRITE_CHUNK_SIZE) {
+        if (isCancelledRef.current) {
+          console.warn("[GTM Job] Cancelado por el usuario.");
+          setError("Importación cancelada por el usuario. El checkpoint se ha guardado en el registro: " + i);
+          setIsProcessing(false);
+          setActiveJob(null);
+          return;
+        }
+
         const batchNum = Math.floor(i / UPSERT_WRITE_CHUNK_SIZE) + 1;
         const chunk = companies.slice(i, i + UPSERT_WRITE_CHUNK_SIZE);
         const batchStartTime = Date.now();
 
-        // Escribir en base omitiendo registros duplicados sin cambios
+        // Actualizamos UI indicando el inicio del batch (Escritos no aumenta aún)
+        setActiveJob(prev => prev ? {
+          ...prev,
+          stage: "WRITING_FIRESTORE",
+          elapsedTimeMs: Date.now() - startTime,
+        } : null);
+
+        // Escribir en base aplicando Upsert Enterprise
         const chunkResult = await MarketFirestoreService.importMarketCompaniesBatch(
           chunk,
           undefined,
@@ -478,6 +512,9 @@ export default function MarketIntelligencePage() {
 
         const batchDuration = Date.now() - batchStartTime;
         batchTimes.push(batchDuration);
+
+        const recordsInBatch = chunk.length;
+        const processedConfirmed = chunkResult.added + chunkResult.overwritten + chunkResult.omitted + chunkResult.failed;
 
         addedAcc += chunkResult.added;
         overwrittenAcc += chunkResult.overwritten;
@@ -490,8 +527,10 @@ export default function MarketIntelligencePage() {
 
         const currentProcessed = Math.min(i + UPSERT_WRITE_CHUNK_SIZE, total);
         const elapsed = Date.now() - startTime;
-        const speed = elapsed > 0 ? (currentProcessed - startIndex) / (elapsed / 1000) : 0;
-        const eta = speed > 0 ? (total - currentProcessed) / speed : 0;
+        const currentWritten = addedAcc + overwrittenAcc + omittedAcc + failedAcc;
+
+        const speed = elapsed > 0 ? currentWritten / (elapsed / 1000) : 0;
+        const eta = speed > 0 ? (total - currentWritten) / speed : 0;
         const remaining = Math.ceil((total - currentProcessed) / UPSERT_WRITE_CHUNK_SIZE);
 
         const currentJobState = {
@@ -504,6 +543,7 @@ export default function MarketIntelligencePage() {
           overwritten: overwrittenAcc,
           omitted: omittedAcc,
           failed: failedAcc,
+          written: currentWritten,
           startTime,
           elapsedTimeMs: elapsed,
           speed: Math.round(speed * 10) / 10,
@@ -533,27 +573,56 @@ export default function MarketIntelligencePage() {
 
         setTelemetryLogs((prev) => [
           {
-            batchNum,
-            recordsCount: chunk.length,
-            durationMs: batchDuration,
-            avgBatchDurationMs: avgBatchDuration,
-            etaSeconds: Math.round(eta),
+            batchNumber: batchNum,
+            startIndex: i,
+            endIndex: currentProcessed - 1,
+            recordsInBatch,
+            duplicateReadStart: chunkResult.duplicateReadStart,
+            duplicateReadEnd: chunkResult.duplicateReadEnd,
+            duplicateReadMs: chunkResult.duplicateReadMs,
+            batchCommitStart: chunkResult.batchCommitStart,
+            batchCommitEnd: chunkResult.batchCommitEnd,
+            batchCommitMs: chunkResult.batchCommitMs,
+            newAdded: chunkResult.added,
+            updated: chunkResult.overwritten,
+            omitted: chunkResult.omitted,
+            failed: chunkResult.failed,
+            processedConfirmed,
+            totalProcessedAccumulated: addedAcc + overwrittenAcc + omittedAcc + failedAcc,
             memoryMb,
             checkpointSaved,
             timestamp: new Date().toLocaleTimeString(),
+            avgBatchDurationMs: avgBatchDuration,
+            etaSeconds: Math.round(eta),
           },
-          ...prev.slice(0, 49),
+          ...prev.slice(0, 99),
         ]);
       }
 
-      // 2. Pasada de Reintentos automáticos para registros fallidos (Garantía total 57,022 = 57,022)
+      // 2. Pasada de Reintentos automáticos para registros fallidos (Garantía total)
       let pass = 1;
       while (failedRecords.length > 0 && pass <= 3) {
+        if (isCancelledRef.current) {
+          console.warn("[GTM Job] Cancelado por el usuario en fase de reintento.");
+          setError("Importación cancelada por el usuario en fase de reintento.");
+          setIsProcessing(false);
+          setActiveJob(null);
+          return;
+        }
+
         console.warn(`[GTM Job] Reintentando ${failedRecords.length} registros fallidos (Paso de reintento ${pass})...`);
         const recordsToRetry = [...failedRecords];
         failedRecords = []; // Limpiar para el siguiente paso
         
         for (let i = 0; i < recordsToRetry.length; i += UPSERT_WRITE_CHUNK_SIZE) {
+          if (isCancelledRef.current) {
+            console.warn("[GTM Job] Cancelado por el usuario en fase de reintento.");
+            setError("Importación cancelada por el usuario en fase de reintento.");
+            setIsProcessing(false);
+            setActiveJob(null);
+            return;
+          }
+
           const batchNum = Math.floor(i / UPSERT_WRITE_CHUNK_SIZE) + 1;
           const retryChunk = recordsToRetry.slice(i, i + UPSERT_WRITE_CHUNK_SIZE);
           const batchStartTime = Date.now();
@@ -578,22 +647,52 @@ export default function MarketIntelligencePage() {
           omittedAcc += chunkResult.omitted;
           failedAcc = Math.max(0, failedAcc - successCount);
 
+          const elapsed = Date.now() - startTime;
+          const currentWritten = addedAcc + overwrittenAcc + omittedAcc + failedAcc;
+
+          const speed = elapsed > 0 ? currentWritten / (elapsed / 1000) : 0;
+          const eta = speed > 0 ? (total - currentWritten) / speed : 0;
+
+          setActiveJob(prev => prev ? {
+            ...prev,
+            added: addedAcc,
+            overwritten: overwrittenAcc,
+            omitted: omittedAcc,
+            failed: failedAcc,
+            written: currentWritten,
+            speed: Math.round(speed * 10) / 10,
+            etaSeconds: Math.round(eta),
+          } : null);
+
           const avgBatchDuration = batchTimes.reduce((acc, curr) => acc + curr, 0) / batchTimes.length;
           const memoryLimit = (performance as any).memory;
           const memoryMb = memoryLimit ? Math.round(memoryLimit.usedJSHeapSize / (1024 * 1024)) : 0;
 
           setTelemetryLogs((prev) => [
             {
-              batchNum: batchNum + 1000 * pass, // Diferenciar logs de reintentos
-              recordsCount: retryChunk.length,
-              durationMs: batchDuration,
-              avgBatchDurationMs: avgBatchDuration,
-              etaSeconds: 0,
+              batchNumber: batchNum + 1000 * pass, // Diferenciar logs de reintentos
+              startIndex: i,
+              endIndex: Math.min(i + UPSERT_WRITE_CHUNK_SIZE, recordsToRetry.length) - 1,
+              recordsInBatch: retryChunk.length,
+              duplicateReadStart: chunkResult.duplicateReadStart,
+              duplicateReadEnd: chunkResult.duplicateReadEnd,
+              duplicateReadMs: chunkResult.duplicateReadMs,
+              batchCommitStart: chunkResult.batchCommitStart,
+              batchCommitEnd: chunkResult.batchCommitEnd,
+              batchCommitMs: chunkResult.batchCommitMs,
+              newAdded: chunkResult.added,
+              updated: chunkResult.overwritten,
+              omitted: chunkResult.omitted,
+              failed: chunkResult.failed,
+              processedConfirmed: chunkResult.added + chunkResult.overwritten + chunkResult.omitted + chunkResult.failed,
+              totalProcessedAccumulated: addedAcc + overwrittenAcc + omittedAcc + failedAcc,
               memoryMb,
               checkpointSaved: false,
               timestamp: new Date().toLocaleTimeString() + ` (Reintento P${pass})`,
+              avgBatchDurationMs: avgBatchDuration,
+              etaSeconds: 0,
             },
-            ...prev.slice(0, 49),
+            ...prev.slice(0, 99),
           ]);
         }
         pass++;
@@ -638,6 +737,8 @@ export default function MarketIntelligencePage() {
       // Eliminar el checkpoint de LocalStorage
       localStorage.removeItem(jobId);
 
+      const finalWritten = addedAcc + overwrittenAcc + omittedAcc + failedAcc;
+
       setActiveJob(prev => prev ? {
         ...prev,
         stage: "COMPLETED",
@@ -646,6 +747,7 @@ export default function MarketIntelligencePage() {
         overwritten: overwrittenAcc,
         omitted: omittedAcc,
         failed: failedAcc,
+        written: finalWritten,
       } : null);
 
       setSuccess(`Lote importado con éxito: ${addedAcc} nuevos, ${overwrittenAcc} actualizados.`);
@@ -1007,8 +1109,6 @@ export default function MarketIntelligencePage() {
         isLoading={isProcessing}
         canImport={capabilities.canImport}
       />
-
-      {/* Diálogo para Reanudar Importación Interrumpida (Checkpoints) */}
       {pendingResumeJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="w-full max-w-lg rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-6">
@@ -1026,7 +1126,7 @@ export default function MarketIntelligencePage() {
 
             <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2">
               <div className="flex justify-between text-xs text-slate-400">
-                <span>Registros procesados:</span>
+                <span>Registros procesados en checkpoint:</span>
                 <span className="font-bold text-white font-mono">{pendingResumeJob.checkpoint.processed.toLocaleString()} / {pendingResumeJob.companies.length.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-400">
@@ -1037,9 +1137,13 @@ export default function MarketIntelligencePage() {
                 <span>Actualizados:</span>
                 <span className="font-bold text-cyan-400 font-mono">+{pendingResumeJob.checkpoint.overwritten}</span>
               </div>
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Omitidos:</span>
+                <span className="font-bold text-slate-400 font-mono">+{pendingResumeJob.checkpoint.omitted}</span>
+              </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 justify-end pt-2">
+            <div className="flex flex-wrap gap-2.5 justify-end pt-2">
               <button
                 type="button"
                 onClick={() => {
@@ -1056,10 +1160,11 @@ export default function MarketIntelligencePage() {
                     failed
                   );
                 }}
-                className="rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 shadow-lg shadow-cyan-500/10 transition"
+                className="rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 shadow-lg shadow-cyan-500/10 transition"
               >
                 Reanudar desde Registro {pendingResumeJob.checkpoint.processed.toLocaleString()}
               </button>
+              
               <button
                 type="button"
                 onClick={() => {
@@ -1072,14 +1177,27 @@ export default function MarketIntelligencePage() {
                     0, 0, 0, 0, 0
                   );
                 }}
-                className="rounded-xl border border-slate-800 bg-slate-950 px-5 py-2.5 text-xs text-slate-400 hover:bg-slate-900 hover:text-white transition"
+                className="rounded-xl bg-indigo-650 hover:bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition"
               >
-                Empezar de Nuevo
+                Reiniciar desde Cero
               </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem(pendingResumeJob.jobId);
+                  setPendingResumeJob(null);
+                  setSuccess("Se ha eliminado el checkpoint del archivo.");
+                }}
+                className="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-950/40 transition"
+              >
+                Limpiar Checkpoint
+              </button>
+
               <button
                 type="button"
                 onClick={() => setPendingResumeJob(null)}
-                className="rounded-xl border border-slate-800 bg-slate-905 px-5 py-2.5 text-xs text-slate-500 hover:bg-slate-800 transition"
+                className="rounded-xl border border-slate-800 bg-slate-905 px-4 py-2.5 text-xs text-slate-500 hover:bg-slate-800 transition"
               >
                 Cancelar
               </button>
@@ -1142,7 +1260,7 @@ export default function MarketIntelligencePage() {
                     {isCompleted ? "✓" : idx + 1}
                   </div>
                   <span className={`text-[10px] font-semibold mt-1 ${
-                    isActive ? "text-cyan-300 font-bold" : isCompleted ? "text-slate-400" : "text-slate-600"
+                    isActive ? "text-cyan-300 font-bold" : isCompleted ? "text-slate-400" : "text-slate-650"
                   }`}>
                     {st.label}
                   </span>
@@ -1167,13 +1285,13 @@ export default function MarketIntelligencePage() {
                 )}
               </span>
               <span className="font-mono text-cyan-400 font-bold">
-                {Math.round((activeJob.processed / activeJob.total) * 100) || 0}%
+                {Math.round((activeJob.written / activeJob.total) * 100) || 0}%
               </span>
             </div>
             <div className="h-3 w-full rounded-full bg-slate-900 overflow-hidden border border-slate-800/80">
               <div 
                 className="h-full rounded-full bg-cyan-400 transition-all duration-300"
-                style={{ width: `${Math.min(100, Math.round((activeJob.processed / activeJob.total) * 100))}%` }}
+                style={{ width: `${Math.min(100, Math.round((activeJob.written / activeJob.total) * 100))}%` }}
               />
             </div>
           </div>
@@ -1184,7 +1302,7 @@ export default function MarketIntelligencePage() {
                 Escritos / Total
               </span>
               <span className="block text-sm font-extrabold text-white mt-1 font-mono">
-                {activeJob.processed.toLocaleString()} / {activeJob.total.toLocaleString()}
+                {activeJob.written.toLocaleString()} / {activeJob.total.toLocaleString()}
               </span>
             </div>
 
@@ -1208,42 +1326,103 @@ export default function MarketIntelligencePage() {
 
             <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
               <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Velocidad
+                Omitidos
               </span>
-              <span className="block text-sm font-extrabold text-slate-300 mt-1 font-mono">
-                {activeJob.speed} reg/s
+              <span className="block text-sm font-extrabold text-slate-400 mt-1 font-mono">
+                +{activeJob.omitted.toLocaleString()}
               </span>
             </div>
 
-            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 col-span-2 md:col-span-1">
+            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
               <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Tiempo Restante (ETA)
+                Fallidos
               </span>
-              <span className="block text-sm font-extrabold text-amber-400 mt-1 font-mono">
-                {activeJob.etaSeconds > 0 ? `${activeJob.etaSeconds}s` : "0s"}
+              <span className="block text-sm font-extrabold text-red-400 mt-1 font-mono">
+                {activeJob.failed.toLocaleString()}
               </span>
             </div>
           </div>
 
-          {/* Consola de Telemetría en Tiempo Real */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 font-mono text-[10px] text-cyan-400/90 space-y-2.5 max-h-48 overflow-y-auto">
-            <div className="text-[11px] font-bold text-slate-400 uppercase border-b border-slate-800 pb-1.5 flex justify-between">
-              <span>Telemetría en Tiempo Real del Job</span>
-              <span className="text-cyan-300">Activo</span>
-            </div>
-            {telemetryLogs.map((log, idx) => (
-              <div key={idx} className="flex justify-between hover:bg-slate-900/60 py-0.5 px-1 rounded transition">
-                <span>
-                  [{log.timestamp}] Lote #{log.batchNum}: {log.recordsCount} reg ({log.durationMs}ms)
-                </span>
-                <span>
-                  Prom: {Math.round(log.avgBatchDurationMs)}ms | ETA: {log.etaSeconds}s | Mem: {log.memoryMb}MB {log.checkpointSaved ? "💾" : ""}
-                </span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-900">
+            <div className="flex items-center gap-6 text-[10px] font-mono text-slate-400">
+              <div>
+                <span className="text-slate-500 mr-1.5">Velocidad:</span>
+                <span className="font-bold text-slate-200">{activeJob.speed} reg/s</span>
               </div>
-            ))}
-            {telemetryLogs.length === 0 && (
-              <div className="text-slate-500 italic">Esperando inicio de lote para reportar telemetría...</div>
+              <div className="h-3 w-[1px] bg-slate-800" />
+              <div>
+                <span className="text-slate-500 mr-1.5">Tiempo Restante (ETA):</span>
+                <span className="font-bold text-amber-400">{activeJob.etaSeconds > 0 ? `${activeJob.etaSeconds}s` : "0s"}</span>
+              </div>
+              <div className="h-3 w-[1px] bg-slate-800" />
+              <div>
+                <span className="text-slate-500 mr-1.5">Procesados (pipeline):</span>
+                <span className="font-bold text-cyan-400">{activeJob.processed.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {activeJob.stage !== "COMPLETED" && (
+              <button
+                type="button"
+                onClick={() => {
+                  isCancelledRef.current = true;
+                }}
+                className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 transition flex items-center gap-1.5"
+              >
+                🛑 Cancelar importación
+              </button>
             )}
+          </div>
+
+          {/* Consola de Telemetría en Tiempo Real */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 font-mono text-[9px] text-cyan-400/90 space-y-2.5 max-h-64 overflow-y-auto">
+            <div className="text-[10px] font-bold text-slate-400 uppercase border-b border-slate-800 pb-1.5 flex justify-between font-sans">
+              <span>Telemetría de Diagnóstico por Lote (GTM Engine)</span>
+              <span className="text-cyan-300">Activa</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-900 text-slate-500 text-[8px] uppercase tracking-wider">
+                    <th className="py-1 px-1">Lote</th>
+                    <th className="py-1 px-1">Rango</th>
+                    <th className="py-1 px-1">Regs</th>
+                    <th className="py-1 px-1">Read (Ms)</th>
+                    <th className="py-1 px-1">Commit (Ms)</th>
+                    <th className="py-1 px-1">N / U / O / F</th>
+                    <th className="py-1 px-1">Confirm/Acum</th>
+                    <th className="py-1 px-1">Mem</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {telemetryLogs.map((log, idx) => (
+                    <tr key={idx} className="hover:bg-slate-900/60 border-b border-slate-900/30">
+                      <td className="py-1 px-1 font-bold text-cyan-300">#{log.batchNumber}</td>
+                      <td className="py-1 px-1 text-slate-400">[{log.startIndex}-{log.endIndex}]</td>
+                      <td className="py-1 px-1 text-slate-200">{log.recordsInBatch}</td>
+                      <td className="py-1 px-1 text-amber-500/80">
+                        {log.duplicateReadMs}ms <span className="text-[7px] text-slate-600">({log.duplicateReadStart})</span>
+                      </td>
+                      <td className="py-1 px-1 text-indigo-400">
+                        {log.batchCommitMs}ms <span className="text-[7px] text-slate-650">({log.batchCommitStart})</span>
+                      </td>
+                      <td className="py-1 px-1">
+                        <span className="text-emerald-400">+{log.newAdded}</span> / <span className="text-cyan-400">+{log.updated}</span> / <span className="text-slate-400">+{log.omitted}</span> / <span className="text-red-400">{log.failed}</span>
+                      </td>
+                      <td className="py-1 px-1 text-slate-300">{log.processedConfirmed} / {log.totalProcessedAccumulated}</td>
+                      <td className="py-1 px-1 font-semibold text-slate-500">{log.memoryMb}MB {log.checkpointSaved ? "💾" : ""}</td>
+                    </tr>
+                  ))}
+                  {telemetryLogs.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-4 text-center text-slate-500 italic font-sans">
+                        Esperando inicio de lote para reportar telemetría de diagnóstico...
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -1300,6 +1479,16 @@ export default function MarketIntelligencePage() {
                 {activeJob.jobId}
               </span>
             </div>
+          </div>
+
+          {/* Propuesta de Optimización para Cloud Functions */}
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-950/5 p-4 space-y-1.5 text-amber-300/90 text-xs">
+            <span className="block font-bold">💡 Propuesta de Optimización Arquitectónica</span>
+            <p className="font-sans text-[11px] leading-relaxed text-slate-400">
+              Dado que procesar 57,000 registros requiere realizar consultas de duplicidad en lotes y transacciones concurrentes desde el navegador,
+              este tipo de carga pesada puede ser susceptible a límites de cliente (cuotas de red del navegador, limitadores locales de hilos de JS y OOM). 
+              Se propone mover el motor a una <strong>Firebase Cloud Function</strong> o a un backend job dedicado, donde se procese el Excel de manera asíncrona mediante Streams.
+            </p>
           </div>
 
           <div className="rounded-2xl bg-slate-900/60 p-4 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
