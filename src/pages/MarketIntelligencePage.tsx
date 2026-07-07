@@ -1047,7 +1047,7 @@ export default function MarketIntelligencePage() {
 
       {/* Panel Temporal de Depuración (Visibilidad local y super-admin) */}
       {(import.meta.env.DEV || capabilities.canImport) && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-4 my-6">
+        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-6 my-6">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
               <span>🔧</span> Panel de Depuración Comercial (Aura Diagnostic OS)
@@ -1056,13 +1056,15 @@ export default function MarketIntelligencePage() {
               Dev Mode
             </span>
           </div>
-          <div className="grid gap-4 text-left text-xs sm:grid-cols-2 lg:grid-cols-3">
+          
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
             <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900">
-              <span className="block text-[10px] font-semibold text-slate-500 uppercase">Filtros Activos</span>
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Filtros Activos</span>
               <pre className="text-[10px] font-mono text-cyan-300 overflow-x-auto max-h-32 bg-slate-950/40 p-2 rounded">
                 {JSON.stringify(filters, null, 2)}
               </pre>
             </div>
+            
             <div className="space-y-2 rounded-lg bg-slate-900/40 p-3 border border-slate-900">
               <div>
                 <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Estados Únicos Detectados</span>
@@ -1072,19 +1074,20 @@ export default function MarketIntelligencePage() {
               </div>
               <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/40 mt-2">
                 <div>
-                  <span className="block text-[8px] font-bold text-slate-500 uppercase">Raw Docs</span>
+                  <span className="block text-[8px] font-bold text-slate-500 uppercase font-sans">Raw Docs</span>
                   <span className="font-extrabold text-white text-sm">{rawDataset.length}</span>
                 </div>
                 <div>
-                  <span className="block text-[8px] font-bold text-slate-500 uppercase">Filtered</span>
+                  <span className="block text-[8px] font-bold text-slate-500 uppercase font-sans">Filtered</span>
                   <span className="font-extrabold text-cyan-400 text-sm">{activeMarketDataset.length}</span>
                 </div>
                 <div>
-                  <span className="block text-[8px] font-bold text-slate-500 uppercase">Paginated</span>
+                  <span className="block text-[8px] font-bold text-slate-500 uppercase font-sans">Paginated</span>
                   <span className="font-extrabold text-amber-400 text-sm">{companies.length}</span>
                 </div>
               </div>
             </div>
+            
             <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900 font-sans">
               <span className="block text-[10px] font-semibold text-slate-500 uppercase">Diagnóstico de Selección de Filtros</span>
               <table className="w-full text-[10px] font-mono text-slate-300 mt-1">
@@ -1109,6 +1112,47 @@ export default function MarketIntelligencePage() {
                     <td className="text-slate-500 py-0.5">Tamaño Raw:</td>
                     <td className="text-cyan-300">{filters.tamano || "(vacío)"}</td>
                   </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Fila inferior: Tabla de auditoría visual de primeros 20 */}
+            <div className="md:col-span-2 xl:col-span-3 rounded-lg bg-slate-900/40 p-4 border border-slate-900 overflow-x-auto font-sans">
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase mb-2">Auditoría Visual de Posicionamiento (Primeros 20 en rawDataset)</span>
+              <table className="w-full text-[10px] font-mono text-slate-300 border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
+                    <th className="pb-1.5 pr-2">Empresa</th>
+                    <th className="pb-1.5 pr-2">Estado Raw</th>
+                    <th className="pb-1.5 pr-2">Municipio</th>
+                    <th className="pb-1.5 pr-2">getCompanyState()</th>
+                    <th className="pb-1.5 pr-2 text-center">En Dropdown</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/40">
+                  {rawDataset.slice(0, 20).map((company) => {
+                    const resolved = getCompanyState(company);
+                    const isInDropdown = availableStates.includes(resolved);
+                    return (
+                      <tr key={company.id} className="hover:bg-slate-900/45 text-slate-300">
+                        <td className="py-1 pr-2 truncate max-w-[150px]" title={company.nombreComercial || company.razonSocial}>
+                          {company.nombreComercial || company.razonSocial}
+                        </td>
+                        <td className="py-1 pr-2 truncate max-w-[100px]" title={company.estado || "(vacío)"}>
+                          {company.estado || "(vacío)"}
+                        </td>
+                        <td className="py-1 pr-2 truncate max-w-[100px]" title={company.municipio || "(vacío)"}>
+                          {company.municipio || "(vacío)"}
+                        </td>
+                        <td className="py-1 pr-2 font-bold text-cyan-400">{resolved}</td>
+                        <td className="py-1 pr-2 text-center">
+                          <span className={`rounded px-1.5 py-0.2 text-[8px] font-extrabold ${isInDropdown ? "bg-emerald-950 text-emerald-400 border border-emerald-500/20" : "bg-rose-950 text-rose-400 border border-rose-500/20"}`}>
+                            {isInDropdown ? "SÍ" : "NO"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

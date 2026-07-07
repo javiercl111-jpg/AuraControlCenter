@@ -48,23 +48,23 @@ export function getCompanyState(company: any): string {
   }
 
   // 2. Inferir por municipio si está vacío
-  const mun = (company.municipio || "").trim().toLowerCase();
-  if (mun) {
-    if (mun.includes("queretaro")) {
+  const munNorm = normalizeState(company.municipio || "");
+  if (munNorm) {
+    if (munNorm.includes("queretaro")) {
       return "Querétaro";
     }
     const nlMunicipios = [
       "monterrey",
-      "san nicolas",
+      "sannicolas",
       "apodaca",
       "guadalupe",
-      "santa catarina",
-      "san pedro garza",
-      "san pedro garcia",
+      "santacatarina",
+      "sanpedrogarza",
+      "sanpedrogarcia",
       "garcia",
       "escobedo"
     ];
-    if (nlMunicipios.some(m => mun.includes(m))) {
+    if (nlMunicipios.some(m => munNorm.includes(m))) {
       return "Nuevo León";
     }
   }
