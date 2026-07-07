@@ -1,8 +1,7 @@
 import JSZip from "jszip";
-import { read, utils } from "xlsx";
+import { read } from "xlsx";
 import NormalizationService from "./normalizationService";
 import MarketFirestoreService from "./marketFirestoreService";
-import type { InegiCompany } from "../types/inegi";
 
 const MEXICAN_STATES = [
   "Aguascalientes", "Baja California", "Baja California Sur", "Campeche", "Coahuila",
@@ -163,24 +162,17 @@ export async function analyzeZipFiles(zipFile: File): Promise<ZipAnalysisSummary
     try {
       const fileData = await zip.files[filename].async("arraybuffer");
       const workbook = read(fileData, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      if (sheetName) {
-        const sheet = workbook.Sheets[sheetName];
-        const jsonRows: any[][] = utils.sheet_to_json(sheet, { header: 1 });
-        if (jsonRows.length > 0) {
-          rowCount = Math.max(0, jsonRows.length - 1); // Descontar fila de cabecera
-          totalEstimatedRows += rowCount;
+      
+      const parsed = NormalizationService.parseExcelWorkbook(workbook, guessedState || undefined);
+      
+      rowCount = parsed.companies.length;
+      totalEstimatedRows += rowCount;
 
-          if (needsStateSelection) {
-            const { headerMap } = NormalizationService.detectHeaderRowAndBuildMap(jsonRows);
-            if (headerMap.estadoIdx !== -1 && jsonRows[1]) {
-              const rowState = String(jsonRows[1][headerMap.estadoIdx] || "").trim();
-              if (rowState && rowState !== "No Especificado") {
-                guessedState = rowState;
-                needsStateSelection = false;
-              }
-            }
-          }
+      if (needsStateSelection && parsed.headerMap.estadoIdx !== -1) {
+        const firstCompany = parsed.companies[0];
+        if (firstCompany && firstCompany.estado && firstCompany.estado !== "No Especificado") {
+          guessedState = firstCompany.estado;
+          needsStateSelection = false;
         }
       }
     } catch (err) {
@@ -267,45 +259,14 @@ export async function importResolvedFiles(
       const fileData = await zip.files[filename].async("arraybuffer");
       console.log(`[NationalZipImport]   - Bytes del archivo: ${fileData.byteLength}`);
       const workbook = read(fileData, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
       
-      if (!sheetName) {
-        console.warn(`[NationalZipImport]   - Omitido: No se detectaron hojas en ${filename}`);
-        omittedFiles++;
-        continue;
-      }
-      console.log(`[NationalZipImport]   - Hoja activa: ${sheetName}`);
-
-      const sheet = workbook.Sheets[sheetName];
-      const jsonRows: any[][] = utils.sheet_to_json(sheet, { header: 1 });
-      console.log(`[NationalZipImport]   - Filas leídas en Excel: ${jsonRows.length}`);
-      
-      if (jsonRows.length <= 1) {
-        console.warn(`[NationalZipImport]   - Omitido: Menos de 1 fila de datos en ${filename}`);
-        omittedFiles++;
-        continue;
-      }
-
-      const { headerMap } = NormalizationService.detectHeaderRowAndBuildMap(jsonRows);
+      const parsed = NormalizationService.parseExcelWorkbook(workbook, state || undefined);
       
       if (state && state !== "No Especificado") {
         importedStatesMap.add(state);
       }
 
-      const companies: InegiCompany[] = [];
-      
-      for (let r = 1; r < jsonRows.length; r++) {
-        const rowArray = jsonRows[r];
-        if (!rowArray || rowArray.length === 0) continue;
-        
-        try {
-          const company = NormalizationService.normalizeRowWithMap(rowArray, headerMap);
-          company.estado = state;
-          companies.push(company);
-        } catch (rowErr) {
-          console.warn(`[NationalZipImport]   - Error parseando fila ${r} en ${filename}:`, rowErr);
-        }
-      }
+      const companies = parsed.companies;
 
       console.log(`[NationalZipImport]   - Registros normalizados listos para upsert: ${companies.length}`);
       if (companies.length === 0) {

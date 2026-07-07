@@ -1,3 +1,4 @@
+import { utils } from "xlsx";
 import type {
   InegiCompany,
   OpportunityScoreBreakdown,
@@ -628,6 +629,85 @@ export function normalizeRowWithMap(rowArray: any[], map: HeaderMap): InegiCompa
   };
 }
 
+/**
+ * Procesa un objeto workbook de XLSX, busca la hoja adecuada (ej. "Datos" o la primera),
+ * detecta la fila de cabeceras, normaliza los registros y devuelve la lista de empresas.
+ */
+export function parseExcelWorkbook(
+  workbook: any,
+  customState?: string
+): {
+  sheetName: string;
+  sheetNames: string[];
+  totalRows: number;
+  headerRowIndex: number;
+  headerMap: any;
+  headers: string[];
+  companies: InegiCompany[];
+} {
+  console.log(`[NormalizationService] Iniciando parseo de workbook. Hojas disponibles:`, workbook.SheetNames);
+  
+  // Buscar la hoja llamada "Datos" (case-insensitive) o usar la primera
+  const sheetName =
+    workbook.SheetNames.find(
+      (name: string) => name.toLowerCase() === "datos"
+    ) || workbook.SheetNames[0];
+
+  if (!sheetName) {
+    throw new Error("El archivo Excel no contiene ninguna hoja.");
+  }
+
+  const worksheet = workbook.Sheets[sheetName];
+  if (!worksheet) {
+    throw new Error(`No se pudo leer la hoja '${sheetName}' en el Excel.`);
+  }
+
+  // Convertir a matriz 2D
+  const rows2D = utils.sheet_to_json<any[]>(worksheet, { header: 1 });
+  console.log(`[NormalizationService] Hoja seleccionada: "${sheetName}". Filas físicas leídas: ${rows2D.length}`);
+
+  if (rows2D.length === 0) {
+    throw new Error(`La hoja '${sheetName}' está vacía.`);
+  }
+
+  // Detectar cabeceras y construir mapa de índices
+  const { headerRowIndex, headerMap, headers } = detectHeaderRowAndBuildMap(rows2D);
+  console.log(`[NormalizationService] Encabezados detectados en fila ${headerRowIndex + 1}:`, headers);
+
+  const dataRows = rows2D.slice(headerRowIndex + 1);
+  const companies: InegiCompany[] = [];
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const rowArray = dataRows[i];
+    if (!rowArray || rowArray.length === 0) continue;
+
+    try {
+      const company = normalizeRowWithMap(rowArray, headerMap);
+      if (customState) {
+        company.estado = customState;
+      }
+      
+      if (company.razonSocial || company.nombreComercial) {
+        companies.push(company);
+      }
+    } catch (err) {
+      // Ignorar fila inválida de forma individual
+    }
+  }
+
+  console.log(`[NormalizationService] Total filas de datos: ${dataRows.length}. Empresas normalizadas válidas: ${companies.length}`);
+
+  return {
+    sheetName,
+    sheetNames: workbook.SheetNames,
+    totalRows: rows2D.length,
+    headerRowIndex,
+    headerMap,
+    headers,
+    companies,
+  };
+}
+
 const NormalizationService = {
   normalizeEmail,
   normalizePhone,
@@ -638,6 +718,7 @@ const NormalizationService = {
   normalizeRow,
   detectHeaderRowAndBuildMap,
   normalizeRowWithMap,
+  parseExcelWorkbook,
 };
 
 export default NormalizationService;

@@ -7,7 +7,7 @@ import {
   Sparkles,
   UploadCloud,
 } from "lucide-react";
-import { normalizeRow, detectHeaderRowAndBuildMap, normalizeRowWithMap } from "../services/normalizationService";
+import { normalizeRow, normalizeRowWithMap, parseExcelWorkbook } from "../services/normalizationService";
 import type { InegiCompany } from "../types/inegi";
 
 interface MarketIntelligenceHeaderProps {
@@ -400,71 +400,32 @@ export default function MarketIntelligenceHeader({
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = read(data, { type: "array" });
         
-        // Buscar la hoja llamada "Datos" (o usar la primera)
-        const sheetName =
-          workbook.SheetNames.find(
-            (name) => name.toLowerCase() === "datos"
-          ) || workbook.SheetNames[0];
-
-        const worksheet = workbook.Sheets[sheetName];
-        if (!worksheet) {
-          throw new Error("No se pudo leer ninguna hoja de datos en el Excel.");
-        }
-
-        // Convertir a matriz 2D para buscar encabezados y mapearlos dinámicamente
-        const rows2D = utils.sheet_to_json<any[]>(worksheet, { header: 1 });
-        
-        if (rows2D.length === 0) {
-          throw new Error("El archivo Excel no contiene registros en la hoja '" + sheetName + "'.");
-        }
-
-        // Detectar encabezados y construir mapa de índices
-        const { headerRowIndex, headerMap, headers } = detectHeaderRowAndBuildMap(rows2D);
-
-        // Imprimir en consola de depuración para diagnóstico
-        console.log("=== ENCABEZADOS DETECTADOS EN EXCEL ===");
-        console.log(headers);
-        console.log("=== MAPEO DE COLUMNAS A VARIABLES ===");
-        console.log(headerMap);
+        // Usar pipeline unificado
+        const parsed = parseExcelWorkbook(workbook);
 
         // Si no se detectó columna de estado, pausar e interrogar al usuario
-        if (headerMap.estadoIdx === -1) {
-          setPendingImportData({ rows2D, headerMap, headers });
+        if (parsed.headerMap.estadoIdx === -1) {
+          const rows2D = utils.sheet_to_json<any[]>(workbook.Sheets[parsed.sheetName], { header: 1 });
+          setPendingImportData({ rows2D, headerMap: parsed.headerMap, headers: parsed.headers });
           setShowStateSelector(true);
           setParseStatus("Falta columna de Estado. Esperando selección manual...");
           return;
         }
 
-        setParseStatus(`Hoja '${sheetName}' detectada (Fila encabezados: ${headerRowIndex + 1}). Procesando...`);
-
-        const dataRows = rows2D.slice(headerRowIndex + 1);
-        const processedRows: InegiCompany[] = [];
-
         // Aplicar límite estricto de 500 registros para proteger costo Firestore
-        const limitCount = Math.min(dataRows.length, 500);
+        const companiesToImport = parsed.companies.slice(0, 500);
 
-        for (let i = 0; i < limitCount; i++) {
-          const rowArray = dataRows[i];
-          if (!rowArray || rowArray.length === 0) continue;
-
-          const normalized = normalizeRowWithMap(rowArray, headerMap);
-          // Validar que al menos tenga Razón Social o Nombre Comercial
-          if (normalized.razonSocial || normalized.nombreComercial) {
-            processedRows.push(normalized);
-          }
-        }
-
-        if (processedRows.length === 0) {
-          throw new Error("Ninguno de los registros leídos contiene campos válidos mapeables (Razón Social o Nombre Comercial).");
+        if (companiesToImport.length === 0) {
+          throw new Error("No se generó ninguna empresa desde el Excel. Verifica que tenga campos válidos.");
         }
 
         setParseStatus(
-          `Normalizados ${processedRows.length} registros (Límite máximo: 500). Importando a Firestore...`
+          `Normalizados ${companiesToImport.length} registros (Límite máximo: 500). Importando a Firestore...`
         );
         
-        await onImport(processedRows);
+        await onImport(companiesToImport);
 
-        setParseStatus(`Importación completada con éxito. ${processedRows.length} registros cargados.`);
+        setParseStatus(`Importación completada con éxito. ${companiesToImport.length} registros cargados.`);
         setTimeout(() => setParseStatus(""), 5000);
         
         if (fileInputRef.current) fileInputRef.current.value = "";
