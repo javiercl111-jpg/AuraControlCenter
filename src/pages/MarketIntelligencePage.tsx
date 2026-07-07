@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { auth } from "../config/firebase";
 
 import MarketIntelligenceHeader from "../modules/market-intelligence/components/MarketIntelligenceHeader";
@@ -51,6 +51,15 @@ export default function MarketIntelligencePage() {
   const [activeMarketDataset, setActiveMarketDataset] = useState<InegiCompany[]>([]);
   const [rawDataset, setRawDataset] = useState<InegiCompany[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal
+  const availableStates = useMemo(() => {
+    return Array.from(
+      new Set(
+        rawDataset.map((c) => getCompanyState(c)).filter(Boolean)
+      )
+    ).sort() as string[];
+  }, [rawDataset]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -102,7 +111,6 @@ export default function MarketIntelligencePage() {
   // Estados de Filtros y Segmentos
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
-  const [availableStates, setAvailableStates] = useState<string[]>(["Querétaro", "Nuevo León"]);
 
   // Reporte de importación masiva realizada (Prioridad 4)
   const [importReport, setImportReport] = useState<{
@@ -131,11 +139,7 @@ export default function MarketIntelligencePage() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [states, history] = await Promise.all([
-          MarketFirestoreService.getUniqueStates(),
-          MarketFirestoreService.getImportHistory()
-        ]);
-        setAvailableStates(states);
+        const history = await MarketFirestoreService.getImportHistory();
         setImportHistory(history);
       } catch (err) {
         console.warn("Error al cargar datos iniciales de estados/historial:", err);
@@ -183,14 +187,6 @@ export default function MarketIntelligencePage() {
         currentRaw = rawCompanies;
         setRawDataset(rawCompanies);
         console.log(`- docs recibidos de Firestore (Global): ${rawCompanies.length}`);
-
-        // Calcular estados disponibles de forma alineada en el cliente
-        const resolvedStates = Array.from(
-          new Set(
-            rawCompanies.map((c) => getCompanyState(c)).filter(Boolean)
-          )
-        ) as string[];
-        setAvailableStates(resolvedStates);
       } else {
         console.log("- omitiendo consulta Firestore, reutilizando rawDatasetGlobal.");
       }
@@ -353,10 +349,6 @@ export default function MarketIntelligencePage() {
 
       setSuccess(`Lote importado con éxito: ${result.added} nuevos, ${result.overwritten} actualizados.`);
       
-      // Recargar la lista de estados únicos
-      const states = await MarketFirestoreService.getUniqueStates();
-      setAvailableStates(states);
-
       // Recargar historial
       const history = await MarketFirestoreService.getImportHistory();
       setImportHistory(history);
@@ -432,10 +424,6 @@ export default function MarketIntelligencePage() {
         `Importación Nacional ZIP completada: ${result.processedFiles}/${result.totalFiles} archivos procesados con éxito.`
       );
       setZipStep("COMPLETED");
-
-      // Recargar la lista de estados únicos
-      const states = await MarketFirestoreService.getUniqueStates();
-      setAvailableStates(states);
 
       // Recargar historial
       const history = await MarketFirestoreService.getImportHistory();
