@@ -327,7 +327,7 @@ export default function MarketIntelligenceHeader({
       const dataRows = rows2D.slice(headerMap.headerRowIndex + 1);
       const processedRows: InegiCompany[] = [];
 
-      const limitCount = Math.min(dataRows.length, 500);
+      const limitCount = dataRows.length;
 
       for (let i = 0; i < limitCount; i++) {
         const rowArray = dataRows[i];
@@ -412,8 +412,8 @@ export default function MarketIntelligenceHeader({
           return;
         }
 
-        // Aplicar límite estricto de 500 registros para proteger costo Firestore
-        const companiesToImport = parsed.companies.slice(0, 500);
+        // Procesar archivo completo sin límites artificiales
+        const companiesToImport = parsed.companies;
 
         if (companiesToImport.length === 0) {
           throw new Error("No se generó ninguna empresa desde el Excel. Verifica que tenga campos válidos.");

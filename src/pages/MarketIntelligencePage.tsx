@@ -14,6 +14,7 @@ import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability } from "../services/rbacService";
 import NationalZipImportService from "../modules/market-intelligence/services/nationalZipImportService";
+import datasetManager, { type DatasetMetadata } from "../modules/market-intelligence/services/datasetManager";
 
 interface FiltersState {
   estado: string;
@@ -51,6 +52,8 @@ export default function MarketIntelligencePage() {
   const [activeMarketDataset, setActiveMarketDataset] = useState<InegiCompany[]>([]);
   const [rawDataset, setRawDataset] = useState<InegiCompany[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeMetadata, setActiveMetadata] = useState<DatasetMetadata | null>(null);
+  const [excelImportProgress, setExcelImportProgress] = useState<{ processed: number; total: number } | null>(null);
 
   // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal
   const availableStates = useMemo(() => {
@@ -192,8 +195,8 @@ export default function MarketIntelligencePage() {
   const [selectedCompany, setSelectedCompany] = useState<InegiCompany | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // Cargar datos
-  async function loadData(resetPage = false, forceFetch = false) {
+  // Cargar conjunto de datos (Aura Dataset Manager & Firestore)
+  async function loadDataset(resetPage = false, forceFetch = false) {
     setIsLoading(true);
     setError("");
 
@@ -202,22 +205,43 @@ export default function MarketIntelligencePage() {
     }
 
     try {
-      console.log("=== AURAPIPELINE LOGS ===");
-      console.log("- filters actuales:", filters);
+      console.log("=== AURA DATASET MANAGER LOGS ===");
+      console.log("- Filtros actuales:", filters);
 
-      let currentRaw = rawDataset;
-      const needsFetch = forceFetch || rawDataset.length === 0;
+      const targetStateKey = filters.estado || "";
+      let currentRaw: InegiCompany[] = [];
+      let entryMetadata: DatasetMetadata | null = null;
 
-      if (needsFetch) {
-        console.log("- consultando Firestore de forma global (sin filtros estructurales)...");
-        // Obtener prospectos globales sin filtros en Firestore para operar 100% en memoria
-        const rawCompanies = await MarketFirestoreService.getMarketCompanies({});
-        currentRaw = rawCompanies;
-        setRawDataset(rawCompanies);
-        console.log(`- docs recibidos de Firestore (Global): ${rawCompanies.length}`);
+      // 1. Comprobar si ya existe en el Dataset Manager cacheado
+      if (!forceFetch && datasetManager.hasDataset(targetStateKey)) {
+        console.log(`- Reutilizando dataset en cache para estado: "${targetStateKey || "Todos"}"`);
+        const entry = datasetManager.getDataset(targetStateKey)!;
+        currentRaw = entry.companies;
+        entryMetadata = entry.metadata;
       } else {
-        console.log("- omitiendo consulta Firestore, reutilizando rawDatasetGlobal.");
+        // 2. Si no está en cache, consultar Firestore
+        if (targetStateKey) {
+          console.log(`- Consultando Firestore para estado completo: "${targetStateKey}"`);
+          // Cargar estado completo (sin límite)
+          const companiesFetched = await MarketFirestoreService.getMarketCompanies({ estado: targetStateKey });
+          console.log(`- Descargados ${companiesFetched.length} registros para: ${targetStateKey}`);
+          const entry = datasetManager.setDataset(targetStateKey, companiesFetched);
+          currentRaw = entry.companies;
+          entryMetadata = entry.metadata;
+        } else {
+          console.log(`- Consultando Firestore con límite seguro de 2,000 registros (Sin estado seleccionado)`);
+          // Límite seguro
+          const companiesFetched = await MarketFirestoreService.getMarketCompanies({}, 2000);
+          console.log(`- Descargados ${companiesFetched.length} registros globales de muestra`);
+          const entry = datasetManager.setDataset(targetStateKey, companiesFetched);
+          currentRaw = entry.companies;
+          entryMetadata = entry.metadata;
+        }
       }
+
+      // Sincronizar fuentes de verdad locales
+      setRawDataset(currentRaw);
+      setActiveMetadata(entryMetadata);
 
       // 2. Aplicar filtros dinámicos en memoria usando el Market Query Engine centralizado
       const filtered = MarketQueryEngine.filterMarketCompanies(currentRaw, {
@@ -241,7 +265,7 @@ export default function MarketIntelligencePage() {
       // 4. Guardar dataset activo unificado (Fuente Única de Verdad)
       setActiveMarketDataset(sorted);
 
-      // 5. Paginar y cargar la primera página de la tabla
+      // 5. Paginar y cargar la primera página de la tabla (solo 25 registros)
       const sliced = sorted.slice(0, 25);
       setCompanies(sliced);
       setHasMore(sorted.length > 25);
@@ -264,13 +288,12 @@ export default function MarketIntelligencePage() {
       setStats(newStats);
       console.log("- datos enviados al dashboard (KPIs):", newStats);
 
-      // Imprimir tabla en consola obligatoria
+      // Imprimir tabla de diagnóstico en consola
       console.table({
-        filters: JSON.stringify(filters),
-        availableStates: availableStates.join(", "),
+        activeState: targetStateKey || "Todos (Límite seguro)",
         rawDatasetLength: currentRaw.length,
-        activeMarketDatasetLength: sorted.length,
-        paginatedLength: sliced.length
+        activeFilteredLength: sorted.length,
+        paginatedViewLength: sliced.length
       });
 
     } catch (err: any) {
@@ -278,7 +301,7 @@ export default function MarketIntelligencePage() {
         code: err.code || null,
         message: err.message || null,
         stack: err.stack || null,
-        operation: "loadData",
+        operation: "loadDataset",
         collection: "market_companies",
         authUid: auth.currentUser?.uid || null,
         authEmail: auth.currentUser?.email || null,
@@ -292,7 +315,7 @@ export default function MarketIntelligencePage() {
 
   // Efecto inicial y ante cambios de filtro (Incluyendo búsqueda textual reactiva)
   useEffect(() => {
-    loadData(true);
+    loadDataset(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     filters.estado,
@@ -360,10 +383,14 @@ export default function MarketIntelligencePage() {
     setError("");
     setSuccess("");
     setImportReport(null);
+    setExcelImportProgress({ processed: 0, total: importedCompanies.length });
 
     try {
       const result = await MarketFirestoreService.importMarketCompaniesBatch(
-        importedCompanies
+        importedCompanies,
+        (progress) => {
+          setExcelImportProgress(progress);
+        }
       );
       
       setImportReport({
@@ -381,12 +408,16 @@ export default function MarketIntelligencePage() {
       const history = await MarketFirestoreService.getImportHistory();
       setImportHistory(history);
 
-      await loadData(true, true);
+      // Limpiar cache para forzar recarga del estado importado
+      datasetManager.clear();
+
+      await loadDataset(true, true);
     } catch (err: any) {
       console.error(err);
       setError("Fallo al importar lote: " + err.message);
     } finally {
       setIsProcessing(false);
+      setExcelImportProgress(null);
     }
   }
 
@@ -457,7 +488,10 @@ export default function MarketIntelligencePage() {
       const history = await MarketFirestoreService.getImportHistory();
       setImportHistory(history);
 
-      await loadData(true, true);
+      // Limpiar cache para forzar recarga de los estados importados
+      datasetManager.clear();
+
+      await loadDataset(true, true);
     } catch (err: any) {
       console.error(err);
       setError("Fallo al procesar el archivo ZIP nacional: " + err.message);
@@ -615,7 +649,7 @@ export default function MarketIntelligencePage() {
     try {
       const result = await MarketFirestoreService.repairImportedStates();
       setSuccess(`Mantenimiento completado. Se revisaron ${result.totalChecked} registros y se repararon ${result.repaired} sin estado.`);
-      await loadData(true, true);
+      await loadDataset(true, true);
     } catch (err: any) {
       console.error(err);
       setError("Error durante la reparación de estados: " + err.message);
@@ -695,6 +729,113 @@ export default function MarketIntelligencePage() {
         isLoading={isProcessing}
         canImport={capabilities.canImport}
       />
+
+      {/* Panel de Progreso de Importación Excel manual */}
+      {excelImportProgress && (
+        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+              <span className="h-2 w-2 animate-ping rounded-full bg-cyan-400" />
+              Procesando Importación de Archivo Excel
+            </h3>
+            <span className="text-xs text-slate-400 font-semibold font-mono font-sans">
+              {excelImportProgress.processed.toLocaleString()} / {excelImportProgress.total.toLocaleString()} Registros
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-xs text-slate-400">
+              <span>Guardando en Firestore...</span>
+              <span>{Math.round((excelImportProgress.processed / excelImportProgress.total) * 100) || 0}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+              <div 
+                className="h-full rounded-full bg-cyan-400 transition-all duration-300"
+                style={{ width: `${Math.min(100, Math.round((excelImportProgress.processed / excelImportProgress.total) * 100))}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Banner de Diagnóstico del Dataset Activo */}
+      {activeMetadata && (
+        <div className="rounded-2xl border border-cyan-500/25 bg-slate-950/40 p-5 backdrop-blur-md space-y-4 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span className="text-xs font-extrabold uppercase tracking-wider text-cyan-300">
+                Aura Dataset Manager — Diagnóstico de Dataset en Memoria
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">
+              Última actualización: {new Date(activeMetadata.loadedAt).toLocaleTimeString()}
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Estado Activo */}
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-[10px] text-slate-500 uppercase font-semibold">Estado Activo</span>
+              <span className="block text-sm font-extrabold text-white mt-1">
+                {filters.estado || "Todos los Estados (Muestra)"}
+              </span>
+            </div>
+
+            {/* Total empresas */}
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-[10px] text-slate-500 uppercase font-semibold">Empresas en Memoria</span>
+              <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono">
+                {activeMetadata.count.toLocaleString()}
+              </span>
+            </div>
+
+            {/* Fuente / Versión */}
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-[10px] text-slate-500 uppercase font-semibold">Fuente / Versión</span>
+              <span className="block text-sm font-extrabold text-slate-300 mt-1">
+                {activeMetadata.source} — {activeMetadata.sourceVersion}
+              </span>
+            </div>
+
+            {/* MRR Estimado */}
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-[10px] text-slate-500 uppercase font-semibold">MRR Potencial Estimado</span>
+              <span className="block text-sm font-extrabold text-emerald-400 mt-1 font-mono">
+                {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0 }).format(activeMetadata.estimatedMrr)}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 pt-1">
+            {/* Oportunidades Críticas/Alta Prioridad */}
+            <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60 flex items-center justify-between">
+              <div>
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Oportunidades de Alta Prioridad</span>
+                <span className="block text-xs text-slate-400 mt-1">Suma de perfiles clasificados como CRITICAL o HIGH.</span>
+              </div>
+              <span className="text-xl font-extrabold text-rose-400 font-mono">
+                {activeMetadata.highPriorityCount.toLocaleString()}
+              </span>
+            </div>
+
+            {/* Top Industrias */}
+            <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60">
+              <span className="block text-[10px] text-slate-500 uppercase font-semibold mb-2">Principales Sectores en este Dataset</span>
+              <div className="flex flex-wrap gap-2">
+                {activeMetadata.topIndustries.map((indItem, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 border border-indigo-500/20"
+                  >
+                    {indItem.industry}: <strong className="text-white font-mono">{indItem.count}</strong>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {capabilities.canImport && (
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/40 px-6 py-4.5">

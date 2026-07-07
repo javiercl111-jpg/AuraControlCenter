@@ -54,7 +54,8 @@ const DEFAULT_CONSULTANT = {
  * Divide los registros en lotes y comprueba su existencia y cambios para minimizar costos de escritura.
  */
 export async function importMarketCompaniesBatch(
-  companies: InegiCompany[]
+  companies: InegiCompany[],
+  onProgress?: (progress: { processed: number; total: number }) => void
 ): Promise<{ 
   added: number; 
   overwritten: number; 
@@ -188,6 +189,13 @@ export async function importMarketCompaniesBatch(
         console.error("Error al escribir lote de importación:", err);
         failed += chunk.length;
       }
+    }
+
+    if (onProgress) {
+      onProgress({
+        processed: Math.min(i + UPSERT_WRITE_CHUNK_SIZE, companies.length),
+        total: companies.length,
+      });
     }
   }
 
@@ -323,14 +331,14 @@ export async function updateUniqueStates(newStates: string[]): Promise<void> {
 }
 
 /**
- * Obtiene prospectos filtrados por Estado en Firestore con un límite de costo protegido de 2000 registros.
+ * Obtiene prospectos filtrados por Estado en Firestore con un límite de costo opcional.
  * Todo el refinamiento secundario ocurre en memoria mediante el Market Query Engine.
  */
 export async function getMarketCompanies(
   filters: {
     estado?: string;
   },
-  limitCount: number = 2000
+  limitCount?: number
 ): Promise<InegiCompany[]> {
   const collRef = collection(db, MARKET_COMPANIES_COLLECTION);
   const queryConstraints: any[] = [];
@@ -339,7 +347,9 @@ export async function getMarketCompanies(
     queryConstraints.push(where("estado", "==", filters.estado));
   }
 
-  queryConstraints.push(limit(limitCount));
+  if (limitCount !== undefined) {
+    queryConstraints.push(limit(limitCount));
+  }
 
   const q = query(collRef, ...queryConstraints);
   const snapshot = await getDocs(q);
