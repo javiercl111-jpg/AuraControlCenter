@@ -1,4 +1,5 @@
 import type { InegiCompany } from "../types/inegi";
+import { getCompanyState } from "./marketQueryEngine";
 
 // Constantes de MRR potencial configurables (en pesos MXN)
 export const POTENTIAL_MRR_LITE = {
@@ -100,7 +101,7 @@ export function generateAdvisorReport(
     }
 
     // Agrupación por estado
-    const state = company.estado || "No Especificado";
+    const state = getCompanyState(company) || "No Especificado";
     if (!stateGroups[state]) {
       stateGroups[state] = {
         totalCount: 0,
