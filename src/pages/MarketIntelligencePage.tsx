@@ -9,7 +9,7 @@ import MarketSegmentsPanel from "../modules/market-intelligence/components/Marke
 import CommercialDashboard from "../modules/market-intelligence/components/CommercialDashboard";
 
 import MarketFirestoreService from "../modules/market-intelligence/services/marketFirestoreService";
-import MarketQueryEngine, { normalizeState, getCompanyState } from "../modules/market-intelligence/services/marketQueryEngine";
+import MarketQueryEngine, { normalizeState, getCompanyState, getCompanyIndustry } from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability } from "../services/rbacService";
@@ -108,9 +108,37 @@ export default function MarketIntelligencePage() {
     verifyPermissions();
   }, []);
 
-  // Estados de Filtros y Segmentos
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+
+  // Derivar estadísticas de sectores comerciales para diagnóstico
+  const industriesStats = useMemo(() => {
+    const allCounts: Record<string, number> = {};
+    const stateFilteredCounts: Record<string, number> = {};
+
+    const matchesCurrentState = (c: InegiCompany) => {
+      if (!filters.estado || filters.estado === "") return true;
+      const docState = getCompanyState(c);
+      const isFilterNoEspecificado = normalizeState(filters.estado) === "noespecificado";
+      const isDocNoEspecificado = docState === "No Especificado" || normalizeState(docState) === "noespecificado";
+      if (isFilterNoEspecificado) return isDocNoEspecificado;
+      return normalizeState(docState) === normalizeState(filters.estado);
+    };
+
+    rawDataset.forEach((c) => {
+      const ind = getCompanyIndustry(c) || "Otros Sectores";
+      allCounts[ind] = (allCounts[ind] || 0) + 1;
+      
+      if (matchesCurrentState(c)) {
+        stateFilteredCounts[ind] = (stateFilteredCounts[ind] || 0) + 1;
+      }
+    });
+
+    return {
+      allCounts,
+      stateFilteredCounts,
+    };
+  }, [rawDataset, filters.estado]);
 
   // Reporte de importación masiva realizada (Prioridad 4)
   const [importReport, setImportReport] = useState<{
@@ -1057,7 +1085,7 @@ export default function MarketIntelligencePage() {
             </span>
           </div>
           
-          <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900">
               <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Filtros Activos</span>
               <pre className="text-[10px] font-mono text-cyan-300 overflow-x-auto max-h-32 bg-slate-950/40 p-2 rounded">
@@ -1116,8 +1144,34 @@ export default function MarketIntelligencePage() {
               </table>
             </div>
 
+            {/* Card 4: Distribución de Sectores Comerciales (En tiempo real) */}
+            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900 overflow-y-auto max-h-48 font-sans">
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Distribución de Sectores</span>
+              <table className="w-full text-[9px] font-mono text-slate-300 mt-1">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
+                    <th className="pb-1 pr-2">Sector</th>
+                    <th className="pb-1 text-right pr-2">Global</th>
+                    <th className="pb-1 text-right">Filtrado Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/20">
+                  {Object.entries(industriesStats.allCounts).map(([ind, count]) => {
+                    const stateCount = industriesStats.stateFilteredCounts[ind] || 0;
+                    return (
+                      <tr key={ind} className="hover:bg-slate-900/25">
+                        <td className="py-0.5 text-slate-400 pr-2 truncate max-w-[100px]" title={ind}>{ind}</td>
+                        <td className="py-0.5 text-right font-bold pr-2">{count}</td>
+                        <td className="py-0.5 text-right text-cyan-400 font-bold">{stateCount}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
             {/* Fila inferior: Tabla de auditoría visual de primeros 20 */}
-            <div className="md:col-span-2 xl:col-span-3 rounded-lg bg-slate-900/40 p-4 border border-slate-900 overflow-x-auto font-sans">
+            <div className="md:col-span-2 xl:col-span-4 rounded-lg bg-slate-900/40 p-4 border border-slate-900 overflow-x-auto font-sans">
               <span className="block text-[10px] font-semibold text-slate-500 uppercase mb-2">Auditoría Visual de Posicionamiento (Primeros 20 en rawDataset)</span>
               <table className="w-full text-[10px] font-mono text-slate-300 border-collapse">
                 <thead>

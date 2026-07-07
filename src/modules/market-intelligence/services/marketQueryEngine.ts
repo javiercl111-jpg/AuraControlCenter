@@ -125,10 +125,29 @@ export function getNormalizedSizeCategory(tamano: string): string {
 import { resolveCommercialIndustry } from "./industryResolverService";
 
 /**
+ * Resuelve de forma robusta la descripción de industria de una compañía
+ * y la traduce a su sector comercial normalizado.
+ */
+export function getCompanyIndustry(company: any): string {
+  if (!company) return "";
+  const rawVal = (
+    company.sector ||
+    company.actividad ||
+    company.nombreActividad ||
+    company.descripcionActividad ||
+    company.scianDescription ||
+    company.claseActividad ||
+    company.scian ||
+    ""
+  ).trim();
+  return resolveCommercialIndustry(rawVal);
+}
+
+/**
  * Realiza una comparación flexible e inteligente de sectores económicos.
  */
-export function matchesSector(docSector: string, filterSector: string): boolean {
-  const docCommercial = resolveCommercialIndustry(docSector);
+export function matchesSector(company: any, filterSector: string): boolean {
+  const docCommercial = getCompanyIndustry(company);
   return normalizeString(docCommercial) === normalizeString(filterSector);
 }
 
@@ -171,7 +190,7 @@ export function filterMarketCompanies(
     if (matchState) {
       if (!isEmptyFilter(filters.status) && normalizeString(company.status || "") !== normalizeString(filters.status!)) {
         exclusionReason = "Excluido por Estatus";
-      } else if (!isEmptyFilter(filters.sector) && !matchesSector(company.sector || "", filters.sector!)) {
+      } else if (!isEmptyFilter(filters.sector) && !matchesSector(company, filters.sector!)) {
         exclusionReason = "Excluido por Sector";
       } else if (!isEmptyFilter(filters.tamano) && getNormalizedSizeCategory(company.tamano || "") !== getNormalizedSizeCategory(filters.tamano!)) {
         exclusionReason = "Excluido por Tamaño";
@@ -192,6 +211,41 @@ export function filterMarketCompanies(
   });
   console.log("=== AUDITORÍA TEMPORAL DE FILTRO DE ESTADO (Primeros 20) ===");
   console.table(auditLogs);
+
+  // Auditoría de Sector para los primeros 50 registros
+  const debugSectorSlice = companies.slice(0, 50);
+  const sectorAuditLogs = debugSectorSlice.map((company) => {
+    const rawSec = company.sector || "";
+    const rawAct = company.actividad || "";
+    const rawSci = company.scian || "";
+    const resolvedSec = resolveCommercialIndustry(rawSec);
+    const resolvedAct = resolveCommercialIndustry(rawAct);
+    const resolvedComp = getCompanyIndustry(company);
+
+    const normFilter = filters.sector ? normalizeString(filters.sector) : "";
+    const matchSector = isEmptyFilter(filters.sector) || normalizeString(resolvedComp) === normFilter;
+
+    let exclusionReason = "Aprobado";
+    if (!matchSector) {
+      exclusionReason = `Excluido por discrepancia de Sector (resolved: "${resolvedComp}" !== filter: "${filters.sector || ""}")`;
+    }
+
+    return {
+      companyName: company.nombreComercial || company.razonSocial || "Sin Nombre",
+      "sector raw": rawSec,
+      "actividad raw": rawAct,
+      "scian raw": rawSci,
+      "resolved sector": resolvedSec,
+      "resolved actividad": resolvedAct,
+      "getCompanyIndustry()": resolvedComp,
+      "filter.sector raw": filters.sector || "(vacío)",
+      "filter.sector normalized": normFilter || "(vacío)",
+      "matchSector": matchSector,
+      "razón de exclusión": exclusionReason
+    };
+  });
+  console.log("=== AUDITORÍA TEMPORAL DE FILTRO DE SECTOR (Primeros 50) ===");
+  console.table(sectorAuditLogs);
 
   const result = companies.filter((company) => {
     // 1. Filtro de Estado
@@ -218,7 +272,7 @@ export function filterMarketCompanies(
 
     // 3. Filtro de Sector
     if (!isEmptyFilter(filters.sector)) {
-      if (!matchesSector(company.sector || "", filters.sector!)) return false;
+      if (!matchesSector(company, filters.sector!)) return false;
     }
 
     // 4. Filtro de Tamaño
