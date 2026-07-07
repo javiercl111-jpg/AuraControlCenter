@@ -118,11 +118,16 @@ export default function MarketCompaniesFilters({
             className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
           >
             <option value="">Todos los estados</option>
-            {availableStates.map((st) => (
-              <option key={st} value={st}>
-                {st}
-              </option>
-            ))}
+            {availableStates
+              .filter((st) => st && st.trim() !== "" && st !== "No Especificado")
+              .map((st) => (
+                <option key={st} value={st}>
+                  {st}
+                </option>
+              ))}
+            {availableStates.some((st) => !st || st.trim() === "" || st === "No Especificado") && (
+              <option value="No Especificado">No Especificado</option>
+            )}
           </select>
         </div>
 

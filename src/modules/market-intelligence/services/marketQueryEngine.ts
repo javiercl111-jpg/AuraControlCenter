@@ -38,6 +38,28 @@ export function normalizeString(str: string): string {
 }
 
 /**
+ * Verifica si un valor de filtro representa la ausencia de filtrado.
+ * Normaliza cadenas visuales genéricas como "Todos", "ALL", "Todos los estados", etc.
+ */
+export function isEmptyFilter(val: any): boolean {
+  if (val === undefined || val === null) return true;
+  if (typeof val === "string") {
+    const clean = val.trim().toLowerCase();
+    return (
+      clean === "" ||
+      clean === "all" ||
+      clean === "todos" ||
+      clean === "todos los estados" ||
+      clean === "todos los sectores" ||
+      clean === "todos los tamaños" ||
+      clean === "todos los estatus" ||
+      clean === "todos los tamanos"
+    );
+  }
+  return false;
+}
+
+/**
  * Filtra un conjunto de prospectos del mercado de forma acumulativa y normalizada.
  * Este motor de consultas es agnóstico y reutilizable por CRM, Sales OS, etc.
  */
@@ -45,41 +67,53 @@ export function filterMarketCompanies(
   companies: InegiCompany[],
   filters: QueryFilters
 ): InegiCompany[] {
-  console.log(`[MarketQueryEngine] Procesando ${companies.length} registros en el pipeline...`);
+  console.log("=== MarketQueryEngine Audit Logs ===");
+  console.log("- Filters antes de aplicar:", filters);
+  console.log("- Selected estado raw:", filters.estado);
+  console.log("- Selected estado normalized:", filters.estado ? normalizeState(filters.estado) : "ninguno");
+  console.log("- Total antes de filtro:", companies.length);
 
   const result = companies.filter((company) => {
     // 1. Filtro de Estado
-    if (filters.estado) {
-      const normDoc = normalizeState(company.estado || "");
-      const normFilter = normalizeState(filters.estado);
-      if (normDoc !== normFilter) return false;
+    if (!isEmptyFilter(filters.estado)) {
+      const isFilterNoEspecificado = normalizeState(filters.estado!) === "noespecificado";
+      const docState = company.estado || "";
+      const isDocNoEspecificado = !docState || docState.trim() === "" || normalizeState(docState) === "noespecificado";
+
+      if (isFilterNoEspecificado) {
+        if (!isDocNoEspecificado) return false;
+      } else {
+        const normDoc = normalizeState(docState);
+        const normFilter = normalizeState(filters.estado!);
+        if (normDoc !== normFilter) return false;
+      }
     }
 
     // 2. Filtro de Estatus Comercial
-    if (filters.status) {
+    if (!isEmptyFilter(filters.status)) {
       const normDoc = normalizeString(company.status || "");
-      const normFilter = normalizeString(filters.status);
+      const normFilter = normalizeString(filters.status!);
       if (normDoc !== normFilter) return false;
     }
 
     // 3. Filtro de Sector
-    if (filters.sector) {
+    if (!isEmptyFilter(filters.sector)) {
       const normDoc = normalizeString(company.sector || "");
-      const normFilter = normalizeString(filters.sector);
+      const normFilter = normalizeString(filters.sector!);
       if (normDoc !== normFilter) return false;
     }
 
     // 4. Filtro de Tamaño
-    if (filters.tamano) {
+    if (!isEmptyFilter(filters.tamano)) {
       const normDoc = normalizeString(company.tamano || "");
-      const normFilter = normalizeString(filters.tamano);
+      const normFilter = normalizeString(filters.tamano!);
       if (normDoc !== normFilter) return false;
     }
 
     // 5. Filtro de Municipio
-    if (filters.municipio) {
+    if (!isEmptyFilter(filters.municipio)) {
       const normDoc = normalizeString(company.municipio || "");
-      const normFilter = normalizeString(filters.municipio);
+      const normFilter = normalizeString(filters.municipio!);
       if (normDoc !== normFilter) return false;
     }
 
@@ -135,7 +169,10 @@ export function filterMarketCompanies(
     return true;
   });
 
-  console.log(`[MarketQueryEngine] Pipeline completado. ${result.length} registros aprobados.`);
+  console.log("- Total después de filtro:", result.length);
+  if (result.length === 0 && companies.length > 0) {
+    console.log("- Razón de 0 resultados: Ningún registro en base local coincide con los filtros aplicados.");
+  }
   return result;
 }
 

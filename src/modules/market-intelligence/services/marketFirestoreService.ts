@@ -335,7 +335,7 @@ export async function getMarketCompanies(
   const collRef = collection(db, MARKET_COMPANIES_COLLECTION);
   const queryConstraints: any[] = [];
 
-  if (filters.estado) {
+  if (filters.estado && filters.estado !== "No Especificado") {
     queryConstraints.push(where("estado", "==", filters.estado));
   }
 
