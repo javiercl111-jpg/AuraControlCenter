@@ -323,14 +323,14 @@ export async function updateUniqueStates(newStates: string[]): Promise<void> {
 }
 
 /**
- * Obtiene prospectos filtrados por Estado en Firestore con un límite de costo protegido de 1000 registros.
+ * Obtiene prospectos filtrados por Estado en Firestore con un límite de costo protegido de 2000 registros.
  * Todo el refinamiento secundario ocurre en memoria mediante el Market Query Engine.
  */
 export async function getMarketCompanies(
   filters: {
     estado?: string;
   },
-  limitCount: number = 1000
+  limitCount: number = 2000
 ): Promise<InegiCompany[]> {
   const collRef = collection(db, MARKET_COMPANIES_COLLECTION);
   const queryConstraints: any[] = [];

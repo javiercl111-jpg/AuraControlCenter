@@ -50,7 +50,6 @@ export default function MarketIntelligencePage() {
   const [companies, setCompanies] = useState<InegiCompany[]>([]);
   const [activeMarketDataset, setActiveMarketDataset] = useState<InegiCompany[]>([]);
   const [rawDataset, setRawDataset] = useState<InegiCompany[]>([]);
-  const [loadedEstado, setLoadedEstado] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -175,20 +174,17 @@ export default function MarketIntelligencePage() {
       console.log("- filters actuales:", filters);
 
       let currentRaw = rawDataset;
-      const needsFetch = forceFetch || rawDataset.length === 0 || filters.estado !== loadedEstado;
+      const needsFetch = forceFetch || rawDataset.length === 0;
 
       if (needsFetch) {
-        console.log(`- consultando Firestore. filters.estado: "${filters.estado || ""}", anterior loadedEstado: "${loadedEstado || ""}"`);
-        // Obtener prospectos filtrados por estado en Firestore (Costo Protegido a 1000 registros)
-        const rawCompanies = await MarketFirestoreService.getMarketCompanies({
-          estado: filters.estado || undefined
-        });
+        console.log("- consultando Firestore de forma global (sin filtros estructurales)...");
+        // Obtener prospectos globales sin filtros en Firestore para operar 100% en memoria
+        const rawCompanies = await MarketFirestoreService.getMarketCompanies({});
         currentRaw = rawCompanies;
         setRawDataset(rawCompanies);
-        setLoadedEstado(filters.estado);
-        console.log(`- docs recibidos de Firestore: ${rawCompanies.length}`);
+        console.log(`- docs recibidos de Firestore (Global): ${rawCompanies.length}`);
       } else {
-        console.log("- omitiendo consulta Firestore, reutilizando rawDataset.");
+        console.log("- omitiendo consulta Firestore, reutilizando rawDatasetGlobal.");
       }
 
       // 2. Aplicar filtros dinámicos en memoria usando el Market Query Engine centralizado
