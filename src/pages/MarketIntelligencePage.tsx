@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, getCountFromServer, query, where } from "firebase/firestore";
-import { db, auth } from "../config/firebase";
+import { auth } from "../config/firebase";
 
 import MarketIntelligenceHeader from "../modules/market-intelligence/components/MarketIntelligenceHeader";
 import MarketCompaniesFilters from "../modules/market-intelligence/components/MarketCompaniesFilters";
@@ -10,6 +9,7 @@ import MarketSegmentsPanel from "../modules/market-intelligence/components/Marke
 import CommercialDashboard from "../modules/market-intelligence/components/CommercialDashboard";
 
 import MarketFirestoreService from "../modules/market-intelligence/services/marketFirestoreService";
+import MarketQueryEngine from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability } from "../services/rbacService";
@@ -48,6 +48,7 @@ const DEFAULT_FILTERS: FiltersState = {
 export default function MarketIntelligencePage() {
   // Estados de carga e interfaz
   const [companies, setCompanies] = useState<InegiCompany[]>([]);
+  const [activeMarketDataset, setActiveMarketDataset] = useState<InegiCompany[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -144,9 +145,7 @@ export default function MarketIntelligencePage() {
 
   // Estados de Paginación (Costo Protegido)
   const [currentPage, setCurrentPage] = useState(1);
-  const [lastDoc, setLastDoc] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
-  const [cursorsHistory, setCursorsHistory] = useState<any[]>([]); // Para regresar páginas en Firestore
 
   // Estados de KPIs (Conteo Servidor y Promedios)
   const [stats, setStats] = useState({
@@ -164,53 +163,73 @@ export default function MarketIntelligencePage() {
   async function loadData(resetPage = false) {
     setIsLoading(true);
     setError("");
-    
-    let cursor = lastDoc;
 
     if (resetPage) {
-      cursor = null;
       setCurrentPage(1);
-      setLastDoc(null);
-      setCursorsHistory([]);
     }
 
     try {
-      // 1. Obtener prospectos paginados
-      const result = await MarketFirestoreService.getMarketCompanies(
-        {
-          status: filters.status as CompanyStatus || undefined,
-          tamano: filters.tamano || undefined,
-          sector: filters.sector || undefined,
-          estado: filters.estado || undefined,
-          municipio: filters.municipio || undefined,
-          hasEmail: filters.hasEmail ? true : undefined,
-          hasPhone: filters.hasPhone ? true : undefined,
-          hasWebsite: filters.hasWebsite ? true : undefined,
-          minScore: filters.minScore || undefined,
-          search: filters.search || undefined,
-          scian: filters.scian || undefined,
-          sortBy: filters.sortBy || undefined,
-        },
-        25,
-        cursor
-      );
+      console.log("=== AURAPIPELINE LOGS ===");
+      console.log("- filters actuales:", filters);
+      console.log("- query enviada a Firestore: Collection 'market_companies'", filters.estado ? `where estado == "${filters.estado}"` : "no-filters (limit 1000)");
 
-      setCompanies(result.companies);
-      setHasMore(result.companies.length === 25 && result.lastDoc !== null);
-      
-      if (resetPage) {
-        setLastDoc(result.lastDoc);
-      }
+      // 1. Obtener prospectos filtrados por estado en Firestore (Costo Protegido a 1000 registros)
+      const rawCompanies = await MarketFirestoreService.getMarketCompanies({
+        estado: filters.estado || undefined
+      });
+      console.log(`- docs recibidos de Firestore: ${rawCompanies.length}`);
 
-      // 2. Cargar KPIs agregados protegiendo costos
-      await fetchAggregatedKPIs(result.companies);
+      // 2. Aplicar filtros dinámicos en memoria usando el Market Query Engine centralizado
+      const filtered = MarketQueryEngine.filterMarketCompanies(rawCompanies, {
+        estado: filters.estado,
+        status: filters.status,
+        tamano: filters.tamano,
+        sector: filters.sector,
+        municipio: filters.municipio,
+        hasEmail: filters.hasEmail,
+        hasPhone: filters.hasPhone,
+        hasWebsite: filters.hasWebsite,
+        minScore: filters.minScore,
+        search: filters.search,
+        scian: filters.scian,
+      });
+      console.log(`- docs después de MarketQueryEngine: ${filtered.length}`);
+
+      // 3. Aplicar ordenamiento
+      const sorted = MarketQueryEngine.sortMarketCompanies(filtered, filters.sortBy || "scoreDesc");
+
+      // 4. Guardar dataset activo unificado (Fuente Única de Verdad)
+      setActiveMarketDataset(sorted);
+
+      // 5. Paginar y cargar la primera página de la tabla
+      const sliced = sorted.slice(0, 25);
+      setCompanies(sliced);
+      setHasMore(sorted.length > 25);
+      console.log(`- datos enviados a la tabla: ${sliced.length} (Página 1)`);
+
+      // 6. Calcular estadísticas unificadas del dataset filtrado
+      const total = sorted.length;
+      const converted = sorted.filter(c => c.status === "CONVERTED").length;
+      const qualified = sorted.filter(c => c.status === "QUALIFIED" || c.status === "CONTACTED").length;
+      const listAvg = sorted.length > 0
+        ? Math.round(sorted.reduce((acc, curr) => acc + curr.opportunityScore, 0) / sorted.length)
+        : 72;
+
+      const newStats = {
+        totalCount: total,
+        convertedCount: converted,
+        qualifiedCount: qualified,
+        avgScore: listAvg,
+      };
+      setStats(newStats);
+      console.log("- datos enviados al dashboard (KPIs):", newStats);
 
     } catch (err: any) {
       console.error({
         code: err.code || null,
         message: err.message || null,
         stack: err.stack || null,
-        operation: "getMarketCompanies",
+        operation: "loadData",
         collection: "market_companies",
         authUid: auth.currentUser?.uid || null,
         authEmail: auth.currentUser?.email || null,
@@ -219,63 +238,6 @@ export default function MarketIntelligencePage() {
       setError("Error al cargar los prospectos de mercado: " + err.message);
     } finally {
       setIsLoading(false);
-    }
-  }
-
-  // Consulta barata de conteos usando getCountFromServer (Filtrados dinámicamente)
-  async function fetchAggregatedKPIs(loadedCompanies: InegiCompany[]) {
-    try {
-      const collRef = collection(db, "market_companies");
-      
-      // Aplicar filtros acumulativos de base de datos a las consultas de conteos
-      const queryConstraints: any[] = [];
-      if (filters.estado) {
-        queryConstraints.push(where("estado", "==", filters.estado));
-      }
-      if (filters.tamano) {
-        queryConstraints.push(where("tamano", "==", filters.tamano));
-      }
-      if (filters.sector) {
-        queryConstraints.push(where("sector", "==", filters.sector));
-      }
-      if (filters.municipio) {
-        queryConstraints.push(where("municipio", "==", filters.municipio));
-      }
-
-      const [totalSnap, convertedSnap, qualifiedSnap, contactedSnap] = await Promise.all([
-        getCountFromServer(query(collRef, ...queryConstraints)),
-        getCountFromServer(query(collRef, ...queryConstraints, where("status", "==", "CONVERTED"))),
-        getCountFromServer(query(collRef, ...queryConstraints, where("status", "==", "QUALIFIED"))),
-        getCountFromServer(query(collRef, ...queryConstraints, where("status", "==", "CONTACTED"))),
-      ]);
-
-      const total = totalSnap.data().count;
-      const converted = convertedSnap.data().count;
-      const qualified = qualifiedSnap.data().count + contactedSnap.data().count;
-
-      // Calcular promedio de score de la lista cargada para no generar costos extras de base de datos
-      const listAvg = loadedCompanies.length > 0
-        ? loadedCompanies.reduce((acc, curr) => acc + curr.opportunityScore, 0) / loadedCompanies.length
-        : 72; // Default a valor representativo de Aura si está vacío
-
-      setStats({
-        totalCount: total,
-        convertedCount: converted,
-        qualifiedCount: qualified,
-        avgScore: listAvg,
-      });
-    } catch (err: any) {
-      console.error({
-        code: err.code || null,
-        message: err.message || null,
-        stack: err.stack || null,
-        operation: "fetchAggregatedKPIs (getCountFromServer)",
-        collection: "market_companies",
-        authUid: auth.currentUser?.uid || null,
-        authEmail: auth.currentUser?.email || null,
-        error: err
-      });
-      console.warn("No se pudieron cargar los conteos del servidor:", err);
     }
   }
 
@@ -321,85 +283,26 @@ export default function MarketIntelligencePage() {
   }
 
   // Paginación: Página Siguiente
-  async function handleNextPage() {
-    if (!hasMore || isLoading) return;
-    setIsLoading(true);
+  function handleNextPage() {
+    const totalPages = Math.ceil(activeMarketDataset.length / 25);
+    if (currentPage >= totalPages) return;
 
-    try {
-      const history = [...cursorsHistory, lastDoc];
-      setCursorsHistory(history);
-
-      const result = await MarketFirestoreService.getMarketCompanies(
-        {
-          status: filters.status as CompanyStatus || undefined,
-          tamano: filters.tamano || undefined,
-          sector: filters.sector || undefined,
-          estado: filters.estado || undefined,
-          municipio: filters.municipio || undefined,
-          hasEmail: filters.hasEmail ? true : undefined,
-          hasPhone: filters.hasPhone ? true : undefined,
-          hasWebsite: filters.hasWebsite ? true : undefined,
-          minScore: filters.minScore || undefined,
-          search: filters.search || undefined,
-          scian: filters.scian || undefined,
-          sortBy: filters.sortBy || undefined,
-        },
-        25,
-        lastDoc
-      );
-
-      setCompanies(result.companies);
-      setLastDoc(result.lastDoc);
-      setHasMore(result.companies.length === 25 && result.lastDoc !== null);
-      setCurrentPage((prev) => prev + 1);
-
-    } catch (err: any) {
-      setError("Error al navegar a la siguiente página: " + err.message);
-    } finally {
-      setIsLoading(false);
-    }
+    const nextPage = currentPage + 1;
+    const sliced = activeMarketDataset.slice((nextPage - 1) * 25, nextPage * 25);
+    setCompanies(sliced);
+    setCurrentPage(nextPage);
+    setHasMore(activeMarketDataset.length > nextPage * 25);
   }
 
   // Paginación: Página Anterior
-  async function handlePrevPage() {
-    if (currentPage <= 1 || isLoading) return;
-    setIsLoading(true);
+  function handlePrevPage() {
+    if (currentPage <= 1) return;
 
-    try {
-      const history = [...cursorsHistory];
-      const prevCursor = history[currentPage - 3] || null; // cursor para cargar la página anterior
-      history.pop(); // remover el actual
-      setCursorsHistory(history);
-
-      const result = await MarketFirestoreService.getMarketCompanies(
-        {
-          status: filters.status as CompanyStatus || undefined,
-          tamano: filters.tamano || undefined,
-          sector: filters.sector || undefined,
-          estado: filters.estado || undefined,
-          municipio: filters.municipio || undefined,
-          hasEmail: filters.hasEmail ? true : undefined,
-          hasPhone: filters.hasPhone ? true : undefined,
-          hasWebsite: filters.hasWebsite ? true : undefined,
-          minScore: filters.minScore || undefined,
-          search: filters.search || undefined,
-          scian: filters.scian || undefined,
-          sortBy: filters.sortBy || undefined,
-        },
-        25,
-        prevCursor
-      );
-
-      setCompanies(result.companies);
-      setLastDoc(result.lastDoc);
-      setHasMore(true);
-      setCurrentPage((prev) => prev - 1);
-
-    } catch (err: any) {
-      setError("Error al navegar a la página anterior: " + err.message);
-    } finally {
-      setIsLoading(false);
-    }
+    const prevPage = currentPage - 1;
+    const sliced = activeMarketDataset.slice((prevPage - 1) * 25, prevPage * 25);
+    setCompanies(sliced);
+    setCurrentPage(prevPage);
+    setHasMore(true);
   }
 
   // Importar desde Excel o Muestra Piloto (Batch con reporte e historial)
@@ -596,7 +499,10 @@ export default function MarketIntelligencePage() {
       setSelectedCompany(updated);
       setSuccess(`Estatus del prospecto actualizado a ${status}.`);
       
-      // Actualizar en lista local sin recargar todo de base de datos
+      // Actualizar en el dataset activo local y la vista local
+      setActiveMarketDataset((prev) =>
+        prev.map((c) => (c.id === selectedCompany.id ? updated : c))
+      );
       setCompanies((prev) =>
         prev.map((c) => (c.id === selectedCompany.id ? updated : c))
       );
@@ -630,13 +536,28 @@ export default function MarketIntelligencePage() {
         `¡Conversión Exitosa! Creado expediente en platform_organizations con ID: ${orgId}.`
       );
 
-      // Actualizar en lista local
+      // Actualizar en el dataset activo local y la vista local
+      setActiveMarketDataset((prev) =>
+        prev.map((c) => (c.id === selectedCompany.id ? updated : c))
+      );
       setCompanies((prev) =>
         prev.map((c) => (c.id === selectedCompany.id ? updated : c))
       );
 
-      // Recargar KPIs agregados
-      await fetchAggregatedKPIs(companies);
+      // Recargar estadísticas del dataset local modificado
+      const total = activeMarketDataset.length;
+      const converted = activeMarketDataset.map(c => c.id === selectedCompany.id ? updated : c).filter(c => c.status === "CONVERTED").length;
+      const qualified = activeMarketDataset.map(c => c.id === selectedCompany.id ? updated : c).filter(c => c.status === "QUALIFIED" || c.status === "CONTACTED").length;
+      const listAvg = activeMarketDataset.length > 0
+        ? Math.round(activeMarketDataset.map(c => c.id === selectedCompany.id ? updated : c).reduce((acc, curr) => acc + curr.opportunityScore, 0) / activeMarketDataset.length)
+        : 72;
+
+      setStats({
+        totalCount: total,
+        convertedCount: converted,
+        qualifiedCount: qualified,
+        avgScore: listAvg,
+      });
     } catch (err: any) {
       console.error(err);
       setError("Fallo al convertir prospecto: " + err.message);
@@ -1013,7 +934,7 @@ export default function MarketIntelligencePage() {
 
       {/* Tablero Ejecutivo Comercial de Aura Prospect Intelligence */}
       <CommercialDashboard
-        companies={companies}
+        companies={activeMarketDataset}
         onSelectCompany={handleSelectCompany}
         stats={stats}
       />

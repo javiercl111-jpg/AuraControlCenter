@@ -9,17 +9,14 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  startAfter,
   updateDoc,
   where,
   writeBatch,
-  getCountFromServer,
 } from "firebase/firestore";
 
 import { db } from "../../../config/firebase";
 import type { CompanyStatus, InegiCompany } from "../types/inegi";
 import type { PlatformOrganization } from "../../../types/platformOrganization";
-import MarketQueryEngine from "./marketQueryEngine";
 
 const MARKET_COMPANIES_COLLECTION = "market_companies";
 const ORGANIZATIONS_COLLECTION = "platform_organizations";
@@ -326,118 +323,31 @@ export async function updateUniqueStates(newStates: string[]): Promise<void> {
 }
 
 /**
- * Obtiene prospectos paginados y filtrados.
- * Combina filtros de base en Firestore con filtros de refinamiento en memoria
- * para evitar el requisito de índices compuestos complejos y proteger costos de lectura.
+ * Obtiene prospectos filtrados por Estado en Firestore con un límite de costo protegido de 1000 registros.
+ * Todo el refinamiento secundario ocurre en memoria mediante el Market Query Engine.
  */
 export async function getMarketCompanies(
   filters: {
-    status?: CompanyStatus;
-    tamano?: string;
-    sector?: string;
     estado?: string;
-    municipio?: string;
-    hasEmail?: boolean;
-    hasPhone?: boolean;
-    hasWebsite?: boolean;
-    minScore?: number;
-    search?: string;
-    scian?: string;
-    sortBy?: string;
   },
-  pageSize: number = 25,
-  lastVisibleSnapshot: any = null
-): Promise<{
-  companies: InegiCompany[];
-  lastDoc: any;
-  totalCount: number;
-}> {
+  limitCount: number = 1000
+): Promise<InegiCompany[]> {
   const collRef = collection(db, MARKET_COMPANIES_COLLECTION);
-  
-  // Construir consulta base
   const queryConstraints: any[] = [];
 
-  // Filtros estructurados que aprovechan índices nativos simples
-  if (filters.status) {
-    queryConstraints.push(where("status", "==", filters.status));
-  }
-  if (filters.tamano) {
-    queryConstraints.push(where("tamano", "==", filters.tamano));
-  }
-  if (filters.sector) {
-    queryConstraints.push(where("sector", "==", filters.sector));
-  }
   if (filters.estado) {
     queryConstraints.push(where("estado", "==", filters.estado));
   }
-  if (filters.municipio) {
-    queryConstraints.push(where("municipio", "==", filters.municipio));
-  }
 
-  // 1. Obtener conteo de forma barata (Firestore protegido)
-  const countQuery = query(collRef, ...queryConstraints);
-  const countSnapshot = await getCountFromServer(countQuery);
-  const totalCount = countSnapshot.data().count;
+  queryConstraints.push(limit(limitCount));
 
-  // 2. Traer registros aplicando paginación
-  // Si hay filtros en memoria (búsqueda de texto, email, score mínimo, etc. o SCIAN parcial),
-  // traemos un número mayor de registros para filtrarlos en el cliente, protegiendo costo.
-  const isComplexFilterActive = 
-    filters.hasEmail === true || 
-    filters.hasPhone === true || 
-    filters.hasWebsite === true || 
-    (filters.minScore !== undefined && filters.minScore > 0) || 
-    (filters.search !== undefined && filters.search.trim() !== "") ||
-    (filters.scian !== undefined && filters.scian.trim() !== "");
-
-  const limitCount = isComplexFilterActive ? 250 : pageSize;
-  const currentQueryConstraints = [...queryConstraints, limit(limitCount)];
-
-  if (lastVisibleSnapshot && !isComplexFilterActive) {
-    currentQueryConstraints.push(startAfter(lastVisibleSnapshot));
-  }
-
-  const q = query(collRef, ...currentQueryConstraints);
+  const q = query(collRef, ...queryConstraints);
   const snapshot = await getDocs(q);
-  
-  let docs = snapshot.docs.map(doc => ({
+
+  return snapshot.docs.map(doc => ({
     id: doc.id,
     ...(doc.data() as Omit<InegiCompany, "id">),
   }));
-
-  // 3. Aplicar filtros en memoria a través del Market Query Engine (Centralizado y Acumulativo)
-  if (isComplexFilterActive) {
-    docs = MarketQueryEngine.filterMarketCompanies(docs, {
-      hasEmail: filters.hasEmail,
-      hasPhone: filters.hasPhone,
-      hasWebsite: filters.hasWebsite,
-      minScore: filters.minScore,
-      search: filters.search,
-      scian: filters.scian,
-    });
-  }
-
-  // 4. Aplicar ordenamiento en memoria a través del Market Query Engine
-  if (filters.sortBy) {
-    docs = MarketQueryEngine.sortMarketCompanies(docs, filters.sortBy);
-  }
-
-  // Paginación en memoria en caso de filtros complejos
-  let paginatedDocs = docs;
-  let finalLastDoc = null;
-
-  if (isComplexFilterActive) {
-    paginatedDocs = docs.slice(0, pageSize);
-    finalLastDoc = null; // En búsquedas complejas en memoria desactivamos el cursor incremental directo
-  } else {
-    finalLastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
-  }
-
-  return {
-    companies: paginatedDocs,
-    lastDoc: finalLastDoc,
-    totalCount: isComplexFilterActive ? paginatedDocs.length : totalCount,
-  };
 }
 
 /**
