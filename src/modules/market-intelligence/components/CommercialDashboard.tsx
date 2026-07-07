@@ -4,6 +4,7 @@ import CommercialAdvisorPanel from "./CommercialAdvisorPanel";
 import TopProspectsPanel from "./TopProspectsPanel";
 import StateOpportunityPanel from "./StateOpportunityPanel";
 import DailySalesGoalPanel from "./DailySalesGoalPanel";
+import ErrorBoundary from "./ErrorBoundary";
 
 interface CommercialDashboardProps {
   companies: InegiCompany[];
@@ -82,15 +83,23 @@ export default function CommercialDashboard({
       </div>
 
       {/* 3. Aura Intelligence Lite Panel */}
-      <CommercialAdvisorPanel report={report} />
+      <ErrorBoundary fallbackTitle="Aura Intelligence Lite">
+        <CommercialAdvisorPanel report={report} />
+      </ErrorBoundary>
 
       {/* 4. Daily Sales Goal Panel */}
-      <DailySalesGoalPanel companies={companies} />
+      <ErrorBoundary fallbackTitle="Metas Diarias de Venta">
+        <DailySalesGoalPanel companies={companies} />
+      </ErrorBoundary>
 
       {/* 5. Grid: Top Prospectos & Oportunidades por Estado */}
       <div className="grid gap-6 md:grid-cols-2">
-        <TopProspectsPanel companies={companies} onSelectCompany={onSelectCompany} />
-        <StateOpportunityPanel report={report} />
+        <ErrorBoundary fallbackTitle="Top Prospectos del Día">
+          <TopProspectsPanel companies={companies} onSelectCompany={onSelectCompany} />
+        </ErrorBoundary>
+        <ErrorBoundary fallbackTitle="Oportunidad Geográfica">
+          <StateOpportunityPanel report={report} />
+        </ErrorBoundary>
       </div>
     </div>
   );

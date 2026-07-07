@@ -48,7 +48,7 @@ export default function TopProspectsPanel({
                     {company.municipio}, {company.estado}
                   </p>
                   <div className="mt-1.5 flex flex-wrap gap-1">
-                    {company.recommendedSuites.slice(0, 2).map((suite) => (
+                    {(company.recommendedSuites || []).slice(0, 2).map((suite) => (
                       <span
                         key={suite}
                         className="rounded-md bg-slate-800 border border-slate-700 px-1.5 py-0.5 text-[9px] text-slate-400"

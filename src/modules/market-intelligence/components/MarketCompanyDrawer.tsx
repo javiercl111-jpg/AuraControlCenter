@@ -330,7 +330,7 @@ export default function MarketCompanyDrawer({
             </h3>
             
             <div className="grid gap-3 sm:grid-cols-2">
-              {company.recommendedSuites.map((suite) => {
+              {(company.recommendedSuites || []).map((suite) => {
                 const details = suiteDetails[suite] || {
                   title: suite,
                   desc: "Módulo comercial de Aura.",
