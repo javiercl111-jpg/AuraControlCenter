@@ -21,6 +21,7 @@ interface MarketCompaniesFiltersProps {
   onFilterChange: (newFilters: FiltersState) => void;
   onClearFilters: () => void;
   availableStates: string[];
+  sectorCounts: Record<string, number>;
 }
 
 import { getCommercialSectorsDropdown } from "../services/industryResolverService";
@@ -57,6 +58,7 @@ export default function MarketCompaniesFilters({
   onFilterChange,
   onClearFilters,
   availableStates,
+  sectorCounts,
 }: MarketCompaniesFiltersProps) {
   function handleChange(field: keyof FiltersState, value: any) {
     onFilterChange({
@@ -152,11 +154,21 @@ export default function MarketCompaniesFilters({
             onChange={(e) => handleChange("sector", e.target.value)}
             className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
           >
-            {SECTORS.map((item) => (
-              <option key={item.label} value={item.value}>
-                {item.label}
-              </option>
-            ))}
+            {SECTORS.map((item) => {
+              if (item.value === "") {
+                return (
+                  <option key={item.label} value={item.value}>
+                    {item.label}
+                  </option>
+                );
+              }
+              const count = sectorCounts[item.value] || 0;
+              return (
+                <option key={item.value} value={item.value} disabled={count === 0}>
+                  {item.label} ({count})
+                </option>
+              );
+            })}
           </select>
         </div>
 

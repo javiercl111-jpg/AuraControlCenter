@@ -18,6 +18,11 @@ interface MarketCompaniesTableProps {
   onPrevPage: () => void;
   hasMore: boolean;
   currentPage: number;
+  filters?: {
+    estado: string;
+    sector: string;
+  };
+  sectorCounts?: Record<string, number>;
 }
 
 export default function MarketCompaniesTable({
@@ -28,6 +33,8 @@ export default function MarketCompaniesTable({
   onPrevPage,
   hasMore,
   currentPage,
+  filters,
+  sectorCounts,
 }: MarketCompaniesTableProps) {
   
   // Render de insignias de estatus
@@ -81,6 +88,51 @@ export default function MarketCompaniesTable({
     );
   }
 
+  // Render de estado vacío interactivo con sugerencias inteligentes
+  function renderEmptyState() {
+    const hasActiveFilters = filters && (filters.estado || filters.sector);
+    
+    if (hasActiveFilters && sectorCounts) {
+      const activeState = filters.estado || "Todos los estados";
+      const activeSector = filters.sector || "Todos los sectores";
+
+      // Encontrar el sector con más registros para la sugerencia
+      const sortedSectors = Object.entries(sectorCounts)
+        .filter(([name, count]) => name && name !== "Otros Sectores" && count > 0)
+        .sort((a, b) => b[1] - a[1]);
+
+      const suggestion = sortedSectors[0]; // [sectorName, count]
+
+      return (
+        <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/10 p-6 text-center backdrop-blur">
+          <Building2Icon className="h-10 w-10 text-slate-600 mb-3" />
+          <p className="text-sm font-semibold text-slate-300">
+            No hay prospectos de "{activeSector}" en {activeState === "No Especificado" ? "No Especificado" : activeState} dentro del dataset cargado.
+          </p>
+          {suggestion ? (
+            <p className="mt-3.5 text-xs text-cyan-400 font-semibold max-w-md bg-cyan-950/20 border border-cyan-500/10 px-3.5 py-2.5 rounded-xl">
+              💡 Sugerencia: Prueba "{suggestion[0]}", donde existen {suggestion[1]} prospectos.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500 max-w-sm">
+              Intenta cambiar los filtros, borrar la búsqueda o recargar datos.
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/10 p-6 text-center backdrop-blur">
+        <Building2Icon className="h-10 w-10 text-slate-600 mb-3" />
+        <p className="text-sm font-semibold text-slate-300">No se encontraron prospectos</p>
+        <p className="mt-1 text-xs text-slate-500 max-w-sm">
+          Intenta cambiar los filtros, borrar la búsqueda, o carga la muestra piloto desde la cabecera.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {isLoading ? (
@@ -89,13 +141,7 @@ export default function MarketCompaniesTable({
           <p className="mt-4 text-sm text-slate-400">Cargando prospectos de mercado...</p>
         </div>
       ) : companies.length === 0 ? (
-        <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/10 p-6 text-center backdrop-blur">
-          <Building2Icon className="h-10 w-10 text-slate-600 mb-3" />
-          <p className="text-sm font-semibold text-slate-300">No se encontraron prospectos</p>
-          <p className="mt-1 text-xs text-slate-500 max-w-sm">
-            Intenta cambiar los filtros, borrar la búsqueda, o carga la muestra piloto desde la cabecera.
-          </p>
-        </div>
+        renderEmptyState()
       ) : (
         <>
           {/* VISTA MOBILE: Tarjetas responsivas (Mobile-first) */}

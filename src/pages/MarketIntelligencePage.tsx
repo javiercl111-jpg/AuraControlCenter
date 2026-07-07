@@ -999,6 +999,7 @@ export default function MarketIntelligencePage() {
             onFilterChange={handleFilterChange}
             onClearFilters={handleClearFilters}
             availableStates={availableStates}
+            sectorCounts={industriesStats.stateFilteredCounts}
           />
 
           {/* La búsqueda se ejecuta reactivamente mediante el efecto del filtro */}
@@ -1011,6 +1012,8 @@ export default function MarketIntelligencePage() {
             onPrevPage={handlePrevPage}
             hasMore={hasMore}
             currentPage={currentPage}
+            filters={{ estado: filters.estado, sector: filters.sector }}
+            sectorCounts={industriesStats.stateFilteredCounts}
           />
 
         </div>
