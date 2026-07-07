@@ -9,7 +9,7 @@ import MarketSegmentsPanel from "../modules/market-intelligence/components/Marke
 import CommercialDashboard from "../modules/market-intelligence/components/CommercialDashboard";
 
 import MarketFirestoreService from "../modules/market-intelligence/services/marketFirestoreService";
-import MarketQueryEngine from "../modules/market-intelligence/services/marketQueryEngine";
+import MarketQueryEngine, { normalizeState } from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability } from "../services/rbacService";
@@ -49,6 +49,8 @@ export default function MarketIntelligencePage() {
   // Estados de carga e interfaz
   const [companies, setCompanies] = useState<InegiCompany[]>([]);
   const [activeMarketDataset, setActiveMarketDataset] = useState<InegiCompany[]>([]);
+  const [rawDataset, setRawDataset] = useState<InegiCompany[]>([]);
+  const [loadedEstado, setLoadedEstado] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -160,7 +162,7 @@ export default function MarketIntelligencePage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Cargar datos
-  async function loadData(resetPage = false) {
+  async function loadData(resetPage = false, forceFetch = false) {
     setIsLoading(true);
     setError("");
 
@@ -171,16 +173,26 @@ export default function MarketIntelligencePage() {
     try {
       console.log("=== AURAPIPELINE LOGS ===");
       console.log("- filters actuales:", filters);
-      console.log("- query enviada a Firestore: Collection 'market_companies'", filters.estado ? `where estado == "${filters.estado}"` : "no-filters (limit 1000)");
 
-      // 1. Obtener prospectos filtrados por estado en Firestore (Costo Protegido a 1000 registros)
-      const rawCompanies = await MarketFirestoreService.getMarketCompanies({
-        estado: filters.estado || undefined
-      });
-      console.log(`- docs recibidos de Firestore: ${rawCompanies.length}`);
+      let currentRaw = rawDataset;
+      const needsFetch = forceFetch || rawDataset.length === 0 || filters.estado !== loadedEstado;
+
+      if (needsFetch) {
+        console.log(`- consultando Firestore. filters.estado: "${filters.estado || ""}", anterior loadedEstado: "${loadedEstado || ""}"`);
+        // Obtener prospectos filtrados por estado en Firestore (Costo Protegido a 1000 registros)
+        const rawCompanies = await MarketFirestoreService.getMarketCompanies({
+          estado: filters.estado || undefined
+        });
+        currentRaw = rawCompanies;
+        setRawDataset(rawCompanies);
+        setLoadedEstado(filters.estado);
+        console.log(`- docs recibidos de Firestore: ${rawCompanies.length}`);
+      } else {
+        console.log("- omitiendo consulta Firestore, reutilizando rawDataset.");
+      }
 
       // 2. Aplicar filtros dinámicos en memoria usando el Market Query Engine centralizado
-      const filtered = MarketQueryEngine.filterMarketCompanies(rawCompanies, {
+      const filtered = MarketQueryEngine.filterMarketCompanies(currentRaw, {
         estado: filters.estado,
         status: filters.status,
         tamano: filters.tamano,
@@ -223,6 +235,15 @@ export default function MarketIntelligencePage() {
       };
       setStats(newStats);
       console.log("- datos enviados al dashboard (KPIs):", newStats);
+
+      // Imprimir tabla en consola obligatoria
+      console.table({
+        filters: JSON.stringify(filters),
+        availableStates: availableStates.join(", "),
+        rawDatasetLength: currentRaw.length,
+        activeMarketDatasetLength: sorted.length,
+        paginatedLength: sliced.length
+      });
 
     } catch (err: any) {
       console.error({
@@ -336,7 +357,7 @@ export default function MarketIntelligencePage() {
       const history = await MarketFirestoreService.getImportHistory();
       setImportHistory(history);
 
-      await loadData(true);
+      await loadData(true, true);
     } catch (err: any) {
       console.error(err);
       setError("Fallo al importar lote: " + err.message);
@@ -416,7 +437,7 @@ export default function MarketIntelligencePage() {
       const history = await MarketFirestoreService.getImportHistory();
       setImportHistory(history);
 
-      await loadData(true);
+      await loadData(true, true);
     } catch (err: any) {
       console.error(err);
       setError("Fallo al procesar el archivo ZIP nacional: " + err.message);
@@ -574,7 +595,7 @@ export default function MarketIntelligencePage() {
     try {
       const result = await MarketFirestoreService.repairImportedStates();
       setSuccess(`Mantenimiento completado. Se revisaron ${result.totalChecked} registros y se repararon ${result.repaired} sin estado.`);
-      await loadData(true);
+      await loadData(true, true);
     } catch (err: any) {
       console.error(err);
       setError("Error durante la reparación de estados: " + err.message);
@@ -1031,6 +1052,77 @@ export default function MarketIntelligencePage() {
           </div>
         )}
       </div>
+
+      {/* Panel Temporal de Depuración (Visibilidad local y super-admin) */}
+      {(import.meta.env.DEV || capabilities.canImport) && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-4 my-6">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+              <span>🔧</span> Panel de Depuración Comercial (Aura Diagnostic OS)
+            </h4>
+            <span className="rounded bg-cyan-950 px-2 py-0.5 text-[9px] font-bold text-cyan-400 font-mono">
+              Dev Mode
+            </span>
+          </div>
+          <div className="grid gap-4 text-left text-xs sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900">
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase">Filtros Activos</span>
+              <pre className="text-[10px] font-mono text-cyan-300 overflow-x-auto max-h-32 bg-slate-950/40 p-2 rounded">
+                {JSON.stringify(filters, null, 2)}
+              </pre>
+            </div>
+            <div className="space-y-2 rounded-lg bg-slate-900/40 p-3 border border-slate-900">
+              <div>
+                <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Estados Únicos Detectados</span>
+                <span className="text-white font-mono text-[10px] block truncate mt-1" title={availableStates.join(", ")}>
+                  {availableStates.join(", ") || "Ninguno"}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/40 mt-2">
+                <div>
+                  <span className="block text-[8px] font-bold text-slate-500 uppercase">Raw Docs</span>
+                  <span className="font-extrabold text-white text-sm">{rawDataset.length}</span>
+                </div>
+                <div>
+                  <span className="block text-[8px] font-bold text-slate-500 uppercase">Filtered</span>
+                  <span className="font-extrabold text-cyan-400 text-sm">{activeMarketDataset.length}</span>
+                </div>
+                <div>
+                  <span className="block text-[8px] font-bold text-slate-500 uppercase">Paginated</span>
+                  <span className="font-extrabold text-amber-400 text-sm">{companies.length}</span>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900 font-sans">
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase">Diagnóstico de Selección de Filtros</span>
+              <table className="w-full text-[10px] font-mono text-slate-300 mt-1">
+                <tbody>
+                  <tr>
+                    <td className="text-slate-500 py-0.5">Estado Raw:</td>
+                    <td className="text-cyan-300 font-bold">{filters.estado || "(vacío)"}</td>
+                  </tr>
+                  <tr>
+                    <td className="text-slate-500 py-0.5">Estado Norm:</td>
+                    <td className="text-cyan-300">{filters.estado ? normalizeState(filters.estado) : "(vacío)"}</td>
+                  </tr>
+                  <tr>
+                    <td className="text-slate-500 py-0.5">Status Raw:</td>
+                    <td className="text-cyan-300">{filters.status || "(vacío)"}</td>
+                  </tr>
+                  <tr>
+                    <td className="text-slate-500 py-0.5">Sector Raw:</td>
+                    <td className="text-cyan-300 truncate max-w-[120px] inline-block" title={filters.sector}>{filters.sector || "(vacío)"}</td>
+                  </tr>
+                  <tr>
+                    <td className="text-slate-500 py-0.5">Tamaño Raw:</td>
+                    <td className="text-cyan-300">{filters.tamano || "(vacío)"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Drawer de Detalle y Conversión */}
       <MarketCompanyDrawer

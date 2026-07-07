@@ -60,6 +60,51 @@ export function isEmptyFilter(val: any): boolean {
 }
 
 /**
+ * Categoriza de forma flexible los tamaños de las unidades económicas.
+ */
+export function getNormalizedSizeCategory(tamano: string): string {
+  const clean = (tamano || "").toLowerCase();
+  if (clean.includes("grande") || clean.includes("251") || clean.includes("101")) {
+    return "grande";
+  }
+  if (clean.includes("mediana") || clean.includes("51") || clean.includes("31")) {
+    return "mediana";
+  }
+  if (clean.includes("pequeña") || clean.includes("pequena") || clean.includes("11")) {
+    return "pequeña";
+  }
+  return "micro";
+}
+
+/**
+ * Realiza una comparación flexible e inteligente de sectores económicos.
+ */
+export function matchesSector(docSector: string, filterSector: string): boolean {
+  const cleanDoc = normalizeString(docSector);
+  const cleanFilter = normalizeString(filterSector);
+  
+  if (cleanDoc.includes(cleanFilter) || cleanFilter.includes(cleanDoc)) {
+    return true;
+  }
+  
+  // Mapeos específicos cruzados
+  if (cleanFilter.includes("alojamiento") || cleanFilter.includes("alimentos")) {
+    return cleanDoc.includes("alojamiento") || cleanDoc.includes("alimentos");
+  }
+  if (cleanFilter.includes("financiero") || cleanFilter.includes("corporativo")) {
+    return cleanDoc.includes("financiero") || cleanDoc.includes("seguro") || cleanDoc.includes("corporativo");
+  }
+  if (cleanFilter.includes("profesional") || cleanFilter.includes("cientific") || cleanFilter.includes("tecnic")) {
+    return cleanDoc.includes("profesional") || cleanDoc.includes("cientific") || cleanDoc.includes("tecnic");
+  }
+  if (cleanFilter.includes("medio") || cleanFilter.includes("masivo") || cleanFilter.includes("informacion")) {
+    return cleanDoc.includes("informacion") || cleanDoc.includes("medio") || cleanDoc.includes("telecomunicacion");
+  }
+  
+  return false;
+}
+
+/**
  * Filtra un conjunto de prospectos del mercado de forma acumulativa y normalizada.
  * Este motor de consultas es agnóstico y reutilizable por CRM, Sales OS, etc.
  */
@@ -98,16 +143,14 @@ export function filterMarketCompanies(
 
     // 3. Filtro de Sector
     if (!isEmptyFilter(filters.sector)) {
-      const normDoc = normalizeString(company.sector || "");
-      const normFilter = normalizeString(filters.sector!);
-      if (normDoc !== normFilter) return false;
+      if (!matchesSector(company.sector || "", filters.sector!)) return false;
     }
 
     // 4. Filtro de Tamaño
     if (!isEmptyFilter(filters.tamano)) {
-      const normDoc = normalizeString(company.tamano || "");
-      const normFilter = normalizeString(filters.tamano!);
-      if (normDoc !== normFilter) return false;
+      const docCategory = getNormalizedSizeCategory(company.tamano || "");
+      const filterCategory = getNormalizedSizeCategory(filters.tamano!);
+      if (docCategory !== filterCategory) return false;
     }
 
     // 5. Filtro de Municipio
