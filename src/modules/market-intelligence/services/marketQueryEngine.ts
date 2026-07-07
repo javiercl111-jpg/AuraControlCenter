@@ -16,6 +16,17 @@ export interface QueryFilters {
 }
 
 /**
+ * Normaliza un nombre de estado para comparaciones estrictas (remueve acentos, espacios, guiones y mayúsculas).
+ */
+export function normalizeState(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Eliminar acentos
+    .replace(/[^a-z0-9]/g, ""); // Eliminar espacios, guiones y números
+}
+
+/**
  * Normaliza un string para comparaciones tolerantes a acentos, mayúsculas y espacios.
  */
 export function normalizeString(str: string): string {
@@ -39,8 +50,8 @@ export function filterMarketCompanies(
   const result = companies.filter((company) => {
     // 1. Filtro de Estado
     if (filters.estado) {
-      const normDoc = normalizeString(company.estado || "");
-      const normFilter = normalizeString(filters.estado);
+      const normDoc = normalizeState(company.estado || "");
+      const normFilter = normalizeState(filters.estado);
       if (normDoc !== normFilter) return false;
     }
 
@@ -163,6 +174,7 @@ export function sortMarketCompanies(
 
 const MarketQueryEngine = {
   normalizeString,
+  normalizeState,
   filterMarketCompanies,
   sortMarketCompanies,
 };

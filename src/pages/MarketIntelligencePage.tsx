@@ -645,6 +645,23 @@ export default function MarketIntelligencePage() {
     }
   }
 
+  // Reparar registros que se hayan importado sin el campo 'estado'
+  async function handleRepairStates() {
+    setIsProcessing(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await MarketFirestoreService.repairImportedStates();
+      setSuccess(`Mantenimiento completado. Se revisaron ${result.totalChecked} registros y se repararon ${result.repaired} sin estado.`);
+      await loadData(true);
+    } catch (err: any) {
+      console.error(err);
+      setError("Error durante la reparación de estados: " + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
   if (hasAccess === null) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center">
@@ -716,6 +733,25 @@ export default function MarketIntelligencePage() {
         isLoading={isProcessing}
         canImport={capabilities.canImport}
       />
+
+      {capabilities.canImport && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/40 px-6 py-4.5">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider font-sans">
+              Aura Import Engine Enterprise
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleRepairStates}
+            disabled={isProcessing}
+            className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-900 hover:text-white transition active:scale-95 disabled:opacity-50"
+          >
+            🔧 Reparar Estados Importados
+          </button>
+        </div>
+      )}
 
       {/* Alertas */}
       {error && (

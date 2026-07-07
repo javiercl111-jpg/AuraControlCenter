@@ -540,6 +540,66 @@ export async function convertMarketCompanyToOrganization(
   return newOrgId;
 }
 
+/**
+ * Utilidad de reparación para reconstruir el estado geográfico de registros históricos
+ * que se hayan importado con el campo "estado" vacío o incorrecto, utilizando el ID del documento
+ * o el municipio.
+ */
+export async function repairImportedStates(): Promise<{ totalChecked: number; repaired: number }> {
+  const collRef = collection(db, MARKET_COMPANIES_COLLECTION);
+  const snap = await getDocs(collRef);
+  
+  let totalChecked = 0;
+  let repaired = 0;
+  
+  const batch = writeBatch(db);
+  let batchCount = 0;
+
+  for (const docSnap of snap.docs) {
+    totalChecked++;
+    const data = docSnap.data();
+    const currentId = docSnap.id.toLowerCase();
+    const currentMunicipio = (data.municipio || "").toLowerCase();
+    const currentEstado = (data.estado || "").trim();
+
+    // Si el estado está vacío, intentar repararlo
+    if (!currentEstado || currentEstado === "No Especificado") {
+      let resolvedState = "";
+
+      // Coincidencias de ID o Municipio para Querétaro, Nuevo León o Jalisco
+      if (currentId.includes("queretaro") || currentMunicipio.includes("querétaro") || currentMunicipio.includes("queretaro")) {
+        resolvedState = "Querétaro";
+      } else if (currentId.includes("nuevoleon") || currentId.includes("nuevo_leon") || currentMunicipio.includes("monterrey") || currentMunicipio.includes("san nicolas") || currentMunicipio.includes("san pedro")) {
+        resolvedState = "Nuevo León";
+      } else if (currentId.includes("jalisco") || currentMunicipio.includes("guadalajara") || currentMunicipio.includes("zapopan") || currentMunicipio.includes("tlaquepaque") || currentMunicipio.includes("el salto")) {
+        resolvedState = "Jalisco";
+      }
+
+      if (resolvedState) {
+        batch.update(docSnap.ref, {
+          estado: resolvedState,
+          updatedAt: serverTimestamp()
+        });
+        repaired++;
+        batchCount++;
+
+        // Firestore batch limit is 500
+        if (batchCount >= 450) {
+          await batch.commit();
+          batchCount = 0;
+        }
+      }
+    }
+  }
+
+  if (batchCount > 0) {
+    await batch.commit();
+  }
+
+  console.log(`[MarketFirestoreService] Reparación de estados finalizada. Revisados: ${totalChecked}, Reparados: ${repaired}`);
+  return { totalChecked, repaired };
+}
+
 const MarketFirestoreService = {
   importMarketCompaniesBatch,
   getMarketCompanies,
@@ -548,6 +608,7 @@ const MarketFirestoreService = {
   getUniqueStates,
   updateUniqueStates,
   getImportHistory,
+  repairImportedStates,
 };
 
 export default MarketFirestoreService;
