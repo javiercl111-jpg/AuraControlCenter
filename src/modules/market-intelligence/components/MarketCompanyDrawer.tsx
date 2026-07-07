@@ -2,7 +2,6 @@ import {
   Building2,
   Calendar,
   CheckCircle2,
-  Compass,
   FileCheck,
   Globe,
   Hash,
@@ -17,7 +16,7 @@ import {
 import type { CompanyStatus, InegiCompany } from "../types/inegi";
 import { resolveCommercialIndustry } from "../services/industryResolverService";
 import { Link } from "react-router-dom";
-import NormalizationService from "../services/normalizationService";
+import AuraSalesAdvisorPanel from "./AuraSalesAdvisorPanel";
 
 interface MarketCompanyDrawerProps {
   company: InegiCompany | null;
@@ -45,48 +44,7 @@ export default function MarketCompanyDrawer({
   const score = company.opportunityScore;
   const breakdown = company.scoreBreakdown;
 
-  // Mapa de Suites a descripciones legibles en UI
-  const suiteDetails: Record<
-    string,
-    { title: string; desc: string; color: string; bg: string }
-  > = {
-    "People Suite": {
-      title: "People Suite",
-      desc: "Gestión de talento, nómina local, control de asistencia y onboarding.",
-      color: "text-cyan-400 border-cyan-400/20",
-      bg: "bg-cyan-500/10",
-    },
-    "Sales Suite": {
-      title: "Sales Suite",
-      desc: "CRM comercial, cotizadores y comisiones de asesores.",
-      color: "text-indigo-400 border-indigo-400/20",
-      bg: "bg-indigo-500/10",
-    },
-    "Compensation Suite": {
-      title: "Compensation Suite",
-      desc: "Análisis salarial de mercado, tabuladores y compensaciones.",
-      color: "text-emerald-400 border-emerald-400/20",
-      bg: "bg-emerald-500/10",
-    },
-    "Operations Suite": {
-      title: "Operations Suite",
-      desc: "Gestión de contratos comerciales, aprovisionamiento y logística.",
-      color: "text-amber-400 border-amber-400/20",
-      bg: "bg-amber-500/10",
-    },
-    "Intelligence Suite": {
-      title: "Intelligence Suite",
-      desc: "Business Intelligence, dashboards directivos y analítica predictiva.",
-      color: "text-purple-400 border-purple-400/20",
-      bg: "bg-purple-500/10",
-    },
-    "Digital Trust Suite": {
-      title: "Digital Trust Suite",
-      desc: "Seguridad de accesos multi-inquilino, firmas digitales y cumplimiento.",
-      color: "text-rose-400 border-rose-400/20",
-      bg: "bg-rose-500/10",
-    },
-  };
+
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-sm">
@@ -121,84 +79,7 @@ export default function MarketCompanyDrawer({
         {/* Content */}
         <div className="flex-1 space-y-8 py-6">
           
-          {/* Aura Commercial Advisor Lite (Prioridad 5) */}
-          {(() => {
-            const priorityLevel = company.priorityLevel || 
-              (company.opportunityScore >= 85 ? "CRITICAL" : company.opportunityScore >= 70 ? "HIGH" : company.opportunityScore >= 45 ? "MEDIUM" : "LOW");
-            
-            const motives = [...(company.motives || [])];
-            let nextAction = company.nextAction || "";
 
-            // Generar dinámicamente si faltan en base de datos
-            if (motives.length === 0) {
-              const generated = NormalizationService.generateCommercialAdvisorInfo(
-                company.opportunityScore,
-                company.tamano,
-                company.sector,
-                company.email,
-                company.telefono,
-                company.sitioWeb,
-                company.actividad
-              );
-              motives.push(...generated.motives);
-              if (!nextAction) {
-                nextAction = generated.nextAction;
-              }
-            }
-
-            if (!nextAction) {
-              nextAction = priorityLevel === "CRITICAL" 
-                ? "Llamada comercial prioritaria: Agendar demo de 15 min enfocada en Operations & People Suite." 
-                : priorityLevel === "HIGH" 
-                ? "Enviar correo de contacto personalizado con folleto de Sales & Compensation Suite."
-                : "Validar tomador de decisiones (RRHH/Operaciones) mediante llamada exploratoria.";
-            }
-
-            return (
-              <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-indigo-300">
-                    <Sparkles className="h-5 w-5 text-indigo-400 animate-pulse" />
-                    <h3 className="text-sm font-bold uppercase tracking-wider">
-                      Aura Commercial Advisor
-                    </h3>
-                  </div>
-                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider ${
-                    priorityLevel === "CRITICAL"
-                      ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                      : priorityLevel === "HIGH"
-                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      : priorityLevel === "MEDIUM"
-                      ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/25"
-                      : "bg-slate-800 text-slate-400 border border-slate-700"
-                  }`}>
-                    Prioridad: {priorityLevel}
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold text-slate-300">Argumentos de Venta Recomendados:</h4>
-                  <ul className="space-y-1.5">
-                    {motives.map((motive, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-xs text-slate-400 leading-relaxed font-sans">
-                        <span className="mt-1 text-indigo-400 font-bold font-sans">✔</span>
-                        <span>{motive}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="rounded-xl bg-indigo-950/40 border border-indigo-500/20 p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300">
-                    Próxima Acción Comercial Recomendada:
-                  </div>
-                  <div className="mt-1 text-xs text-white leading-relaxed font-semibold font-sans">
-                    {nextAction}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
 
           {/* Ficha Rápida Estatus & Score */}
           <div className="grid gap-4 sm:grid-cols-2">
@@ -267,6 +148,9 @@ export default function MarketCompanyDrawer({
 
           </div>
 
+          {/* Aura Sales Advisor */}
+          <AuraSalesAdvisorPanel company={company} />
+
           {/* Desglose del Scoring */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5">
             <h3 className="text-sm font-semibold tracking-wide text-white mb-4 flex items-center gap-1.5">
@@ -323,37 +207,7 @@ export default function MarketCompanyDrawer({
 
 
 
-          {/* Suites Aura Recomendadas */}
-          <div>
-            <h3 className="text-sm font-semibold tracking-wide text-white mb-4 flex items-center gap-1.5">
-              <Compass className="h-4.5 w-4.5 text-cyan-400" />
-              Ecosistemas de Software Aura Recomendados
-            </h3>
-            
-            <div className="grid gap-3 sm:grid-cols-2">
-              {(company.recommendedSuites || []).map((suite) => {
-                const details = suiteDetails[suite] || {
-                  title: suite,
-                  desc: "Módulo comercial de Aura.",
-                  color: "text-slate-400 border-slate-800",
-                  bg: "bg-slate-900/50",
-                };
-                return (
-                  <div
-                    key={suite}
-                    className={`rounded-xl border p-4 ${details.bg} ${details.color.split(" ")[1]}`}
-                  >
-                    <h4 className={`font-bold text-xs ${details.color.split(" ")[0]}`}>
-                      {details.title}
-                    </h4>
-                    <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
-                      {details.desc}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+
 
           {/* Datos Generales / Ficha Técnica */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 space-y-4">
