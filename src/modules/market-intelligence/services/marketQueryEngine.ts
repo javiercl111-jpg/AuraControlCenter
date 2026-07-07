@@ -27,6 +27,52 @@ export function normalizeState(str: string): string {
 }
 
 /**
+ * Resuelve de forma robusta el estado de una compañía a partir de múltiples posibles propiedades.
+ * Realiza inferencia por municipio si el campo de estado está vacío.
+ */
+export function getCompanyState(company: any): string {
+  if (!company) return "";
+  
+  // 1. Intentar resolver por propiedades directas en orden
+  const val = (
+    company.estado ||
+    company.state ||
+    company.entidad ||
+    company.entidadFederativa ||
+    company.nomEnt ||
+    ""
+  ).trim();
+
+  if (val && val.toLowerCase() !== "no especificado" && val.toLowerCase() !== "null") {
+    return val;
+  }
+
+  // 2. Inferir por municipio si está vacío
+  const mun = (company.municipio || "").trim().toLowerCase();
+  if (mun) {
+    if (mun.includes("queretaro")) {
+      return "Querétaro";
+    }
+    const nlMunicipios = [
+      "monterrey",
+      "san nicolas",
+      "apodaca",
+      "guadalupe",
+      "santa catarina",
+      "san pedro garza",
+      "san pedro garcia",
+      "garcia",
+      "escobedo"
+    ];
+    if (nlMunicipios.some(m => mun.includes(m))) {
+      return "Nuevo León";
+    }
+  }
+
+  return "No Especificado";
+}
+
+/**
  * Normaliza un string para comparaciones tolerantes a acentos, mayúsculas y espacios.
  */
 export function normalizeString(str: string): string {
@@ -118,12 +164,59 @@ export function filterMarketCompanies(
   console.log("- Selected estado normalized:", filters.estado ? normalizeState(filters.estado) : "ninguno");
   console.log("- Total antes de filtro:", companies.length);
 
+  // Auditoría temporal de los primeros 20 registros
+  const debugSlice = companies.slice(0, 20);
+  const auditLogs = debugSlice.map((company) => {
+    const docState = getCompanyState(company);
+    const normDoc = normalizeState(docState);
+    const normFilter = filters.estado ? normalizeState(filters.estado) : "";
+    const isFilterNoEspecificado = normFilter === "noespecificado";
+    const isDocNoEspecificado = docState === "No Especificado" || normDoc === "noespecificado";
+
+    let matchState = true;
+    let exclusionReason = "Aprobado";
+
+    if (!isEmptyFilter(filters.estado)) {
+      if (isFilterNoEspecificado) {
+        matchState = isDocNoEspecificado;
+        if (!matchState) exclusionReason = "Excluido por filtro No Especificado";
+      } else {
+        matchState = normDoc === normFilter;
+        if (!matchState) exclusionReason = `Excluido por discrepancia de Estado ("${normDoc}" !== "${normFilter}")`;
+      }
+    }
+
+    if (matchState) {
+      if (!isEmptyFilter(filters.status) && normalizeString(company.status || "") !== normalizeString(filters.status!)) {
+        exclusionReason = "Excluido por Estatus";
+      } else if (!isEmptyFilter(filters.sector) && !matchesSector(company.sector || "", filters.sector!)) {
+        exclusionReason = "Excluido por Sector";
+      } else if (!isEmptyFilter(filters.tamano) && getNormalizedSizeCategory(company.tamano || "") !== getNormalizedSizeCategory(filters.tamano!)) {
+        exclusionReason = "Excluido por Tamaño";
+      }
+    }
+
+    return {
+      companyName: company.nombreComercial || company.razonSocial || "Sin Nombre",
+      "estado raw": company.estado || (company as any).state || (company as any).entidad || "(ninguno)",
+      "estado resolved": docState,
+      "estado normalized": normDoc,
+      municipio: company.municipio || "(ninguno)",
+      "filters.estado raw": filters.estado || "(vacío)",
+      "filters.estado normalized": normFilter || "(vacío)",
+      "matchState": matchState,
+      "razón de exclusión": exclusionReason
+    };
+  });
+  console.log("=== AUDITORÍA TEMPORAL DE FILTRO DE ESTADO (Primeros 20) ===");
+  console.table(auditLogs);
+
   const result = companies.filter((company) => {
     // 1. Filtro de Estado
     if (!isEmptyFilter(filters.estado)) {
+      const docState = getCompanyState(company);
       const isFilterNoEspecificado = normalizeState(filters.estado!) === "noespecificado";
-      const docState = company.estado || "";
-      const isDocNoEspecificado = !docState || docState.trim() === "" || normalizeState(docState) === "noespecificado";
+      const isDocNoEspecificado = docState === "No Especificado" || normalizeState(docState) === "noespecificado";
 
       if (isFilterNoEspecificado) {
         if (!isDocNoEspecificado) return false;

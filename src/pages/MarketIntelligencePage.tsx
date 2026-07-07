@@ -9,7 +9,7 @@ import MarketSegmentsPanel from "../modules/market-intelligence/components/Marke
 import CommercialDashboard from "../modules/market-intelligence/components/CommercialDashboard";
 
 import MarketFirestoreService from "../modules/market-intelligence/services/marketFirestoreService";
-import MarketQueryEngine, { normalizeState } from "../modules/market-intelligence/services/marketQueryEngine";
+import MarketQueryEngine, { normalizeState, getCompanyState } from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability } from "../services/rbacService";
@@ -183,6 +183,14 @@ export default function MarketIntelligencePage() {
         currentRaw = rawCompanies;
         setRawDataset(rawCompanies);
         console.log(`- docs recibidos de Firestore (Global): ${rawCompanies.length}`);
+
+        // Calcular estados disponibles de forma alineada en el cliente
+        const resolvedStates = Array.from(
+          new Set(
+            rawCompanies.map((c) => getCompanyState(c)).filter(Boolean)
+          )
+        ) as string[];
+        setAvailableStates(resolvedStates);
       } else {
         console.log("- omitiendo consulta Firestore, reutilizando rawDatasetGlobal.");
       }
