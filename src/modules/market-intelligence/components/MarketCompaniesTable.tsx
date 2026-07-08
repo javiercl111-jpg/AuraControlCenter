@@ -107,11 +107,11 @@ export default function MarketCompaniesTable({
         <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/10 p-6 text-center backdrop-blur">
           <Building2Icon className="h-10 w-10 text-slate-600 mb-3" />
           <p className="text-sm font-semibold text-slate-300">
-            No hay prospectos de "{activeSector}" en {activeState === "No Especificado" ? "No Especificado" : activeState} dentro del dataset cargado.
+            No hay prospectos de {activeSector} en {activeState === "No Especificado" ? "No Especificado" : activeState} dentro del dataset cargado.
           </p>
           {suggestion ? (
             <p className="mt-3.5 text-xs text-cyan-400 font-semibold max-w-md bg-cyan-950/20 border border-cyan-500/10 px-3.5 py-2.5 rounded-xl">
-              💡 Sugerencia: Prueba "{suggestion[0]}", donde existen {suggestion[1]} prospectos.
+              Prueba {suggestion[0]}, donde existen {suggestion[1]} prospectos.
             </p>
           ) : (
             <p className="mt-2 text-xs text-slate-500 max-w-sm">

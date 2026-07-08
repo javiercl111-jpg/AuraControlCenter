@@ -164,7 +164,7 @@ export default function MarketCompaniesFilters({
               }
               const count = sectorCounts[item.value] || 0;
               return (
-                <option key={item.value} value={item.value} disabled={count === 0}>
+                <option key={item.value} value={item.value}>
                   {item.label} ({count})
                 </option>
               );

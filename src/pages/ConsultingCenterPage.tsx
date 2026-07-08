@@ -152,6 +152,18 @@ export default function ConsultingCenterPage() {
     }
   }
 
+  if (error && organizations.length === 0 && discoveryRequests.length === 0) {
+    return (
+      <div className="rounded-3xl border border-rose-500/25 bg-rose-500/5 p-8 text-center space-y-3 max-w-lg mx-auto mt-12 font-sans animate-fadeIn">
+        <div className="text-rose-400 text-3xl">⚠️</div>
+        <h3 className="text-base font-bold text-white font-sans">Centro de consultoría temporalmente no disponible</h3>
+        <p className="text-xs text-slate-400 leading-relaxed font-sans">
+          No se pudo sincronizar la información del Consulting Center en este dispositivo.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <ConsultingHeader />

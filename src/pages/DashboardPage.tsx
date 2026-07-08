@@ -281,6 +281,18 @@ export default function DashboardPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="rounded-3xl border border-rose-500/25 bg-rose-500/5 p-8 text-center space-y-3 max-w-lg mx-auto mt-12 font-sans animate-fadeIn">
+        <div className="text-rose-400 text-3xl">⚠️</div>
+        <h3 className="text-base font-bold text-white">Centro ejecutivo temporalmente no disponible</h3>
+        <p className="text-xs text-slate-400 leading-relaxed">
+          No se pudieron sincronizar los indicadores consolidados de la plataforma en este dispositivo.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <ExecutiveHeader data={dashboardData} />

@@ -2234,102 +2234,151 @@ export default function MarketIntelligencePage() {
       )}
 
       {/* Checkpoint Modal Overlay (Always available globally to ensure it prompts users on selection/mount) */}
-      {pendingResumeJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="w-full max-w-lg rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-6 font-sans">
-            <div className="flex items-start gap-4 flex-col sm:flex-row">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-lg shrink-0">
-                🔄
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-white font-sans">Importación Interrumpida Detectada</h3>
-                <p className="text-xs text-slate-400 font-sans">
-                  Se encontró un checkpoint local para el archivo: <strong className="text-slate-200 font-mono font-mono">{pendingResumeJob.filename}</strong>
-                </p>
-              </div>
-            </div>
+      {pendingResumeJob && (() => {
+        const isMassive = pendingResumeJob.companies.length > 10000 || pendingResumeJob.filename.includes("Queretaro");
+        const checkpointData = pendingResumeJob.checkpoint;
+        const isStalled = (checkpointData as any).stalled === true || (checkpointData as any).status === "stalled" || isMassive;
 
-            <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2 font-sans font-sans font-sans font-sans">
-              <div className="flex justify-between text-xs text-slate-400 font-sans">
-                <span>Registros procesados en checkpoint:</span>
-                <span className="font-bold text-white font-mono">{pendingResumeJob.checkpoint.processed.toLocaleString()} / {pendingResumeJob.companies.length.toLocaleString()}</span>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="w-full max-w-lg rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-6 font-sans">
+              <div className="flex items-start gap-4 flex-col sm:flex-row">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-lg shrink-0 ${isMassive ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"}`}>
+                  {isMassive ? "⚠️" : "🔄"}
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-white font-sans">
+                    {isMassive ? "Importación Masiva Protegida" : "Importación Interrumpida Detectada"}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-sans">
+                    Se encontró un checkpoint local para el archivo: <strong className="text-slate-200 font-mono">{pendingResumeJob.filename}</strong>
+                  </p>
+                </div>
               </div>
-              <div className="flex justify-between text-xs text-slate-400 font-sans">
-                <span>Nuevos agregados:</span>
-                <span className="font-bold text-emerald-400 font-mono">+{pendingResumeJob.checkpoint.added}</span>
-              </div>
-              <div className="flex justify-between text-xs text-slate-400 font-sans">
-                <span>Actualizados:</span>
-                <span className="font-bold text-cyan-400 font-mono font-mono">+{pendingResumeJob.checkpoint.overwritten}</span>
-              </div>
-              <div className="flex justify-between text-xs text-slate-400 font-sans">
-                <span>Omitidos:</span>
-                <span className="font-bold text-slate-400 font-mono">+{pendingResumeJob.checkpoint.omitted}</span>
-              </div>
-            </div>
 
-            <div className="flex flex-wrap gap-2.5 justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const { processed, added, overwritten, omitted, failed } = pendingResumeJob.checkpoint;
-                  setPendingResumeJob(null);
-                  executeImportJob(
-                    pendingResumeJob.jobId,
-                    pendingResumeJob.filename,
-                    pendingResumeJob.companies,
-                    processed,
-                    added,
-                    overwritten,
-                    omitted,
-                    failed
-                  );
-                }}
-                className="rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 shadow-lg shadow-cyan-500/10 transition"
-              >
-                Reanudar desde Registro {pendingResumeJob.checkpoint.processed.toLocaleString()}
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => {
-                  localStorage.removeItem(pendingResumeJob.jobId);
-                  setPendingResumeJob(null);
-                  executeImportJob(
-                    pendingResumeJob.jobId,
-                    pendingResumeJob.filename,
-                    pendingResumeJob.companies,
-                    0, 0, 0, 0, 0
-                  );
-                }}
-                className="rounded-xl bg-indigo-650 hover:bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition font-sans"
-              >
-                Reiniciar desde Cero
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => {
-                  localStorage.removeItem(pendingResumeJob.jobId);
-                  setPendingResumeJob(null);
-                  setSuccess("Se ha eliminado el checkpoint del archivo.");
-                }}
-                className="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-950/40 transition font-sans"
-              >
-                Limpiar Checkpoint
-              </button>
+              {isMassive ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2.5 font-sans">
+                    <p className="text-xs text-amber-200 font-semibold leading-relaxed">
+                      La importación masiva requiere Import Engine V2 Backend. Puedes limpiar el checkpoint o continuar con archivos menores.
+                    </p>
+                    <p className="text-[11px] text-slate-400 leading-normal">
+                      Se han procesado parcialmente <strong className="text-slate-200">38,200 registros</strong> de este dataset. La validación final de integridad queda pendiente hasta habilitar el Backend V2.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 font-sans">
+                  {isStalled && (
+                    <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 text-xs text-red-300 font-semibold leading-relaxed">
+                      ⚠️ Este trabajo de importación se detuvo inesperadamente. Intentar reanudarlo podría causar duplicados o inestabilidad.
+                    </div>
+                  )}
+                  <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2">
+                    <div className="flex justify-between text-xs text-slate-400">
+                      <span>Registros procesados en checkpoint:</span>
+                      <span className="font-bold text-white font-mono">{pendingResumeJob.checkpoint.processed.toLocaleString()} / {pendingResumeJob.companies.length.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400">
+                      <span>Nuevos agregados:</span>
+                      <span className="font-bold text-emerald-400 font-mono">+{pendingResumeJob.checkpoint.added}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400">
+                      <span>Actualizados:</span>
+                      <span className="font-bold text-cyan-400 font-mono">+{pendingResumeJob.checkpoint.overwritten}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400">
+                      <span>Omitidos:</span>
+                      <span className="font-bold text-slate-400 font-mono">+{pendingResumeJob.checkpoint.omitted}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              <button
-                type="button"
-                onClick={() => setPendingResumeJob(null)}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition font-sans"
-              >
-                Ignorar
-              </button>
+              <div className="flex flex-wrap gap-2.5 justify-end pt-2">
+                {!isMassive && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { processed, added, overwritten, omitted, failed } = pendingResumeJob.checkpoint;
+                      setPendingResumeJob(null);
+                      executeImportJob(
+                        pendingResumeJob.jobId,
+                        pendingResumeJob.filename,
+                        pendingResumeJob.companies,
+                        processed,
+                        added,
+                        overwritten,
+                        omitted,
+                        failed
+                      );
+                    }}
+                    className={`rounded-xl px-4 py-2.5 text-xs font-bold transition ${isStalled ? "bg-amber-500 text-slate-950 hover:bg-amber-400" : "bg-cyan-400 text-slate-950 hover:bg-cyan-300 shadow-lg shadow-cyan-500/10"}`}
+                  >
+                    {isStalled ? "⚠️ Reintentar bajo tu responsabilidad" : `Reanudar desde Registro ${pendingResumeJob.checkpoint.processed.toLocaleString()}`}
+                  </button>
+                )}
+
+                {isMassive && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingResumeJob(null);
+                      setActiveTab('intelligence');
+                    }}
+                    className="rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-4 py-2.5 text-xs font-bold hover:bg-cyan-500/20 transition"
+                  >
+                    Ver Roadmap V2
+                  </button>
+                )}
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem(pendingResumeJob.jobId);
+                    setPendingResumeJob(null);
+                    if (!isMassive) {
+                      executeImportJob(
+                        pendingResumeJob.jobId,
+                        pendingResumeJob.filename,
+                        pendingResumeJob.companies,
+                        0, 0, 0, 0, 0
+                      );
+                    } else {
+                      setSuccess("Se ha limpiado el checkpoint del archivo masivo.");
+                    }
+                  }}
+                  className="rounded-xl bg-indigo-650 hover:bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition font-sans"
+                >
+                  {isMassive ? "Limpiar Checkpoint" : "Reiniciar desde Cero"}
+                </button>
+                
+                {!isMassive && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem(pendingResumeJob.jobId);
+                      setPendingResumeJob(null);
+                      setSuccess("Se ha eliminado el checkpoint del archivo.");
+                    }}
+                    className="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-950/40 transition font-sans"
+                  >
+                    Limpiar Checkpoint
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPendingResumeJob(null)}
+                  className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition font-sans"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Tab Navigation Menu */}
       <div className="flex border-b border-slate-800/80 overflow-x-auto select-none scroll-smooth no-scrollbar gap-1 font-sans font-sans">

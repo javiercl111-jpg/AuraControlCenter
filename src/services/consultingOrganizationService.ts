@@ -89,16 +89,22 @@ export async function getDiscoveryRequests(): Promise<
 > {
   const q = query(
     collection(db, DISCOVERY_REQUESTS_COLLECTION),
-    where("status", "==", "NEW"),
-    orderBy("createdAt", "desc")
+    where("status", "==", "NEW")
   );
 
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((item) => ({
+  const list = snapshot.docs.map((item) => ({
     id: item.id,
     ...(item.data() as Omit<PlatformDiscoveryRequest, "id">),
   }));
+
+  // Sort in-memory to bypass index requirement
+  return list.sort((a, b) => {
+    const timeA = (a.createdAt as any)?.seconds ?? 0;
+    const timeB = (b.createdAt as any)?.seconds ?? 0;
+    return timeB - timeA;
+  });
 }
 
 export async function updateOrganizationStage(
