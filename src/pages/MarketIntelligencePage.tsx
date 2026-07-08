@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { auth } from "../config/firebase";
+import { doc, onSnapshot, updateDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../config/firebase";
+import { uploadAndCreateImportJob, getActiveBackendJob } from "../modules/market-intelligence/services/backendImportService";
 
 import MarketIntelligenceHeader from "../modules/market-intelligence/components/MarketIntelligenceHeader";
 import MarketCompaniesFilters from "../modules/market-intelligence/components/MarketCompaniesFilters";
@@ -110,6 +112,7 @@ export default function MarketIntelligencePage() {
       failed: number;
       companiesCount?: number;
     };
+    rawFile?: File;
   } | null>(null);
 
   const [duplicateImportJob, setDuplicateImportJob] = useState<{
@@ -118,6 +121,9 @@ export default function MarketIntelligencePage() {
     companies: InegiCompany[];
     existingImport: ImportHistoryEntry;
   } | null>(null);
+
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'summary' | 'prospects' | 'import' | 'intelligence' | 'diagnostics'>('summary');
   const [importStalled, setImportStalled] = useState(false);
@@ -181,6 +187,83 @@ export default function MarketIntelligencePage() {
     }
   }, [activeTab]);
 
+
+  // Escuchar progreso del job de backend en tiempo real
+  function listenToBackendJob(jobId: string) {
+    const startTime = Date.now();
+    const docRef = doc(db, "market_import_jobs", jobId);
+
+    const unsubscribe = onSnapshot(docRef, async (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+
+      const mappedActiveJob = {
+        jobId: snap.id,
+        filename: data.filename,
+        total: data.total || 0,
+        processed: data.processed || 0,
+        written: data.processed || 0,
+        added: data.added || 0,
+        overwritten: data.overwritten || 0,
+        omitted: data.omitted || 0,
+        failed: data.failed || 0,
+        stage: ((data.status === "completed" || data.currentStage === "completed") ? "COMPLETED" : "WRITING_FIRESTORE") as any,
+        mode: "Escribiendo" as const,
+        startTime,
+        elapsedTimeMs: Date.now() - startTime,
+        speed: Math.round((data.processed || 0) / Math.max(1, (Date.now() - startTime) / 1000)),
+        etaSeconds: Math.round((data.total - data.processed) / Math.max(1, Math.round((data.processed || 0) / Math.max(1, (Date.now() - startTime) / 1000)))),
+        batchesRemaining: Math.ceil((data.total - (data.processed || 0)) / 100),
+        status: data.status,
+        errorMessage: data.errorMessage || "",
+      };
+
+      setActiveJob(mappedActiveJob as any);
+      setIsProcessing(true);
+
+      // Si el job se completó con éxito
+      if (data.status === "completed") {
+        setIsProcessing(false);
+        setActiveJob(null);
+        setSuccess(`La importación masiva finalizó con éxito en el backend. Procesados: ${data.processed.toLocaleString()}`);
+        datasetManager.clear();
+        await loadDataset(true, true);
+        if (unsubscribe) unsubscribe();
+      }
+
+      // Si el job falló
+      if (data.status === "failed") {
+        setIsProcessing(false);
+        setActiveJob(null);
+        setError(`El motor de importación masiva falló: ${data.errorMessage}`);
+        if (unsubscribe) unsubscribe();
+      }
+    });
+
+    return unsubscribe;
+  }
+
+  // Comprobar y recuperar el job de backend activo al cargar o cambiar de usuario
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    async function checkActiveJob() {
+      try {
+        const activeJobData = await getActiveBackendJob();
+        if (activeJobData) {
+          unsubscribe = listenToBackendJob(activeJobData.id);
+        }
+      } catch (err) {
+        console.error("Error al buscar job activo en el backend:", err);
+      }
+    }
+
+    checkActiveJob();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [auth.currentUser]);
 
   // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal
   const availableStates = useMemo(() => {
@@ -932,7 +1015,8 @@ export default function MarketIntelligencePage() {
   async function handleImport(
     importedCompanies: InegiCompany[],
     filename: string = "Importación Masiva Excel",
-    fileMetadata?: { size: number; lastModified: number }
+    fileMetadata?: { size: number; lastModified: number },
+    rawFile?: File
   ) {
     setIsProcessing(true);
     setError("");
@@ -967,6 +1051,7 @@ export default function MarketIntelligencePage() {
         filename,
         companies: importedCompanies,
         checkpoint: checkpointData,
+        rawFile,
       });
       setIsProcessing(false);
       return;
@@ -1729,8 +1814,20 @@ export default function MarketIntelligencePage() {
               {activeJob.stage !== "COMPLETED" && (
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     isCancelledRef.current = true;
+                    if (activeJob && activeJob.jobId) {
+                      try {
+                        const jobRef = doc(db, "market_import_jobs", activeJob.jobId);
+                        await updateDoc(jobRef, {
+                          status: "cancelled",
+                          currentStage: "cancelled",
+                          updatedAt: serverTimestamp(),
+                        });
+                      } catch (e) {
+                        console.warn("No se pudo cancelar el job en Firestore:", e);
+                      }
+                    }
                     setIsProcessing(false);
                     setActiveJob(null);
                     setImportStalled(false);
@@ -2339,6 +2436,25 @@ export default function MarketIntelligencePage() {
                       </p>
                     )}
                   </div>
+                  {isUploading && (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-slate-400 font-semibold">
+                        <span>Subiendo archivo al servidor...</span>
+                        <span className="font-mono text-cyan-400">{uploadProgress || 0}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-slate-900 overflow-hidden border border-slate-800/80">
+                        <div 
+                          className="h-full rounded-full bg-cyan-400 transition-all duration-300"
+                          style={{ width: `${uploadProgress || 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {!pendingResumeJob.rawFile && (
+                    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-4 text-xs text-cyan-300 leading-relaxed">
+                      💡 Sube el archivo original para iniciar el procesamiento masivo en el servidor.
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4 font-sans">
@@ -2374,6 +2490,45 @@ export default function MarketIntelligencePage() {
               )}
 
               <div className="flex flex-wrap gap-2.5 justify-end pt-2">
+                {isMassive && pendingResumeJob.rawFile && (
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={async () => {
+                      if (!pendingResumeJob.rawFile) return;
+                      setIsUploading(true);
+                      setError("");
+                      setSuccess("");
+                      try {
+                        const filename = pendingResumeJob.filename;
+                        const file = pendingResumeJob.rawFile;
+                        const fingerprint = `${filename}_${file.size}_${file.lastModified}`;
+                        
+                        const jobId = await uploadAndCreateImportJob(
+                          file,
+                          filename,
+                          filename.toLowerCase().includes("queretaro") ? ["Querétaro"] : [],
+                          fingerprint,
+                          (progress) => setUploadProgress(Math.round(progress))
+                        );
+
+                        setPendingResumeJob(null);
+                        setSuccess("Lote masivo cargado con éxito. El servidor ha iniciado el procesamiento.");
+                        listenToBackendJob(jobId);
+                      } catch (err: any) {
+                        console.error(err);
+                        setError("Fallo al iniciar el procesamiento en servidor: " + err.message);
+                      } finally {
+                        setIsUploading(false);
+                        setUploadProgress(null);
+                      }
+                    }}
+                    className="rounded-xl bg-cyan-400 text-slate-950 px-4 py-2.5 text-xs font-bold hover:bg-cyan-300 transition flex items-center gap-1.5 shadow-lg shadow-cyan-500/10"
+                  >
+                    {isUploading ? `Subiendo: ${uploadProgress}%` : "Subir y Procesar en Servidor"}
+                  </button>
+                )}
+
                 {!isMassive && hasCompanies && (
                   <button
                     type="button"

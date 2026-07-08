@@ -14,7 +14,8 @@ interface MarketIntelligenceHeaderProps {
   onImport: (
     companies: InegiCompany[], 
     filename?: string, 
-    fileMetadata?: { size: number; lastModified: number }
+    fileMetadata?: { size: number; lastModified: number },
+    rawFile?: File
   ) => Promise<void>;
   onZipSelect: (file: File) => Promise<void>;
   isLoading: boolean;
@@ -431,7 +432,7 @@ export default function MarketIntelligenceHeader({
         await onImport(companiesToImport, file.name, {
           size: file.size,
           lastModified: file.lastModified,
-        });
+        }, file);
 
         setParseStatus(`Importación completada con éxito. ${companiesToImport.length} registros cargados.`);
         setTimeout(() => setParseStatus(""), 5000);
