@@ -328,7 +328,7 @@ function normalizeRowWithMap(rowArray, map) {
 // ----------------- Cloud Function Trigger -----------------
 exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
     document: "market_import_jobs/{jobId}",
-    timeoutSeconds: 3600,
+    timeoutSeconds: 540,
     memory: "1GiB",
 }, async (event) => {
     const snapshot = event.data;

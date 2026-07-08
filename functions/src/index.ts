@@ -43,7 +43,7 @@ interface HeaderMap {
 function normalizeEmail(email: string | null | undefined): string {
   if (!email) return "";
   const cleaned = email.trim().toLowerCase();
-  
+
   const placeholders = [
     "no disponible",
     "n/a",
@@ -55,37 +55,37 @@ function normalizeEmail(email: string | null | undefined): string {
     "none",
     "null",
   ];
-  
+
   if (placeholders.some(p => cleaned.includes(p))) {
     return "";
   }
-  
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(cleaned)) {
     return "";
   }
-  
+
   return cleaned;
 }
 
 function normalizePhone(phone: string | null | undefined): string {
   if (!phone) return "";
   const cleaned = phone.replace(/\D/g, "");
-  
+
   const placeholders = [
     "0000000000",
     "1234567890",
     "1111111111",
   ];
-  
+
   if (placeholders.includes(cleaned) || cleaned.length < 8 || cleaned.length > 15) {
     return "";
   }
-  
+
   if (cleaned.length === 12 && cleaned.startsWith("52")) {
     return cleaned.slice(2);
   }
-  
+
   return cleaned;
 }
 
@@ -136,12 +136,12 @@ function calculateOpportunityScore(
 
   let sectorScore = 5;
   const cleanSector = (sector || "").toLowerCase();
-  
+
   if (
-    cleanSector.includes("financier") || 
-    cleanSector.includes("seguro") || 
+    cleanSector.includes("financier") ||
+    cleanSector.includes("seguro") ||
     cleanSector.includes("tecnolog") ||
-    cleanSector.includes("informacion") || 
+    cleanSector.includes("informacion") ||
     cleanSector.includes("profesional") ||
     cleanSector.includes("cientific") ||
     cleanSector.includes("corporativo")
@@ -156,7 +156,7 @@ function calculateOpportunityScore(
   let reachabilityScore = 0;
   if (emailValido) reachabilityScore += 15;
   if (telefonoValido) reachabilityScore += 10;
-  
+
   const cleanWeb = (sitioWeb || "").toLowerCase().trim();
   const hasWeb = cleanWeb && cleanWeb !== "no disponible" && cleanWeb !== "n/a" && cleanWeb !== "no aplica";
   if (hasWeb) reachabilityScore += 10;
@@ -183,11 +183,11 @@ function determineRecommendedSuites(
   const cleanTamano = (tamano || "").toLowerCase();
   const cleanRango = (rangoPersonal || "").toLowerCase();
 
-  const esGrandeOMediana = 
-    cleanTamano.includes("grande") || 
-    cleanTamano.includes("mediana") || 
-    cleanRango.includes("50") || 
-    cleanRango.includes("100") || 
+  const esGrandeOMediana =
+    cleanTamano.includes("grande") ||
+    cleanTamano.includes("mediana") ||
+    cleanRango.includes("50") ||
+    cleanRango.includes("100") ||
     cleanRango.includes("250");
 
   if (esGrandeOMediana || cleanSector.includes("manufactur") || cleanSector.includes("comercio")) {
@@ -195,8 +195,8 @@ function determineRecommendedSuites(
   }
 
   if (
-    cleanSector.includes("comercio") || 
-    cleanSector.includes("financier") || 
+    cleanSector.includes("comercio") ||
+    cleanSector.includes("financier") ||
     cleanSector.includes("servicios") ||
     cleanSector.includes("seguro") ||
     cleanSector.includes("alojamiento") ||
@@ -210,9 +210,9 @@ function determineRecommendedSuites(
   }
 
   if (
-    cleanSector.includes("manufactur") || 
-    cleanSector.includes("construc") || 
-    cleanSector.includes("transport") || 
+    cleanSector.includes("manufactur") ||
+    cleanSector.includes("construc") ||
+    cleanSector.includes("transport") ||
     cleanSector.includes("logistica")
   ) {
     suites.push("Operations Suite");
@@ -223,8 +223,8 @@ function determineRecommendedSuites(
   }
 
   if (
-    cleanSector.includes("financier") || 
-    cleanSector.includes("seguro") || 
+    cleanSector.includes("financier") ||
+    cleanSector.includes("seguro") ||
     cleanSector.includes("profesional") ||
     cleanSector.includes("juridic") ||
     cleanSector.includes("consultor")
@@ -286,7 +286,7 @@ function generateCommercialAdvisorInfo(
   if (telefono && telefono !== "no disponible" && telefono !== "no aplica") {
     motives.push("Contacto telefónico disponible: Apto para prospección telefónica directa.");
   }
-  
+
   const cleanWeb = (sitioWeb || "").toLowerCase().trim();
   const hasWeb = cleanWeb && cleanWeb !== "no disponible" && cleanWeb !== "n/a" && cleanWeb !== "no aplica";
   if (hasWeb) {
@@ -370,26 +370,26 @@ function normalizeRowWithMap(rowArray: any[], map: HeaderMap): any {
   const sector = getValue(map.sectorIdx);
   const tamano = getValue(map.tamanoIdx, "Micro");
   const rangoPersonal = getValue(map.rangoPersonalIdx, "0 a 5 personas");
-  
+
   const rawTelefono = getValue(map.telefonoIdx);
   const rawEmail = getValue(map.emailIdx);
   const sitioWeb = getValue(map.sitioWebIdx);
-  
+
   const direccion = getValue(map.direccionIdx);
   const municipio = getValue(map.municipioIdx);
   const estado = getValue(map.estadoIdx);
   const cp = getValue(map.cpIdx);
   const scian = getValue(map.scianIdx);
   const actividad = getValue(map.actividadIdx);
-  
+
   const latitud = getNumber(map.latitudIdx);
   const longitud = getNumber(map.longitudIdx);
   const altaDenue = getValue(map.altaDenueIdx);
-  
+
   const email = normalizeEmail(rawEmail);
   const telefono = normalizePhone(rawTelefono);
   const rawSourceScore = getNumber(map.scoreIdx, 0);
-  
+
   const scoreBreakdown = calculateOpportunityScore(
     rawSourceScore,
     tamano,
@@ -447,7 +447,7 @@ function normalizeRowWithMap(rowArray: any[], map: HeaderMap): any {
 export const processMarketImportJob = onDocumentCreated(
   {
     document: "market_import_jobs/{jobId}",
-    timeoutSeconds: 3600,
+    timeoutSeconds: 540,
     memory: "1GiB",
   },
   async (event) => {
@@ -473,7 +473,7 @@ export const processMarketImportJob = onDocumentCreated(
       const storagePath = data.storagePath;
       const bucket = admin.storage().bucket();
       const tempFilePath = path.join(os.tmpdir(), `${Date.now()}_${data.filename}`);
-      
+
       await bucket.file(storagePath).download({ destination: tempFilePath });
 
       await snapshot.ref.update({
@@ -543,7 +543,7 @@ export const processMarketImportJob = onDocumentCreated(
           const docRefs = companies.map(c => db.collection("market_companies").doc(c.id));
           const snapshots = await db.getAll(...docRefs);
           const existingDocsMap = new Map<string, any>();
-          
+
           snapshots.forEach(snap => {
             if (snap.exists) {
               existingDocsMap.set(snap.id, snap.data());
@@ -570,7 +570,7 @@ export const processMarketImportJob = onDocumentCreated(
               });
               added++;
             } else {
-              const hasChanged = 
+              const hasChanged =
                 existing.razonSocial !== company.razonSocial ||
                 existing.nombreComercial !== company.nombreComercial ||
                 existing.sector !== company.sector ||
@@ -606,7 +606,7 @@ export const processMarketImportJob = onDocumentCreated(
         }
 
         processed += chunkRows.length;
-        
+
         await snapshot.ref.update({
           processed,
           added,

@@ -51,6 +51,7 @@ const DEFAULT_FILTERS: FiltersState = {
 
 export default function MarketIntelligencePage() {
   const isCancelledRef = useRef<boolean>(false);
+  const modalFileInputRef = useRef<HTMLInputElement>(null);
 
   // Estados de carga e interfaz
   const [companies, setCompanies] = useState<InegiCompany[]>([]);
@@ -241,6 +242,38 @@ export default function MarketIntelligencePage() {
     });
 
     return unsubscribe;
+  }
+
+  // Manejar la selección de archivo desde el modal masivo
+  async function handleModalFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !pendingResumeJob) return;
+
+    setIsUploading(true);
+    setError("");
+    setSuccess("");
+    try {
+      const filename = file.name;
+      const fingerprint = `${filename}_${file.size}_${file.lastModified}`;
+      
+      const jobId = await uploadAndCreateImportJob(
+        file,
+        filename,
+        filename.toLowerCase().includes("queretaro") ? ["Querétaro"] : [],
+        fingerprint,
+        (progress) => setUploadProgress(Math.round(progress))
+      );
+
+      setPendingResumeJob(null);
+      setSuccess("Lote masivo cargado con éxito. El servidor ha iniciado el procesamiento.");
+      listenToBackendJob(jobId);
+    } catch (err: any) {
+      console.error(err);
+      setError("Fallo al iniciar el procesamiento en servidor: " + err.message);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(null);
+    }
   }
 
   // Comprobar y recuperar el job de backend activo al cargar o cambiar de usuario
@@ -1207,6 +1240,7 @@ export default function MarketIntelligencePage() {
         failed: 0,
         companiesCount: 50000, // Trigger massive warning
       },
+      rawFile: file,
     });
     setIsProcessing(false);
   }
@@ -2409,6 +2443,13 @@ export default function MarketIntelligencePage() {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
+            <input 
+              type="file" 
+              ref={modalFileInputRef} 
+              className="hidden" 
+              onChange={handleModalFileSelect} 
+              accept=".xlsx,.xls,.zip"
+            />
             <div className="w-full max-w-lg rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-6 font-sans">
               <div className="flex items-start gap-4 flex-col sm:flex-row">
                 <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-lg shrink-0 ${isMassive ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"}`}>
@@ -2430,7 +2471,7 @@ export default function MarketIntelligencePage() {
                     <p className="text-xs text-amber-200 font-semibold leading-relaxed">
                       Esta carga requiere Aura Import Engine V2 Backend. El archivo es demasiado grande para procesarse de forma segura desde el navegador.
                     </p>
-                    {pendingResumeJob.filename.toLowerCase().includes("queretaro") && (
+                    {pendingResumeJob.filename.toLowerCase().includes("queretaro") && pendingResumeJob.checkpoint.processed > 0 && (
                       <p className="text-[11px] text-slate-400 leading-normal">
                         Se han procesado parcialmente <strong className="text-slate-200">38,200 registros</strong> de este dataset. La validación final de integridad queda pendiente hasta habilitar el Backend V2.
                       </p>
@@ -2452,7 +2493,7 @@ export default function MarketIntelligencePage() {
                   )}
                   {!pendingResumeJob.rawFile && (
                     <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-4 text-xs text-cyan-300 leading-relaxed">
-                      💡 Sube el archivo original para iniciar el procesamiento masivo en el servidor.
+                      💡 Sube el archivo original o pulsa el botón de abajo para iniciar el procesamiento masivo en el servidor.
                     </div>
                   )}
                 </div>
@@ -2490,12 +2531,15 @@ export default function MarketIntelligencePage() {
               )}
 
               <div className="flex flex-wrap gap-2.5 justify-end pt-2">
-                {isMassive && pendingResumeJob.rawFile && (
+                {isMassive && (
                   <button
                     type="button"
                     disabled={isUploading}
                     onClick={async () => {
-                      if (!pendingResumeJob.rawFile) return;
+                      if (!pendingResumeJob.rawFile) {
+                        modalFileInputRef.current?.click();
+                        return;
+                      }
                       setIsUploading(true);
                       setError("");
                       setSuccess("");
@@ -2525,7 +2569,7 @@ export default function MarketIntelligencePage() {
                     }}
                     className="rounded-xl bg-cyan-400 text-slate-950 px-4 py-2.5 text-xs font-bold hover:bg-cyan-300 transition flex items-center gap-1.5 shadow-lg shadow-cyan-500/10"
                   >
-                    {isUploading ? `Subiendo: ${uploadProgress}%` : "Subir y Procesar en Servidor"}
+                    {isUploading ? `Subiendo: ${uploadProgress}%` : "Subir archivo al Backend V2"}
                   </button>
                 )}
 
@@ -2570,8 +2614,18 @@ export default function MarketIntelligencePage() {
                   type="button"
                   onClick={() => {
                     localStorage.removeItem(pendingResumeJob.jobId);
-                    setPendingResumeJob(null);
-                    setSuccess("Checkpoint eliminado. La importación completa quedará pendiente hasta Backend V2.");
+                    setPendingResumeJob(prev => prev ? {
+                      ...prev,
+                      checkpoint: {
+                        processed: 0,
+                        added: 0,
+                        overwritten: 0,
+                        omitted: 0,
+                        failed: 0,
+                        companiesCount: 0,
+                      }
+                    } : null);
+                    setSuccess("Checkpoint local eliminado. Puedes iniciar una nueva importación limpia al Backend V2.");
                   }}
                   className="rounded-xl bg-red-950/40 hover:bg-red-950/60 border border-red-500/30 px-4 py-2.5 text-xs font-bold text-red-400 transition font-sans"
                 >
