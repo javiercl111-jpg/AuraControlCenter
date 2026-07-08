@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../config/firebase";
 
 import ExecutiveHeader from "../components/executive/ExecutiveHeader";
 import ExecutiveKPIs from "../components/executive/ExecutiveKPIs";
@@ -50,6 +52,7 @@ export interface ExecutiveMetrics {
   paidCommissionAmount: number;
   mrr: number;
   arr: number;
+  failedQueries?: string[];
 }
 
 export interface ExecutiveDashboardData {
@@ -80,6 +83,7 @@ export default function DashboardPage() {
   const [commissions, setCommissions] = useState<PlatformCommission[]>([]);
   const [leads, setLeads] = useState<PlatformLead[]>([]);
   const [organizations, setOrganizations] = useState<PlatformOrganization[]>([]);
+  const [failedQueries, setFailedQueries] = useState<string[]>([]);
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -87,16 +91,9 @@ export default function DashboardPage() {
   async function loadDashboardData() {
     try {
       setError("");
+      setIsLoading(true);
 
-      const [
-        clientsData,
-        tenantsData,
-        invoicesData,
-        paymentsData,
-        commissionsData,
-        leadsData,
-        organizationsData,
-      ] = await Promise.all([
+      const results = await Promise.allSettled([
         getClients(),
         getTenants(),
         getInvoices(),
@@ -105,6 +102,27 @@ export default function DashboardPage() {
         getLeads(),
         getOrganizations(),
       ]);
+
+      const queryNames = ["clients", "tenants", "invoices", "payments", "commissions", "leads", "organizations"];
+      const failedList: string[] = [];
+      results.forEach((r, idx) => {
+        if (r.status === "rejected") {
+          failedList.push(queryNames[idx]);
+        }
+      });
+      setFailedQueries(failedList);
+
+      const clientsData = results[0].status === "fulfilled" ? (results[0] as any).value : [];
+      const tenantsData = results[1].status === "fulfilled" ? (results[1] as any).value : [];
+      const invoicesData = results[2].status === "fulfilled" ? (results[2] as any).value : [];
+      const paymentsData = results[3].status === "fulfilled" ? (results[3] as any).value : [];
+      const commissionsData = results[4].status === "fulfilled" ? (results[4] as any).value : [];
+      const leadsData = results[5].status === "fulfilled" ? (results[5] as any).value : [];
+      const organizationsData = results[6].status === "fulfilled" ? (results[6] as any).value : [];
+
+      if (failedList.length === queryNames.length) {
+        setError("Centro ejecutivo temporalmente no disponible. No se pudieron sincronizar los indicadores de la plataforma en este dispositivo.");
+      }
 
       setClients(clientsData);
       setTenants(tenantsData);
@@ -122,7 +140,15 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    loadDashboardData();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loadDashboardData();
+      } else {
+        // En localhost/entorno sin auth hidratado inmediato, esperar o dar fallback seguro
+        setIsLoading(false);
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   const metrics = useMemo<ExecutiveMetrics>(() => {
@@ -259,8 +285,9 @@ export default function DashboardPage() {
       paidCommissionAmount,
       mrr,
       arr: mrr * 12,
+      failedQueries,
     };
-  }, [clients, tenants, invoices, payments, commissions, leads, organizations]);
+  }, [clients, tenants, invoices, payments, commissions, leads, organizations, failedQueries]);
 
   const dashboardData: ExecutiveDashboardData = {
     clients,

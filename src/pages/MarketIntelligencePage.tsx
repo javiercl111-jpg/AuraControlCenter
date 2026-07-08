@@ -149,6 +149,37 @@ export default function MarketIntelligencePage() {
     return () => clearInterval(timer);
   }, [activeJob?.processed, activeJob?.stage]);
 
+  // Check for any saved import checkpoints in LocalStorage when entering the Import tab
+  useEffect(() => {
+    if (activeTab !== 'import') return;
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("aura_job_")) {
+        const dismissed = sessionStorage.getItem("aura_import_checkpoint_dismissed_" + key) === "true";
+        if (!dismissed) {
+          try {
+            const saved = localStorage.getItem(key);
+            if (saved) {
+              const checkpointData = JSON.parse(saved);
+              const filename = checkpointData.filename || key.replace("aura_job_", "").split("_")[0] || "Importación Pendiente";
+              
+              setPendingResumeJob({
+                jobId: key,
+                filename: filename,
+                companies: [],
+                checkpoint: checkpointData,
+              });
+              break;
+            }
+          } catch (e) {
+            console.warn("Error al auto-detectar checkpoint:", e);
+          }
+        }
+      }
+    }
+  }, [activeTab]);
+
 
   // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal
   const availableStates = useMemo(() => {
@@ -934,6 +965,13 @@ export default function MarketIntelligencePage() {
 
     const jobId = `aura_job_${filename.replace(/[^a-zA-Z0-9]/g, "")}_${total}`;
     
+    // Check if user dismissed checkpoint popup for this session
+    const dismissed = sessionStorage.getItem("aura_import_checkpoint_dismissed_" + jobId) === "true";
+    if (dismissed) {
+      executeImportJob(jobId, filename, importedCompanies, 0, 0, 0, 0, 0, fingerprint);
+      return;
+    }
+
     // Comprobar checkpoint existente
     const saved = localStorage.getItem(jobId);
     if (saved) {
@@ -2232,12 +2270,14 @@ export default function MarketIntelligencePage() {
           <span>{error}</span>
         </div>
       )}
-
-      {/* Checkpoint Modal Overlay (Always available globally to ensure it prompts users on selection/mount) */}
-      {pendingResumeJob && (() => {
-        const isMassive = pendingResumeJob.companies.length > 10000 || pendingResumeJob.filename.includes("Queretaro");
+      {activeTab === 'import' && pendingResumeJob && (() => {
+        const isMassive = (pendingResumeJob.checkpoint as any)?.companiesCount > 10000 || 
+                         pendingResumeJob.companies.length > 10000 || 
+                         pendingResumeJob.filename.includes("Queretaro") ||
+                         pendingResumeJob.jobId.includes("Queretaro");
         const checkpointData = pendingResumeJob.checkpoint;
         const isStalled = (checkpointData as any).stalled === true || (checkpointData as any).status === "stalled" || isMassive;
+        const hasCompanies = pendingResumeJob.companies && pendingResumeJob.companies.length > 0;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
@@ -2263,7 +2303,7 @@ export default function MarketIntelligencePage() {
                       La importación masiva requiere Import Engine V2 Backend. Puedes limpiar el checkpoint o continuar con archivos menores.
                     </p>
                     <p className="text-[11px] text-slate-400 leading-normal">
-                      Se han procesado parcialmente <strong className="text-slate-200">38,200 registros</strong> de este dataset. La validación final de integridad queda pendiente hasta habilitar el Backend V2.
+                      Se han procesado parcialmente <strong className="text-slate-200">{pendingResumeJob.checkpoint.processed.toLocaleString()} registros</strong> de este dataset.
                     </p>
                   </div>
                 </div>
@@ -2274,10 +2314,15 @@ export default function MarketIntelligencePage() {
                       ⚠️ Este trabajo de importación se detuvo inesperadamente. Intentar reanudarlo podría causar duplicados o inestabilidad.
                     </div>
                   )}
+                  {!hasCompanies && (
+                    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-4 text-xs text-cyan-300 leading-relaxed">
+                      💡 Sube el archivo original para habilitar la opción de reanudar esta importación.
+                    </div>
+                  )}
                   <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2">
                     <div className="flex justify-between text-xs text-slate-400">
                       <span>Registros procesados en checkpoint:</span>
-                      <span className="font-bold text-white font-mono">{pendingResumeJob.checkpoint.processed.toLocaleString()} / {pendingResumeJob.companies.length.toLocaleString()}</span>
+                      <span className="font-bold text-white font-mono">{pendingResumeJob.checkpoint.processed.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-xs text-slate-400">
                       <span>Nuevos agregados:</span>
@@ -2296,7 +2341,7 @@ export default function MarketIntelligencePage() {
               )}
 
               <div className="flex flex-wrap gap-2.5 justify-end pt-2">
-                {!isMassive && (
+                {!isMassive && hasCompanies && (
                   <button
                     type="button"
                     onClick={() => {
@@ -2324,52 +2369,44 @@ export default function MarketIntelligencePage() {
                     type="button"
                     onClick={() => {
                       setPendingResumeJob(null);
-                      setActiveTab('intelligence');
+                      sessionStorage.setItem("aura_import_checkpoint_dismissed_" + pendingResumeJob.jobId, "true");
+                      setActiveTab('diagnostics');
                     }}
                     className="rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-4 py-2.5 text-xs font-bold hover:bg-cyan-500/20 transition"
                   >
                     Ver Roadmap V2
                   </button>
                 )}
-                
+
                 <button
                   type="button"
                   onClick={() => {
                     localStorage.removeItem(pendingResumeJob.jobId);
                     setPendingResumeJob(null);
-                    if (!isMassive) {
-                      executeImportJob(
-                        pendingResumeJob.jobId,
-                        pendingResumeJob.filename,
-                        pendingResumeJob.companies,
-                        0, 0, 0, 0, 0
-                      );
-                    } else {
-                      setSuccess("Se ha limpiado el checkpoint del archivo masivo.");
-                    }
+                    setSuccess("Checkpoint eliminado. La importación completa quedará pendiente hasta Backend V2.");
                   }}
-                  className="rounded-xl bg-indigo-650 hover:bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition font-sans"
+                  className="rounded-xl bg-red-950/40 hover:bg-red-950/60 border border-red-500/30 px-4 py-2.5 text-xs font-bold text-red-400 transition font-sans"
                 >
-                  {isMassive ? "Limpiar Checkpoint" : "Reiniciar desde Cero"}
+                  Limpiar Checkpoint
                 </button>
-                
-                {!isMassive && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      localStorage.removeItem(pendingResumeJob.jobId);
-                      setPendingResumeJob(null);
-                      setSuccess("Se ha eliminado el checkpoint del archivo.");
-                    }}
-                    className="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-950/40 transition font-sans"
-                  >
-                    Limpiar Checkpoint
-                  </button>
-                )}
 
                 <button
                   type="button"
-                  onClick={() => setPendingResumeJob(null)}
+                  onClick={() => {
+                    setPendingResumeJob(null);
+                    sessionStorage.setItem("aura_import_checkpoint_dismissed_" + pendingResumeJob.jobId, "true");
+                  }}
+                  className="rounded-xl bg-indigo-650 hover:bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition font-sans"
+                >
+                  Continuar sin importar
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingResumeJob(null);
+                    sessionStorage.setItem("aura_import_checkpoint_dismissed_" + pendingResumeJob.jobId, "true");
+                  }}
                   className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition font-sans"
                 >
                   Cancelar

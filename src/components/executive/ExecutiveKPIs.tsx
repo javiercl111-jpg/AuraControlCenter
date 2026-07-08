@@ -20,38 +20,45 @@ import {
   }
   
   export default function ExecutiveKPIs({ metrics }: ExecutiveKPIsProps) {
-    const cards = [
-      {
-        label: "Clientes activos",
-        value: String(metrics.activeClients.length),
-        detail: `${metrics.graceClients.length} en gracia · ${metrics.suspendedClients.length} suspendidos`,
-        icon: Building2,
-      },
-      {
-        label: "Tenants activos",
-        value: String(metrics.activeTenants.length),
-        detail: `${metrics.suspendedTenants.length} suspendidos · ${metrics.tenantsNearLimit.length} cerca del límite`,
-        icon: Network,
-      },
-      {
-        label: "MRR estimado",
-        value: formatCurrency(metrics.mrr),
-        detail: `ARR estimado: ${formatCurrency(metrics.arr)}`,
-        icon: BadgeDollarSign,
-      },
-      {
-        label: "Facturación mes",
-        value: formatCurrency(metrics.monthlyBilling),
-        detail: `Histórico: ${formatCurrency(metrics.annualBilling)}`,
-        icon: CreditCard,
-      },
-      {
-        label: "Pagos recibidos",
-        value: formatCurrency(metrics.paymentsReceived),
-        detail: `${metrics.pendingInvoices.length} facturas pendientes`,
-        icon: ReceiptText,
-      },
-    ];
+  const failed = metrics.failedQueries || [];
+
+  const isClientsFailed = failed.includes("clients");
+  const isTenantsFailed = failed.includes("tenants");
+  const isInvoicesFailed = failed.includes("invoices");
+  const isPaymentsFailed = failed.includes("payments");
+
+  const cards = [
+    {
+      label: "Clientes activos",
+      value: isClientsFailed ? "No disponible" : String(metrics.activeClients.length),
+      detail: isClientsFailed ? "Sincronización fallida" : `${metrics.graceClients.length} en gracia · ${metrics.suspendedClients.length} suspendidos`,
+      icon: Building2,
+    },
+    {
+      label: "Tenants activos",
+      value: isTenantsFailed ? "No disponible" : String(metrics.activeTenants.length),
+      detail: isTenantsFailed ? "Sincronización fallida" : `${metrics.suspendedTenants.length} suspendidos · ${metrics.tenantsNearLimit.length} cerca del límite`,
+      icon: Network,
+    },
+    {
+      label: "MRR estimado",
+      value: (isClientsFailed || isInvoicesFailed) ? "No disponible" : formatCurrency(metrics.mrr),
+      detail: (isClientsFailed || isInvoicesFailed) ? "Sincronización fallida" : `ARR estimado: ${formatCurrency(metrics.arr)}`,
+      icon: BadgeDollarSign,
+    },
+    {
+      label: "Facturación mes",
+      value: isInvoicesFailed ? "No disponible" : formatCurrency(metrics.monthlyBilling),
+      detail: isInvoicesFailed ? "Sincronización fallida" : `Histórico: ${formatCurrency(metrics.annualBilling)}`,
+      icon: CreditCard,
+    },
+    {
+      label: "Pagos recibidos",
+      value: (isPaymentsFailed || isInvoicesFailed) ? "No disponible" : formatCurrency(metrics.paymentsReceived),
+      detail: (isPaymentsFailed || isInvoicesFailed) ? "Sincronización fallida" : `${metrics.pendingInvoices.length} facturas pendientes`,
+      icon: ReceiptText,
+    },
+  ];
   
     return (
       <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
