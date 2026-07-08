@@ -191,12 +191,17 @@ export default function MarketIntelligencePage() {
 
   // Escuchar progreso del job de backend en tiempo real
   function listenToBackendJob(jobId: string) {
+    console.log(`[Aura Audit] [6] Listener backend iniciado para jobId: ${jobId}`);
     const startTime = Date.now();
     const docRef = doc(db, "market_import_jobs", jobId);
 
     const unsubscribe = onSnapshot(docRef, async (snap) => {
-      if (!snap.exists()) return;
+      if (!snap.exists()) {
+        console.warn(`[Aura Audit] Documento de job no encontrado en Firestore para el id: ${jobId}`);
+        return;
+      }
       const data = snap.data();
+      console.log(`[Aura Audit] [7] JobId recibido de Firestore. ID: ${snap.id}. Status: ${data?.status}, Stage: ${data?.currentStage}, Progress: ${data?.progress}%`);
 
       const mappedActiveJob = {
         jobId: snap.id,
@@ -247,8 +252,12 @@ export default function MarketIntelligencePage() {
   // Manejar la selección de archivo desde el modal masivo
   async function handleModalFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !pendingResumeJob) return;
+    if (!file || !pendingResumeJob) {
+      console.warn("[Aura Audit] handleModalFileSelect ejecutado sin archivo o sin pendingResumeJob.");
+      return;
+    }
 
+    console.log(`[Aura Audit] [2] Archivo recibido correctamente desde selector. Nombre: ${file.name}, Tamaño: ${file.size} bytes`);
     setIsUploading(true);
     setError("");
     setSuccess("");
@@ -268,8 +277,8 @@ export default function MarketIntelligencePage() {
       setSuccess("Lote masivo cargado con éxito. El servidor ha iniciado el procesamiento.");
       listenToBackendJob(jobId);
     } catch (err: any) {
-      console.error(err);
-      setError("Fallo al iniciar el procesamiento en servidor: " + err.message);
+      console.error("[Aura Audit] ERROR COMPLETO en el flujo backend desde selector modal:", err);
+      setError("Fallo al iniciar el procesamiento en servidor: " + (err.stack || err.message || err));
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
@@ -2536,16 +2545,21 @@ export default function MarketIntelligencePage() {
                     type="button"
                     disabled={isUploading}
                     onClick={async () => {
+                      console.log("[Aura Audit] [1] Botón 'Subir archivo al Backend V2' presionado.");
                       if (!pendingResumeJob.rawFile) {
+                        console.log("[Aura Audit] Archivo no disponible en memoria. Abriendo selector de archivos...");
                         modalFileInputRef.current?.click();
                         return;
                       }
+                      
+                      const file = pendingResumeJob.rawFile;
+                      console.log(`[Aura Audit] [2] Archivo recibido correctamente en memoria. Nombre: ${file.name}, Tamaño: ${file.size} bytes`);
+                      
                       setIsUploading(true);
                       setError("");
                       setSuccess("");
                       try {
                         const filename = pendingResumeJob.filename;
-                        const file = pendingResumeJob.rawFile;
                         const fingerprint = `${filename}_${file.size}_${file.lastModified}`;
                         
                         const jobId = await uploadAndCreateImportJob(
@@ -2560,8 +2574,8 @@ export default function MarketIntelligencePage() {
                         setSuccess("Lote masivo cargado con éxito. El servidor ha iniciado el procesamiento.");
                         listenToBackendJob(jobId);
                       } catch (err: any) {
-                        console.error(err);
-                        setError("Fallo al iniciar el procesamiento en servidor: " + err.message);
+                        console.error("[Aura Audit] ERROR COMPLETO en el flujo backend:", err);
+                        setError("Fallo al iniciar el procesamiento en servidor: " + (err.stack || err.message || err));
                       } finally {
                         setIsUploading(false);
                         setUploadProgress(null);

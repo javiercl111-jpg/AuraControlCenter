@@ -34,6 +34,7 @@ export async function uploadAndCreateImportJob(
   fingerprint: string,
   onUploadProgress?: (progress: number) => void
 ): Promise<string> {
+  console.log(`[Aura Audit] [3] Upload a Storage iniciado. Archivo: ${file.name}, Tamaño: ${file.size} bytes`);
   const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, "")}`;
   const fileRef = ref(storage, `market_imports/${uniqueName}`);
 
@@ -49,12 +50,16 @@ export async function uploadAndCreateImportJob(
           onUploadProgress(percent);
         }
       },
-      (error) => reject(error),
+      (error) => {
+        console.error("[Aura Audit] Error durante la subida a Storage:", error);
+        reject(error);
+      },
       () => resolve()
     );
   });
 
   const storagePath = fileRef.fullPath;
+  console.log(`[Aura Audit] [4] Upload a Storage completado. Path en Storage: ${storagePath}`);
 
   // 2. Add job doc in market_import_jobs
   const jobDoc = {
@@ -77,7 +82,9 @@ export async function uploadAndCreateImportJob(
     errorMessage: "",
   };
 
+  console.log("[Aura Audit] Preparando creación de documento market_import_jobs en Firestore...");
   const docRef = await addDoc(collection(db, "market_import_jobs"), jobDoc);
+  console.log(`[Aura Audit] [5] Documento market_import_jobs creado. ID del Job: ${docRef.id}`);
   return docRef.id;
 }
 
