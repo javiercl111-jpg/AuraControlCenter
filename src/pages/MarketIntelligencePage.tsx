@@ -249,19 +249,22 @@ export default function MarketIntelligencePage() {
     return unsubscribe;
   }
 
-  // Manejar la selección de archivo desde el modal masivo
-  async function handleModalFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !pendingResumeJob) {
-      console.warn("[Aura Audit] handleModalFileSelect ejecutado sin archivo o sin pendingResumeJob.");
+  // Iniciar importación masiva en Backend desde un archivo físico
+  async function startBackendImportFromFile(file: File) {
+    console.log("[Aura Backend Import] file selected:", file.name, file.size);
+    if (!file) {
+      console.warn("[Aura Backend Import] startBackendImportFromFile invocado sin archivo.");
       return;
     }
 
-    console.log(`[Aura Audit] [2] Archivo recibido correctamente desde selector. Nombre: ${file.name}, Tamaño: ${file.size} bytes`);
-    setIsUploading(true);
+    setIsProcessing(true);
     setError("");
     setSuccess("");
+    setIsUploading(true);
+    setUploadProgress(0);
+
     try {
+      console.log("[Aura Backend Import] upload started");
       const filename = file.name;
       const fingerprint = `${filename}_${file.size}_${file.lastModified}`;
       
@@ -270,18 +273,29 @@ export default function MarketIntelligencePage() {
         filename,
         filename.toLowerCase().includes("queretaro") ? ["Querétaro"] : [],
         fingerprint,
-        (progress) => setUploadProgress(Math.round(progress))
+        (progress) => {
+          setUploadProgress(Math.round(progress));
+          if (progress >= 100) {
+            console.log("[Aura Backend Import] storage upload completed");
+          }
+        }
       );
 
-      setPendingResumeJob(null);
-      setSuccess("Lote masivo cargado con éxito. El servidor ha iniciado el procesamiento.");
+      console.log("[Aura Backend Import] job created:", jobId);
+      setPendingResumeJob(null); // Cerrar modal
+      setActiveTab("import");
+
       listenToBackendJob(jobId);
+      console.log("[Aura Backend Import] listener attached");
+      
+      setSuccess("El archivo masivo se ha cargado con éxito. El procesamiento ha comenzado en el backend.");
     } catch (err: any) {
-      console.error("[Aura Audit] ERROR COMPLETO en el flujo backend desde selector modal:", err);
+      console.error("[Aura Backend Import] Error completo en flujo backend:", err);
       setError("Fallo al iniciar el procesamiento en servidor: " + (err.stack || err.message || err));
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
+      setIsProcessing(false);
     }
   }
 
@@ -2456,8 +2470,14 @@ export default function MarketIntelligencePage() {
               type="file" 
               ref={modalFileInputRef} 
               className="hidden" 
-              onChange={handleModalFileSelect} 
               accept=".xlsx,.xls,.zip"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  startBackendImportFromFile(file);
+                  event.target.value = "";
+                }
+              }}
             />
             <div className="w-full max-w-lg rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-6 font-sans">
               <div className="flex items-start gap-4 flex-col sm:flex-row">
@@ -2544,41 +2564,11 @@ export default function MarketIntelligencePage() {
                   <button
                     type="button"
                     disabled={isUploading}
-                    onClick={async () => {
-                      console.log("[Aura Audit] [1] Botón 'Subir archivo al Backend V2' presionado.");
-                      if (!pendingResumeJob.rawFile) {
-                        console.log("[Aura Audit] Archivo no disponible en memoria. Abriendo selector de archivos...");
+                    onClick={() => {
+                      if (pendingResumeJob.rawFile) {
+                        startBackendImportFromFile(pendingResumeJob.rawFile);
+                      } else {
                         modalFileInputRef.current?.click();
-                        return;
-                      }
-                      
-                      const file = pendingResumeJob.rawFile;
-                      console.log(`[Aura Audit] [2] Archivo recibido correctamente en memoria. Nombre: ${file.name}, Tamaño: ${file.size} bytes`);
-                      
-                      setIsUploading(true);
-                      setError("");
-                      setSuccess("");
-                      try {
-                        const filename = pendingResumeJob.filename;
-                        const fingerprint = `${filename}_${file.size}_${file.lastModified}`;
-                        
-                        const jobId = await uploadAndCreateImportJob(
-                          file,
-                          filename,
-                          filename.toLowerCase().includes("queretaro") ? ["Querétaro"] : [],
-                          fingerprint,
-                          (progress) => setUploadProgress(Math.round(progress))
-                        );
-
-                        setPendingResumeJob(null);
-                        setSuccess("Lote masivo cargado con éxito. El servidor ha iniciado el procesamiento.");
-                        listenToBackendJob(jobId);
-                      } catch (err: any) {
-                        console.error("[Aura Audit] ERROR COMPLETO en el flujo backend:", err);
-                        setError("Fallo al iniciar el procesamiento en servidor: " + (err.stack || err.message || err));
-                      } finally {
-                        setIsUploading(false);
-                        setUploadProgress(null);
                       }
                     }}
                     className="rounded-xl bg-cyan-400 text-slate-950 px-4 py-2.5 text-xs font-bold hover:bg-cyan-300 transition flex items-center gap-1.5 shadow-lg shadow-cyan-500/10"
