@@ -82,10 +82,23 @@ export async function uploadAndCreateImportJob(
     errorMessage: "",
   };
 
-  console.log("[Aura Audit] Preparando creación de documento market_import_jobs en Firestore...");
-  const docRef = await addDoc(collection(db, "market_import_jobs"), jobDoc);
-  console.log(`[Aura Audit] [5] Documento market_import_jobs creado. ID del Job: ${docRef.id}`);
-  return docRef.id;
+  const collectionName = "market_import_jobs";
+  console.log("[AUDIT] writing collection:", collectionName, jobDoc);
+  try {
+    const docRef = await addDoc(collection(db, "market_import_jobs"), jobDoc);
+    console.log("[AUDIT] success:", collectionName, docRef.id);
+    console.log(`[Aura Audit] [5] Documento market_import_jobs creado. ID del Job: ${docRef.id}`);
+    return docRef.id;
+  } catch (err: any) {
+    console.error("[AUDIT FIRESTORE ERROR]", {
+      collectionName,
+      code: err.code,
+      message: err.message,
+      stack: err.stack,
+      raw: err
+    });
+    throw new Error(`Falló escritura en: ${collectionName}. Detalle: ${err.message}`);
+  }
 }
 
 /**

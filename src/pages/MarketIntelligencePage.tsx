@@ -125,6 +125,8 @@ export default function MarketIntelligencePage() {
 
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedBackendFile, setSelectedBackendFile] = useState<File | null>(null);
+  const backendUploadInProgressRef = useRef<boolean>(false);
 
   const [activeTab, setActiveTab] = useState<'summary' | 'prospects' | 'import' | 'intelligence' | 'diagnostics'>('summary');
   const [importStalled, setImportStalled] = useState(false);
@@ -257,6 +259,12 @@ export default function MarketIntelligencePage() {
       return;
     }
 
+    if (backendUploadInProgressRef.current) {
+      console.warn("[Aura Backend Import] La carga ya está iniciando. Espera un momento.");
+      return;
+    }
+
+    backendUploadInProgressRef.current = true;
     setIsProcessing(true);
     setError("");
     setSuccess("");
@@ -283,6 +291,7 @@ export default function MarketIntelligencePage() {
 
       console.log("[Aura Backend Import] job created:", jobId);
       setPendingResumeJob(null); // Cerrar modal
+      setSelectedBackendFile(null); // Limpiar selectedBackendFile
       setActiveTab("import");
 
       listenToBackendJob(jobId);
@@ -293,6 +302,7 @@ export default function MarketIntelligencePage() {
       console.error("[Aura Backend Import] Error completo en flujo backend:", err);
       setError("Fallo al iniciar el procesamiento en servidor: " + (err.stack || err.message || err));
     } finally {
+      backendUploadInProgressRef.current = false;
       setIsUploading(false);
       setUploadProgress(null);
       setIsProcessing(false);
@@ -1092,6 +1102,9 @@ export default function MarketIntelligencePage() {
     const jobId = `aura_job_${filename.replace(/[^a-zA-Z0-9]/g, "")}_${total}`;
 
     if (isMassive) {
+      console.log("[Aura Backend Import] Archivo masivo detectado por handleImport. Nombre:", filename);
+      setSelectedBackendFile(rawFile || null);
+      
       const saved = localStorage.getItem(jobId);
       const checkpointData = saved ? JSON.parse(saved) : {
         processed: filename.includes("Queretaro") ? 38200 : 0,
@@ -1249,6 +1262,7 @@ export default function MarketIntelligencePage() {
     setSuccess("");
     setImportReport(null);
     setActiveZipFile(file);
+    setSelectedBackendFile(file);
 
     const jobId = `aura_job_${file.name.replace(/[^a-zA-Z0-9]/g, "")}`;
     setPendingResumeJob({
@@ -1874,15 +1888,26 @@ export default function MarketIntelligencePage() {
                   onClick={async () => {
                     isCancelledRef.current = true;
                     if (activeJob && activeJob.jobId) {
+                      const collectionName = "market_import_jobs";
+                      const payload = {
+                        status: "cancelled",
+                        currentStage: "cancelled",
+                        updatedAt: serverTimestamp(),
+                      };
+                      console.log("[AUDIT] writing collection:", collectionName, payload);
                       try {
                         const jobRef = doc(db, "market_import_jobs", activeJob.jobId);
-                        await updateDoc(jobRef, {
-                          status: "cancelled",
-                          currentStage: "cancelled",
-                          updatedAt: serverTimestamp(),
+                        await updateDoc(jobRef, payload);
+                        console.log("[AUDIT] success:", collectionName, activeJob.jobId);
+                      } catch (err: any) {
+                        console.error("[AUDIT FIRESTORE ERROR]", {
+                          collectionName,
+                          code: err.code,
+                          message: err.message,
+                          stack: err.stack,
+                          raw: err
                         });
-                      } catch (e) {
-                        console.warn("No se pudo cancelar el job en Firestore:", e);
+                        setError(`Falló escritura en: ${collectionName}`);
                       }
                     }
                     setIsProcessing(false);
@@ -2474,7 +2499,8 @@ export default function MarketIntelligencePage() {
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) {
-                  startBackendImportFromFile(file);
+                  console.log("[Aura Backend Import] Archivo seleccionado por el usuario:", file.name, file.size);
+                  setSelectedBackendFile(file);
                   event.target.value = "";
                 }
               }}
@@ -2507,7 +2533,7 @@ export default function MarketIntelligencePage() {
                     )}
                   </div>
                   {isUploading && (
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 font-sans">
                       <div className="flex justify-between text-xs text-slate-400 font-semibold">
                         <span>Subiendo archivo al servidor...</span>
                         <span className="font-mono text-cyan-400">{uploadProgress || 0}%</span>
@@ -2520,9 +2546,14 @@ export default function MarketIntelligencePage() {
                       </div>
                     </div>
                   )}
-                  {!pendingResumeJob.rawFile && (
-                    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-4 text-xs text-cyan-300 leading-relaxed">
-                      💡 Sube el archivo original o pulsa el botón de abajo para iniciar el procesamiento masivo en el servidor.
+                  {!selectedBackendFile && !pendingResumeJob.rawFile && (
+                    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-4 text-xs text-cyan-300 leading-relaxed font-sans animate-fadeIn">
+                      Este checkpoint no contiene el archivo físico. Selecciona el archivo original una sola vez para iniciar el Backend V2.
+                    </div>
+                  )}
+                  {(selectedBackendFile || pendingResumeJob.rawFile) && !isUploading && (
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4 text-xs text-emerald-300 leading-relaxed font-sans animate-fadeIn">
+                      💡 Archivo preparado: <strong className="font-mono text-emerald-200">{(selectedBackendFile || pendingResumeJob.rawFile)?.name}</strong>. Listo para subir y procesar en el backend.
                     </div>
                   )}
                 </div>
@@ -2563,17 +2594,22 @@ export default function MarketIntelligencePage() {
                 {isMassive && (
                   <button
                     type="button"
-                    disabled={isUploading}
+                    disabled={isUploading || isProcessing || backendUploadInProgressRef.current === true}
                     onClick={() => {
-                      if (pendingResumeJob.rawFile) {
-                        startBackendImportFromFile(pendingResumeJob.rawFile);
+                      if (isUploading || isProcessing || backendUploadInProgressRef.current === true) {
+                        console.warn("[Aura Backend Import] Operación bloqueada: carga en progreso.");
+                        return;
+                      }
+                      const fileToUpload = selectedBackendFile || pendingResumeJob.rawFile;
+                      if (fileToUpload) {
+                        startBackendImportFromFile(fileToUpload);
                       } else {
                         modalFileInputRef.current?.click();
                       }
                     }}
-                    className="rounded-xl bg-cyan-400 text-slate-950 px-4 py-2.5 text-xs font-bold hover:bg-cyan-300 transition flex items-center gap-1.5 shadow-lg shadow-cyan-500/10"
+                    className="rounded-xl bg-cyan-400 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-950 px-4 py-2.5 text-xs font-bold hover:bg-cyan-300 transition flex items-center gap-1.5 shadow-lg shadow-cyan-500/10 font-sans"
                   >
-                    {isUploading ? `Subiendo: ${uploadProgress}%` : "Subir archivo al Backend V2"}
+                    {isUploading ? `Subiendo: ${uploadProgress}%` : ((selectedBackendFile || pendingResumeJob.rawFile) ? "Subir archivo al Backend V2" : "Seleccionar archivo original")}
                   </button>
                 )}
 
@@ -2618,6 +2654,7 @@ export default function MarketIntelligencePage() {
                   type="button"
                   onClick={() => {
                     localStorage.removeItem(pendingResumeJob.jobId);
+                    setSelectedBackendFile(null);
                     setPendingResumeJob(prev => prev ? {
                       ...prev,
                       checkpoint: {
