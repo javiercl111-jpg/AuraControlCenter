@@ -116,6 +116,39 @@ export class RecommendationEngine implements IRecommendationEngine {
       });
     });
 
+    // Memory-Derived Actions
+    const followUp = context.memoryTimeline.find((e) => e.type === "FOLLOW_UP_SCHEDULED");
+    if (followUp) {
+      actions.push({
+        id: "act_memory_followup",
+        priorityScore: 75,
+        priorityLevel: "HIGH",
+        category: "sales",
+        title: `Llamada Programada: ${followUp.title}`,
+        description: `Pendiente en historial: ${followUp.description}`,
+        suggestedAction: "Realizar llamada de seguimiento",
+        associatedBrain: "commercial",
+        metadata: { eventId: followUp.id },
+      });
+    }
+
+    const priceObjection = context.memoryTimeline.find(
+      (e) => e.type === "OBJECTION_RECORDED" && e.metadata?.objectionReason === "pricing"
+    );
+    if (priceObjection) {
+      actions.push({
+        id: "act_memory_objection",
+        priorityScore: 85,
+        priorityLevel: "HIGH",
+        category: "sales",
+        title: "Resolver Objeción: " + priceObjection.title,
+        description: `El cliente solicitó cotizar ${priceObjection.metadata?.targetProduct || "un plan menor"}.`,
+        suggestedAction: "Presentar propuesta modular de entrada",
+        associatedBrain: "proposal",
+        metadata: { eventId: priceObjection.id },
+      });
+    }
+
     // 3. Sort actions by priority score descending
     const sortedActions = actions.sort((a, b) => b.priorityScore - a.priorityScore);
 

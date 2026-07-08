@@ -4,6 +4,7 @@ import type { ExecutiveIntelligenceDashboard } from "../types/brains";
 import SmartBusinessDossier from "../domain/SmartBusinessDossier";
 import ContextEngine from "./contextEngine";
 import KnowledgeEngine from "./knowledgeEngine";
+import MemoryEngine from "./memoryEngine";
 import CommercialBrain from "./commercialBrain";
 import BusinessAssessmentBrain from "./businessAssessmentBrain";
 import ProposalBrain from "./proposalBrain";
@@ -67,8 +68,33 @@ export class AppAdapter {
     // Resolve providers and engines
     const provider = LLMProviderFactory.getProvider("gemini");
     const knowledge = new KnowledgeEngine();
-    const contextEngine = new ContextEngine(knowledge);
+    const memory = new MemoryEngine();
+
+    // Seed mock/demo events dynamically for this client to demonstrate Memory handling
+    await memory.addMemoryEvent({
+      dossierId: company.id,
+      type: "OBJECTION_RECORDED",
+      title: "MOCK/DEMO - Objeción de Presupuesto",
+      description: `El contacto comentó que el costo de la suscripción completa excede su presupuesto. Recomendó iniciar con Aura HCM Básico.`,
+      createdBy: "advisor_user",
+      sourceModule: "crm",
+      importance: "HIGH",
+      tags: ["objection", "pricing", "demo"],
+      metadata: { objectionReason: "pricing", targetProduct: "Aura HCM Básico" },
+    });
+
+    await memory.addMemoryEvent({
+      dossierId: company.id,
+      type: "FOLLOW_UP_SCHEDULED",
+      title: "MOCK/DEMO - Siguiente Llamada Comercial",
+      description: "Seguimiento agendado para discutir el ROI de la propuesta básica.",
+      createdBy: "advisor_user",
+      sourceModule: "crm",
+      importance: "MEDIUM",
+      tags: ["followup", "demo"],
+    });
     
+    const contextEngine = new ContextEngine(knowledge, memory);
     const commBrain = new CommercialBrain(provider);
     const assessBrain = new BusinessAssessmentBrain(provider);
     const propBrain = new ProposalBrain(provider);
@@ -149,7 +175,33 @@ export class AppAdapter {
     
     const provider = LLMProviderFactory.getProvider("gemini");
     const knowledge = new KnowledgeEngine();
-    const contextEngine = new ContextEngine(knowledge);
+    const memory = new MemoryEngine();
+
+    // Seed mock/demo events dynamically for this client to demonstrate Memory handling in recommendation list
+    await memory.addMemoryEvent({
+      dossierId: primaryCompany.id,
+      type: "OBJECTION_RECORDED",
+      title: "MOCK/DEMO - Objeción de Presupuesto",
+      description: `El contacto comentó que el costo de la suscripción completa excede su presupuesto. Recomendó iniciar con Aura HCM Básico.`,
+      createdBy: "advisor_user",
+      sourceModule: "crm",
+      importance: "HIGH",
+      tags: ["objection", "pricing", "demo"],
+      metadata: { objectionReason: "pricing", targetProduct: "Aura HCM Básico" },
+    });
+
+    await memory.addMemoryEvent({
+      dossierId: primaryCompany.id,
+      type: "FOLLOW_UP_SCHEDULED",
+      title: "MOCK/DEMO - Siguiente Llamada Comercial",
+      description: "Seguimiento agendado para discutir el ROI de la propuesta básica.",
+      createdBy: "advisor_user",
+      sourceModule: "crm",
+      importance: "MEDIUM",
+      tags: ["followup", "demo"],
+    });
+
+    const contextEngine = new ContextEngine(knowledge, memory);
 
     const commBrain = new CommercialBrain(provider);
     const assessBrain = new BusinessAssessmentBrain(provider);
@@ -168,5 +220,10 @@ export class AppAdapter {
     return orchestrator.generateActionDashboard(context);
   }
 }
+
+/**
+ * Gateway alias of AppAdapter, serving as the main entry point from the UI to Aura Intelligence Core.
+ */
+export const AuraIntelligenceGateway = AppAdapter;
 
 export default AppAdapter;

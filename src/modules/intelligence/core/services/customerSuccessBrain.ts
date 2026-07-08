@@ -16,10 +16,15 @@ export class CustomerSuccessBrain implements ICustomerSuccessBrain {
 Analyze the customer context telemetry.
 Evaluate retention levels, identify churn threat vectors, and draft mitigation action plans.`;
 
-    const userPrompt = `Client Name: ${context.businessName}
+    let userPrompt = `Client Name: ${context.businessName}
 CS Health Rating: ${context.financialSnapshot.financialHealthIndex}/100
 Primary warning indicators:
 ${context.relevantFacts.filter((f) => f.includes("Warning") || f.includes("Gap")).join("\n")}`;
+
+    const renewalRisk = context.memoryTimeline.find((e) => e.type === "RENEWAL_RISK");
+    if (renewalRisk) {
+      userPrompt += `\nPrevious Renewal/Churn Risk in Memory: "${renewalRisk.title}" - ${renewalRisk.description}`;
+    }
 
     const schema = {
       customerHealthScore: "number (0 to 100)",
@@ -115,6 +120,15 @@ Locations: ${context.operationalSnapshot.locationsCount}`;
         indicator: "Falta de control de asistencia automático",
         impactScore: 5,
         details: "Registrar incidencias de forma externa a Aura eleva la fricción operativa del administrador.",
+      });
+    }
+
+    const renewalRisk = context.memoryTimeline.find((e) => e.type === "RENEWAL_RISK");
+    if (renewalRisk) {
+      factors.push({
+        indicator: "Riesgo de Renovación en Historial",
+        impactScore: 9,
+        details: `Se registró alerta de renovación: "${renewalRisk.title}" - ${renewalRisk.description}`,
       });
     }
 

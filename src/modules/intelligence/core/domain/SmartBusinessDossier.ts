@@ -1,3 +1,5 @@
+import type { BusinessMemoryEvent } from "../types/memory";
+
 export interface DossierProps {
   id: string;
   businessName: string;
@@ -16,6 +18,7 @@ export interface DossierProps {
   complianceRisks?: string[];
   interactions?: Array<{ date: string; type: string; summary: string }>;
   uploadedDocuments?: Array<{ name: string; type: string; uploadedAt: string }>;
+  memories?: BusinessMemoryEvent[];
 }
 
 export class SmartBusinessDossier {
@@ -36,6 +39,7 @@ export class SmartBusinessDossier {
   public complianceRisks: string[];
   public interactions: Array<{ date: string; type: string; summary: string }>;
   public uploadedDocuments: Array<{ name: string; type: string; uploadedAt: string }>;
+  public memories: BusinessMemoryEvent[];
 
   constructor(props: DossierProps) {
     this.id = props.id;
@@ -55,6 +59,7 @@ export class SmartBusinessDossier {
     this.complianceRisks = props.complianceRisks ?? [];
     this.interactions = props.interactions ?? [];
     this.uploadedDocuments = props.uploadedDocuments ?? [];
+    this.memories = props.memories ?? [];
   }
 
   /**
@@ -203,7 +208,73 @@ Compliance Gaps Count: ${this.getHRComplianceGaps().length}`;
       complianceRisks: [...this.complianceRisks],
       interactions: [...this.interactions],
       uploadedDocuments: [...this.uploadedDocuments],
+      memories: [...this.memories],
     };
+  }
+
+  /**
+   * Adds a new event record directly into the dossier's historical timeline.
+   */
+  public addMemory(event: BusinessMemoryEvent): void {
+    this.memories.push(event);
+  }
+
+  /**
+   * Returns the sorted chronology of memory events for this specific business.
+   */
+  public getTimeline(): BusinessMemoryEvent[] {
+    return [...this.memories].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  /**
+   * Returns the most recent commercial action event (proposal, sales pitch, objection, followup).
+   */
+  public getLastCommercialInteraction(): BusinessMemoryEvent | null {
+    const commTypes: string[] = [
+      "PROSPECT_CREATED",
+      "PROPOSAL_GENERATED",
+      "PROPOSAL_SENT",
+      "OBJECTION_RECORDED",
+      "FOLLOW_UP_SCHEDULED",
+    ];
+    const sorted = this.getTimeline();
+    return sorted.find((e) => commTypes.includes(e.type)) || null;
+  }
+
+  /**
+   * Evaluates active, unaddressed risks from memory (e.g. objections, renewal risk).
+   */
+  public getOpenRisks(): BusinessMemoryEvent[] {
+    return this.memories.filter(
+      (e) => (e.type === "OBJECTION_RECORDED" || e.type === "RENEWAL_RISK") && e.importance === "CRITICAL" || e.importance === "HIGH"
+    );
+  }
+
+  /**
+   * Recommends a strategic Next Best Action derived dynamically from historical memory context.
+   */
+  public getNextBestActionFromMemory(): string {
+    const lastComm = this.getLastCommercialInteraction();
+    if (!lastComm) {
+      return "Establecer contacto inicial para levantar diagnóstico de procesos.";
+    }
+
+    if (lastComm.type === "OBJECTION_RECORDED") {
+      const target = lastComm.metadata?.targetProduct || "Aura HCM";
+      return `Presentar propuesta formal adaptada para: ${target}. Abordar objeción: "${lastComm.description}".`;
+    }
+
+    if (lastComm.type === "FOLLOW_UP_SCHEDULED") {
+      return `Realizar llamada de seguimiento agendada: "${lastComm.title}".`;
+    }
+
+    if (lastComm.type === "PROPOSAL_SENT") {
+      return "Confirmar recepción de propuesta comercial y agendar sesión de negociación.";
+    }
+
+    return "Realizar sesión periódica de revisión ejecutiva.";
   }
 }
 

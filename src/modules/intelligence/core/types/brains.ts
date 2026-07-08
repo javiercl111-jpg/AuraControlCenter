@@ -1,4 +1,5 @@
 import type SmartBusinessDossier from "../domain/SmartBusinessDossier";
+import type { BusinessMemoryEvent } from "./memory";
 
 // ----------------------------------------------------
 // Core Intelligence Context Types
@@ -29,6 +30,8 @@ export interface IntelligenceContext {
     operationalInefficiencyScore: number;
   };
   retrievedKnowledge: KnowledgeDocument[];
+  memorySummary: string;
+  memoryTimeline: BusinessMemoryEvent[];
   timestamp: string;
 }
 

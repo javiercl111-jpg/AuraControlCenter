@@ -8,13 +8,14 @@ Este módulo contiene la arquitectura fundacional de la IA de Aura. Está diseñ
 
 ## Arquitectura del Módulo
 
-Toda la inteligencia de Aura gira alrededor del **Expediente Empresarial Inteligente**. El flujo está desacoplado a través del **Context Engine**, asegurando la recopilación limpia de telemetría de negocio y RAG (Generación Aumentada por Recuperación) antes de invocar a los cerebros especializados.
+Toda la inteligencia de Aura gira alrededor del **Expediente Empresarial Inteligente**. El flujo está desacoplado a través del **Context Engine**, asegurando la recopilación limpia de telemetría de negocio, conocimiento de la plataforma RAG y el historial de eventos del cliente antes de invocar a los cerebros especializados.
 
 ```mermaid
 graph TD
     %% Nodes
     Dossier[SmartBusinessDossier Class<br/>Expediente Empresarial Inteligente]
-    KE[KnowledgeEngine<br/>RAG Semantic Docs]
+    KE[KnowledgeEngine<br/>RAG General Knowledge]
+    ME[MemoryEngine<br/>Company Event History]
     CE[ContextEngine<br/>Aggregates & Sanitizes]
     LLM[LLM Provider Factory<br/>Model Agnostic Interface]
     
@@ -29,7 +30,8 @@ graph TD
 
     %% Flow
     Dossier -->|summarizeState + getters| CE
-    KE -->|Vector query results| CE
+    KE -->|Vector query general rules| CE
+    ME -->|Semantic customer history| CE
     CE -->|Unified IntelligenceContext| RE
     
     RE -->|Context| CB
@@ -42,10 +44,18 @@ graph TD
     CB -->|Qualification / Pitches| RE
     AB -->|Gaps / Compliance Scores| RE
     PB -->|Pricing / ROI Projections| RE
-    CSB -->|CS Health / Expansion Opportunites| RE
+    CSB -->|CS Health / Expansion Opportunities| RE
     
     RE -->|Synthesizes dashboard & sort priorities| Dashboard
 ```
+
+---
+
+## Diferencia: Knowledge vs Memory
+
+Para garantizar un contexto óptimo en la generación de inteligencia artificial:
+* **Knowledge Engine (General)**: Contiene y busca conocimiento estático y genérico sobre el ecosistema de Aura (por ejemplo: la Ley Federal del Trabajo, lineamientos de firmas NOM-151 o esquemas tarifarios de suites).
+* **Memory Engine (Específico)**: Conserva la bitácora cronológica e historial de eventos específicos de un cliente/prospecto a lo largo de su ciclo de vida (por ejemplo: objeciones comerciales previas, presupuestos discutidos o llamadas agendadas).
 
 ---
 

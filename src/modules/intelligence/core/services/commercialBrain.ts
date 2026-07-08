@@ -16,11 +16,16 @@ export class CommercialBrain implements ICommercialBrain {
 Analyze the customer's Smart Business Dossier context and qualify the lead.
 Provide standard structures including qualification score, probability, estimated values, and target products.`;
 
-    const userPrompt = `Dossier Context:
+    let userPrompt = `Dossier Context:
 ${context.dossierSummary}
 Key Facts:
 ${context.relevantFacts.join("\n")}
 Estimated MRR: ${context.financialSnapshot.estimatedMrr}`;
+
+    const objectionEvent = context.memoryTimeline.find((e) => e.type === "OBJECTION_RECORDED");
+    if (objectionEvent) {
+      userPrompt += `\nPrevious Objection Recorded in Memory: "${objectionEvent.title}" - ${objectionEvent.description}`;
+    }
 
     const schema = {
       score: "number (0 to 100 lead score)",
@@ -77,10 +82,15 @@ Estimated MRR: ${context.financialSnapshot.estimatedMrr}`;
     const systemPrompt = `You are a high-performing Sales Copywriter at Aura HCM.
 Write a personalized ${channel} outreach pitch based on the client's business context.`;
 
-    const userPrompt = `Client Name: ${context.businessName}
+    let userPrompt = `Client Name: ${context.businessName}
 Industry: ${context.industry}
 Employee Count: ${context.hrSnapshot.employeeCount}
 Primary Gaps: ${context.relevantFacts.filter((f) => f.includes("Gap")).join("; ")}`;
+
+    const objectionEvent = context.memoryTimeline.find((e) => e.type === "OBJECTION_RECORDED");
+    if (objectionEvent) {
+      userPrompt += `\nPrevious Objection Recorded in Memory: "${objectionEvent.title}" - ${objectionEvent.description}. Adapt this pitch to address this objection.`;
+    }
 
     const schema = {
       subject: "string (optional, only for email)",
@@ -111,10 +121,15 @@ Primary Gaps: ${context.relevantFacts.filter((f) => f.includes("Gap")).join("; "
       };
     } catch (err) {
       console.warn("LLM copy generation failed, returning fallback script:", err);
+
+      const body = objectionEvent
+        ? `Hola equipo de ${context.businessName}. En nuestra última conversación mencionaron inquietud sobre el costo de la suscripción completa. Por ello, queremos presentarles la opción de iniciar de forma modular con Aura HCM Básico, optimizando su presupuesto mientras automatizan su nómina y asistencia.`
+        : `Hola, me pongo en contacto con ${context.businessName} porque vemos un gran potencial para automatizar sus procesos de asistencia y cumplimiento laboral.`;
+
       return {
         channel,
         subject: channel === "email" ? `Propuesta de Mejora de Procesos - ${context.businessName}` : undefined,
-        body: `Hola, me pongo en contacto con ${context.businessName} porque vemos un gran potencial para automatizar sus procesos de asistencia y cumplimiento laboral.`,
+        body,
         callToAction: "Agendar llamada breve de diagnóstico.",
         keySellingPoints: ["Cumplimiento con LFT", "Cero hojas de Excel"],
         objectionsToAnticipate: ["Ya tenemos otro software"],

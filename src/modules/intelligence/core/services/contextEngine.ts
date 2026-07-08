@@ -1,16 +1,20 @@
 import type SmartBusinessDossier from "../domain/SmartBusinessDossier";
 import type { IContextEngine, IntelligenceContext, IKnowledgeEngine, KnowledgeDocument } from "../types/brains";
+import type { IMemoryEngine, BusinessMemoryEvent } from "../types/memory";
 
 export class ContextEngine implements IContextEngine {
   private knowledgeEngine?: IKnowledgeEngine;
+  private memoryEngine?: IMemoryEngine;
 
-  constructor(knowledgeEngine?: IKnowledgeEngine) {
+  constructor(knowledgeEngine?: IKnowledgeEngine, memoryEngine?: IMemoryEngine) {
     this.knowledgeEngine = knowledgeEngine;
+    this.memoryEngine = memoryEngine;
   }
 
   /**
    * Builds the comprehensive IntelligenceContext by aggregating and synthesising the dossier
-   * state and performing RAG query matches from the Knowledge Engine.
+   * state, performing RAG query matches from the Knowledge Engine, and pulling company-specific
+   * memory timelines from the Memory Engine.
    */
   public async buildContext(
     dossier: SmartBusinessDossier,
@@ -40,6 +44,25 @@ export class ContextEngine implements IContextEngine {
         retrievedKnowledge = queryRes.documents;
       } catch (err) {
         console.error("ContextEngine failed to retrieve semantic knowledge:", err);
+      }
+    }
+
+    // Fetch historical memory timeline and summary from Memory Engine
+    let memorySummary = "";
+    let memoryTimeline: BusinessMemoryEvent[] = [];
+    if (this.memoryEngine) {
+      try {
+        memorySummary = await this.memoryEngine.summarizeMemory(dossier.id);
+        memoryTimeline = await this.memoryEngine.getTimeline(dossier.id);
+
+        // Sync memory events into the domain model instance so that domain evaluations are active
+        memoryTimeline.forEach((ev) => {
+          if (!dossier.memories.some((m) => m.id === ev.id)) {
+            dossier.addMemory(ev);
+          }
+        });
+      } catch (err) {
+        console.error("ContextEngine failed to retrieve dossier memory:", err);
       }
     }
 
@@ -76,6 +99,8 @@ export class ContextEngine implements IContextEngine {
       hrSnapshot,
       operationalSnapshot,
       retrievedKnowledge,
+      memorySummary,
+      memoryTimeline,
       timestamp: new Date().toISOString(),
     };
   }
