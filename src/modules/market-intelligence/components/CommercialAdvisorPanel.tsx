@@ -10,7 +10,7 @@ export default function CommercialAdvisorPanel({ report }: CommercialAdvisorPane
     <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 backdrop-blur">
       <div className="flex items-center gap-2 text-indigo-300">
         <Sparkles className="h-5 w-5 text-indigo-400 animate-pulse" />
-        <h3 className="text-sm font-bold uppercase tracking-wider">Aura Intelligence Lite</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wider">Aura Intelligence</h3>
       </div>
 
       <div className="mt-4 space-y-4">

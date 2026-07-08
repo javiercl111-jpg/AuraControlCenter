@@ -7,6 +7,7 @@ import MarketCompaniesTable from "../modules/market-intelligence/components/Mark
 import MarketCompanyDrawer from "../modules/market-intelligence/components/MarketCompanyDrawer";
 import MarketSegmentsPanel from "../modules/market-intelligence/components/MarketSegmentsPanel";
 import CommercialDashboard from "../modules/market-intelligence/components/CommercialDashboard";
+import AuraIntelligenceRecommendationsPanel from "../modules/market-intelligence/components/AuraIntelligenceRecommendationsPanel";
 
 import MarketFirestoreService, { type ImportHistoryEntry } from "../modules/market-intelligence/services/marketFirestoreService";
 import MarketQueryEngine, { normalizeState, getCompanyState, getCompanyIndustry } from "../modules/market-intelligence/services/marketQueryEngine";
@@ -116,6 +117,37 @@ export default function MarketIntelligencePage() {
     companies: InegiCompany[];
     existingImport: ImportHistoryEntry;
   } | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'summary' | 'prospects' | 'import' | 'intelligence' | 'diagnostics'>('summary');
+  const [importStalled, setImportStalled] = useState(false);
+  const lastProcessedRef = useRef<number>(0);
+  const lastProcessedTimeRef = useRef<number>(0);
+
+  // Monitor stalled GTM imports (no progress increments for more than 2 minutes)
+  useEffect(() => {
+    if (!activeJob || activeJob.stage !== "WRITING_FIRESTORE") {
+      setImportStalled(false);
+      return;
+    }
+
+    const currentProcessed = activeJob.processed;
+    const now = Date.now();
+
+    if (currentProcessed !== lastProcessedRef.current) {
+      lastProcessedRef.current = currentProcessed;
+      lastProcessedTimeRef.current = now;
+      setImportStalled(false);
+    }
+
+    const timer = setInterval(() => {
+      const idleTime = Date.now() - lastProcessedTimeRef.current;
+      if (idleTime > 120000) { // 2 minutes
+        setImportStalled(true);
+      }
+    }, 10000); // check every 10s
+
+    return () => clearInterval(timer);
+  }, [activeJob?.processed, activeJob?.stage]);
 
 
   // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal
@@ -563,8 +595,8 @@ export default function MarketIntelligencePage() {
             batchesRemaining: chunks.length - activeIndex,
           } : null);
 
-          const checkpointSaved = (currentProcessed % 500 === 0 || currentProcessed === total);
-          // Guardar checkpoint cada 500 registros
+          const checkpointSaved = (currentProcessed % 100 === 0 || currentProcessed === total);
+          // Guardar checkpoint cada 100 registros (cada lote completado)
           if (checkpointSaved) {
             localStorage.setItem(jobId, JSON.stringify({
               processed: currentProcessed,
@@ -1223,31 +1255,943 @@ export default function MarketIntelligencePage() {
     );
   }
 
+  const renderSummaryTab = () => {
+    return (
+      <div className="space-y-6 animate-fadeIn">
+        <CommercialDashboard
+          companies={activeMarketDataset}
+          onSelectCompany={handleSelectCompany}
+          stats={stats}
+        />
+      </div>
+    );
+  };
+
+  const renderProspectsTab = () => {
+    return (
+      <div className="grid gap-6 xl:grid-cols-12 animate-fadeIn">
+        {/* Panel Izquierdo: Segmentación */}
+        <aside className="xl:col-span-3">
+          <MarketSegmentsPanel
+            onSelectSegment={handleSelectSegment}
+            activeSegmentId={activeSegmentId}
+          />
+        </aside>
+
+        {/* Panel Derecho: Filtros y Tabla */}
+        <div className="space-y-6 xl:col-span-9">
+          <MarketCompaniesFilters
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            onClearFilters={handleClearFilters}
+            availableStates={availableStates}
+            sectorCounts={industriesStats.stateFilteredCounts}
+          />
+          <MarketCompaniesTable
+            companies={companies}
+            isLoading={isLoading}
+            onSelectCompany={handleSelectCompany}
+            onNextPage={handleNextPage}
+            onPrevPage={handlePrevPage}
+            hasMore={hasMore}
+            currentPage={currentPage}
+            filters={{ estado: filters.estado, sector: filters.sector }}
+            sectorCounts={industriesStats.stateFilteredCounts}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const renderImportTab = () => {
+    return (
+      <div className="space-y-6 animate-fadeIn font-sans">
+        {/* GTM Import Engine Header */}
+        <MarketIntelligenceHeader
+          onImport={handleImport}
+          onZipSelect={handleZipSelect}
+          isLoading={isProcessing}
+          canImport={capabilities.canImport}
+        />
+
+        {/* Banner de Diagnóstico del Dataset Activo */}
+        {activeMetadata && (
+          <div className="rounded-2xl border border-cyan-500/25 bg-slate-950/40 p-5 backdrop-blur-md space-y-4 animate-fadeIn font-sans">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+                <span className="text-xs font-extrabold uppercase tracking-wider text-cyan-300">
+                  Aura Dataset Manager — Diagnóstico de Dataset en Memoria
+                </span>
+              </div>
+              <div className="text-[10px] text-slate-500 font-mono">
+                Última actualización: {new Date(activeMetadata.loadedAt).toLocaleTimeString()}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Estado Activo */}
+              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold font-sans">Estado Activo</span>
+                <span className="block text-sm font-extrabold text-white mt-1">
+                  {filters.estado || "Todos los Estados (Muestra)"}
+                </span>
+              </div>
+
+              {/* Total empresas */}
+              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Empresas en Memoria</span>
+                <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono">
+                  {activeMetadata.count.toLocaleString()}
+                </span>
+              </div>
+
+              {/* Fuente / Versión */}
+              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Fuente / Versión</span>
+                <span className="block text-sm font-extrabold text-slate-300 mt-1">
+                  {activeMetadata.source} — {activeMetadata.sourceVersion}
+                </span>
+              </div>
+
+              {/* MRR Estimado */}
+              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">MRR Potencial Estimado</span>
+                <span className="block text-sm font-extrabold text-emerald-400 mt-1 font-mono">
+                  {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0 }).format(activeMetadata.estimatedMrr)}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 pt-1 font-sans">
+              {/* Oportunidades Críticas/Alta Prioridad */}
+              <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60 flex items-center justify-between">
+                <div>
+                  <span className="block text-[10px] text-slate-500 uppercase font-semibold">Oportunidades de Alta Prioridad</span>
+                  <span className="block text-xs text-slate-400 mt-1">Suma de perfiles clasificados como CRITICAL o HIGH.</span>
+                </div>
+                <span className="text-xl font-extrabold text-rose-400 font-mono">
+                  {activeMetadata.highPriorityCount.toLocaleString()}
+                </span>
+              </div>
+
+              {/* Top Industrias */}
+              <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold mb-2">Principales Sectores en este Dataset</span>
+                <div className="flex flex-wrap gap-2">
+                  {activeMetadata.topIndustries.map((indItem, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 border border-indigo-500/20"
+                    >
+                      {indItem.industry}: <strong className="text-white font-mono">{indItem.count}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 1. Confirmación de Carga de ZIP (Prioridad 3) */}
+        {pendingStateResolutionFiles && currentResolutionIndex === -1 && resolvedFilesList.length > 0 && (
+          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 space-y-4 font-sans animate-fadeIn">
+            {renderZipTimeline()}
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+                <span>📦</span> Importación Nacional: {activeZipFile?.name}
+              </h3>
+              <span className="text-[10px] text-cyan-400 font-mono">Total Archivos: {pendingStateResolutionFiles.length}</span>
+            </div>
+            
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 font-mono text-[9px] text-cyan-300 max-h-40 overflow-y-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-900 text-slate-500 font-bold uppercase">
+                    <th className="pb-1">Archivo Excel</th>
+                    <th className="pb-1 text-right">Estado Asignado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-900/30">
+                  {resolvedFilesList.map((res) => (
+                    <tr key={res.filename}>
+                      <td className="py-1 truncate max-w-xs">{res.filename}</td>
+                      <td className="py-1 text-right font-bold">{res.state}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelZipImport}
+                className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-900 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmZipImport}
+                className="rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 transition active:scale-95 animate-pulse"
+              >
+                Comenzar Importación
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 2. Panel de Progreso en Tiempo Real del ZIP */}
+        {zipProgress && (
+          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 space-y-4 font-sans animate-fadeIn">
+            {renderZipTimeline()}
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+                <span className="h-2 w-2 animate-ping rounded-full bg-cyan-400" />
+                Procesando Importación Nacional ZIP
+              </h3>
+              <span className="text-xs text-slate-400 font-semibold font-mono">
+                {zipProgress.processedFiles} / {zipProgress.totalFiles} Archivos
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Archivo actual: <strong className="font-mono">{zipProgress.currentFile}</strong></span>
+                <span>{Math.round((zipProgress.processedFiles / zipProgress.totalFiles) * 100)}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+                <div 
+                  className="h-full rounded-full bg-cyan-400 transition-all duration-300"
+                  style={{ width: `${(zipProgress.processedFiles / zipProgress.totalFiles) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 text-center text-xs">
+              <div className="rounded-lg bg-slate-950 p-3 border border-slate-900">
+                <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Procesados</span>
+                <span className="block font-bold text-white mt-0.5">{zipProgress.totalRowsProcessed}</span>
+              </div>
+              <div className="rounded-lg bg-emerald-500/5 p-3 border border-emerald-500/10">
+                <span className="block text-emerald-500 font-semibold uppercase tracking-wider text-[10px]">Nuevos</span>
+                <span className="block font-bold text-emerald-400 mt-0.5">{zipProgress.added}</span>
+              </div>
+              <div className="rounded-lg bg-cyan-500/5 p-3 border border-cyan-500/10">
+                <span className="block text-cyan-500 font-semibold uppercase tracking-wider text-[10px]">Actualizados</span>
+                <span className="block font-bold text-cyan-400 mt-0.5">{zipProgress.overwritten}</span>
+              </div>
+              <div className="rounded-lg bg-rose-500/5 p-3 border border-rose-500/10">
+                <span className="block text-rose-500 font-semibold uppercase tracking-wider text-[10px]">Errores</span>
+                <span className="block font-bold text-rose-400 mt-0.5">{zipProgress.failed}</span>
+              </div>
+            </div>
+
+            {zipStep === "COMPLETED" && (
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={resetZipImportStates}
+                  className="rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 transition active:scale-95"
+                >
+                  Entendido
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Asistente de Selección Manual de Estado para ZIP (Prioridad 4) */}
+        {pendingStateResolutionFiles && currentResolutionIndex !== -1 && (
+          <div className="rounded-2xl border border-amber-500/20 bg-slate-900 p-6 space-y-4 shadow-xl font-sans">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                Asistente de Importación Nacional (ZIP)
+              </span>
+              <h3 className="text-base font-bold text-white mt-1">
+                Selección de Estado Requerida
+              </h3>
+              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                No pudimos detectar automáticamente el estado para el archivo:
+                <strong className="block text-amber-200 mt-1 font-mono break-all">
+                  {pendingStateResolutionFiles[currentResolutionIndex].filename}
+                </strong>
+              </p>
+            </div>
+
+            {renderZipTimeline()}
+
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-400">
+                Selecciona el estado de la República correspondiente:
+              </label>
+              <select
+                onChange={(e) => {
+                  const stateVal = e.target.value;
+                  if (!stateVal) return;
+                  
+                  const filename = pendingStateResolutionFiles[currentResolutionIndex].filename;
+                  const newResolvedList = [...resolvedFilesList, { filename, state: stateVal }];
+                  setResolvedFilesList(newResolvedList);
+
+                  e.target.value = "";
+
+                  if (currentResolutionIndex + 1 < pendingStateResolutionFiles.length) {
+                    setCurrentResolutionIndex(currentResolutionIndex + 1);
+                  } else {
+                    startResolvedZipImport(activeZipFile!, newResolvedList);
+                  }
+                }}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-xs text-white"
+              >
+                <option value="">-- Seleccionar Estado --</option>
+                {NationalZipImportService.MEXICAN_STATES.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelZipImport}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition"
+              >
+                Cancelar Importación
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Duplicate protection prompt */}
+        {duplicateImportJob && (
+          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-6 space-y-4 animate-fadeIn font-sans">
+            <div className="flex items-start gap-4">
+              <div className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-lg">
+                ⚠️
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-amber-300">Carga duplicada detectada</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  El archivo <strong className="text-slate-200">{duplicateImportJob.filename}</strong> ya se importó anteriormente.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end font-sans">
+              <button
+                type="button"
+                onClick={() => {
+                  executeFastValidation(duplicateImportJob);
+                }}
+                className="rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-emerald-300 shadow-lg shadow-emerald-500/10 transition flex items-center gap-1.5"
+              >
+                🔍 Validar Conteo Rápido
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const fingerprint = duplicateImportJob.fingerprint;
+                  const filename = duplicateImportJob.filename;
+                  const companiesToImport = duplicateImportJob.companies;
+                  setDuplicateImportJob(null);
+                  const jobId = `aura_job_${filename.replace(/[^a-zA-Z0-9]/g, "")}_${companiesToImport.length}`;
+                  executeImportJob(jobId, filename, companiesToImport, 0, 0, 0, 0, 0, fingerprint);
+                }}
+                className="rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-amber-400"
+              >
+                Forzar reimportación (Sobrescribir)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicateImportJob(null);
+                  setSuccess("Importación cancelada para evitar duplicidad.");
+                }}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800"
+              >
+                Omitir Carga
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Progress loop panel */}
+        {activeJob && (
+          <div className="rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900/60 to-slate-950/60 p-6 space-y-5 animate-fadeIn font-sans">
+            <div className="flex items-center justify-between border-b border-slate-900 pb-3">
+              <div className="flex items-center gap-2 text-white">
+                <span className="animate-spin h-3.5 w-3.5 border-2 border-cyan-400 border-t-transparent rounded-full shrink-0" />
+                <span className="text-xs font-bold uppercase tracking-wider">Aura GTM Import Job Engine</span>
+              </div>
+              <div className="text-[10px] text-slate-500 font-mono">ID: {activeJob.jobId}</div>
+            </div>
+
+            {renderZipTimeline()}
+
+            {importStalled && (
+              <div className="bg-amber-950/40 border border-amber-500/30 text-amber-200 p-4.5 rounded-2xl flex flex-col gap-2 font-sans">
+                <div className="flex items-center gap-2 font-bold text-amber-300">
+                  <span>⚠️ La importación parece detenida.</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  No se ha detectado actividad en los últimos 2 minutos. Puedes cancelar de forma segura la importación actual. El checkpoint se encuentra guardado en este navegador y podrás reanudar el proceso desde el registro <strong className="font-mono text-white">{activeJob.processed}</strong> una vez que la red o el servicio se estabilicen.
+                </p>
+                <div className="text-[10px] text-amber-400 font-mono">
+                  Último lote procesado: {activeJob.processed} / {activeJob.total} ({(activeJob.processed ? Math.round(activeJob.processed / activeJob.total * 100) : 0)}%) | Última actividad: {new Date(lastProcessedTimeRef.current).toLocaleTimeString()}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-semibold text-slate-400">
+                <span className="flex items-center gap-1.5 font-sans">
+                  {activeJob.stage === "WRITING_FIRESTORE" ? (
+                    <>Escribiendo registros en Firestore...</>
+                  ) : activeJob.stage === "VALIDATING_WRITE" ? (
+                    <>Validando escrituras de base de datos...</>
+                  ) : activeJob.stage === "UPDATING_DATASET_MANAGER" ? (
+                    <>Refrescando caché del Dataset Manager...</>
+                  ) : activeJob.stage === "COMPLETED" ? (
+                    <span className="text-emerald-400 font-bold">¡Lote finalizado con éxito!</span>
+                  ) : (
+                    <>Procesando etapa...</>
+                  )}
+                </span>
+                <span className="font-mono text-cyan-400 font-bold">
+                  {Math.round((activeJob.written / activeJob.total) * 100) || 0}%
+                </span>
+              </div>
+              <div className="h-3 w-full rounded-full bg-slate-900 overflow-hidden border border-slate-800/80">
+                <div 
+                  className="h-full rounded-full bg-cyan-400 transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.round((activeJob.written / activeJob.total) * 100))}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-5 text-center pt-2 font-mono">
+              <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans">
+                  Escritos / Total
+                </span>
+                <span className="block text-sm font-extrabold text-white mt-1 font-mono">
+                  {activeJob.written.toLocaleString()} / {activeJob.total.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans">
+                  Nuevos
+                </span>
+                <span className="block text-sm font-extrabold text-emerald-400 mt-1 font-mono">
+                  +{activeJob.added.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 font-sans font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans">
+                  Actualizados
+                </span>
+                <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono font-mono">
+                  +{activeJob.overwritten.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans">
+                  Omitidos
+                </span>
+                <span className="block text-sm font-extrabold text-slate-400 mt-1 font-mono">
+                  +{activeJob.omitted.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans">
+                  Fallidos
+                </span>
+                <span className="block text-sm font-extrabold text-red-400 mt-1 font-mono font-mono font-mono">
+                  {activeJob.failed.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-900">
+              <div className="flex items-center gap-6 text-[10px] font-mono text-slate-400">
+                <div>
+                  <span className="text-slate-500 mr-1.5 font-sans">Velocidad:</span>
+                  <span className="font-bold text-slate-200">{activeJob.speed} reg/s</span>
+                </div>
+                <div className="h-3 w-[1px] bg-slate-800" />
+                <div>
+                  <span className="text-slate-500 mr-1.5 font-sans">ETA:</span>
+                  <span className="font-bold text-amber-400">{activeJob.etaSeconds > 0 ? `${activeJob.etaSeconds}s` : "0s"}</span>
+                </div>
+                <div className="h-3 w-[1px] bg-slate-800" />
+                <div>
+                  <span className="text-slate-500 mr-1.5 font-sans font-sans">Procesados:</span>
+                  <span className="font-bold text-cyan-400">{activeJob.processed.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {activeJob.stage !== "COMPLETED" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    isCancelledRef.current = true;
+                    if (importStalled) {
+                      setIsProcessing(false);
+                      setActiveJob(null);
+                      setError("Importación interrumpida forzada por el usuario debido a detención.");
+                    }
+                  }}
+                  className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 transition flex items-center gap-1.5 font-sans"
+                >
+                  🛑 Cancelar importación {importStalled ? "(Forzar)" : ""}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Import report */}
+        {importReport && (
+          <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+                📊 Reporte de Procesamiento de Importación
+              </h3>
+              <button
+                onClick={() => setImportReport(null)}
+                className="text-xs text-slate-500 hover:text-white"
+              >
+                Cerrar Reporte
+              </button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-5 text-center">
+              <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800">
+                <span className="block text-slate-400 text-[10px] font-semibold uppercase tracking-wider font-sans">Procesados</span>
+                <span className="block text-2xl font-bold text-white mt-1">{importReport.total}</span>
+              </div>
+              <div className="rounded-xl bg-emerald-500/5 p-4 border border-emerald-500/20">
+                <span className="block text-emerald-400 text-[10px] font-semibold uppercase tracking-wider font-sans font-sans">Nuevos</span>
+                <span className="block text-2xl font-bold text-emerald-300 mt-1">{importReport.added}</span>
+              </div>
+              <div className="rounded-xl bg-cyan-500/5 p-4 border border-cyan-500/20">
+                <span className="block text-cyan-400 text-[10px] font-semibold uppercase tracking-wider font-sans">Actualizados</span>
+                <span className="block text-2xl font-bold text-cyan-300 mt-1">{importReport.updated}</span>
+              </div>
+              <div className="rounded-xl bg-amber-500/5 p-4 border border-amber-500/20">
+                <span className="block text-amber-400 text-[10px] font-semibold uppercase tracking-wider font-sans">Sin cambios</span>
+                <span className="block text-2xl font-bold text-amber-300 mt-1">{importReport.omitted}</span>
+              </div>
+              <div className="rounded-xl bg-rose-500/5 p-4 border border-rose-500/20">
+                <span className="block text-rose-400 text-[10px] font-semibold uppercase tracking-wider font-sans">Fallidos</span>
+                <span className="block text-2xl font-bold text-rose-300 mt-1">{importReport.failed}</span>
+              </div>
+            </div>
+            <div className="text-[10px] text-slate-500 text-right">
+              Tiempo de ejecución: <span className="font-semibold text-slate-400">{importReport.timeMs} ms</span>
+            </div>
+          </div>
+        )}
+
+        {/* Audit History List */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 font-sans">
+          <button
+            type="button"
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-405 outline-none"
+          >
+            <span className="flex items-center gap-2">
+              <span>📋</span> Historial de Auditoría de Importaciones (Últimas 20)
+            </span>
+            <span className="text-cyan-400">
+              {showHistory ? "Ocultar" : `Mostrar (${importHistory.length})`}
+            </span>
+          </button>
+
+          {showHistory && (
+            <div className="mt-4 overflow-x-auto">
+              {importHistory.length === 0 ? (
+                <p className="text-xs text-slate-500 py-2">No se han registrado importaciones en este tenant.</p>
+              ) : (
+                <table className="w-full border-collapse text-left text-xs font-sans">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-500 font-semibold uppercase tracking-wider">
+                      <th className="py-2.5">Fecha / Hora</th>
+                      <th className="py-2.5">Total Registros</th>
+                      <th className="py-2.5 text-emerald-400 font-sans">Nuevos</th>
+                      <th className="py-2.5 text-cyan-400">Actualizados</th>
+                      <th className="py-2.5 text-amber-400">Sin Cambios</th>
+                      <th className="py-2.5 text-rose-400">Fallidos</th>
+                      <th className="py-2.5 text-right">Tiempo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-855 text-slate-300 font-mono">
+                    {importHistory.map((entry) => {
+                      const date = entry.timestamp?.seconds
+                        ? new Date(entry.timestamp.seconds * 1000).toLocaleString()
+                        : "Reciente";
+                      return (
+                        <tr key={entry.id} className="hover:bg-slate-900/20">
+                          <td className="py-2.5 font-sans font-medium">{date}</td>
+                          <td className="py-2.5">{entry.totalProcessed}</td>
+                          <td className="py-2.5 font-semibold text-emerald-400">{entry.newAdded}</td>
+                          <td className="py-2.5 font-semibold text-cyan-400">{entry.updated}</td>
+                          <td className="py-2.5 text-slate-400">{entry.omitted}</td>
+                          <td className="py-2.5 font-semibold text-rose-400">{entry.failed}</td>
+                          <td className="py-2.5 text-right text-slate-450">{entry.timeMs} ms</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Maintenance & Repair Tools */}
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/10 p-5 space-y-4">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <span>🔧</span> Herramientas de Reparación Laboral
+          </h4>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            Consolidación administrativa y normalización de geografía. Permite asociar municipios huérfanos con sus estados federativos según catálogos oficiales del DENUE.
+          </p>
+          <div className="flex gap-2 font-sans">
+            <button
+              type="button"
+              onClick={handleRepairStates}
+              disabled={isProcessing}
+              className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 px-4 py-2.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-950/30 transition disabled:opacity-50"
+            >
+              Normalizar Municipios Huérfanos
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderIntelligenceTab = () => {
+    return (
+      <div className="space-y-6 animate-fadeIn font-sans">
+        <AuraIntelligenceRecommendationsPanel companies={activeMarketDataset} />
+
+        {/* Core Memory & Knowledge Summary Card */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-5 space-y-4">
+          <div className="flex items-center gap-2 text-cyan-300">
+            <span>🧠</span>
+            <h4 className="text-sm font-bold uppercase tracking-wider">Aura Core memory timeline</h4>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed font-sans">
+            Historial de interacción empresarial y eventos críticos de memoria corporativa.
+          </p>
+          <div className="border border-slate-850 rounded-xl p-4 bg-slate-900/30 space-y-4 font-sans">
+            <div className="flex justify-between items-center border-b border-slate-855 pb-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Resumen de Memoria Activa (Mock/Demo):</span>
+              <span className="text-[9px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded px-1.5 py-0.2 uppercase font-extrabold tracking-wider">Demo Tenant</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed font-mono whitespace-pre-wrap">
+{`[MOCK/DEMO MEMORY LOG] - 22_Queretaro.xlsx
+- Lead Creado: Registrado automáticamente en el Control Center.
+- Objeción Registrada: El contacto comentó que el costo de la suscripción completa excede su presupuesto. Recomendó iniciar con Aura HCM Básico.
+- Seguimiento: Llamada comercial agendada para discutir el ROI de la propuesta básica.`}
+            </p>
+            <div className="text-[10px] text-slate-500 leading-relaxed border-t border-slate-850 pt-2 flex items-center gap-1 font-sans">
+              <span>💡</span>
+              <span>
+                <strong>Tip de Prospección:</strong> El core ha detectado una objeción de precio. Al abrir el drawer de cualquier prospecto de Querétaro, el Asesor de Ventas recibirá sugerencias que priorizan comenzar con <strong>Aura HCM Básico</strong> para mitigar esta barrera presupuestaria.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDiagnosticsTab = () => {
+    return (
+      <div className="space-y-6 animate-fadeIn font-sans">
+        {/* Diagnostic Console card */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 space-y-4 font-sans">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex justify-between font-sans">
+            <span>📊 Consola de Diagnóstico & Telemetría GTM</span>
+            <span className="text-cyan-400 font-mono text-[10px]">Modo Admin</span>
+          </h4>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans font-sans">
+            Consola técnica de rendimiento. Muestra la velocidad de procesamiento, carga en paralelo de hilos concurrentes, y tiempos de duplicidad/commit de Firestore para control de lints de Firebase.
+          </p>
+
+          <div className="grid gap-4 md:grid-cols-4 text-center font-mono">
+            <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800">
+              <span className="block text-slate-500 text-[10px] font-bold uppercase font-sans">Memoria Asignada</span>
+              <span className="block text-xl font-bold text-white mt-1">
+                ${(performance as any).memory ? `${Math.round((performance as any).memory.usedJSHeapSize / (1024 * 1024))} MB` : "N/D"}
+              </span>
+            </div>
+            <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800 font-sans">
+              <span className="block text-slate-500 text-[10px] font-bold uppercase">Hilos Paralelos</span>
+              <span className="block text-xl font-bold text-white mt-1 font-mono">4 Hilos</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800 font-sans">
+              <span className="block text-slate-500 text-[10px] font-bold uppercase">Tamaño Lote Write</span>
+              <span className="block text-xl font-bold text-white mt-1 font-mono">100 reg</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800 font-sans">
+              <span className="block text-slate-500 text-[10px] font-bold uppercase">Dataset en Memoria</span>
+              <span className="block text-xl font-bold text-cyan-400 mt-1 font-mono">${rawDataset.length.toLocaleString()} reg</span>
+            </div>
+          </div>
+
+          {/* Diagnostic Tables Grid */}
+          <div className="grid gap-6 xl:grid-cols-4 font-sans font-sans">
+            {/* Card 1: Estatus de Importación por Estado */}
+            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900">
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase">Estatus del Dataset por Estado</span>
+              <table className="w-full text-[9px] font-mono text-slate-300 mt-1">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
+                    <th className="pb-1 pr-2">Estado</th>
+                    <th className="pb-1 text-right">Registros</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-850">
+                  {availableStates.map((st) => {
+                    const count = rawDataset.filter((c) => getCompanyState(c) === st).length;
+                    return (
+                      <tr key={st} className="hover:bg-slate-900/20">
+                        <td className="py-0.5 text-slate-400 pr-2 truncate max-w-[120px]" title={st}>{st}</td>
+                        <td className="py-0.5 text-right font-bold text-cyan-400">{count}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Card 2: Diagnóstico de Duplicidad por Estado */}
+            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900">
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase">Duplicidad e Integridad</span>
+              <table className="w-full text-[9px] font-mono text-slate-300 mt-1">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
+                    <th className="pb-1 pr-2">Estado</th>
+                    <th className="pb-1 text-right font-sans">Únicos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-850">
+                  {availableStates.map((st) => {
+                    const list = rawDataset.filter((c) => getCompanyState(c) === st);
+                    const unique = new Set(list.map((c) => c.nombreComercial || c.razonSocial)).size;
+                    return (
+                      <tr key={st} className="hover:bg-slate-900/20">
+                        <td className="py-0.5 text-slate-400 pr-2 truncate max-w-[120px]" title={st}>{st}</td>
+                        <td className="py-0.5 text-right font-bold text-emerald-400">{unique}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Card 3: Parámetros del Filtro GTM */}
+            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900 font-sans">
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase">Parámetros del Filtro</span>
+              <table className="w-full text-[9px] font-mono text-slate-300 mt-1">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
+                    <th className="pb-1 pr-2">Parámetro</th>
+                    <th className="pb-1">Valor Activo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-850">
+                  <tr className="hover:bg-slate-900/20">
+                    <td className="py-0.5 text-slate-400 pr-2 font-bold font-sans">Filtro Estado</td>
+                    <td className="text-cyan-300">{filters.estado || "(vacío)"}</td>
+                  </tr>
+                  <tr className="hover:bg-slate-900/20">
+                    <td className="py-0.5 text-slate-400 pr-2 font-bold font-sans">Filtro Sector</td>
+                    <td className="text-cyan-300">{filters.sector || "(vacío)"}</td>
+                  </tr>
+                  <tr className="hover:bg-slate-900/20">
+                    <td className="py-0.5 text-slate-400 pr-2 font-bold font-sans">Filtro Rango</td>
+                    <td className="text-cyan-300">{filters.tamano || "(vacío)"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Card 4: Distribución de Sectores Comerciales (En tiempo real) */}
+            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900 overflow-y-auto max-h-48 font-sans">
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Distribución de Sectores</span>
+              <table className="w-full text-[9px] font-mono text-slate-300 mt-1">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
+                    <th className="pb-1 pr-2">Sector</th>
+                    <th className="pb-1 text-right pr-2">Global</th>
+                    <th className="pb-1 text-right">Filtrado Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/20">
+                  {Object.entries(industriesStats.allCounts).map(([ind, count]) => {
+                    const stateCount = industriesStats.stateFilteredCounts[ind] || 0;
+                    return (
+                      <tr key={ind} className="hover:bg-slate-900/25">
+                        <td className="py-0.5 text-slate-400 pr-2 truncate max-w-[100px]" title={ind}>{ind}</td>
+                        <td className="py-0.5 text-right font-bold pr-2">{count}</td>
+                        <td className="py-0.5 text-right text-cyan-400 font-bold">{stateCount}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Fila inferior: Tabla de auditoría visual de primeros 20 */}
+            <div className="md:col-span-2 xl:col-span-4 rounded-lg bg-slate-900/40 p-4 border border-slate-900 overflow-x-auto font-sans">
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase mb-2">Auditoría Visual de Posicionamiento (Primeros 20 en rawDataset)</span>
+              <table className="w-full text-[10px] font-mono text-slate-300 border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
+                    <th className="pb-1.5 pr-2 font-sans font-sans">Empresa</th>
+                    <th className="pb-1.5 pr-2">Estado Raw</th>
+                    <th className="pb-1.5 pr-2 font-sans">Municipio</th>
+                    <th className="pb-1.5 pr-2">getCompanyState()</th>
+                    <th className="pb-1.5 pr-2 text-center">En Dropdown</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/40">
+                  {rawDataset.slice(0, 20).map((company) => {
+                    const resolved = getCompanyState(company);
+                    const isInDropdown = availableStates.includes(resolved);
+                    return (
+                      <tr key={company.id} className="hover:bg-slate-900/45 text-slate-300 font-sans">
+                        <td className="py-1 pr-2 truncate max-w-[150px]" title={company.nombreComercial || company.razonSocial}>
+                          {company.nombreComercial || company.razonSocial}
+                        </td>
+                        <td className="py-1 pr-2 truncate max-w-[100px]" title={company.estado || "(vacío)"}>
+                          {company.estado || "(vacío)"}
+                        </td>
+                        <td className="py-1 pr-2 truncate max-w-[100px]" title={company.municipio || "(vacío)"}>
+                          {company.municipio || "(vacío)"}
+                        </td>
+                        <td className="py-1 pr-2 font-bold text-cyan-400 font-mono">{resolved}</td>
+                        <td className="py-1 pr-2 text-center">
+                          <span className={`rounded px-1.5 py-0.2 text-[8px] font-extrabold ${isInDropdown ? "bg-emerald-950 text-emerald-400 border border-emerald-500/20" : "bg-rose-950 text-rose-400 border border-rose-500/20"}`}>
+                            {isInDropdown ? "SÍ" : "NO"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Consola de Telemetría */}
+          <div className="rounded-2xl border border-slate-855 bg-slate-950 p-4 font-mono text-[9px] text-cyan-400/90 space-y-2.5 max-h-96 overflow-y-auto">
+            <div className="text-[10px] font-bold text-slate-400 uppercase border-b border-slate-855 pb-1.5 flex justify-between">
+              <span>Registros de Auditoría GTM Engine (Historial de Lotes)</span>
+              <span className="text-cyan-300 font-sans">Total Logs: {telemetryLogs.length}</span>
+            </div>
+            <div className="overflow-x-auto font-mono">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-900 text-slate-500 text-[8px] uppercase tracking-wider">
+                    <th className="py-1">Lote #</th>
+                    <th className="py-1">Rango Reg</th>
+                    <th className="py-1">Conf</th>
+                    <th className="py-1 font-sans font-sans">Dup R/W</th>
+                    <th className="py-1">Commit</th>
+                    <th className="py-1 text-emerald-400">Nue</th>
+                    <th className="py-1 text-cyan-400">Act</th>
+                    <th className="py-1 text-rose-400">Fal</th>
+                    <th className="py-1">Time</th>
+                    <th className="py-1 font-sans">Memoria</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-900/30 text-slate-300 font-mono">
+                  {telemetryLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-4 text-center text-slate-500 italic">No hay logs de telemetría activos. Inicia una importación para ver datos.</td>
+                    </tr>
+                  ) : (
+                    telemetryLogs.map((log) => (
+                      <tr key={log.batchNumber} className="hover:bg-slate-900/30">
+                        <td className="py-1 font-bold text-slate-400">#{log.batchNumber}</td>
+                        <td className="py-1">{log.startIndex}-{log.endIndex}</td>
+                        <td className="py-1 text-slate-400">{log.processedConfirmed}</td>
+                        <td className="py-1 text-slate-500">{log.duplicateReadMs}ms</td>
+                        <td className="py-1 text-cyan-400 font-bold">{log.batchCommitMs}ms</td>
+                        <td className="py-1 text-emerald-400 font-bold">+{log.newAdded}</td>
+                        <td className="py-1 text-cyan-300 font-semibold">+{log.updated}</td>
+                        <td className="py-1 text-rose-400">{log.failed}</td>
+                        <td className="py-1 text-slate-500">{log.timestamp}</td>
+                        <td className="py-1 font-semibold text-slate-500">{log.memoryMb}MB {log.checkpointSaved ? "💾" : ""}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
-      {/* Cabecera / Importador */}
-      <MarketIntelligenceHeader
-        onImport={handleImport}
-        onZipSelect={handleZipSelect}
-        isLoading={isProcessing}
-        canImport={capabilities.canImport}
-      />
+      {/* Page Title & Subtitle */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2.5 font-sans">
+            <span>🌍</span> Aura Market Intelligence
+          </h1>
+          <p className="text-xs text-slate-400 mt-1 leading-relaxed font-sans">
+            Consola del Control Center para prospección de mercado, auditoría de regiones y recomendación de HCM.
+          </p>
+        </div>
+      </div>
+
+      {/* Global Alerts */}
+      {success && (
+        <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200">
+          <span className="font-semibold">Éxito:</span>
+          <span>{success}</span>
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-300">
+          <span className="font-semibold">Error:</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Checkpoint Modal Overlay (Always available globally to ensure it prompts users on selection/mount) */}
       {pendingResumeJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="w-full max-w-lg rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-6">
+          <div className="w-full max-w-lg rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-6 font-sans">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-lg">
                 🔄
               </div>
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-white">Importación Interrumpida Detectada</h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 font-sans font-sans">
                   Se encontró un checkpoint local para el archivo: <strong className="text-slate-200 font-mono">{pendingResumeJob.filename}</strong>
                 </p>
               </div>
             </div>
 
-            <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2">
+            <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2 font-sans font-sans">
               <div className="flex justify-between text-xs text-slate-400">
                 <span>Registros procesados en checkpoint:</span>
                 <span className="font-bold text-white font-mono">{pendingResumeJob.checkpoint.processed.toLocaleString()} / {pendingResumeJob.companies.length.toLocaleString()}</span>
@@ -1320,987 +2264,77 @@ export default function MarketIntelligencePage() {
               <button
                 type="button"
                 onClick={() => setPendingResumeJob(null)}
-                className="rounded-xl border border-slate-800 bg-slate-905 px-4 py-2.5 text-xs text-slate-500 hover:bg-slate-800 transition"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Diálogo para Archivo Ya Importado (Checksum/Fingerprint) */}
-      {duplicateImportJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="w-full max-w-lg rounded-3xl border border-amber-500/30 bg-slate-900 p-6 shadow-2xl space-y-6">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 text-lg">
-                ⚠️
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-white">Archivo Ya Importado Anteriormente</h3>
-                <p className="text-xs text-slate-400">
-                  La huella digital de <strong className="text-slate-200 font-mono">{duplicateImportJob.filename}</strong> ya coincide en el historial.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2 text-xs text-slate-400 font-sans">
-              <p>
-                Este archivo de <strong className="text-white font-mono">{duplicateImportJob.companies.length.toLocaleString()}</strong> registros 
-                fue cargado con éxito anteriormente.
-              </p>
-              <div className="mt-1 pt-1.5 border-t border-slate-900 flex justify-between">
-                <span>Último operador:</span>
-                <span className="text-slate-200 font-mono">{duplicateImportJob.existingImport.user || "jcuellar@aura-hcm.com"}</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2.5 justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  executeFastValidation(duplicateImportJob);
-                }}
-                className="rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-emerald-300 shadow-lg shadow-emerald-500/10 transition flex items-center gap-1.5"
-              >
-                🔍 Validar Conteo Rápido
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => {
-                  const jobCompanies = duplicateImportJob.companies;
-                  const jobName = duplicateImportJob.filename;
-                  const jobFingerprint = duplicateImportJob.fingerprint;
-                  setDuplicateImportJob(null);
-                  const jobId = `aura_job_${jobName.replace(/[^a-zA-Z0-9]/g, "")}_${jobCompanies.length}`;
-                  executeImportJob(jobId, jobName, jobCompanies, 0, 0, 0, 0, 0, jobFingerprint);
-                }}
-                className="rounded-xl bg-indigo-605 hover:bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition flex items-center gap-1"
-              >
-                ♻️ Reimportar Completo
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDuplicateImportJob(null)}
-                className="rounded-xl border border-slate-800 bg-slate-905 px-4 py-2.5 text-xs text-slate-500 hover:bg-slate-800 transition"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Panel de Progreso del Aura GTM Import Job Engine */}
-      {activeJob && (
-        <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/80 p-6 space-y-6 shadow-xl animate-fadeIn">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
-            <div className="space-y-1">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-cyan-400 border border-cyan-500/20">
-                Aura GTM Import Job Engine {activeJob.mode && `(${activeJob.mode})`}
-              </span>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className="h-2.5 w-2.5 animate-ping rounded-full bg-cyan-400" />
-                Trabajando en: {activeJob.filename}
-              </h3>
-            </div>
-            
-            <div className="flex items-center gap-4 text-[11px] font-mono text-slate-400">
-              <div>
-                <span className="text-slate-500 mr-1.5">Duración:</span>
-                <span>{Math.round(activeJob.elapsedTimeMs / 1000)}s</span>
-              </div>
-              <div className="h-3 w-[1px] bg-slate-800" />
-              <div>
-                <span className="text-slate-500 mr-1.5">Lotes Restantes:</span>
-                <span>{activeJob.batchesRemaining}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-2 grid-cols-7 text-center">
-            {[
-              { id: "PREPARING", label: "Preparando" },
-              { id: "READING_EXCEL", label: "Excel" },
-              { id: "NORMALIZING", label: "Normalizando" },
-              { id: "WRITING_FIRESTORE", label: "Escribiendo" },
-              { id: "VALIDATING_WRITE", label: "Validando" },
-              { id: "UPDATING_DATASET_MANAGER", label: "Caché" },
-              { id: "COMPLETED", label: "Finalizado" }
-            ].map((st, idx) => {
-              const stagesList = ["PREPARING", "READING_EXCEL", "NORMALIZING", "WRITING_FIRESTORE", "VALIDATING_WRITE", "UPDATING_DATASET_MANAGER", "COMPLETED"];
-              const currentIdx = stagesList.indexOf(activeJob.stage);
-              const isCompleted = idx < currentIdx || activeJob.stage === "COMPLETED";
-              const isActive = st.id === activeJob.stage;
-
-              return (
-                <div key={st.id} className="flex flex-col gap-1 items-center">
-                  <div className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${
-                    isCompleted
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                      : isActive
-                      ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/40 animate-pulse"
-                      : "bg-slate-900 text-slate-600 border border-slate-800"
-                  }`}>
-                    {isCompleted ? "✓" : idx + 1}
-                  </div>
-                  <span className={`text-[10px] font-semibold mt-1 ${
-                    isActive ? "text-cyan-300 font-bold" : isCompleted ? "text-slate-400" : "text-slate-650"
-                  }`}>
-                    {st.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs font-semibold text-slate-400">
-              <span className="flex items-center gap-1.5">
-                {activeJob.stage === "WRITING_FIRESTORE" ? (
-                  <>Escribiendo registros en Firestore...</>
-                ) : activeJob.stage === "VALIDATING_WRITE" ? (
-                  <>Validando escrituras de base de datos...</>
-                ) : activeJob.stage === "UPDATING_DATASET_MANAGER" ? (
-                  <>Refrescando caché del Dataset Manager...</>
-                ) : activeJob.stage === "COMPLETED" ? (
-                  <span className="text-emerald-400 font-bold">¡Lote finalizado con éxito!</span>
-                ) : (
-                  <>Procesando etapa...</>
-                )}
-              </span>
-              <span className="font-mono text-cyan-400 font-bold">
-                {Math.round((activeJob.written / activeJob.total) * 100) || 0}%
-              </span>
-            </div>
-            <div className="h-3 w-full rounded-full bg-slate-900 overflow-hidden border border-slate-800/80">
-              <div 
-                className="h-full rounded-full bg-cyan-400 transition-all duration-300"
-                style={{ width: `${Math.min(100, Math.round((activeJob.written / activeJob.total) * 100))}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-5 text-center pt-2">
-            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Escritos / Total
-              </span>
-              <span className="block text-sm font-extrabold text-white mt-1 font-mono">
-                {activeJob.written.toLocaleString()} / {activeJob.total.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Nuevos
-              </span>
-              <span className="block text-sm font-extrabold text-emerald-400 mt-1 font-mono">
-                +{activeJob.added.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Actualizados
-              </span>
-              <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono">
-                +{activeJob.overwritten.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Omitidos
-              </span>
-              <span className="block text-sm font-extrabold text-slate-400 mt-1 font-mono">
-                +{activeJob.omitted.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Fallidos
-              </span>
-              <span className="block text-sm font-extrabold text-red-400 mt-1 font-mono">
-                {activeJob.failed.toLocaleString()}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-900">
-            <div className="flex items-center gap-6 text-[10px] font-mono text-slate-400">
-              <div>
-                <span className="text-slate-500 mr-1.5">Velocidad:</span>
-                <span className="font-bold text-slate-200">{activeJob.speed} reg/s</span>
-              </div>
-              <div className="h-3 w-[1px] bg-slate-800" />
-              <div>
-                <span className="text-slate-500 mr-1.5">Tiempo Restante (ETA):</span>
-                <span className="font-bold text-amber-400">{activeJob.etaSeconds > 0 ? `${activeJob.etaSeconds}s` : "0s"}</span>
-              </div>
-              <div className="h-3 w-[1px] bg-slate-800" />
-              <div>
-                <span className="text-slate-500 mr-1.5">Procesados (pipeline):</span>
-                <span className="font-bold text-cyan-400">{activeJob.processed.toLocaleString()}</span>
-              </div>
-            </div>
-
-            {activeJob.stage !== "COMPLETED" && (
-              <button
-                type="button"
-                onClick={() => {
-                  isCancelledRef.current = true;
-                }}
-                className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 transition flex items-center gap-1.5"
-              >
-                🛑 Cancelar importación
-              </button>
-            )}
-          </div>
-
-          {/* Consola de Telemetría en Tiempo Real */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 font-mono text-[9px] text-cyan-400/90 space-y-2.5 max-h-64 overflow-y-auto">
-            <div className="text-[10px] font-bold text-slate-400 uppercase border-b border-slate-800 pb-1.5 flex justify-between font-sans">
-              <span>Telemetría de Diagnóstico por Lote (GTM Engine)</span>
-              <span className="text-cyan-300">Activa</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-900 text-slate-500 text-[8px] uppercase tracking-wider">
-                    <th className="py-1 px-1">Lote</th>
-                    <th className="py-1 px-1">Rango</th>
-                    <th className="py-1 px-1">Regs</th>
-                    <th className="py-1 px-1">Read (Ms)</th>
-                    <th className="py-1 px-1">Commit (Ms)</th>
-                    <th className="py-1 px-1">N / U / O / F</th>
-                    <th className="py-1 px-1">Confirm/Acum</th>
-                    <th className="py-1 px-1">Mem</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {telemetryLogs.map((log, idx) => (
-                    <tr key={idx} className="hover:bg-slate-900/60 border-b border-slate-900/30">
-                      <td className="py-1 px-1 font-bold text-cyan-300">#{log.batchNumber}</td>
-                      <td className="py-1 px-1 text-slate-400">[{log.startIndex}-{log.endIndex}]</td>
-                      <td className="py-1 px-1 text-slate-200">{log.recordsInBatch}</td>
-                      <td className="py-1 px-1 text-amber-500/80">
-                        {log.duplicateReadMs}ms <span className="text-[7px] text-slate-600">({log.duplicateReadStart})</span>
-                      </td>
-                      <td className="py-1 px-1 text-indigo-400">
-                        {log.batchCommitMs}ms <span className="text-[7px] text-slate-650">({log.batchCommitStart})</span>
-                      </td>
-                      <td className="py-1 px-1">
-                        <span className="text-emerald-400">+{log.newAdded}</span> / <span className="text-cyan-400">+{log.updated}</span> / <span className="text-slate-400">+{log.omitted}</span> / <span className="text-red-400">{log.failed}</span>
-                      </td>
-                      <td className="py-1 px-1 text-slate-300">{log.processedConfirmed} / {log.totalProcessedAccumulated}</td>
-                      <td className="py-1 px-1 font-semibold text-slate-500">{log.memoryMb}MB {log.checkpointSaved ? "💾" : ""}</td>
-                    </tr>
-                  ))}
-                  {telemetryLogs.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-4 text-center text-slate-500 italic font-sans">
-                        Esperando inicio de lote para reportar telemetría de diagnóstico...
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Panel Final de Importación Validada (Integridad de Datos) */}
-      {importReport && activeJob?.stage === "COMPLETED" && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/10 p-6 space-y-6 shadow-2xl animate-fadeIn">
-          <div className="flex items-center gap-3 border-b border-emerald-500/20 pb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-lg">
-              🛡️
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">Importación Validada con Éxito</h3>
-              <p className="text-xs text-emerald-400 font-semibold font-sans">
-                Garantía de Integridad Foundation Zero: {importReport.total} = {importReport.total}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Integridad de Datos
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 mt-1">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                100% Sincronizado
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Duración del Job
-              </span>
-              <span className="block text-sm font-extrabold text-white mt-1 font-mono">
-                {Math.round(importReport.timeMs / 1000)} segundos
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Velocidad Promedio
-              </span>
-              <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono">
-                {Math.round((importReport.total / (importReport.timeMs / 1000)) * 10) / 10} reg/s
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-slate-900/40 p-4 border border-slate-800">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Auditoría ID
-              </span>
-              <span className="block text-xs font-extrabold text-slate-400 mt-1.5 font-mono truncate">
-                {activeJob.jobId}
-              </span>
-            </div>
-          </div>
-
-          {/* Propuesta de Optimización para Cloud Functions */}
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-950/5 p-4 space-y-1.5 text-amber-300/90 text-xs">
-            <span className="block font-bold">💡 Propuesta de Optimización Arquitectónica</span>
-            <p className="font-sans text-[11px] leading-relaxed text-slate-400">
-              Dado que procesar 57,000 registros requiere realizar consultas de duplicidad en lotes y transacciones concurrentes desde el navegador,
-              este tipo de carga pesada puede ser susceptible a límites de cliente (cuotas de red del navegador, limitadores locales de hilos de JS y OOM). 
-              Se propone mover el motor a una <strong>Firebase Cloud Function</strong> o a un backend job dedicado, donde se procese el Excel de manera asíncrona mediante Streams.
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-slate-900/60 p-4 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <span className="block text-xs font-bold text-slate-200">
-                Se guardó el log de auditoría completo en Firestore.
-              </span>
-              <p className="text-[11px] text-slate-500 font-sans">
-                Registrado por el operador {auth.currentUser?.email || "jcuellar@aura-hcm.com"} para el archivo {activeJob.filename}.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setImportReport(null);
-                setActiveJob(null);
-              }}
-              className="rounded-xl bg-emerald-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-emerald-300 transition shrink-0"
-            >
-              Entendido
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Banner de Diagnóstico del Dataset Activo */}
-      {activeMetadata && (
-        <div className="rounded-2xl border border-cyan-500/25 bg-slate-950/40 p-5 backdrop-blur-md space-y-4 animate-fadeIn">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
-              <span className="text-xs font-extrabold uppercase tracking-wider text-cyan-300">
-                Aura Dataset Manager — Diagnóstico de Dataset en Memoria
-              </span>
-            </div>
-            <div className="text-[10px] text-slate-500 font-mono">
-              Última actualización: {new Date(activeMetadata.loadedAt).toLocaleTimeString()}
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Estado Activo */}
-            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
-              <span className="block text-[10px] text-slate-500 uppercase font-semibold">Estado Activo</span>
-              <span className="block text-sm font-extrabold text-white mt-1">
-                {filters.estado || "Todos los Estados (Muestra)"}
-              </span>
-            </div>
-
-            {/* Total empresas */}
-            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
-              <span className="block text-[10px] text-slate-500 uppercase font-semibold">Empresas en Memoria</span>
-              <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono">
-                {activeMetadata.count.toLocaleString()}
-              </span>
-            </div>
-
-            {/* Fuente / Versión */}
-            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
-              <span className="block text-[10px] text-slate-500 uppercase font-semibold">Fuente / Versión</span>
-              <span className="block text-sm font-extrabold text-slate-300 mt-1">
-                {activeMetadata.source} — {activeMetadata.sourceVersion}
-              </span>
-            </div>
-
-            {/* MRR Estimado */}
-            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
-              <span className="block text-[10px] text-slate-500 uppercase font-semibold">MRR Potencial Estimado</span>
-              <span className="block text-sm font-extrabold text-emerald-400 mt-1 font-mono">
-                {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0 }).format(activeMetadata.estimatedMrr)}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 pt-1">
-            {/* Oportunidades Críticas/Alta Prioridad */}
-            <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60 flex items-center justify-between">
-              <div>
-                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Oportunidades de Alta Prioridad</span>
-                <span className="block text-xs text-slate-400 mt-1">Suma de perfiles clasificados como CRITICAL o HIGH.</span>
-              </div>
-              <span className="text-xl font-extrabold text-rose-400 font-mono">
-                {activeMetadata.highPriorityCount.toLocaleString()}
-              </span>
-            </div>
-
-            {/* Top Industrias */}
-            <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60">
-              <span className="block text-[10px] text-slate-500 uppercase font-semibold mb-2">Principales Sectores en este Dataset</span>
-              <div className="flex flex-wrap gap-2">
-                {activeMetadata.topIndustries.map((indItem, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 border border-indigo-500/20"
-                  >
-                    {indItem.industry}: <strong className="text-white font-mono">{indItem.count}</strong>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {capabilities.canImport && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/40 px-6 py-4.5">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
-            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider font-sans">
-              Aura Import Engine Enterprise
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleRepairStates}
-            disabled={isProcessing}
-            className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-900 hover:text-white transition active:scale-95 disabled:opacity-50"
-          >
-            🔧 Reparar Estados Importados
-          </button>
-        </div>
-      )}
-
-      {/* Alertas */}
-      {error && (
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm text-red-300">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4 text-sm text-cyan-200">
-          {success}
-        </div>
-      )}
-
-      {/* Resumen Previo a la Importación ZIP (Prioridad 6) */}
-      {zipSummary && activeZipFile && (
-        <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4">
-          {renderZipTimeline()}
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-300">
-              📁 ZIP Nacional Detectado
-            </h3>
-            <span className="text-xs text-slate-400 font-semibold font-mono font-sans">
-              {activeZipFile.name}
-            </span>
-          </div>
-
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-4 text-center">
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Archivos Excel Detectados
-              </span>
-              <span className="block text-2xl font-extrabold text-white mt-1">
-                {zipSummary.totalFiles}
-              </span>
-            </div>
-            
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Estados Identificados
-              </span>
-              <span className="block text-2xl font-extrabold text-white mt-1">
-                {zipSummary.statesCount}
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Registros Estimados
-              </span>
-              <span className="block text-2xl font-extrabold text-cyan-400 mt-1 font-mono">
-                {zipSummary.totalEstimatedRows.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                Resolución Requerida
-              </span>
-              <span className="block text-2xl font-extrabold text-amber-400 mt-1">
-                {zipSummary.unresolvedFilesCount}
-              </span>
-            </div>
-          </div>
-
-          {zipSummary.unresolvedFilesCount > 0 && (
-            <p className="text-xs text-amber-400 leading-relaxed bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 font-sans">
-              ⚠ Se requiere que confirmes el estado geográfico de <strong>{zipSummary.unresolvedFilesCount}</strong> archivo(s) manualmente antes de iniciar.
-            </p>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handleCancelZipImport}
-              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-900 transition"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmZipImport}
-              className="rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 transition active:scale-95"
-            >
-              Comenzar Importación
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Panel de Progreso en Tiempo Real del ZIP */}
-      {zipProgress && (
-        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 space-y-4">
-          {renderZipTimeline()}
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
-              <span className="h-2 w-2 animate-ping rounded-full bg-cyan-400" />
-              Procesando Importación Nacional ZIP
-            </h3>
-            <span className="text-xs text-slate-400 font-semibold font-mono font-sans">
-              {zipProgress.processedFiles} / {zipProgress.totalFiles} Archivos
-            </span>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-slate-400">
-              <span>Archivo actual: <strong className="font-mono">{zipProgress.currentFile}</strong></span>
-              <span>{Math.round((zipProgress.processedFiles / zipProgress.totalFiles) * 100)}%</span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
-              <div 
-                className="h-full rounded-full bg-cyan-400 transition-all duration-300"
-                style={{ width: `${(zipProgress.processedFiles / zipProgress.totalFiles) * 100}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 text-center text-xs">
-            <div className="rounded-lg bg-slate-950 p-3 border border-slate-900">
-              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Procesados</span>
-              <span className="block font-bold text-white mt-0.5">{zipProgress.totalRowsProcessed}</span>
-            </div>
-            <div className="rounded-lg bg-emerald-500/5 p-3 border border-emerald-500/10">
-              <span className="block text-emerald-500 font-semibold uppercase tracking-wider text-[10px]">Nuevos</span>
-              <span className="block font-bold text-emerald-400 mt-0.5">{zipProgress.added}</span>
-            </div>
-            <div className="rounded-lg bg-cyan-500/5 p-3 border border-cyan-500/10">
-              <span className="block text-cyan-500 font-semibold uppercase tracking-wider text-[10px]">Actualizados</span>
-              <span className="block font-bold text-cyan-400 mt-0.5">{zipProgress.overwritten}</span>
-            </div>
-            <div className="rounded-lg bg-rose-500/5 p-3 border border-rose-500/10">
-              <span className="block text-rose-500 font-semibold uppercase tracking-wider text-[10px]">Errores</span>
-              <span className="block font-bold text-rose-400 mt-0.5">{zipProgress.failed}</span>
-            </div>
-          </div>
-
-          {zipStep === "COMPLETED" && (
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                onClick={resetZipImportStates}
-                className="rounded-xl bg-cyan-400 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 transition active:scale-95"
-              >
-                Entendido
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Asistente de Selección Manual de Estado para ZIP (Prioridad 4) */}
-      {pendingStateResolutionFiles && currentResolutionIndex !== -1 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-amber-500/20 bg-slate-900 p-6 shadow-2xl space-y-4">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                Asistente de Importación Nacional (ZIP)
-              </span>
-              <h3 className="text-base font-bold text-white mt-1">
-                Selección de Estado Requerida
-              </h3>
-              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                No pudimos detectar automáticamente el estado para el archivo:
-                <strong className="block text-amber-200 mt-1 font-mono break-all font-sans">
-                  {pendingStateResolutionFiles[currentResolutionIndex].filename}
-                </strong>
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-semibold text-slate-400 font-sans">
-                Selecciona el estado de la República correspondiente:
-              </label>
-              <select
-                onChange={(e) => {
-                  const stateVal = e.target.value;
-                  if (!stateVal) return;
-                  
-                  // Guardar resolución y pasar al siguiente
-                  const filename = pendingStateResolutionFiles[currentResolutionIndex].filename;
-                  const newResolvedList = [...resolvedFilesList, { filename, state: stateVal }];
-                  setResolvedFilesList(newResolvedList);
-
-                  // Limpiar el select para el siguiente renderizado de estado
-                  e.target.value = "";
-
-                  if (currentResolutionIndex + 1 < pendingStateResolutionFiles.length) {
-                    setCurrentResolutionIndex(currentResolutionIndex + 1);
-                  } else {
-                    // Todos resueltos: Iniciar importación
-                    startResolvedZipImport(activeZipFile!, newResolvedList);
-                  }
-                }}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-              >
-                <option value="">-- Seleccionar Estado --</option>
-                {NationalZipImportService.MEXICAN_STATES.map((st) => (
-                  <option key={st} value={st}>
-                    {st}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={handleCancelZipImport}
                 className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition"
               >
-                Cancelar Importación
+                Ignorar
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Reporte de Importación Detallado (Prioridad 4) */}
-      {importReport && (
-        <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-300">
-              📊 Reporte de Procesamiento de Importación
-            </h3>
-            <button
-              onClick={() => setImportReport(null)}
-              className="text-xs text-slate-500 hover:text-white"
-            >
-              Cerrar Reporte
-            </button>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-5 text-center">
-            <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800">
-              <span className="block text-slate-400 text-[10px] font-semibold uppercase tracking-wider">Procesados</span>
-              <span className="block text-2xl font-bold text-white mt-1">{importReport.total}</span>
-            </div>
-            <div className="rounded-xl bg-emerald-500/5 p-4 border border-emerald-500/20">
-              <span className="block text-emerald-400 text-[10px] font-semibold uppercase tracking-wider">Nuevos</span>
-              <span className="block text-2xl font-bold text-emerald-300 mt-1">{importReport.added}</span>
-            </div>
-            <div className="rounded-xl bg-cyan-500/5 p-4 border border-cyan-500/20">
-              <span className="block text-cyan-400 text-[10px] font-semibold uppercase tracking-wider">Actualizados</span>
-              <span className="block text-2xl font-bold text-cyan-300 mt-1">{importReport.updated}</span>
-            </div>
-            <div className="rounded-xl bg-amber-500/5 p-4 border border-amber-500/20">
-              <span className="block text-amber-400 text-[10px] font-semibold uppercase tracking-wider">Sin cambios</span>
-              <span className="block text-2xl font-bold text-amber-300 mt-1">{importReport.omitted}</span>
-            </div>
-            <div className="rounded-xl bg-rose-500/5 p-4 border border-rose-500/20">
-              <span className="block text-rose-400 text-[10px] font-semibold uppercase tracking-wider">Fallidos</span>
-              <span className="block text-2xl font-bold text-rose-300 mt-1">{importReport.failed}</span>
-            </div>
-          </div>
-          <div className="text-[10px] text-slate-500 text-right">
-            Tiempo de ejecución en servidor: <span className="font-semibold text-slate-400">{importReport.timeMs} ms</span>
-          </div>
-        </div>
-      )}
-
-      {/* Tablero Ejecutivo Comercial de Aura Prospect Intelligence */}
-      <CommercialDashboard
-        companies={activeMarketDataset}
-        onSelectCompany={handleSelectCompany}
-        stats={stats}
-      />
-
-      {/* Grid Principal con Segmentos y Tabla */}
-      <div className="grid gap-6 xl:grid-cols-12">
-        
-        {/* Panel Izquierdo: Segmentación */}
-        <aside className="xl:col-span-3">
-          <MarketSegmentsPanel
-            onSelectSegment={handleSelectSegment}
-            activeSegmentId={activeSegmentId}
-          />
-        </aside>
-
-        {/* Panel Derecho: Filtros y Tabla */}
-        <div className="space-y-6 xl:col-span-9">
-          
-          <MarketCompaniesFilters
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            onClearFilters={handleClearFilters}
-            availableStates={availableStates}
-            sectorCounts={industriesStats.stateFilteredCounts}
-          />
-
-          {/* La búsqueda se ejecuta reactivamente mediante el efecto del filtro */}
-
-          <MarketCompaniesTable
-            companies={companies}
-            isLoading={isLoading}
-            onSelectCompany={handleSelectCompany}
-            onNextPage={handleNextPage}
-            onPrevPage={handlePrevPage}
-            hasMore={hasMore}
-            currentPage={currentPage}
-            filters={{ estado: filters.estado, sector: filters.sector }}
-            sectorCounts={industriesStats.stateFilteredCounts}
-          />
-
-        </div>
-
-      </div>
-
-      {/* Historial de Importaciones Recientes (Prioridad 4) */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5">
+      {/* Tab Navigation Menu */}
+      <div className="flex border-b border-slate-800/80 overflow-x-auto select-none no-scrollbar gap-1 font-sans">
         <button
-          type="button"
-          onClick={() => setShowHistory(!showHistory)}
-          className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400 outline-none"
+          onClick={() => setActiveTab('summary')}
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+            activeTab === 'summary'
+              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
         >
-          <span className="flex items-center gap-2">
-            <span>📋</span> Historial de Auditoría de Importaciones (Últimas 20)
-          </span>
-          <span className="text-cyan-400">
-            {showHistory ? "Ocultar" : `Mostrar (${importHistory.length})`}
-          </span>
+          📊 Resumen
         </button>
-
-        {showHistory && (
-          <div className="mt-4 overflow-x-auto">
-            {importHistory.length === 0 ? (
-              <p className="text-xs text-slate-500 py-2">No se han registrado importaciones en este tenant.</p>
-            ) : (
-              <table className="w-full border-collapse text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-500 font-semibold uppercase tracking-wider">
-                    <th className="py-2.5">Fecha / Hora</th>
-                    <th className="py-2.5">Total Registros</th>
-                    <th className="py-2.5 text-emerald-400">Nuevos</th>
-                    <th className="py-2.5 text-cyan-400">Actualizados</th>
-                    <th className="py-2.5 text-amber-400">Sin Cambios</th>
-                    <th className="py-2.5 text-rose-400">Fallidos</th>
-                    <th className="py-2.5 text-right">Tiempo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-850 text-slate-300">
-                  {importHistory.map((entry) => {
-                    const date = entry.timestamp?.seconds
-                      ? new Date(entry.timestamp.seconds * 1000).toLocaleString()
-                      : "Reciente";
-                    return (
-                      <tr key={entry.id} className="hover:bg-slate-900/20">
-                        <td className="py-2.5 font-medium">{date}</td>
-                        <td className="py-2.5">{entry.totalProcessed}</td>
-                        <td className="py-2.5 font-semibold text-emerald-400">{entry.newAdded}</td>
-                        <td className="py-2.5 font-semibold text-cyan-400">{entry.updated}</td>
-                        <td className="py-2.5 font-semibold text-amber-400">{entry.omitted}</td>
-                        <td className="py-2.5 font-semibold text-rose-400">{entry.failed}</td>
-                        <td className="py-2.5 text-right text-slate-400">{entry.timeMs} ms</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
+        <button
+          onClick={() => setActiveTab('prospects')}
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+            activeTab === 'prospects'
+              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          👥 Prospectos
+        </button>
+        <button
+          onClick={() => setActiveTab('import')}
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+            activeTab === 'import'
+              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          📥 Importación
+        </button>
+        <button
+          onClick={() => setActiveTab('intelligence')}
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+            activeTab === 'intelligence'
+              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          🧠 Intelligence
+        </button>
+        {capabilities.canImport && (
+          <button
+            onClick={() => setActiveTab('diagnostics')}
+            className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+              activeTab === 'diagnostics'
+                ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            ⚙️ Diagnóstico
+          </button>
         )}
       </div>
 
-      {/* Panel Temporal de Depuración (Visibilidad local y super-admin) */}
-      {(import.meta.env.DEV || capabilities.canImport) && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-6 my-6">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
-              <span>🔧</span> Panel de Depuración Comercial (Aura Diagnostic OS)
-            </h4>
-            <span className="rounded bg-cyan-950 px-2 py-0.5 text-[9px] font-bold text-cyan-400 font-mono">
-              Dev Mode
-            </span>
-          </div>
-          
-          <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900">
-              <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Filtros Activos</span>
-              <pre className="text-[10px] font-mono text-cyan-300 overflow-x-auto max-h-32 bg-slate-950/40 p-2 rounded">
-                {JSON.stringify(filters, null, 2)}
-              </pre>
-            </div>
-            
-            <div className="space-y-2 rounded-lg bg-slate-900/40 p-3 border border-slate-900">
-              <div>
-                <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Estados Únicos Detectados</span>
-                <span className="text-white font-mono text-[10px] block truncate mt-1" title={availableStates.join(", ")}>
-                  {availableStates.join(", ") || "Ninguno"}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/40 mt-2">
-                <div>
-                  <span className="block text-[8px] font-bold text-slate-500 uppercase font-sans">Raw Docs</span>
-                  <span className="font-extrabold text-white text-sm">{rawDataset.length}</span>
-                </div>
-                <div>
-                  <span className="block text-[8px] font-bold text-slate-500 uppercase font-sans">Filtered</span>
-                  <span className="font-extrabold text-cyan-400 text-sm">{activeMarketDataset.length}</span>
-                </div>
-                <div>
-                  <span className="block text-[8px] font-bold text-slate-500 uppercase font-sans">Paginated</span>
-                  <span className="font-extrabold text-amber-400 text-sm">{companies.length}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900 font-sans">
-              <span className="block text-[10px] font-semibold text-slate-500 uppercase">Diagnóstico de Selección de Filtros</span>
-              <table className="w-full text-[10px] font-mono text-slate-300 mt-1">
-                <tbody>
-                  <tr>
-                    <td className="text-slate-500 py-0.5">Estado Raw:</td>
-                    <td className="text-cyan-300 font-bold">{filters.estado || "(vacío)"}</td>
-                  </tr>
-                  <tr>
-                    <td className="text-slate-500 py-0.5">Estado Norm:</td>
-                    <td className="text-cyan-300">{filters.estado ? normalizeState(filters.estado) : "(vacío)"}</td>
-                  </tr>
-                  <tr>
-                    <td className="text-slate-500 py-0.5">Status Raw:</td>
-                    <td className="text-cyan-300">{filters.status || "(vacío)"}</td>
-                  </tr>
-                  <tr>
-                    <td className="text-slate-500 py-0.5">Sector Raw:</td>
-                    <td className="text-cyan-300 truncate max-w-[120px] inline-block" title={filters.sector}>{filters.sector || "(vacío)"}</td>
-                  </tr>
-                  <tr>
-                    <td className="text-slate-500 py-0.5">Tamaño Raw:</td>
-                    <td className="text-cyan-300">{filters.tamano || "(vacío)"}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Card 4: Distribución de Sectores Comerciales (En tiempo real) */}
-            <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900 overflow-y-auto max-h-48 font-sans">
-              <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Distribución de Sectores</span>
-              <table className="w-full text-[9px] font-mono text-slate-300 mt-1">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
-                    <th className="pb-1 pr-2">Sector</th>
-                    <th className="pb-1 text-right pr-2">Global</th>
-                    <th className="pb-1 text-right">Filtrado Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/20">
-                  {Object.entries(industriesStats.allCounts).map(([ind, count]) => {
-                    const stateCount = industriesStats.stateFilteredCounts[ind] || 0;
-                    return (
-                      <tr key={ind} className="hover:bg-slate-900/25">
-                        <td className="py-0.5 text-slate-400 pr-2 truncate max-w-[100px]" title={ind}>{ind}</td>
-                        <td className="py-0.5 text-right font-bold pr-2">{count}</td>
-                        <td className="py-0.5 text-right text-cyan-400 font-bold">{stateCount}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Fila inferior: Tabla de auditoría visual de primeros 20 */}
-            <div className="md:col-span-2 xl:col-span-4 rounded-lg bg-slate-900/40 p-4 border border-slate-900 overflow-x-auto font-sans">
-              <span className="block text-[10px] font-semibold text-slate-500 uppercase mb-2">Auditoría Visual de Posicionamiento (Primeros 20 en rawDataset)</span>
-              <table className="w-full text-[10px] font-mono text-slate-300 border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
-                    <th className="pb-1.5 pr-2">Empresa</th>
-                    <th className="pb-1.5 pr-2">Estado Raw</th>
-                    <th className="pb-1.5 pr-2">Municipio</th>
-                    <th className="pb-1.5 pr-2">getCompanyState()</th>
-                    <th className="pb-1.5 pr-2 text-center">En Dropdown</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/40">
-                  {rawDataset.slice(0, 20).map((company) => {
-                    const resolved = getCompanyState(company);
-                    const isInDropdown = availableStates.includes(resolved);
-                    return (
-                      <tr key={company.id} className="hover:bg-slate-900/45 text-slate-300">
-                        <td className="py-1 pr-2 truncate max-w-[150px]" title={company.nombreComercial || company.razonSocial}>
-                          {company.nombreComercial || company.razonSocial}
-                        </td>
-                        <td className="py-1 pr-2 truncate max-w-[100px]" title={company.estado || "(vacío)"}>
-                          {company.estado || "(vacío)"}
-                        </td>
-                        <td className="py-1 pr-2 truncate max-w-[100px]" title={company.municipio || "(vacío)"}>
-                          {company.municipio || "(vacío)"}
-                        </td>
-                        <td className="py-1 pr-2 font-bold text-cyan-400">{resolved}</td>
-                        <td className="py-1 pr-2 text-center">
-                          <span className={`rounded px-1.5 py-0.2 text-[8px] font-extrabold ${isInDropdown ? "bg-emerald-950 text-emerald-400 border border-emerald-500/20" : "bg-rose-950 text-rose-400 border border-rose-500/20"}`}>
-                            {isInDropdown ? "SÍ" : "NO"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Conditionally Render Selected Tab content */}
+      {activeTab === 'summary' && renderSummaryTab()}
+      {activeTab === 'prospects' && renderProspectsTab()}
+      {activeTab === 'import' && renderImportTab()}
+      {activeTab === 'intelligence' && renderIntelligenceTab()}
+      {activeTab === 'diagnostics' && renderDiagnosticsTab()}
 
       {/* Drawer de Detalle y Conversión */}
       <MarketCompanyDrawer
@@ -2318,4 +2352,5 @@ export default function MarketIntelligencePage() {
       />
     </div>
   );
+
 }

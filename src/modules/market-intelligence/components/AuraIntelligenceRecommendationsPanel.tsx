@@ -123,7 +123,7 @@ export function AuraIntelligenceRecommendationsPanel({
             </h3>
             <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
               <Info className="h-3 w-3 shrink-0" />
-              Modulo local del Control Center conectado al Core de Inteligencia
+              Resumen ejecutivo generado por Aura Intelligence
             </p>
           </div>
         </div>
@@ -138,7 +138,7 @@ export function AuraIntelligenceRecommendationsPanel({
         {/* Health gauge */}
         <div className="rounded-xl border border-slate-850 bg-slate-950/50 p-4 flex flex-col justify-between">
           <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-            Índice de Salud Global
+            Prioridad Comercial
           </span>
           <div className="flex items-baseline gap-2 mt-2">
             <span
@@ -219,7 +219,10 @@ export function AuraIntelligenceRecommendationsPanel({
                       </span>
                     </div>
                     <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
-                      {action.description}
+                      {action.description}{" "}
+                      <span className="text-indigo-400 font-medium">
+                        Sugerencia: {action.suggestedAction}
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -229,7 +232,13 @@ export function AuraIntelligenceRecommendationsPanel({
                     type="button"
                     className="flex items-center gap-1 rounded-lg bg-indigo-500/15 border border-indigo-500/25 px-2.5 py-1.5 text-[10px] font-bold text-indigo-300 hover:bg-indigo-500 hover:text-white transition duration-200"
                   >
-                    <span>{action.suggestedAction}</span>
+                    <span>
+                      {action.category === "compliance"
+                        ? "Preparar diagnóstico"
+                        : action.category === "sales"
+                        ? "Ver análisis"
+                        : "Revisar recomendación"}
+                    </span>
                     <ArrowRight className="h-3 w-3" />
                   </button>
                 </div>
