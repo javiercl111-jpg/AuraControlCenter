@@ -139,6 +139,21 @@ async function runAuraCoreExample() {
 
 ---
 
+## Integración con Control Center
+
+Para conectar las pantallas existentes del **Control Center** con este Core de Inteligencia, se ha provisto un adaptador unificado:
+
+### 1. Prospect Intelligence Core Adapter (`AppAdapter`)
+Ubicado en [appAdapter.ts](file:///c:/Projects/AuraControlCenter/src/modules/intelligence/core/services/appAdapter.ts), actúa como el puente de integración:
+* Convierte las entidades pasivas `InegiCompany` de la base DENUE a objetos de dominio activos `SmartBusinessDossier`.
+* Expone `getSalesAdvice(company)` para alimentar al panel **Aura Sales Advisor** de forma asíncrona, manteniendo un mecanismo de fallback basado en reglas locales si el núcleo de IA falla.
+* Expone `generateDashboard(companies)` para ejecutar el `RecommendationEngine` completo sobre una colección de prospectos.
+
+### 2. UI Component: `AuraIntelligenceRecommendationsPanel`
+Ubicado en [AuraIntelligenceRecommendationsPanel.tsx](file:///c:/Projects/AuraControlCenter/src/modules/market-intelligence/components/AuraIntelligenceRecommendationsPanel.tsx), este panel es una vista integrada dentro del **Control Center** que despliega el Índice de Salud Global, el valor comercial proyectado y la cola de acciones priorizadas generadas directamente por el núcleo local de Aura Intelligence.
+
+---
+
 ## Roadmap de Implementación
 
 ### Fase 1: Core de Arquitectura (Actual)

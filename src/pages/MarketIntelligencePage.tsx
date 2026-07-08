@@ -8,7 +8,7 @@ import MarketCompanyDrawer from "../modules/market-intelligence/components/Marke
 import MarketSegmentsPanel from "../modules/market-intelligence/components/MarketSegmentsPanel";
 import CommercialDashboard from "../modules/market-intelligence/components/CommercialDashboard";
 
-import MarketFirestoreService from "../modules/market-intelligence/services/marketFirestoreService";
+import MarketFirestoreService, { type ImportHistoryEntry } from "../modules/market-intelligence/services/marketFirestoreService";
 import MarketQueryEngine, { normalizeState, getCompanyState, getCompanyIndustry } from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
@@ -59,6 +59,7 @@ export default function MarketIntelligencePage() {
     jobId: string;
     filename: string;
     stage: "PREPARING" | "READING_EXCEL" | "NORMALIZING" | "WRITING_FIRESTORE" | "VALIDATING_WRITE" | "UPDATING_DATASET_MANAGER" | "COMPLETED";
+    mode: "Validando" | "Reimportando" | "Escribiendo";
     processed: number;
     total: number;
     added: number;
@@ -107,6 +108,13 @@ export default function MarketIntelligencePage() {
       omitted: number;
       failed: number;
     };
+  } | null>(null);
+
+  const [duplicateImportJob, setDuplicateImportJob] = useState<{
+    fingerprint: string;
+    filename: string;
+    companies: InegiCompany[];
+    existingImport: ImportHistoryEntry;
   } | null>(null);
 
 
@@ -424,7 +432,6 @@ export default function MarketIntelligencePage() {
   // Paginación: Página Anterior
   function handlePrevPage() {
     if (currentPage <= 1) return;
-
     const prevPage = currentPage - 1;
     const sliced = activeMarketDataset.slice((prevPage - 1) * 25, prevPage * 25);
     setCompanies(sliced);
@@ -441,7 +448,8 @@ export default function MarketIntelligencePage() {
     initialAdded: number = 0,
     initialOverwritten: number = 0,
     initialOmitted: number = 0,
-    initialFailed: number = 0
+    initialFailed: number = 0,
+    fingerprint?: string
   ) {
     setIsProcessing(true);
     setError("");
@@ -453,10 +461,13 @@ export default function MarketIntelligencePage() {
     const total = companies.length;
     const startTime = Date.now();
 
+    const currentMode = fingerprint ? ("Reimportando" as const) : ("Escribiendo" as const);
+
     const initialJobState = {
       jobId,
       filename,
       stage: "WRITING_FIRESTORE" as const,
+      mode: currentMode,
       processed: startIndex,
       total,
       added: initialAdded,
@@ -482,121 +493,135 @@ export default function MarketIntelligencePage() {
     const UPSERT_WRITE_CHUNK_SIZE = 100;
 
     try {
-      // 1. Loop principal de escrituras por lotes de 100
+      // 1. Loop principal de escrituras por lotes de 100 utilizando un pool de trabajadores concurrentes
+      const chunks: InegiCompany[][] = [];
       for (let i = startIndex; i < total; i += UPSERT_WRITE_CHUNK_SIZE) {
-        if (isCancelledRef.current) {
-          console.warn("[GTM Job] Cancelado por el usuario.");
-          setError("Importación cancelada por el usuario. El checkpoint se ha guardado en el registro: " + i);
-          setIsProcessing(false);
-          setActiveJob(null);
-          return;
-        }
+        chunks.push(companies.slice(i, i + UPSERT_WRITE_CHUNK_SIZE));
+      }
 
-        const batchNum = Math.floor(i / UPSERT_WRITE_CHUNK_SIZE) + 1;
-        const chunk = companies.slice(i, i + UPSERT_WRITE_CHUNK_SIZE);
-        const batchStartTime = Date.now();
+      let activeIndex = 0;
+      const workers: Promise<void>[] = [];
+      const concurrency = 4; // Concurrencia de 4 lotes en paralelo
 
-        // Actualizamos UI indicando el inicio del batch (Escritos no aumenta aún)
-        setActiveJob(prev => prev ? {
-          ...prev,
-          stage: "WRITING_FIRESTORE",
-          elapsedTimeMs: Date.now() - startTime,
-        } : null);
+      const runWorker = async () => {
+        while (activeIndex < chunks.length) {
+          if (isCancelledRef.current) return;
+          const chunkIdx = activeIndex++;
+          const chunk = chunks[chunkIdx];
+          const batchNum = chunkIdx + 1;
+          const batchStartIndex = startIndex + chunkIdx * UPSERT_WRITE_CHUNK_SIZE;
+          const batchStartTime = Date.now();
 
-        // Escribir en base aplicando Upsert Enterprise
-        const chunkResult = await MarketFirestoreService.importMarketCompaniesBatch(
-          chunk,
-          undefined,
-          { skipHistory: true }
-        );
+          // Actualizamos UI indicando el inicio del batch (Escritos no aumenta aún)
+          setActiveJob(prev => prev ? {
+            ...prev,
+            stage: "WRITING_FIRESTORE",
+            elapsedTimeMs: Date.now() - startTime,
+          } : null);
 
-        const batchDuration = Date.now() - batchStartTime;
-        batchTimes.push(batchDuration);
+          // Escribir en base aplicando Upsert Enterprise (que internamente paraleliza las lecturas)
+          const chunkResult = await MarketFirestoreService.importMarketCompaniesBatch(
+            chunk,
+            undefined,
+            { skipHistory: true }
+          );
 
-        const recordsInBatch = chunk.length;
-        const processedConfirmed = chunkResult.added + chunkResult.overwritten + chunkResult.omitted + chunkResult.failed;
+          const batchDuration = Date.now() - batchStartTime;
+          batchTimes.push(batchDuration);
 
-        addedAcc += chunkResult.added;
-        overwrittenAcc += chunkResult.overwritten;
-        omittedAcc += chunkResult.omitted;
-        failedAcc += chunkResult.failed;
+          const recordsInBatch = chunk.length;
+          const processedConfirmed = chunkResult.added + chunkResult.overwritten + chunkResult.omitted + chunkResult.failed;
 
-        if (chunkResult.failedCompanies && chunkResult.failedCompanies.length > 0) {
-          failedRecords.push(...chunkResult.failedCompanies);
-        }
+          // Actualización atómica de acumuladores
+          addedAcc += chunkResult.added;
+          overwrittenAcc += chunkResult.overwritten;
+          omittedAcc += chunkResult.omitted;
+          failedAcc += chunkResult.failed;
 
-        const currentProcessed = Math.min(i + UPSERT_WRITE_CHUNK_SIZE, total);
-        const elapsed = Date.now() - startTime;
-        const currentWritten = addedAcc + overwrittenAcc + omittedAcc + failedAcc;
+          if (chunkResult.failedCompanies && chunkResult.failedCompanies.length > 0) {
+            failedRecords.push(...chunkResult.failedCompanies);
+          }
 
-        const speed = elapsed > 0 ? currentWritten / (elapsed / 1000) : 0;
-        const eta = speed > 0 ? (total - currentWritten) / speed : 0;
-        const remaining = Math.ceil((total - currentProcessed) / UPSERT_WRITE_CHUNK_SIZE);
+          const currentProcessed = Math.min(batchStartIndex + chunk.length, total);
+          const elapsed = Date.now() - startTime;
+          const currentWritten = addedAcc + overwrittenAcc + omittedAcc + failedAcc;
 
-        const currentJobState = {
-          jobId,
-          filename,
-          stage: "WRITING_FIRESTORE" as const,
-          processed: currentProcessed,
-          total,
-          added: addedAcc,
-          overwritten: overwrittenAcc,
-          omitted: omittedAcc,
-          failed: failedAcc,
-          written: currentWritten,
-          startTime,
-          elapsedTimeMs: elapsed,
-          speed: Math.round(speed * 10) / 10,
-          etaSeconds: Math.round(eta),
-          batchesRemaining: remaining,
-        };
+          const speed = elapsed > 0 ? currentWritten / (elapsed / 1000) : 0;
+          const eta = speed > 0 ? (total - currentWritten) / speed : 0;
 
-        setActiveJob(currentJobState);
-
-        const checkpointSaved = (currentProcessed % 500 === 0 || currentProcessed === total);
-        // Guardar checkpoint cada 500 registros
-        if (checkpointSaved) {
-          localStorage.setItem(jobId, JSON.stringify({
+          setActiveJob(prev => prev ? {
+            ...prev,
             processed: currentProcessed,
             added: addedAcc,
             overwritten: overwrittenAcc,
             omitted: omittedAcc,
             failed: failedAcc,
-            timestamp: Date.now(),
-          }));
-        }
-
-        // Telemetría del lote
-        const avgBatchDuration = batchTimes.reduce((acc, curr) => acc + curr, 0) / batchTimes.length;
-        const memoryLimit = (performance as any).memory;
-        const memoryMb = memoryLimit ? Math.round(memoryLimit.usedJSHeapSize / (1024 * 1024)) : 0;
-
-        setTelemetryLogs((prev) => [
-          {
-            batchNumber: batchNum,
-            startIndex: i,
-            endIndex: currentProcessed - 1,
-            recordsInBatch,
-            duplicateReadStart: chunkResult.duplicateReadStart,
-            duplicateReadEnd: chunkResult.duplicateReadEnd,
-            duplicateReadMs: chunkResult.duplicateReadMs,
-            batchCommitStart: chunkResult.batchCommitStart,
-            batchCommitEnd: chunkResult.batchCommitEnd,
-            batchCommitMs: chunkResult.batchCommitMs,
-            newAdded: chunkResult.added,
-            updated: chunkResult.overwritten,
-            omitted: chunkResult.omitted,
-            failed: chunkResult.failed,
-            processedConfirmed,
-            totalProcessedAccumulated: addedAcc + overwrittenAcc + omittedAcc + failedAcc,
-            memoryMb,
-            checkpointSaved,
-            timestamp: new Date().toLocaleTimeString(),
-            avgBatchDurationMs: avgBatchDuration,
+            written: currentWritten,
+            elapsedTimeMs: elapsed,
+            speed: Math.round(speed * 10) / 10,
             etaSeconds: Math.round(eta),
-          },
-          ...prev.slice(0, 99),
-        ]);
+            batchesRemaining: chunks.length - activeIndex,
+          } : null);
+
+          const checkpointSaved = (currentProcessed % 500 === 0 || currentProcessed === total);
+          // Guardar checkpoint cada 500 registros
+          if (checkpointSaved) {
+            localStorage.setItem(jobId, JSON.stringify({
+              processed: currentProcessed,
+              added: addedAcc,
+              overwritten: overwrittenAcc,
+              omitted: omittedAcc,
+              failed: failedAcc,
+              timestamp: Date.now(),
+            }));
+          }
+
+          // Telemetría del lote
+          const avgBatchDuration = batchTimes.reduce((acc, curr) => acc + curr, 0) / batchTimes.length;
+          const memoryLimit = (performance as any).memory;
+          const memoryMb = memoryLimit ? Math.round(memoryLimit.usedJSHeapSize / (1024 * 1024)) : 0;
+
+          setTelemetryLogs((prev) => [
+            {
+              batchNumber: batchNum,
+              startIndex: batchStartIndex,
+              endIndex: Math.min(batchStartIndex + chunk.length, total) - 1,
+              recordsInBatch,
+              duplicateReadStart: chunkResult.duplicateReadStart,
+              duplicateReadEnd: chunkResult.duplicateReadEnd,
+              duplicateReadMs: chunkResult.duplicateReadMs,
+              batchCommitStart: chunkResult.batchCommitStart,
+              batchCommitEnd: chunkResult.batchCommitEnd,
+              batchCommitMs: chunkResult.batchCommitMs,
+              newAdded: chunkResult.added,
+              updated: chunkResult.overwritten,
+              omitted: chunkResult.omitted,
+              failed: chunkResult.failed,
+              processedConfirmed,
+              totalProcessedAccumulated: addedAcc + overwrittenAcc + omittedAcc + failedAcc,
+              memoryMb,
+              checkpointSaved,
+              timestamp: new Date().toLocaleTimeString(),
+              avgBatchDurationMs: avgBatchDuration,
+              etaSeconds: Math.round(eta),
+            },
+            ...prev.slice(0, 99),
+          ]);
+        }
+      };
+
+      // Iniciar workers paralelos
+      for (let w = 0; w < concurrency; w++) {
+        workers.push(runWorker());
+      }
+      await Promise.all(workers);
+
+      if (isCancelledRef.current) {
+        console.warn("[GTM Job] Cancelado por el usuario.");
+        setError("Importación cancelada por el usuario.");
+        setIsProcessing(false);
+        setActiveJob(null);
+        return;
       }
 
       // 2. Pasada de Reintentos automáticos para registros fallidos (Garantía total)
@@ -728,6 +753,7 @@ export default function MarketIntelligencePage() {
         sourceVersion: "DENUE-2026",
         user: auth.currentUser?.email || "jcuellar@aura-hcm.com",
         states: uniqueStates,
+        fingerprint,
       });
 
       // Recargar historial
@@ -750,7 +776,7 @@ export default function MarketIntelligencePage() {
         written: finalWritten,
       } : null);
 
-      setSuccess(`Lote importado con éxito: ${addedAcc} nuevos, ${overwrittenAcc} actualizados.`);
+      setSuccess(`Lote importado con éxito: ${addedAcc} nuevos, ${overwrittenAcc} actualizados, ${omittedAcc} omitidos.`);
       setImportReport({
         total,
         added: addedAcc,
@@ -770,14 +796,111 @@ export default function MarketIntelligencePage() {
     }
   }
 
+  // Ejecutar validación de conteo rápida sin recorrer los 57k
+  async function executeFastValidation(job: {
+    fingerprint: string;
+    filename: string;
+    companies: InegiCompany[];
+    existingImport: ImportHistoryEntry;
+  }) {
+    setIsProcessing(true);
+    setError("");
+    setSuccess("");
+    
+    const startTime = Date.now();
+    const total = job.companies.length;
+    const targetState = job.companies[0] ? getCompanyState(job.companies[0]) : "";
+
+    // Consultar conteo actual de base de datos para este estado
+    let dbCount = total;
+    if (targetState) {
+      try {
+        const verifySnap = await MarketFirestoreService.getMarketCompanies({ estado: targetState });
+        dbCount = verifySnap.length;
+      } catch (err) {
+        console.error("Error al consultar conteo rápido de estado:", err);
+      }
+    }
+
+    const elapsed = Date.now() - startTime;
+
+    // Actualizar activeJob para mostrar completado rápido
+    setActiveJob({
+      jobId: `validate_${Date.now()}`,
+      filename: job.filename,
+      stage: "COMPLETED",
+      mode: "Validando" as const,
+      processed: total,
+      total,
+      added: 0,
+      overwritten: 0,
+      omitted: total,
+      failed: 0,
+      written: total,
+      startTime,
+      elapsedTimeMs: elapsed,
+      speed: 0,
+      etaSeconds: 0,
+      batchesRemaining: 0,
+    });
+
+    setImportReport({
+      total,
+      added: 0,
+      updated: 0,
+      omitted: total,
+      failed: 0,
+      timeMs: elapsed,
+    });
+
+    // Invalida Dataset de este estado por si acaso
+    if (targetState) {
+      datasetManager.invalidateDataset(targetState);
+    }
+
+    setSuccess(`Validación de conteo rápida completada. Registros en dataset: ${dbCount.toLocaleString()}.`);
+    setDuplicateImportJob(null);
+    setIsProcessing(false);
+    await loadDataset(true, true);
+  }
+
   // Importar desde Excel o Muestra Piloto (Batch con reporte e historial)
-  async function handleImport(importedCompanies: InegiCompany[], filename: string = "Importación Masiva Excel") {
+  async function handleImport(
+    importedCompanies: InegiCompany[],
+    filename: string = "Importación Masiva Excel",
+    fileMetadata?: { size: number; lastModified: number }
+  ) {
     setIsProcessing(true);
     setError("");
     setSuccess("");
     setImportReport(null);
 
-    const jobId = `aura_job_${filename.replace(/[^a-zA-Z0-9]/g, "")}_${importedCompanies.length}`;
+    const size = fileMetadata?.size || 0;
+    const lastModified = fileMetadata?.lastModified || 0;
+    const total = importedCompanies.length;
+    const fingerprint = `${filename}_${total}_${size}_${lastModified}`;
+
+    // 1. Verificar si el archivo ya fue importado con el mismo fingerprint
+    try {
+      const history = await MarketFirestoreService.getImportHistory();
+      const existingImport = history.find(h => h.fingerprint === fingerprint);
+
+      if (existingImport && existingImport.failed === 0) {
+        // Encontrado: Mostrar diálogo de reimportación o validación
+        setDuplicateImportJob({
+          fingerprint,
+          filename,
+          companies: importedCompanies,
+          existingImport,
+        });
+        setIsProcessing(false);
+        return;
+      }
+    } catch (err) {
+      console.warn("No se pudo comprobar el historial de huellas digitales:", err);
+    }
+
+    const jobId = `aura_job_${filename.replace(/[^a-zA-Z0-9]/g, "")}_${total}`;
     
     // Comprobar checkpoint existente
     const saved = localStorage.getItem(jobId);
@@ -798,7 +921,7 @@ export default function MarketIntelligencePage() {
     }
 
     // Si no hay checkpoint, ejecutar de cero
-    executeImportJob(jobId, filename, importedCompanies, 0, 0, 0, 0, 0);
+    executeImportJob(jobId, filename, importedCompanies, 0, 0, 0, 0, 0, fingerprint);
   }
 
   // Limpiar estados de progreso e importación
@@ -1206,13 +1329,78 @@ export default function MarketIntelligencePage() {
         </div>
       )}
 
+      {/* Diálogo para Archivo Ya Importado (Checksum/Fingerprint) */}
+      {duplicateImportJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="w-full max-w-lg rounded-3xl border border-amber-500/30 bg-slate-900 p-6 shadow-2xl space-y-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 text-lg">
+                ⚠️
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white">Archivo Ya Importado Anteriormente</h3>
+                <p className="text-xs text-slate-400">
+                  La huella digital de <strong className="text-slate-200 font-mono">{duplicateImportJob.filename}</strong> ya coincide en el historial.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2 text-xs text-slate-400 font-sans">
+              <p>
+                Este archivo de <strong className="text-white font-mono">{duplicateImportJob.companies.length.toLocaleString()}</strong> registros 
+                fue cargado con éxito anteriormente.
+              </p>
+              <div className="mt-1 pt-1.5 border-t border-slate-900 flex justify-between">
+                <span>Último operador:</span>
+                <span className="text-slate-200 font-mono">{duplicateImportJob.existingImport.user || "jcuellar@aura-hcm.com"}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2.5 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  executeFastValidation(duplicateImportJob);
+                }}
+                className="rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-emerald-300 shadow-lg shadow-emerald-500/10 transition flex items-center gap-1.5"
+              >
+                🔍 Validar Conteo Rápido
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  const jobCompanies = duplicateImportJob.companies;
+                  const jobName = duplicateImportJob.filename;
+                  const jobFingerprint = duplicateImportJob.fingerprint;
+                  setDuplicateImportJob(null);
+                  const jobId = `aura_job_${jobName.replace(/[^a-zA-Z0-9]/g, "")}_${jobCompanies.length}`;
+                  executeImportJob(jobId, jobName, jobCompanies, 0, 0, 0, 0, 0, jobFingerprint);
+                }}
+                className="rounded-xl bg-indigo-605 hover:bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition flex items-center gap-1"
+              >
+                ♻️ Reimportar Completo
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDuplicateImportJob(null)}
+                className="rounded-xl border border-slate-800 bg-slate-905 px-4 py-2.5 text-xs text-slate-500 hover:bg-slate-800 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Panel de Progreso del Aura GTM Import Job Engine */}
       {activeJob && (
         <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/80 p-6 space-y-6 shadow-xl animate-fadeIn">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
             <div className="space-y-1">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-cyan-400 border border-cyan-500/20">
-                Aura GTM Import Job Engine
+                Aura GTM Import Job Engine {activeJob.mode && `(${activeJob.mode})`}
               </span>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <span className="h-2.5 w-2.5 animate-ping rounded-full bg-cyan-400" />

@@ -11,7 +11,11 @@ import { normalizeRow, normalizeRowWithMap, parseExcelWorkbook } from "../servic
 import type { InegiCompany } from "../types/inegi";
 
 interface MarketIntelligenceHeaderProps {
-  onImport: (companies: InegiCompany[], filename?: string) => Promise<void>;
+  onImport: (
+    companies: InegiCompany[], 
+    filename?: string, 
+    fileMetadata?: { size: number; lastModified: number }
+  ) => Promise<void>;
   onZipSelect: (file: File) => Promise<void>;
   isLoading: boolean;
   canImport: boolean;
@@ -424,8 +428,10 @@ export default function MarketIntelligenceHeader({
         setParseStatus(
           `Normalizados ${companiesToImport.length} registros. Importando a Firestore...`
         );
-        
-        await onImport(companiesToImport, file.name);
+        await onImport(companiesToImport, file.name, {
+          size: file.size,
+          lastModified: file.lastModified,
+        });
 
         setParseStatus(`Importación completada con éxito. ${companiesToImport.length} registros cargados.`);
         setTimeout(() => setParseStatus(""), 5000);

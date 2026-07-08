@@ -6,6 +6,8 @@ import StateOpportunityPanel from "./StateOpportunityPanel";
 import DailySalesGoalPanel from "./DailySalesGoalPanel";
 import ErrorBoundary from "./ErrorBoundary";
 
+import AuraIntelligenceRecommendationsPanel from "./AuraIntelligenceRecommendationsPanel";
+
 interface CommercialDashboardProps {
   companies: InegiCompany[];
   onSelectCompany: (company: InegiCompany) => void;
@@ -81,6 +83,11 @@ export default function CommercialDashboard({
           <span className="block text-2xl font-extrabold text-indigo-300 mt-1">{activeStates}</span>
         </div>
       </div>
+
+      {/* 2.5. Aura Intelligence Core Recommendations Panel */}
+      <ErrorBoundary fallbackTitle="Recomendaciones de Aura Intelligence">
+        <AuraIntelligenceRecommendationsPanel companies={companies} />
+      </ErrorBoundary>
 
       {/* 3. Aura Intelligence Lite Panel */}
       <ErrorBoundary fallbackTitle="Aura Intelligence Lite">

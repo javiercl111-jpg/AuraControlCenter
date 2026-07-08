@@ -56,6 +56,8 @@ export interface ImportHistoryEntry {
   timeMs: number;
   source: string;
   sourceVersion: string;
+  fingerprint?: string;
+  user?: string;
 }
 
 const DEFAULT_CONSULTANT = {
@@ -121,21 +123,24 @@ export async function importMarketCompaniesBatch(
     const readStart = Date.now();
     duplicateReadStartStr = new Date().toLocaleTimeString() + "." + String(Date.now() % 1000).padStart(3, "0");
 
+    const readPromises: Promise<any>[] = [];
     for (let j = 0; j < ids.length; j += UPSERT_READ_CHUNK_SIZE) {
       const idGroup = ids.slice(j, j + UPSERT_READ_CHUNK_SIZE);
-      try {
-        const q = query(
-          collection(db, MARKET_COMPANIES_COLLECTION),
-          where("__name__", "in", idGroup)
-        );
-        const snap = await retryWithBackoff(() => getDocs(q), 3, 1000);
-        snap.forEach(doc => {
-          existingDocsMap.set(doc.id, doc.data());
-        });
-      } catch (err) {
-        console.error("Error al consultar existencia de IDs en importación:", err);
-      }
+      const q = query(
+        collection(db, MARKET_COMPANIES_COLLECTION),
+        where("__name__", "in", idGroup)
+      );
+      readPromises.push(
+        retryWithBackoff(() => getDocs(q), 3, 1000).then(snap => {
+          snap.forEach(doc => {
+            existingDocsMap.set(doc.id, doc.data());
+          });
+        }).catch(err => {
+          console.error("Error al consultar existencia de IDs en importación paralela:", err);
+        })
+      );
     }
+    await Promise.all(readPromises);
 
     const readEnd = Date.now();
     duplicateReadEndStr = new Date().toLocaleTimeString() + "." + String(Date.now() % 1000).padStart(3, "0");
@@ -339,6 +344,8 @@ export async function getImportHistory(): Promise<ImportHistoryEntry[]> {
         timeMs: data.timeMs || 0,
         source: data.source || "INEGI",
         sourceVersion: data.sourceVersion || "DENUE-2026",
+        fingerprint: data.fingerprint || "",
+        user: data.user || "",
       });
     });
     // Ordenar descendente (más recientes primero)
@@ -612,6 +619,7 @@ export async function writeImportAudit(audit: {
   sourceVersion: string;
   user: string;
   states?: string[];
+  fingerprint?: string;
 }): Promise<string> {
   const historyRef = doc(collection(db, "market_imports_history"));
   const historyId = historyRef.id;
@@ -629,6 +637,7 @@ export async function writeImportAudit(audit: {
     sourceVersion: audit.sourceVersion,
     user: audit.user,
     states: audit.states || [],
+    fingerprint: audit.fingerprint || "",
   });
   return historyId;
 }

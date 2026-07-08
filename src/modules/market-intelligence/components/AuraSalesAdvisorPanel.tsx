@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sparkles,
   Copy,
@@ -14,14 +14,41 @@ import {
   BadgeAlert,
 } from "lucide-react";
 import type { InegiCompany } from "../types/inegi";
-import { generateAuraSalesAdvice } from "../services/auraSalesAdvisorService";
+import { generateAuraSalesAdvice, type AuraSalesAdvice } from "../services/auraSalesAdvisorService";
+import AppAdapter from "../../intelligence/core/services/appAdapter";
 
 interface AuraSalesAdvisorPanelProps {
   company: InegiCompany;
 }
 
 export default function AuraSalesAdvisorPanel({ company }: AuraSalesAdvisorPanelProps) {
-  const advice = generateAuraSalesAdvice(company);
+  const [advice, setAdvice] = useState<AuraSalesAdvice | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    async function loadAdvice() {
+      try {
+        const res = await AppAdapter.getSalesAdvice(company);
+        if (active) {
+          setAdvice(res);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.warn("AuraCore advice failed, reverting to rule-based fallback:", err);
+        if (active) {
+          const fallback = generateAuraSalesAdvice(company);
+          setAdvice(fallback);
+          setLoading(false);
+        }
+      }
+    }
+    loadAdvice();
+    return () => {
+      active = false;
+    };
+  }, [company]);
 
   const [copied, setCopied] = useState(false);
   const [activeObjectionIdx, setActiveObjectionIdx] = useState<number | null>(null);
@@ -29,9 +56,11 @@ export default function AuraSalesAdvisorPanel({ company }: AuraSalesAdvisorPanel
   const [isObjectionsOpen, setIsObjectionsOpen] = useState(true);
 
   const handleCopySpeech = () => {
-    navigator.clipboard.writeText(advice.openingSpeech);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (advice) {
+      navigator.clipboard.writeText(advice.openingSpeech);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   // Formateadores de moneda
@@ -43,6 +72,15 @@ export default function AuraSalesAdvisorPanel({ company }: AuraSalesAdvisorPanel
       maximumFractionDigits: 0,
     }).format(amount);
   };
+
+  if (loading || !advice) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-6 flex flex-col items-center justify-center min-h-[300px] space-y-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div>
+        <p className="text-xs text-slate-400 font-medium">Aura Core resolviendo asesoría de ventas...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-6 backdrop-blur-md hover:border-slate-700/80 transition-all duration-300 space-y-6">
