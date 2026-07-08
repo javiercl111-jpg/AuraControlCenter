@@ -61,7 +61,7 @@ export class RecommendationEngine implements IRecommendationEngine {
         priorityScore: score,
         priorityLevel: gap.severity,
         category: "compliance",
-        title: `Remediar Brecha: ${gap.gapDescription}`,
+        title: `Oportunidad detectada: ${gap.gapDescription}`,
         description: `${gap.regulatoryImpact} Multa potencial estimada: $${gap.estimatedFineCost ?? 0} MXN.`,
         suggestedAction: gap.remediationAction,
         associatedBrain: "assessment",

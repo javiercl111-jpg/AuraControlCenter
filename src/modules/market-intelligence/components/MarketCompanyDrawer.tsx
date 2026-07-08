@@ -52,7 +52,7 @@ export default function MarketCompanyDrawer({
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Drawer Body */}
-      <div className="relative flex h-full w-full max-w-2xl flex-col border-l border-slate-800 bg-slate-950 p-6 shadow-2xl transition-all duration-300 md:p-8 overflow-y-auto">
+      <div className="relative flex h-full w-full max-w-2xl flex-col border-l border-slate-800 bg-slate-950 p-6 shadow-2xl transition-all duration-300 md:p-8 overflow-y-auto pt-[env(safe-area-inset-top)] pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         
         {/* Header Drawer */}
         <div className="flex items-start justify-between border-b border-slate-800 pb-5">

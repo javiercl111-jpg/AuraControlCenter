@@ -55,7 +55,7 @@ export default function CommercialDashboard({
       </div>
 
       {/* 2. KPIs principales */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 font-sans">
         <div className="rounded-xl border border-slate-800 bg-slate-900/20 p-4.5">
           <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prospectos</span>
           <span className="block text-2xl font-extrabold text-white mt-1">{stats.totalCount}</span>
@@ -72,11 +72,34 @@ export default function CommercialDashboard({
           <span className="block text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Contacto Completo</span>
           <span className="block text-2xl font-extrabold text-cyan-300 mt-1">{contactComplete}</span>
         </div>
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4.5">
-          <span className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider">MRR Estimado</span>
-          <span className="block text-xl font-extrabold text-emerald-300 mt-1.5">
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4.5 flex flex-col justify-between">
+          <div>
+            <span className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Mercado Potencial</span>
+            <span className="block text-[8px] text-slate-500 mt-0.5 leading-normal">
+              Valor mensual máximo estimado del dataset cargado
+            </span>
+          </div>
+          <span className="block text-lg font-extrabold text-emerald-300 mt-2 font-mono">
             ${report.estimatedPotentialMrr.toLocaleString()} MXN
           </span>
+          <div className="mt-2.5 pt-2 border-t border-slate-800/80 space-y-1 text-[8px] text-slate-500 font-mono">
+            <div className="flex justify-between text-slate-400">
+              <span>Mercado Potencial:</span>
+              <span className="font-semibold text-emerald-400">${report.estimatedPotentialMrr.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>MRR Objetivo:</span>
+              <span>Pendiente</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Pipeline Activo:</span>
+              <span>Pendiente</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Forecast Esperado:</span>
+              <span>Pendiente</span>
+            </div>
+          </div>
         </div>
         <div className="rounded-xl border border-indigo-500/15 bg-indigo-500/5 p-4.5">
           <span className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Estados Activos</span>

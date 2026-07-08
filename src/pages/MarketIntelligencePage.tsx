@@ -1314,85 +1314,6 @@ export default function MarketIntelligencePage() {
           canImport={capabilities.canImport}
         />
 
-        {/* Banner de Diagnóstico del Dataset Activo */}
-        {activeMetadata && (
-          <div className="rounded-2xl border border-cyan-500/25 bg-slate-950/40 p-5 backdrop-blur-md space-y-4 animate-fadeIn font-sans">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
-                <span className="text-xs font-extrabold uppercase tracking-wider text-cyan-300">
-                  Aura Dataset Manager — Diagnóstico de Dataset en Memoria
-                </span>
-              </div>
-              <div className="text-[10px] text-slate-500 font-mono">
-                Última actualización: {new Date(activeMetadata.loadedAt).toLocaleTimeString()}
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Estado Activo */}
-              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
-                <span className="block text-[10px] text-slate-500 uppercase font-semibold font-sans">Estado Activo</span>
-                <span className="block text-sm font-extrabold text-white mt-1">
-                  {filters.estado || "Todos los Estados (Muestra)"}
-                </span>
-              </div>
-
-              {/* Total empresas */}
-              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 font-sans">
-                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Empresas en Memoria</span>
-                <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono">
-                  {activeMetadata.count.toLocaleString()}
-                </span>
-              </div>
-
-              {/* Fuente / Versión */}
-              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 font-sans">
-                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Fuente / Versión</span>
-                <span className="block text-sm font-extrabold text-slate-300 mt-1">
-                  {activeMetadata.source} — {activeMetadata.sourceVersion}
-                </span>
-              </div>
-
-              {/* MRR Estimado */}
-              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 font-sans">
-                <span className="block text-[10px] text-slate-500 uppercase font-semibold">MRR Potencial Estimado</span>
-                <span className="block text-sm font-extrabold text-emerald-400 mt-1 font-mono">
-                  {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0 }).format(activeMetadata.estimatedMrr)}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 pt-1 font-sans">
-              {/* Oportunidades Críticas/Alta Prioridad */}
-              <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60 flex items-center justify-between">
-                <div>
-                  <span className="block text-[10px] text-slate-500 uppercase font-semibold">Oportunidades de Alta Prioridad</span>
-                  <span className="block text-xs text-slate-400 mt-1">Suma de perfiles clasificados como CRITICAL o HIGH.</span>
-                </div>
-                <span className="text-xl font-extrabold text-rose-400 font-mono">
-                  {activeMetadata.highPriorityCount.toLocaleString()}
-                </span>
-              </div>
-
-              {/* Top Industrias */}
-              <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60">
-                <span className="block text-[10px] text-slate-500 uppercase font-semibold mb-2">Principales Sectores en este Dataset</span>
-                <div className="flex flex-wrap gap-2">
-                  {activeMetadata.topIndustries.map((indItem, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 border border-indigo-500/20"
-                    >
-                      {indItem.industry}: <strong className="text-white font-mono">{indItem.count}</strong>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* 1. Confirmación de Carga de ZIP (Prioridad 3) */}
         {pendingStateResolutionFiles && currentResolutionIndex === -1 && resolvedFilesList.length > 0 && (
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 space-y-4 font-sans animate-fadeIn">
@@ -1401,15 +1322,15 @@ export default function MarketIntelligencePage() {
               <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
                 <span>📦</span> Importación Nacional: {activeZipFile?.name}
               </h3>
-              <span className="text-[10px] text-cyan-400 font-mono">Total Archivos: {pendingStateResolutionFiles.length}</span>
+              <span className="text-[10px] text-cyan-400 font-mono font-sans font-sans">Total Archivos: {pendingStateResolutionFiles.length}</span>
             </div>
             
             <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 font-mono text-[9px] text-cyan-300 max-h-40 overflow-y-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-900 text-slate-500 font-bold uppercase">
-                    <th className="pb-1">Archivo Excel</th>
-                    <th className="pb-1 text-right">Estado Asignado</th>
+                    <th className="pb-1 font-sans">Archivo Excel</th>
+                    <th className="pb-1 text-right font-sans">Estado Asignado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-900/30">
@@ -1447,8 +1368,8 @@ export default function MarketIntelligencePage() {
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 space-y-4 font-sans animate-fadeIn">
             {renderZipTimeline()}
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
-                <span className="h-2 w-2 animate-ping rounded-full bg-cyan-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2 font-sans">
+                <span className="h-2 w-2 animate-ping rounded-full bg-cyan-400 animate-pulse" />
                 Procesando Importación Nacional ZIP
               </h3>
               <span className="text-xs text-slate-400 font-semibold font-mono">
@@ -1469,27 +1390,27 @@ export default function MarketIntelligencePage() {
               </div>
             </div>
 
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 text-center text-xs">
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 text-center text-xs font-mono">
               <div className="rounded-lg bg-slate-950 p-3 border border-slate-900">
-                <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Procesados</span>
+                <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px] font-sans">Procesados</span>
                 <span className="block font-bold text-white mt-0.5">{zipProgress.totalRowsProcessed}</span>
               </div>
               <div className="rounded-lg bg-emerald-500/5 p-3 border border-emerald-500/10">
-                <span className="block text-emerald-500 font-semibold uppercase tracking-wider text-[10px]">Nuevos</span>
+                <span className="block text-emerald-500 font-semibold uppercase tracking-wider text-[10px] font-sans">Nuevos</span>
                 <span className="block font-bold text-emerald-400 mt-0.5">{zipProgress.added}</span>
               </div>
               <div className="rounded-lg bg-cyan-500/5 p-3 border border-cyan-500/10">
-                <span className="block text-cyan-500 font-semibold uppercase tracking-wider text-[10px]">Actualizados</span>
+                <span className="block text-cyan-500 font-semibold uppercase tracking-wider text-[10px] font-sans">Actualizados</span>
                 <span className="block font-bold text-cyan-400 mt-0.5">{zipProgress.overwritten}</span>
               </div>
-              <div className="rounded-lg bg-rose-500/5 p-3 border border-rose-500/10">
+              <div className="rounded-lg bg-rose-500/5 p-3 border border-rose-500/10 font-sans">
                 <span className="block text-rose-500 font-semibold uppercase tracking-wider text-[10px]">Errores</span>
-                <span className="block font-bold text-rose-400 mt-0.5">{zipProgress.failed}</span>
+                <span className="block font-bold text-rose-400 mt-0.5 font-mono">{zipProgress.failed}</span>
               </div>
             </div>
 
             {zipStep === "COMPLETED" && (
-              <div className="flex justify-end pt-2">
+              <div className="flex justify-end pt-2 font-sans">
                 <button
                   type="button"
                   onClick={resetZipImportStates}
@@ -1506,7 +1427,7 @@ export default function MarketIntelligencePage() {
         {pendingStateResolutionFiles && currentResolutionIndex !== -1 && (
           <div className="rounded-2xl border border-amber-500/20 bg-slate-900 p-6 space-y-4 shadow-xl font-sans">
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 font-sans">
                 Asistente de Importación Nacional (ZIP)
               </span>
               <h3 className="text-base font-bold text-white mt-1">
@@ -1514,7 +1435,7 @@ export default function MarketIntelligencePage() {
               </h3>
               <p className="text-xs text-slate-400 mt-2 leading-relaxed">
                 No pudimos detectar automáticamente el estado para el archivo:
-                <strong className="block text-amber-200 mt-1 font-mono break-all">
+                <strong className="block text-amber-200 mt-1 font-mono break-all font-sans">
                   {pendingStateResolutionFiles[currentResolutionIndex].filename}
                 </strong>
               </p>
@@ -1580,7 +1501,7 @@ export default function MarketIntelligencePage() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2 justify-end font-sans">
+            <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -1620,23 +1541,23 @@ export default function MarketIntelligencePage() {
 
         {/* Progress loop panel */}
         {activeJob && (
-          <div className="rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900/60 to-slate-950/60 p-6 space-y-5 animate-fadeIn font-sans">
+          <div className="rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900/60 to-slate-950/60 p-6 space-y-5 animate-fadeIn font-sans font-sans">
             <div className="flex items-center justify-between border-b border-slate-900 pb-3">
               <div className="flex items-center gap-2 text-white">
                 <span className="animate-spin h-3.5 w-3.5 border-2 border-cyan-400 border-t-transparent rounded-full shrink-0" />
                 <span className="text-xs font-bold uppercase tracking-wider">Aura GTM Import Job Engine</span>
               </div>
-              <div className="text-[10px] text-slate-500 font-mono">ID: {activeJob.jobId}</div>
+              <div className="text-[10px] text-slate-500 font-mono font-sans font-sans font-sans">ID: {activeJob.jobId}</div>
             </div>
 
             {renderZipTimeline()}
 
             {importStalled && (
-              <div className="bg-amber-950/40 border border-amber-500/30 text-amber-200 p-4.5 rounded-2xl flex flex-col gap-2 font-sans">
+              <div className="bg-amber-950/40 border border-amber-500/30 text-amber-200 p-4.5 rounded-2xl flex flex-col gap-2 font-sans font-sans">
                 <div className="flex items-center gap-2 font-bold text-amber-300">
                   <span>⚠️ La importación parece detenida.</span>
                 </div>
-                <p className="text-[11px] leading-relaxed">
+                <p className="text-[11px] leading-relaxed font-sans">
                   No se ha detectado actividad en los últimos 2 minutos. Puedes cancelar de forma segura la importación actual. El checkpoint se encuentra guardado en este navegador y podrás reanudar el proceso desde el registro <strong className="font-mono text-white">{activeJob.processed}</strong> una vez que la red o el servicio se estabilicen.
                 </p>
                 <div className="text-[10px] text-amber-400 font-mono">
@@ -1646,8 +1567,8 @@ export default function MarketIntelligencePage() {
             )}
 
             <div className="space-y-2">
-              <div className="flex justify-between text-xs font-semibold text-slate-400">
-                <span className="flex items-center gap-1.5 font-sans">
+              <div className="flex justify-between text-xs font-semibold text-slate-400 font-sans">
+                <span className="flex items-center gap-1.5">
                   {activeJob.stage === "WRITING_FIRESTORE" ? (
                     <>Escribiendo registros en Firestore...</>
                   ) : activeJob.stage === "VALIDATING_WRITE" ? (
@@ -1655,7 +1576,7 @@ export default function MarketIntelligencePage() {
                   ) : activeJob.stage === "UPDATING_DATASET_MANAGER" ? (
                     <>Refrescando caché del Dataset Manager...</>
                   ) : activeJob.stage === "COMPLETED" ? (
-                    <span className="text-emerald-400 font-bold">¡Lote finalizado con éxito!</span>
+                    <span className="text-emerald-400 font-bold font-sans">¡Lote finalizado con éxito!</span>
                   ) : (
                     <>Procesando etapa...</>
                   )}
@@ -1674,10 +1595,10 @@ export default function MarketIntelligencePage() {
 
             <div className="grid gap-4 grid-cols-2 md:grid-cols-5 text-center pt-2 font-mono">
               <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 font-sans">
-                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans font-sans">
                   Escritos / Total
                 </span>
-                <span className="block text-sm font-extrabold text-white mt-1 font-mono">
+                <span className="block text-sm font-extrabold text-white mt-1">
                   {activeJob.written.toLocaleString()} / {activeJob.total.toLocaleString()}
                 </span>
               </div>
@@ -1686,16 +1607,16 @@ export default function MarketIntelligencePage() {
                 <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans">
                   Nuevos
                 </span>
-                <span className="block text-sm font-extrabold text-emerald-400 mt-1 font-mono">
+                <span className="block text-sm font-extrabold text-emerald-400 mt-1">
                   +{activeJob.added.toLocaleString()}
                 </span>
               </div>
 
-              <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 font-sans font-sans">
-                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans">
+              <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans font-sans">
                   Actualizados
                 </span>
-                <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono font-mono">
+                <span className="block text-sm font-extrabold text-cyan-400 mt-1">
                   +{activeJob.overwritten.toLocaleString()}
                 </span>
               </div>
@@ -1710,30 +1631,30 @@ export default function MarketIntelligencePage() {
               </div>
 
               <div className="rounded-2xl bg-slate-900/40 p-4 border border-slate-800/60 font-sans">
-                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
                   Fallidos
                 </span>
-                <span className="block text-sm font-extrabold text-red-400 mt-1 font-mono font-mono font-mono">
+                <span className="block text-sm font-extrabold text-red-400 mt-1 font-mono">
                   {activeJob.failed.toLocaleString()}
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-900">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-900 font-sans">
               <div className="flex items-center gap-6 text-[10px] font-mono text-slate-400">
                 <div>
                   <span className="text-slate-500 mr-1.5 font-sans">Velocidad:</span>
-                  <span className="font-bold text-slate-200">{activeJob.speed} reg/s</span>
+                  <span className="font-bold text-slate-200 font-mono">{activeJob.speed} reg/s</span>
                 </div>
                 <div className="h-3 w-[1px] bg-slate-800" />
                 <div>
-                  <span className="text-slate-500 mr-1.5 font-sans">ETA:</span>
-                  <span className="font-bold text-amber-400">{activeJob.etaSeconds > 0 ? `${activeJob.etaSeconds}s` : "0s"}</span>
+                  <span className="text-slate-500 mr-1.5 font-sans font-sans">ETA:</span>
+                  <span className="font-bold text-amber-400 font-mono">{activeJob.etaSeconds > 0 ? `${activeJob.etaSeconds}s` : "0s"}</span>
                 </div>
                 <div className="h-3 w-[1px] bg-slate-800" />
                 <div>
-                  <span className="text-slate-500 mr-1.5 font-sans font-sans">Procesados:</span>
-                  <span className="font-bold text-cyan-400">{activeJob.processed.toLocaleString()}</span>
+                  <span className="text-slate-500 mr-1.5 font-sans">Procesados:</span>
+                  <span className="font-bold text-cyan-400 font-mono">{activeJob.processed.toLocaleString()}</span>
                 </div>
               </div>
 
@@ -1760,7 +1681,7 @@ export default function MarketIntelligencePage() {
         {/* Import report */}
         {importReport && (
           <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between font-sans">
               <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-300">
                 📊 Reporte de Procesamiento de Importación
               </h3>
@@ -1771,24 +1692,24 @@ export default function MarketIntelligencePage() {
                 Cerrar Reporte
               </button>
             </div>
-            <div className="grid gap-4 sm:grid-cols-5 text-center">
+            <div className="grid gap-4 sm:grid-cols-5 text-center font-mono">
               <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800">
                 <span className="block text-slate-400 text-[10px] font-semibold uppercase tracking-wider font-sans">Procesados</span>
                 <span className="block text-2xl font-bold text-white mt-1">{importReport.total}</span>
               </div>
-              <div className="rounded-xl bg-emerald-500/5 p-4 border border-emerald-500/20">
-                <span className="block text-emerald-400 text-[10px] font-semibold uppercase tracking-wider font-sans font-sans">Nuevos</span>
-                <span className="block text-2xl font-bold text-emerald-300 mt-1">{importReport.added}</span>
+              <div className="rounded-xl bg-emerald-500/5 p-4 border border-emerald-500/20 font-sans font-sans">
+                <span className="block text-emerald-400 text-[10px] font-semibold uppercase tracking-wider">Nuevos</span>
+                <span className="block text-2xl font-bold text-emerald-300 mt-1">+{importReport.added}</span>
               </div>
-              <div className="rounded-xl bg-cyan-500/5 p-4 border border-cyan-500/20">
-                <span className="block text-cyan-400 text-[10px] font-semibold uppercase tracking-wider font-sans">Actualizados</span>
-                <span className="block text-2xl font-bold text-cyan-300 mt-1">{importReport.updated}</span>
+              <div className="rounded-xl bg-cyan-500/5 p-4 border border-cyan-500/20 font-sans">
+                <span className="block text-cyan-400 text-[10px] font-semibold uppercase tracking-wider">Actualizados</span>
+                <span className="block text-2xl font-bold text-cyan-300 mt-1">+{importReport.updated}</span>
               </div>
-              <div className="rounded-xl bg-amber-500/5 p-4 border border-amber-500/20">
+              <div className="rounded-xl bg-amber-500/5 p-4 border border-amber-500/20 font-sans">
                 <span className="block text-amber-400 text-[10px] font-semibold uppercase tracking-wider font-sans">Sin cambios</span>
-                <span className="block text-2xl font-bold text-amber-300 mt-1">{importReport.omitted}</span>
+                <span className="block text-2xl font-bold text-amber-300 mt-1">+{importReport.omitted}</span>
               </div>
-              <div className="rounded-xl bg-rose-500/5 p-4 border border-rose-500/20">
+              <div className="rounded-xl bg-rose-500/5 p-4 border border-rose-500/20 font-sans">
                 <span className="block text-rose-400 text-[10px] font-semibold uppercase tracking-wider font-sans">Fallidos</span>
                 <span className="block text-2xl font-bold text-rose-300 mt-1">{importReport.failed}</span>
               </div>
@@ -1800,11 +1721,11 @@ export default function MarketIntelligencePage() {
         )}
 
         {/* Audit History List */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 font-sans">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 font-sans font-sans">
           <button
             type="button"
             onClick={() => setShowHistory(!showHistory)}
-            className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-405 outline-none"
+            className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-405 outline-none font-sans"
           >
             <span className="flex items-center gap-2">
               <span>📋</span> Historial de Auditoría de Importaciones (Últimas 20)
@@ -1824,11 +1745,11 @@ export default function MarketIntelligencePage() {
                     <tr className="border-b border-slate-800 text-slate-500 font-semibold uppercase tracking-wider">
                       <th className="py-2.5">Fecha / Hora</th>
                       <th className="py-2.5">Total Registros</th>
-                      <th className="py-2.5 text-emerald-400 font-sans">Nuevos</th>
-                      <th className="py-2.5 text-cyan-400">Actualizados</th>
+                      <th className="py-2.5 text-emerald-400">Nuevos</th>
+                      <th className="py-2.5 text-cyan-400 font-sans">Actualizados</th>
                       <th className="py-2.5 text-amber-400">Sin Cambios</th>
-                      <th className="py-2.5 text-rose-400">Fallidos</th>
-                      <th className="py-2.5 text-right">Tiempo</th>
+                      <th className="py-2.5 text-rose-400 font-sans">Fallidos</th>
+                      <th className="py-2.5 text-right font-sans">Tiempo</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-855 text-slate-300 font-mono">
@@ -1854,26 +1775,6 @@ export default function MarketIntelligencePage() {
             </div>
           )}
         </div>
-
-        {/* Maintenance & Repair Tools */}
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/10 p-5 space-y-4">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <span>🔧</span> Herramientas de Reparación Laboral
-          </h4>
-          <p className="text-xs text-slate-500 leading-relaxed font-sans">
-            Consolidación administrativa y normalización de geografía. Permite asociar municipios huérfanos con sus estados federativos según catálogos oficiales del DENUE.
-          </p>
-          <div className="flex gap-2 font-sans">
-            <button
-              type="button"
-              onClick={handleRepairStates}
-              disabled={isProcessing}
-              className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 px-4 py-2.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-950/30 transition disabled:opacity-50"
-            >
-              Normalizar Municipios Huérfanos
-            </button>
-          </div>
-        </div>
       </div>
     );
   };
@@ -1892,7 +1793,7 @@ export default function MarketIntelligencePage() {
           <p className="text-xs text-slate-400 leading-relaxed font-sans">
             Historial de interacción empresarial y eventos críticos de memoria corporativa.
           </p>
-          <div className="border border-slate-850 rounded-xl p-4 bg-slate-900/30 space-y-4 font-sans">
+          <div className="border border-slate-850 rounded-xl p-4 bg-slate-900/30 space-y-4 font-sans font-sans">
             <div className="flex justify-between items-center border-b border-slate-855 pb-2">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Resumen de Memoria Activa (Mock/Demo):</span>
               <span className="text-[9px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded px-1.5 py-0.2 uppercase font-extrabold tracking-wider">Demo Tenant</span>
@@ -1903,12 +1804,67 @@ export default function MarketIntelligencePage() {
 - Objeción Registrada: El contacto comentó que el costo de la suscripción completa excede su presupuesto. Recomendó iniciar con Aura HCM Básico.
 - Seguimiento: Llamada comercial agendada para discutir el ROI de la propuesta básica.`}
             </p>
-            <div className="text-[10px] text-slate-500 leading-relaxed border-t border-slate-850 pt-2 flex items-center gap-1 font-sans">
+            <div className="text-[10px] text-slate-500 leading-relaxed border-t border-slate-850 pt-2 flex items-center gap-1 font-sans font-sans">
               <span>💡</span>
               <span>
                 <strong>Tip de Prospección:</strong> El core ha detectado una objeción de precio. Al abrir el drawer de cualquier prospecto de Querétaro, el Asesor de Ventas recibirá sugerencias que priorizan comenzar con <strong>Aura HCM Básico</strong> para mitigar esta barrera presupuestaria.
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* Knowledge Engine Summary Card */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-5 space-y-4">
+          <div className="flex items-center gap-2 text-indigo-400 font-sans">
+            <span>📚</span>
+            <h4 className="text-sm font-bold uppercase tracking-wider">Aura Knowledge Engine</h4>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed font-sans">
+            Conocimiento regulatorio general del ecosistema Aura HCM para auditorías laborales en México.
+          </p>
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-3 font-sans">
+            <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4 space-y-1">
+              <span className="block text-[10px] text-indigo-400 font-extrabold uppercase font-sans font-sans">NOM-035-STPS</span>
+              <span className="block text-xs font-bold text-white font-sans font-sans">Riesgos Psicosociales</span>
+              <span className="block text-[10px] text-slate-400 leading-normal font-sans">Evaluación de entorno organizacional favorable obligatorio para empresas en México.</span>
+            </div>
+            <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4 space-y-1 font-sans">
+              <span className="block text-[10px] text-indigo-400 font-extrabold uppercase">NOM-037-STPS</span>
+              <span className="block text-xs font-bold text-white">Teletrabajo Obligatorio</span>
+              <span className="block text-[10px] text-slate-400 leading-normal">Regulación de higiene, seguridad y herramientas de trabajo remoto.</span>
+            </div>
+            <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4 space-y-1 font-sans">
+              <span className="block text-[10px] text-indigo-400 font-extrabold uppercase">NOM-151-SCFI</span>
+              <span className="block text-xs font-bold text-white font-sans">Conservación de Mensajes</span>
+              <span className="block text-[10px] text-slate-400 leading-normal font-sans">Requisitos de firmas electrónicas y contratos digitales para validez jurídica.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Business Assessment Brain Simulation Card */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-5 space-y-4">
+          <div className="flex items-center gap-2 text-cyan-400 font-sans">
+            <span>📄</span>
+            <h4 className="text-sm font-bold uppercase tracking-wider">Business Assessment Brain</h4>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed font-sans">
+            Módulo de simulación de auditorías laborales y multas STPS. Preparado para generación de informes interactivos.
+          </p>
+          <div className="rounded-xl border border-dashed border-cyan-500/20 bg-cyan-500/5 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans font-sans">
+            <div className="space-y-1 max-w-xl">
+              <span className="inline-flex items-center gap-1 rounded bg-cyan-950 px-2 py-0.5 text-[9px] font-extrabold text-cyan-400 border border-cyan-500/20 uppercase tracking-wide">Core Module Ready</span>
+              <h5 className="text-xs font-bold text-white">Reporte Ejecutivo STPS & SAT</h5>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                Una vez habilitado el motor, podrás generar diagnósticos de cumplimiento normativo y exportar simulaciones financieras en PDF interactivos para clientes enterprise.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled
+              className="self-start md:self-center rounded-xl bg-cyan-950 border border-cyan-500/30 text-cyan-400/60 px-4 py-2.5 text-xs font-bold whitespace-nowrap cursor-not-allowed font-sans"
+            >
+              Preparar Diagnóstico (Assessment in-core)
+            </button>
           </div>
         </div>
       </div>
@@ -1918,19 +1874,101 @@ export default function MarketIntelligencePage() {
   const renderDiagnosticsTab = () => {
     return (
       <div className="space-y-6 animate-fadeIn font-sans">
+        {/* Banner de Diagnóstico del Dataset Activo */}
+        {activeMetadata && (
+          <div className="rounded-2xl border border-cyan-500/25 bg-slate-950/40 p-5 backdrop-blur-md space-y-4 animate-fadeIn font-sans">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+                <span className="text-xs font-extrabold uppercase tracking-wider text-cyan-300">
+                  Aura Dataset Manager — Diagnóstico de Dataset en Memoria
+                </span>
+              </div>
+              <div className="text-[10px] text-slate-500 font-mono">
+                Última actualización: {new Date(activeMetadata.loadedAt).toLocaleTimeString()}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 font-sans font-sans">
+              {/* Estado Activo */}
+              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold font-sans">Estado Activo</span>
+                <span className="block text-sm font-extrabold text-white mt-1">
+                  {filters.estado || "Todos los Estados (Muestra)"}
+                </span>
+              </div>
+
+              {/* Total empresas */}
+              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Empresas en Memoria</span>
+                <span className="block text-sm font-extrabold text-cyan-400 mt-1 font-mono">
+                  {activeMetadata.count.toLocaleString()}
+                </span>
+              </div>
+
+              {/* Fuente / Versión */}
+              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 font-sans">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Fuente / Versión</span>
+                <span className="block text-sm font-extrabold text-slate-300 mt-1 font-sans">
+                  {activeMetadata.source} — {activeMetadata.sourceVersion}
+                </span>
+              </div>
+
+              {/* Mercado Potencial */}
+              <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+                <div className="space-y-0.5 font-sans">
+                  <span className="block text-[10px] text-slate-500 uppercase font-semibold">Mercado Potencial</span>
+                  <span className="block text-[8px] text-slate-450 leading-none">Valor mensual máximo del dataset</span>
+                </div>
+                <span className="block text-sm font-extrabold text-emerald-400 mt-1.5 font-mono">
+                  {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0 }).format(activeMetadata.estimatedMrr)}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 pt-1 font-sans">
+              {/* Oportunidades Críticas/Alta Prioridad */}
+              <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60 flex items-center justify-between">
+                <div>
+                  <span className="block text-[10px] text-slate-500 uppercase font-semibold">Oportunidades de Alta Prioridad</span>
+                  <span className="block text-xs text-slate-400 mt-1">Suma de perfiles clasificados como CRITICAL o HIGH.</span>
+                </div>
+                <span className="text-xl font-extrabold text-rose-400 font-mono">
+                  {activeMetadata.highPriorityCount.toLocaleString()}
+                </span>
+              </div>
+
+              {/* Top Industrias */}
+              <div className="rounded-xl bg-slate-900/30 p-4 border border-slate-900/60">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold mb-2">Principales Sectores en este Dataset</span>
+                <div className="flex flex-wrap gap-2">
+                  {activeMetadata.topIndustries.map((indItem, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 border border-indigo-500/20"
+                    >
+                      {indItem.industry}: <strong className="text-white font-mono">{indItem.count}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Diagnostic Console card */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 space-y-4 font-sans">
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex justify-between font-sans">
             <span>📊 Consola de Diagnóstico & Telemetría GTM</span>
             <span className="text-cyan-400 font-mono text-[10px]">Modo Admin</span>
           </h4>
-          <p className="text-xs text-slate-500 leading-relaxed font-sans font-sans">
+          <p className="text-xs text-slate-500 leading-relaxed">
             Consola técnica de rendimiento. Muestra la velocidad de procesamiento, carga en paralelo de hilos concurrentes, y tiempos de duplicidad/commit de Firestore para control de lints de Firebase.
           </p>
 
           <div className="grid gap-4 md:grid-cols-4 text-center font-mono">
             <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800">
-              <span className="block text-slate-500 text-[10px] font-bold uppercase font-sans">Memoria Asignada</span>
+              <span className="block text-slate-500 text-[10px] font-bold uppercase">Memoria Asignada</span>
               <span className="block text-xl font-bold text-white mt-1">
                 ${(performance as any).memory ? `${Math.round((performance as any).memory.usedJSHeapSize / (1024 * 1024))} MB` : "N/D"}
               </span>
@@ -1943,7 +1981,7 @@ export default function MarketIntelligencePage() {
               <span className="block text-slate-500 text-[10px] font-bold uppercase">Tamaño Lote Write</span>
               <span className="block text-xl font-bold text-white mt-1 font-mono">100 reg</span>
             </div>
-            <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800 font-sans">
+            <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800 font-sans font-sans">
               <span className="block text-slate-500 text-[10px] font-bold uppercase">Dataset en Memoria</span>
               <span className="block text-xl font-bold text-cyan-400 mt-1 font-mono">${rawDataset.length.toLocaleString()} reg</span>
             </div>
@@ -1961,7 +1999,7 @@ export default function MarketIntelligencePage() {
                     <th className="pb-1 text-right">Registros</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-850">
+                <tbody className="divide-y divide-slate-855">
                   {availableStates.map((st) => {
                     const count = rawDataset.filter((c) => getCompanyState(c) === st).length;
                     return (
@@ -1980,12 +2018,12 @@ export default function MarketIntelligencePage() {
               <span className="block text-[10px] font-semibold text-slate-500 uppercase">Duplicidad e Integridad</span>
               <table className="w-full text-[9px] font-mono text-slate-300 mt-1">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left font-sans">
                     <th className="pb-1 pr-2">Estado</th>
-                    <th className="pb-1 text-right font-sans">Únicos</th>
+                    <th className="pb-1 text-right">Únicos</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-850">
+                <tbody className="divide-y divide-slate-855">
                   {availableStates.map((st) => {
                     const list = rawDataset.filter((c) => getCompanyState(c) === st);
                     const unique = new Set(list.map((c) => c.nombreComercial || c.razonSocial)).size;
@@ -2005,9 +2043,9 @@ export default function MarketIntelligencePage() {
               <span className="block text-[10px] font-semibold text-slate-500 uppercase">Parámetros del Filtro</span>
               <table className="w-full text-[9px] font-mono text-slate-300 mt-1">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left font-sans">
                     <th className="pb-1 pr-2">Parámetro</th>
-                    <th className="pb-1">Valor Activo</th>
+                    <th className="pb-1 text-left">Valor Activo</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-850">
@@ -2029,7 +2067,7 @@ export default function MarketIntelligencePage() {
 
             {/* Card 4: Distribución de Sectores Comerciales (En tiempo real) */}
             <div className="space-y-1.5 rounded-lg bg-slate-900/40 p-3 border border-slate-900 overflow-y-auto max-h-48 font-sans">
-              <span className="block text-[10px] font-semibold text-slate-500 uppercase font-sans">Distribución de Sectores</span>
+              <span className="block text-[10px] font-semibold text-slate-500 uppercase">Distribución de Sectores</span>
               <table className="w-full text-[9px] font-mono text-slate-300 mt-1">
                 <thead>
                   <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
@@ -2054,19 +2092,19 @@ export default function MarketIntelligencePage() {
             </div>
 
             {/* Fila inferior: Tabla de auditoría visual de primeros 20 */}
-            <div className="md:col-span-2 xl:col-span-4 rounded-lg bg-slate-900/40 p-4 border border-slate-900 overflow-x-auto font-sans">
+            <div className="md:col-span-2 xl:col-span-4 rounded-lg bg-slate-900/40 p-4 border border-slate-900 overflow-x-auto font-sans font-sans">
               <span className="block text-[10px] font-semibold text-slate-500 uppercase mb-2">Auditoría Visual de Posicionamiento (Primeros 20 en rawDataset)</span>
               <table className="w-full text-[10px] font-mono text-slate-300 border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left">
-                    <th className="pb-1.5 pr-2 font-sans font-sans">Empresa</th>
+                  <tr className="border-b border-slate-800 text-slate-500 font-bold text-left font-sans">
+                    <th className="pb-1.5 pr-2">Empresa</th>
                     <th className="pb-1.5 pr-2">Estado Raw</th>
-                    <th className="pb-1.5 pr-2 font-sans">Municipio</th>
+                    <th className="pb-1.5 pr-2">Municipio</th>
                     <th className="pb-1.5 pr-2">getCompanyState()</th>
                     <th className="pb-1.5 pr-2 text-center">En Dropdown</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/40">
+                <tbody className="divide-y divide-slate-800/40 font-mono text-[9.5px]">
                   {rawDataset.slice(0, 20).map((company) => {
                     const resolved = getCompanyState(company);
                     const isInDropdown = availableStates.includes(resolved);
@@ -2081,7 +2119,7 @@ export default function MarketIntelligencePage() {
                         <td className="py-1 pr-2 truncate max-w-[100px]" title={company.municipio || "(vacío)"}>
                           {company.municipio || "(vacío)"}
                         </td>
-                        <td className="py-1 pr-2 font-bold text-cyan-400 font-mono">{resolved}</td>
+                        <td className="py-1 pr-2 font-bold text-cyan-400">{resolved}</td>
                         <td className="py-1 pr-2 text-center">
                           <span className={`rounded px-1.5 py-0.2 text-[8px] font-extrabold ${isInDropdown ? "bg-emerald-950 text-emerald-400 border border-emerald-500/20" : "bg-rose-950 text-rose-400 border border-rose-500/20"}`}>
                             {isInDropdown ? "SÍ" : "NO"}
@@ -2097,27 +2135,27 @@ export default function MarketIntelligencePage() {
 
           {/* Consola de Telemetría */}
           <div className="rounded-2xl border border-slate-855 bg-slate-950 p-4 font-mono text-[9px] text-cyan-400/90 space-y-2.5 max-h-96 overflow-y-auto">
-            <div className="text-[10px] font-bold text-slate-400 uppercase border-b border-slate-855 pb-1.5 flex justify-between">
+            <div className="text-[10px] font-bold text-slate-400 uppercase border-b border-slate-855 pb-1.5 flex justify-between font-sans">
               <span>Registros de Auditoría GTM Engine (Historial de Lotes)</span>
-              <span className="text-cyan-300 font-sans">Total Logs: {telemetryLogs.length}</span>
+              <span className="text-cyan-300">Total Logs: {telemetryLogs.length}</span>
             </div>
-            <div className="overflow-x-auto font-mono">
+            <div className="overflow-x-auto font-mono font-mono">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-900 text-slate-500 text-[8px] uppercase tracking-wider">
                     <th className="py-1">Lote #</th>
                     <th className="py-1">Rango Reg</th>
                     <th className="py-1">Conf</th>
-                    <th className="py-1 font-sans font-sans">Dup R/W</th>
+                    <th className="py-1">Dup R/W</th>
                     <th className="py-1">Commit</th>
                     <th className="py-1 text-emerald-400">Nue</th>
                     <th className="py-1 text-cyan-400">Act</th>
                     <th className="py-1 text-rose-400">Fal</th>
                     <th className="py-1">Time</th>
-                    <th className="py-1 font-sans">Memoria</th>
+                    <th className="py-1">Memoria</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-900/30 text-slate-300 font-mono">
+                <tbody className="divide-y divide-slate-900/30 text-slate-300">
                   {telemetryLogs.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="py-4 text-center text-slate-500 italic">No hay logs de telemetría activos. Inicia una importación para ver datos.</td>
@@ -2131,7 +2169,7 @@ export default function MarketIntelligencePage() {
                         <td className="py-1 text-slate-500">{log.duplicateReadMs}ms</td>
                         <td className="py-1 text-cyan-400 font-bold">{log.batchCommitMs}ms</td>
                         <td className="py-1 text-emerald-400 font-bold">+{log.newAdded}</td>
-                        <td className="py-1 text-cyan-300 font-semibold">+{log.updated}</td>
+                        <td className="py-1 text-cyan-300 font-semibold font-sans font-sans">+{log.updated}</td>
                         <td className="py-1 text-rose-400">{log.failed}</td>
                         <td className="py-1 text-slate-500">{log.timestamp}</td>
                         <td className="py-1 font-semibold text-slate-500">{log.memoryMb}MB {log.checkpointSaved ? "💾" : ""}</td>
@@ -2143,12 +2181,32 @@ export default function MarketIntelligencePage() {
             </div>
           </div>
         </div>
+
+        {/* Maintenance & Repair Tools */}
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/10 p-5 space-y-4 font-sans">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <span>🔧</span> Herramientas de Reparación Laboral
+          </h4>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans font-sans">
+            Consolidación administrativa y normalización de geografía. Permite asociar municipios huérfanos con sus estados federativos según catálogos oficiales del DENUE.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleRepairStates}
+              disabled={isProcessing}
+              className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 px-4 py-2.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-950/30 transition disabled:opacity-50 font-sans"
+            >
+              Normalizar Municipios Huérfanos
+            </button>
+          </div>
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-[env(safe-area-inset-bottom)] min-w-0 w-full font-sans">
       {/* Page Title & Subtitle */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -2179,32 +2237,32 @@ export default function MarketIntelligencePage() {
       {pendingResumeJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="w-full max-w-lg rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-6 font-sans">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-lg">
+            <div className="flex items-start gap-4 flex-col sm:flex-row">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-lg shrink-0">
                 🔄
               </div>
               <div className="space-y-1">
-                <h3 className="text-base font-bold text-white">Importación Interrumpida Detectada</h3>
-                <p className="text-xs text-slate-400 font-sans font-sans">
-                  Se encontró un checkpoint local para el archivo: <strong className="text-slate-200 font-mono">{pendingResumeJob.filename}</strong>
+                <h3 className="text-base font-bold text-white font-sans">Importación Interrumpida Detectada</h3>
+                <p className="text-xs text-slate-400 font-sans">
+                  Se encontró un checkpoint local para el archivo: <strong className="text-slate-200 font-mono font-mono">{pendingResumeJob.filename}</strong>
                 </p>
               </div>
             </div>
 
-            <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2 font-sans font-sans">
-              <div className="flex justify-between text-xs text-slate-400">
+            <div className="rounded-2xl bg-slate-950/60 p-4 border border-slate-800/80 space-y-2 font-sans font-sans font-sans font-sans">
+              <div className="flex justify-between text-xs text-slate-400 font-sans">
                 <span>Registros procesados en checkpoint:</span>
                 <span className="font-bold text-white font-mono">{pendingResumeJob.checkpoint.processed.toLocaleString()} / {pendingResumeJob.companies.length.toLocaleString()}</span>
               </div>
-              <div className="flex justify-between text-xs text-slate-400">
+              <div className="flex justify-between text-xs text-slate-400 font-sans">
                 <span>Nuevos agregados:</span>
                 <span className="font-bold text-emerald-400 font-mono">+{pendingResumeJob.checkpoint.added}</span>
               </div>
-              <div className="flex justify-between text-xs text-slate-400">
+              <div className="flex justify-between text-xs text-slate-400 font-sans">
                 <span>Actualizados:</span>
-                <span className="font-bold text-cyan-400 font-mono">+{pendingResumeJob.checkpoint.overwritten}</span>
+                <span className="font-bold text-cyan-400 font-mono font-mono">+{pendingResumeJob.checkpoint.overwritten}</span>
               </div>
-              <div className="flex justify-between text-xs text-slate-400">
+              <div className="flex justify-between text-xs text-slate-400 font-sans">
                 <span>Omitidos:</span>
                 <span className="font-bold text-slate-400 font-mono">+{pendingResumeJob.checkpoint.omitted}</span>
               </div>
@@ -2244,7 +2302,7 @@ export default function MarketIntelligencePage() {
                     0, 0, 0, 0, 0
                   );
                 }}
-                className="rounded-xl bg-indigo-650 hover:bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition"
+                className="rounded-xl bg-indigo-650 hover:bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition font-sans"
               >
                 Reiniciar desde Cero
               </button>
@@ -2256,7 +2314,7 @@ export default function MarketIntelligencePage() {
                   setPendingResumeJob(null);
                   setSuccess("Se ha eliminado el checkpoint del archivo.");
                 }}
-                className="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-950/40 transition"
+                className="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-950/40 transition font-sans"
               >
                 Limpiar Checkpoint
               </button>
@@ -2264,7 +2322,7 @@ export default function MarketIntelligencePage() {
               <button
                 type="button"
                 onClick={() => setPendingResumeJob(null)}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition font-sans"
               >
                 Ignorar
               </button>
@@ -2274,22 +2332,22 @@ export default function MarketIntelligencePage() {
       )}
 
       {/* Tab Navigation Menu */}
-      <div className="flex border-b border-slate-800/80 overflow-x-auto select-none no-scrollbar gap-1 font-sans">
+      <div className="flex border-b border-slate-800/80 overflow-x-auto select-none scroll-smooth no-scrollbar gap-1 font-sans font-sans">
         <button
           onClick={() => setActiveTab('summary')}
-          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap shrink-0 ${
             activeTab === 'summary'
-              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
+              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold animate-pulse'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          📊 Resumen
+          📊 Executive Center
         </button>
         <button
           onClick={() => setActiveTab('prospects')}
-          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap shrink-0 ${
             activeTab === 'prospects'
-              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
+              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold animate-pulse'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -2297,7 +2355,7 @@ export default function MarketIntelligencePage() {
         </button>
         <button
           onClick={() => setActiveTab('import')}
-          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap shrink-0 ${
             activeTab === 'import'
               ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -2307,20 +2365,20 @@ export default function MarketIntelligencePage() {
         </button>
         <button
           onClick={() => setActiveTab('intelligence')}
-          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap shrink-0 ${
             activeTab === 'intelligence'
-              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
+              ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold animate-pulse'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          🧠 Intelligence
+          🧠 Aura Intelligence
         </button>
         {capabilities.canImport && (
           <button
             onClick={() => setActiveTab('diagnostics')}
-            className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap ${
+            className={`px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap shrink-0 ${
               activeTab === 'diagnostics'
-                ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold'
+                ? 'border-cyan-400 text-cyan-400 bg-cyan-400/5 font-extrabold animate-pulse'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -2330,11 +2388,13 @@ export default function MarketIntelligencePage() {
       </div>
 
       {/* Conditionally Render Selected Tab content */}
-      {activeTab === 'summary' && renderSummaryTab()}
-      {activeTab === 'prospects' && renderProspectsTab()}
-      {activeTab === 'import' && renderImportTab()}
-      {activeTab === 'intelligence' && renderIntelligenceTab()}
-      {activeTab === 'diagnostics' && renderDiagnosticsTab()}
+      <div className="min-w-0 w-full">
+        {activeTab === 'summary' && renderSummaryTab()}
+        {activeTab === 'prospects' && renderProspectsTab()}
+        {activeTab === 'import' && renderImportTab()}
+        {activeTab === 'intelligence' && renderIntelligenceTab()}
+        {activeTab === 'diagnostics' && renderDiagnosticsTab()}
+      </div>
 
       {/* Drawer de Detalle y Conversión */}
       <MarketCompanyDrawer

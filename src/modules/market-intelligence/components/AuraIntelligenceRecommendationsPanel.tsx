@@ -155,16 +155,40 @@ export function AuraIntelligenceRecommendationsPanel({
           </div>
         </div>
 
-        {/* Potential MRR */}
-        <div className="rounded-xl border border-slate-850 bg-slate-950/50 p-4 flex flex-col justify-between">
-          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-            MRR Potencial Estimado
-          </span>
+        {/* Mercado Potencial */}
+        <div className="rounded-xl border border-slate-850 bg-slate-950/50 p-4 flex flex-col justify-between font-sans">
+          <div className="space-y-1">
+            <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Mercado Potencial
+            </span>
+            <span className="block text-[8px] text-slate-450 leading-normal">
+              Valor mensual máximo estimado del dataset cargado
+            </span>
+          </div>
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-white">
+            <span className="text-2xl font-extrabold text-white font-mono">
               ${dashboard.estimatedPotentialValue.toLocaleString()}
             </span>
             <span className="text-[10px] text-slate-400 font-bold uppercase">MXN</span>
+          </div>
+          
+          <div className="mt-3 pt-2.5 border-t border-slate-900 space-y-1 text-[8.5px] text-slate-500 font-mono">
+            <div className="flex justify-between text-slate-400">
+              <span>Mercado Potencial:</span>
+              <span className="font-semibold text-cyan-400">${dashboard.estimatedPotentialValue.toLocaleString()} MXN</span>
+            </div>
+            <div className="flex justify-between">
+              <span>MRR Objetivo:</span>
+              <span>Pendiente</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Pipeline Activo:</span>
+              <span>Pendiente</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Forecast Esperado:</span>
+              <span>Pendiente</span>
+            </div>
           </div>
         </div>
 

@@ -93,7 +93,7 @@ export default function AuraSalesAdvisorPanel({ company }: AuraSalesAdvisorPanel
           </div>
           <div>
             <h3 className="text-base font-bold text-white tracking-wide">Aura Sales Advisor</h3>
-            <p className="text-xs text-slate-400">Asesor de ventas inteligente AI-Ready</p>
+            <p className="text-xs text-slate-400">Asesor consultivo de soluciones HCM</p>
           </div>
         </div>
 
