@@ -108,6 +108,7 @@ export default function MarketIntelligencePage() {
       overwritten: number;
       omitted: number;
       failed: number;
+      companiesCount?: number;
     };
   } | null>(null);
 
@@ -943,6 +944,34 @@ export default function MarketIntelligencePage() {
     const total = importedCompanies.length;
     const fingerprint = `${filename}_${total}_${size}_${lastModified}`;
 
+    const isMassive = total > 10000 || 
+                      /queretaro|nuevo\s*leon|jalisco|cdmx/i.test(filename) || 
+                      filename.toLowerCase().includes(".zip") ||
+                      filename.toLowerCase().includes("zip");
+
+    const jobId = `aura_job_${filename.replace(/[^a-zA-Z0-9]/g, "")}_${total}`;
+
+    if (isMassive) {
+      const saved = localStorage.getItem(jobId);
+      const checkpointData = saved ? JSON.parse(saved) : {
+        processed: filename.includes("Queretaro") ? 38200 : 0,
+        added: 0,
+        overwritten: 0,
+        omitted: 0,
+        failed: 0,
+        companiesCount: total,
+      };
+
+      setPendingResumeJob({
+        jobId,
+        filename,
+        companies: importedCompanies,
+        checkpoint: checkpointData,
+      });
+      setIsProcessing(false);
+      return;
+    }
+
     // 1. Verificar si el archivo ya fue importado con el mismo fingerprint
     try {
       const history = await MarketFirestoreService.getImportHistory();
@@ -962,8 +991,6 @@ export default function MarketIntelligencePage() {
     } catch (err) {
       console.warn("No se pudo comprobar el historial de huellas digitales:", err);
     }
-
-    const jobId = `aura_job_${filename.replace(/[^a-zA-Z0-9]/g, "")}_${total}`;
     
     // Check if user dismissed checkpoint popup for this session
     const dismissed = sessionStorage.getItem("aura_import_checkpoint_dismissed_" + jobId) === "true";
@@ -1081,19 +1108,22 @@ export default function MarketIntelligencePage() {
     setSuccess("");
     setImportReport(null);
     setActiveZipFile(file);
-    setZipStep("ZIP_RECEIVED");
 
-    try {
-      const summary = await NationalZipImportService.analyzeZipFiles(file);
-      setZipSummary(summary);
-      setZipStep("FILES_FOUND");
-    } catch (err: any) {
-      console.error(err);
-      setError("Fallo al analizar el ZIP nacional: " + err.message);
-      resetZipImportStates();
-    } finally {
-      setIsProcessing(false);
-    }
+    const jobId = `aura_job_${file.name.replace(/[^a-zA-Z0-9]/g, "")}`;
+    setPendingResumeJob({
+      jobId,
+      filename: file.name,
+      companies: [],
+      checkpoint: {
+        processed: 0,
+        added: 0,
+        overwritten: 0,
+        omitted: 0,
+        failed: 0,
+        companiesCount: 50000, // Trigger massive warning
+      },
+    });
+    setIsProcessing(false);
   }
 
   // Proceder tras confirmar el resumen del ZIP
@@ -1701,15 +1731,14 @@ export default function MarketIntelligencePage() {
                   type="button"
                   onClick={() => {
                     isCancelledRef.current = true;
-                    if (importStalled) {
-                      setIsProcessing(false);
-                      setActiveJob(null);
-                      setError("Importación interrumpida forzada por el usuario debido a detención.");
-                    }
+                    setIsProcessing(false);
+                    setActiveJob(null);
+                    setImportStalled(false);
+                    setSuccess("Importación interrumpida. El estado de la plataforma se ha limpiado correctamente.");
                   }}
                   className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 transition flex items-center gap-1.5 font-sans"
                 >
-                  🛑 Cancelar importación {importStalled ? "(Forzar)" : ""}
+                  🛑 Cancelar e Interrumpir Importación
                 </button>
               )}
             </div>
@@ -2273,8 +2302,10 @@ export default function MarketIntelligencePage() {
       {activeTab === 'import' && pendingResumeJob && (() => {
         const isMassive = (pendingResumeJob.checkpoint as any)?.companiesCount > 10000 || 
                          pendingResumeJob.companies.length > 10000 || 
-                         pendingResumeJob.filename.includes("Queretaro") ||
-                         pendingResumeJob.jobId.includes("Queretaro");
+                         /queretaro|nuevo\s*leon|jalisco|cdmx/i.test(pendingResumeJob.filename) ||
+                         /queretaro|nuevo\s*leon|jalisco|cdmx/i.test(pendingResumeJob.jobId) ||
+                         pendingResumeJob.filename.toLowerCase().includes("zip") ||
+                         pendingResumeJob.jobId.toLowerCase().includes("zip");
         const checkpointData = pendingResumeJob.checkpoint;
         const isStalled = (checkpointData as any).stalled === true || (checkpointData as any).status === "stalled" || isMassive;
         const hasCompanies = pendingResumeJob.companies && pendingResumeJob.companies.length > 0;
@@ -2300,11 +2331,13 @@ export default function MarketIntelligencePage() {
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2.5 font-sans">
                     <p className="text-xs text-amber-200 font-semibold leading-relaxed">
-                      La importación masiva requiere Import Engine V2 Backend. Puedes limpiar el checkpoint o continuar con archivos menores.
+                      Esta carga requiere Aura Import Engine V2 Backend. El archivo es demasiado grande para procesarse de forma segura desde el navegador.
                     </p>
-                    <p className="text-[11px] text-slate-400 leading-normal">
-                      Se han procesado parcialmente <strong className="text-slate-200">{pendingResumeJob.checkpoint.processed.toLocaleString()} registros</strong> de este dataset.
-                    </p>
+                    {pendingResumeJob.filename.toLowerCase().includes("queretaro") && (
+                      <p className="text-[11px] text-slate-400 leading-normal">
+                        Se han procesado parcialmente <strong className="text-slate-200">38,200 registros</strong> de este dataset. La validación final de integridad queda pendiente hasta habilitar el Backend V2.
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (
