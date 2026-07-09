@@ -827,6 +827,177 @@ export async function writeImportAudit(audit: {
   return historyId;
 }
 
+/**
+ * Realiza una auditoría completa del estado de Tabasco en la colección de market_companies,
+ * contando registros que tengan indicadores de Tabasco y aplicando un backfill masivo
+ * si se detectan discrepancias.
+ */
+export async function auditAndRepairTabasco(
+  onProgress?: (progress: { processed: number; total: number }) => void
+): Promise<{
+  totalScanned: number;
+  countEstadoTabasco: number;
+  countEstadoNormalizedTabasco: number;
+  countEstadoNormalizedTabascoLower: number;
+  countSourceStateTabasco: number;
+  countSourceStateTabascoLower: number;
+  countFilenameTabasco: number;
+  countMunicipiosTabasco: number;
+  totalUniqueTabascoSignals: number;
+  repaired: number;
+}> {
+  const collRef = collection(db, MARKET_COMPANIES_COLLECTION);
+  let lastDoc: any = null;
+  let hasMore = true;
+  let totalScanned = 0;
+
+  let countEstadoTabasco = 0;
+  let countEstadoNormalizedTabasco = 0;
+  let countEstadoNormalizedTabascoLower = 0;
+  let countSourceStateTabasco = 0;
+  let countSourceStateTabascoLower = 0;
+  let countFilenameTabasco = 0;
+  let countMunicipiosTabasco = 0;
+  let totalUniqueTabascoSignals = 0;
+
+  const batchSize = 1000;
+  const docsToUpdate: { id: string; ref: any }[] = [];
+
+  while (hasMore) {
+    let q = query(collRef, orderBy("__name__"), limit(batchSize));
+    if (lastDoc) {
+      q = query(collRef, orderBy("__name__"), startAfter(lastDoc), limit(batchSize));
+    }
+
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      hasMore = false;
+      break;
+    }
+
+    lastDoc = snap.docs[snap.docs.length - 1];
+    totalScanned += snap.docs.length;
+
+    snap.docs.forEach((docSnap) => {
+      const data = docSnap.data();
+      const filename = (data.filename || data.sourceFile || data.sourceFileUrl || "").toLowerCase();
+      const sourceState = data.sourceState || "";
+      const estadoNormalized = data.estadoNormalized || "";
+      const estado = data.estado || "";
+      const municipio = (data.municipio || "").toLowerCase().trim();
+
+      const matchEstado = estado === "Tabasco";
+      const matchEstNorm = estadoNormalized === "Tabasco";
+      const matchEstNormLower = estadoNormalized === "tabasco";
+      const matchSrcState = sourceState === "Tabasco";
+      const matchSrcStateLower = sourceState === "tabasco";
+      const matchFilename = filename.includes("27_tabasco") || filename.includes("27-tabasco") || filename.includes("tabasco");
+      const matchMunicipios = ["centro", "villahermosa", "comalcalco", "cardenas", "paraiso"].some(m => municipio.includes(m));
+
+      if (matchEstado) countEstadoTabasco++;
+      if (matchEstNorm) countEstadoNormalizedTabasco++;
+      if (matchEstNormLower) countEstadoNormalizedTabascoLower++;
+      if (matchSrcState) countSourceStateTabasco++;
+      if (matchSrcStateLower) countSourceStateTabascoLower++;
+      if (matchFilename) countFilenameTabasco++;
+      if (matchMunicipios) countMunicipiosTabasco++;
+
+      const hasTabascoSignal =
+        matchEstado ||
+        matchEstNorm ||
+        matchEstNormLower ||
+        matchSrcState ||
+        matchSrcStateLower ||
+        matchFilename ||
+        matchMunicipios;
+
+      if (hasTabascoSignal) {
+        totalUniqueTabascoSignals++;
+        if (estado !== "Tabasco" || estadoNormalized !== "Tabasco" || sourceState !== "Tabasco") {
+          docsToUpdate.push({ id: docSnap.id, ref: docSnap.ref });
+        }
+      }
+    });
+
+    if (onProgress) {
+      onProgress({ processed: totalScanned, total: 57000 });
+    }
+
+    if (snap.docs.length < batchSize) {
+      hasMore = false;
+    }
+  }
+
+  // Realizar el backfill masivo por lotes de 100 en 100
+  let repaired = 0;
+  const writeBatchSize = 100;
+  for (let i = 0; i < docsToUpdate.length; i += writeBatchSize) {
+    const chunk = docsToUpdate.slice(i, i + writeBatchSize);
+    const batchInstance = writeBatch(db);
+    chunk.forEach((item) => {
+      batchInstance.update(item.ref, {
+        estado: "Tabasco",
+        estadoNormalized: "Tabasco",
+        sourceState: "Tabasco"
+      });
+    });
+    await batchInstance.commit();
+    repaired += chunk.length;
+  }
+
+  // Si reparamos algo, forzar la creación de metadatos para Tabasco
+  if (totalUniqueTabascoSignals > 0) {
+    try {
+      const tabascoDatasetMetadataRef = doc(db, "market_dataset_metadata", "Tabasco");
+      await setDoc(tabascoDatasetMetadataRef, {
+        state: "Tabasco",
+        totalRecords: totalUniqueTabascoSignals,
+        lastImportJobId: "manual_audit_repair",
+        completedAt: serverTimestamp(),
+        fingerprint: "audit_repair_tabasco",
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      const tabascoCompaniesMetadataRef = doc(db, "market_companies_metadata", "Tabasco");
+      await setDoc(tabascoCompaniesMetadataRef, {
+        state: "Tabasco",
+        totalRecords: totalUniqueTabascoSignals,
+        lastImportJobId: "manual_audit_repair",
+        completedAt: serverTimestamp(),
+        fingerprint: "audit_repair_tabasco",
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      const statesRef = doc(db, "market_companies_metadata", "states");
+      await runTransaction(db, async (transaction) => {
+        const statesSnap = await transaction.get(statesRef);
+        let statesList: string[] = ["Querétaro", "Nuevo León", "Tabasco"];
+        if (statesSnap.exists()) {
+          const currentList = statesSnap.data()?.states || [];
+          const combined = new Set([...currentList, ...statesList]);
+          statesList = Array.from(combined).sort();
+        }
+        transaction.set(statesRef, { states: statesList }, { merge: true });
+      });
+    } catch (metaErr) {
+      console.warn("Fallo al escribir metadatos tras auditoría:", metaErr);
+    }
+  }
+
+  return {
+    totalScanned,
+    countEstadoTabasco,
+    countEstadoNormalizedTabasco,
+    countEstadoNormalizedTabascoLower,
+    countSourceStateTabasco,
+    countSourceStateTabascoLower,
+    countFilenameTabasco,
+    countMunicipiosTabasco,
+    totalUniqueTabascoSignals,
+    repaired,
+  };
+}
+
 const MarketFirestoreService = {
   importMarketCompaniesBatch,
   getMarketCompanies,
@@ -837,6 +1008,7 @@ const MarketFirestoreService = {
   getImportHistory,
   repairImportedStates,
   writeImportAudit,
+  auditAndRepairTabasco,
 };
 
 export default MarketFirestoreService;

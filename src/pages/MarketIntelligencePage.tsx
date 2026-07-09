@@ -623,6 +623,31 @@ export default function MarketIntelligencePage() {
   const [selectedCompany, setSelectedCompany] = useState<InegiCompany | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  // Estados de Auditoría Real de Tabasco
+  const [auditReport, setAuditReport] = useState<any | null>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditProgress, setAuditProgress] = useState<{ processed: number; total: number } | null>(null);
+
+  async function handleAuditTabasco() {
+    setIsAuditing(true);
+    setError("");
+    setSuccess("");
+    try {
+      const report = await MarketFirestoreService.auditAndRepairTabasco((prog) => {
+        setAuditProgress(prog);
+      });
+      setAuditReport(report);
+      setSuccess(`Auditoría y reparación finalizada. Se procesaron ${report.repaired} registros de Tabasco.`);
+      await loadDataset(true, true);
+    } catch (err: any) {
+      console.error("Error en auditoría de Tabasco:", err);
+      setError("Error en auditoría: " + err.message);
+    } finally {
+      setIsAuditing(false);
+      setAuditProgress(null);
+    }
+  }
+
   // Cargar conjunto de datos (Aura Dataset Manager & Firestore)
   async function loadDataset(resetPage = false, forceFetch = false, overrideState?: string) {
     setIsLoading(true);
@@ -2388,6 +2413,70 @@ export default function MarketIntelligencePage() {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Auditoría de Tabasco Button & Results */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 space-y-4 font-sans animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Auditoría Real de Firestore para Tabasco</h4>
+              <p className="text-[11px] text-slate-505 leading-normal">
+                Escanea de forma completa toda la colección en Firestore buscando señales de Tabasco (sourceFile, municipios, estadoNormalized) y repara inconsistencias.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAuditTabasco}
+              disabled={isAuditing || isLoading}
+              className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-5 py-2.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-950/30 transition disabled:opacity-50 flex items-center gap-1.5 font-sans active:scale-95 whitespace-nowrap"
+            >
+              {isAuditing ? (
+                <>
+                  <span className="animate-spin h-3.5 w-3.5 border-2 border-cyan-400 border-t-transparent rounded-full shrink-0" />
+                  Auditando... ({auditProgress?.processed || 0} reg)
+                </>
+              ) : (
+                "Auditar y Reparar Tabasco"
+              )}
+            </button>
+          </div>
+
+          {auditReport && (
+            <div className="rounded-xl bg-slate-950/70 p-4 border border-slate-900 grid gap-4 sm:grid-cols-2 md:grid-cols-5 text-xs font-mono">
+              <div className="p-2 bg-slate-900/40 rounded border border-slate-800/60">
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold">Total Escaneados</span>
+                <span className="block text-sm font-bold text-white mt-1">{auditReport.totalScanned.toLocaleString()}</span>
+              </div>
+              <div className="p-2 bg-slate-900/40 rounded border border-slate-800/60">
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold">estado == "Tabasco"</span>
+                <span className="block text-sm font-bold text-cyan-400 mt-1">{auditReport.countEstadoTabasco.toLocaleString()}</span>
+              </div>
+              <div className="p-2 bg-slate-900/40 rounded border border-slate-800/60">
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold">estadoNormalized == "tabasco"</span>
+                <span className="block text-sm font-bold text-cyan-400 mt-1">{(auditReport.countEstadoNormalizedTabasco + auditReport.countEstadoNormalizedTabascoLower).toLocaleString()}</span>
+              </div>
+              <div className="p-2 bg-slate-900/40 rounded border border-slate-800/60">
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold">sourceState == "Tabasco"</span>
+                <span className="block text-sm font-bold text-cyan-400 mt-1">{(auditReport.countSourceStateTabasco + auditReport.countSourceStateTabascoLower).toLocaleString()}</span>
+              </div>
+              <div className="p-2 bg-slate-900/40 rounded border border-slate-800/60">
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold">Filename Tabasco</span>
+                <span className="block text-sm font-bold text-cyan-400 mt-1">{auditReport.countFilenameTabasco.toLocaleString()}</span>
+              </div>
+              <div className="p-2 bg-slate-900/40 rounded border border-slate-800/60">
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold">Municipios Tabasco</span>
+                <span className="block text-sm font-bold text-cyan-400 mt-1">{auditReport.countMunicipiosTabasco.toLocaleString()}</span>
+              </div>
+              <div className="p-2 bg-slate-900/40 rounded border border-slate-900 col-span-2">
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold text-emerald-400">Total con Señales Tabasco</span>
+                <span className="block text-sm font-bold text-emerald-400 mt-1">{auditReport.totalUniqueTabascoSignals.toLocaleString()}</span>
+              </div>
+              <div className="p-2 bg-slate-900/40 rounded border border-slate-900 col-span-2">
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold text-amber-400">Registros Reparados (Backfill)</span>
+                <span className="block text-sm font-bold text-amber-400 mt-1">{auditReport.repaired.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Banner de Diagnóstico del Dataset Activo */}
