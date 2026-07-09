@@ -58,6 +58,7 @@ export interface ImportHistoryEntry {
   sourceVersion: string;
   fingerprint?: string;
   user?: string;
+  states?: string[];
 }
 
 const DEFAULT_CONSULTANT = {
@@ -346,6 +347,7 @@ export async function getImportHistory(): Promise<ImportHistoryEntry[]> {
         sourceVersion: data.sourceVersion || "DENUE-2026",
         fingerprint: data.fingerprint || "",
         user: data.user || "",
+        states: data.states || [],
       });
     });
     // Ordenar descendente (más recientes primero)

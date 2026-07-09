@@ -57,6 +57,10 @@ export default function MarketIntelligencePage() {
   const [rawDataset, setRawDataset] = useState<InegiCompany[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeMetadata, setActiveMetadata] = useState<DatasetMetadata | null>(null);
+  const [loadedState, setLoadedState] = useState<string | null>(null);
+  const [dbUniqueStates, setDbUniqueStates] = useState<string[]>([]);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
+  const [swUpdateAvailable, setSwUpdateAvailable] = useState(false);
   const [activeJob, setActiveJob] = useState<{
     jobId: string;
     filename: string;
@@ -237,8 +241,27 @@ export default function MarketIntelligencePage() {
         setIsProcessing(false);
         setActiveJob(null);
         setSuccess(`La importación masiva finalizó con éxito en el backend. Procesados: ${data.processed.toLocaleString()}`);
-        datasetManager.clear();
-        await loadDataset(true, true);
+        
+        const detectedState = (data.states && data.states.length > 0) ? data.states[0] : "";
+        
+        datasetManager.invalidateDataset(detectedState);
+        console.log("[Aura Dataset Hydration] datasetManager refreshed");
+        
+        setLoadedState(null);
+        
+        try {
+          const updatedUniqueStates = await MarketFirestoreService.getUniqueStates();
+          setDbUniqueStates(updatedUniqueStates);
+        } catch (err) {
+          console.warn("Error al actualizar estados únicos después de importación backend:", err);
+        }
+        
+        setFilters(prev => ({
+          ...prev,
+          estado: detectedState
+        }));
+        
+        await loadDataset(true, true, detectedState);
         if (unsubscribe) unsubscribe();
       }
 
@@ -362,14 +385,13 @@ export default function MarketIntelligencePage() {
     };
   }, [auth.currentUser]);
 
-  // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal
+  // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal y base de datos
   const availableStates = useMemo(() => {
+    const derived = rawDataset.map((c) => getCompanyState(c)).filter(Boolean);
     return Array.from(
-      new Set(
-        rawDataset.map((c) => getCompanyState(c)).filter(Boolean)
-      )
+      new Set([...dbUniqueStates, ...derived])
     ).sort() as string[];
-  }, [rawDataset]);
+  }, [rawDataset, dbUniqueStates]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -400,6 +422,7 @@ export default function MarketIntelligencePage() {
             canUpdate: upd,
             canConvert: conv,
           });
+          console.log("[Aura Dataset Hydration] auth ready");
         }
       } catch (err: any) {
         console.error({
@@ -416,6 +439,20 @@ export default function MarketIntelligencePage() {
       }
     }
     verifyPermissions();
+  }, []);
+
+  // Escuchar actualizaciones de la PWA/Service Worker
+  useEffect(() => {
+    if ((window as any).__auraSWNeedRefresh) {
+      setSwUpdateAvailable(true);
+    }
+    const handleSWUpdate = () => {
+      setSwUpdateAvailable(true);
+    };
+    window.addEventListener("aura-sw-update-available", handleSWUpdate);
+    return () => {
+      window.removeEventListener("aura-sw-update-available", handleSWUpdate);
+    };
   }, []);
 
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
@@ -477,10 +514,42 @@ export default function MarketIntelligencePage() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const history = await MarketFirestoreService.getImportHistory();
+        const [history, states] = await Promise.all([
+          MarketFirestoreService.getImportHistory(),
+          MarketFirestoreService.getUniqueStates()
+        ]);
         setImportHistory(history);
+        setDbUniqueStates(states);
+        console.log("[Aura Dataset Hydration] initial states loaded:", states);
+
+        // Si estamos en PWA, auto-seleccionar Querétaro o el último estado importado
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const inPwa = isStandalone || isMobile;
+
+        if (inPwa) {
+          let targetState = "";
+          if (states.includes("Querétaro")) {
+            targetState = "Querétaro";
+          } else if (history.length > 0) {
+            const lastImport = history.find(h => h.states && h.states.length > 0);
+            if (lastImport && lastImport.states && lastImport.states.length > 0) {
+              targetState = lastImport.states[0];
+            }
+          }
+
+          if (targetState) {
+            console.log(`[Aura Dataset Hydration] PWA auto-selecting state: "${targetState}"`);
+            setFilters(prev => ({
+              ...prev,
+              estado: targetState
+            }));
+          }
+        }
       } catch (err) {
         console.warn("Error al cargar datos iniciales de estados/historial:", err);
+      } finally {
+        setIsInitialLoadDone(true);
       }
     }
     loadInitialData();
@@ -541,7 +610,7 @@ export default function MarketIntelligencePage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Cargar conjunto de datos (Aura Dataset Manager & Firestore)
-  async function loadDataset(resetPage = false, forceFetch = false) {
+  async function loadDataset(resetPage = false, forceFetch = false, overrideState?: string) {
     setIsLoading(true);
     setError("");
 
@@ -550,10 +619,11 @@ export default function MarketIntelligencePage() {
     }
 
     try {
+      const targetStateKey = overrideState !== undefined ? overrideState : (filters.estado || "");
+      console.log("[Aura Dataset Hydration] loading state:", targetStateKey || "Todos");
       console.log("=== AURA DATASET MANAGER LOGS ===");
       console.log("- Filtros actuales:", filters);
 
-      const targetStateKey = filters.estado || "";
       let currentRaw: InegiCompany[] = [];
       let entryMetadata: DatasetMetadata | null = null;
 
@@ -587,10 +657,8 @@ export default function MarketIntelligencePage() {
       // Sincronizar fuentes de verdad locales
       setRawDataset(currentRaw);
       setActiveMetadata(entryMetadata);
-
-      // Sincronizar fuentes de verdad locales
-      setRawDataset(currentRaw);
-      setActiveMetadata(entryMetadata);
+      setLoadedState(targetStateKey || null);
+      console.log(`[Aura Dataset Hydration] records loaded: ${currentRaw.length}`);
 
       // Imprimir tabla de diagnóstico en consola
       console.table({
@@ -617,9 +685,10 @@ export default function MarketIntelligencePage() {
 
   // Efecto inicial y ante cambios de estado (Único filtro que requiere fetching/cache)
   useEffect(() => {
+    if (!isInitialLoadDone || hasAccess !== true) return;
     loadDataset(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.estado]);
+  }, [filters.estado, isInitialLoadDone, hasAccess]);
 
   // Resetear paginación al cambiar otros filtros locales
   useEffect(() => {
@@ -972,6 +1041,7 @@ export default function MarketIntelligencePage() {
       uniqueStates.forEach(state => {
         datasetManager.invalidateDataset(state);
       });
+      console.log("[Aura Dataset Hydration] datasetManager refreshed");
 
       // Crear auditoría en la base
       const timeMs = Date.now() - startTime;
@@ -1090,6 +1160,7 @@ export default function MarketIntelligencePage() {
     // Invalida Dataset de este estado por si acaso
     if (targetState) {
       datasetManager.invalidateDataset(targetState);
+      console.log("[Aura Dataset Hydration] datasetManager refreshed");
     }
 
     setSuccess(`Validación de conteo rápida completada. Registros en dataset: ${dbCount.toLocaleString()}.`);
@@ -1265,6 +1336,7 @@ export default function MarketIntelligencePage() {
 
       // Limpiar cache para forzar recarga de los estados importados
       datasetManager.clear();
+      console.log("[Aura Dataset Hydration] datasetManager refreshed");
 
       await loadDataset(true, true);
     } catch (err: any) {
@@ -1408,6 +1480,8 @@ export default function MarketIntelligencePage() {
     try {
       const result = await MarketFirestoreService.repairImportedStates();
       setSuccess(`Mantenimiento completado. Se revisaron ${result.totalChecked} registros y se repararon ${result.repaired} sin estado.`);
+      datasetManager.clear();
+      console.log("[Aura Dataset Hydration] datasetManager refreshed");
       await loadDataset(true, true);
     } catch (err: any) {
       console.error(err);
@@ -1537,6 +1611,28 @@ export default function MarketIntelligencePage() {
           isLoading={isProcessing}
           canImport={capabilities.canImport}
         />
+
+        {/* Memory and Cache Status Reload Card */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans">
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Estado de Memoria y Caché de Prospectos</h4>
+            <p className="text-[11px] text-slate-500 leading-normal">
+              Fuerza la recarga limpia de los datos directamente de Firestore invalidando el caché local de la PWA.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              datasetManager.clear();
+              console.log("[Aura Dataset Hydration] datasetManager refreshed");
+              await loadDataset(true, true);
+            }}
+            disabled={isLoading}
+            className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 px-5 py-2.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-950/30 transition disabled:opacity-50 flex items-center gap-1.5 font-sans active:scale-95 whitespace-nowrap"
+          >
+            <span>🔄</span> Recargar dataset
+          </button>
+        </div>
 
         {/* 1. Confirmación de Carga de ZIP (Prioridad 3) */}
         {pendingStateResolutionFiles && currentResolutionIndex === -1 && resolvedFilesList.length > 0 && (
@@ -2138,9 +2234,9 @@ export default function MarketIntelligencePage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 font-sans font-sans">
               {/* Estado Activo */}
               <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
-                <span className="block text-[10px] text-slate-500 uppercase font-semibold font-sans">Estado Activo</span>
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold font-sans">Estado Cargado</span>
                 <span className="block text-sm font-extrabold text-white mt-1">
-                  {filters.estado || "Todos los Estados (Muestra)"}
+                  {loadedState || "Todos los Estados (Muestra)"}
                 </span>
               </div>
 
@@ -2436,7 +2532,7 @@ export default function MarketIntelligencePage() {
           <p className="text-xs text-slate-500 leading-relaxed font-sans font-sans">
             Consolidación administrativa y normalización de geografía. Permite asociar municipios huérfanos con sus estados federativos según catálogos oficiales del DENUE.
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={handleRepairStates}
@@ -2444,6 +2540,18 @@ export default function MarketIntelligencePage() {
               className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 px-4 py-2.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-950/30 transition disabled:opacity-50 font-sans"
             >
               Normalizar Municipios Huérfanos
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                datasetManager.clear();
+                console.log("[Aura Dataset Hydration] datasetManager refreshed");
+                await loadDataset(true, true);
+              }}
+              disabled={isLoading}
+              className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 px-4 py-2.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-950/30 transition disabled:opacity-50 flex items-center gap-1.5 font-sans active:scale-95"
+            >
+              <span>🔄</span> Recargar dataset
             </button>
           </div>
         </div>
@@ -2453,6 +2561,28 @@ export default function MarketIntelligencePage() {
 
   return (
     <div className="space-y-6 pb-[env(safe-area-inset-bottom)] min-w-0 w-full font-sans">
+      {/* SW Update Available Banner */}
+      {swUpdateAvailable && (
+        <div className="flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3.5 text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <span>✨</span>
+            <span>Nueva versión disponible de Aura Control Center.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if ((window as any).__auraSWUpdateFn) {
+                (window as any).__auraSWUpdateFn();
+              } else {
+                window.location.reload();
+              }
+            }}
+            className="rounded-lg bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-slate-950 hover:bg-amber-400 transition active:scale-95"
+          >
+            Actualizar Ahora
+          </button>
+        </div>
+      )}
       {/* Page Title & Subtitle */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
