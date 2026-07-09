@@ -162,7 +162,7 @@ export default function DiscoverPage() {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     // Process logic
-    const output = orchestratorRef.current.processTurn(input);
+    const output = await orchestratorRef.current.processTurn(input);
 
     // Apply Output to State
     reflectionStateRef.current = output.updatedReflectionState;

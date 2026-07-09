@@ -2,13 +2,15 @@ import type { OrchestratorInput, OrchestratorOutput, PendingSummary } from "../t
 import { ReflectionEngine } from "./ReflectionEngine";
 import { ConversationEngine } from "./ConversationEngine";
 import { AuraPersonality } from "./AuraPersonality";
+import { AuraLLMGateway } from "../../core/services/AuraLLMGateway";
 
 export class ConversationOrchestrator {
   private reflectionEngine = new ReflectionEngine();
   private conversationEngine = new ConversationEngine();
   private personality = new AuraPersonality();
+  private llmGateway = new AuraLLMGateway();
 
-  public processTurn(input: OrchestratorInput): OrchestratorOutput {
+  public async processTurn(input: OrchestratorInput): Promise<OrchestratorOutput> {
     const { engineInput, conversationStateSnapshot } = input;
     const currentPhase = conversationStateSnapshot.conversationPhase;
 
@@ -84,7 +86,7 @@ export class ConversationOrchestrator {
       engineInput.hypotheses.length
     );
 
-    return {
+    const heuristicOutput: OrchestratorOutput = {
       finalMessage,
       finalIntent,
       reflectionOutput,
@@ -98,6 +100,41 @@ export class ConversationOrchestrator {
       updatedConfidenceMatrix,
       pendingSummary
     };
+
+    // --- SHADOW MODE EVALUATION (Parallel / Background) ---
+    // We do not await this to avoid blocking the UI, as instructed: "Nunca esperar indefinidamente al LLM"
+    // The Gateway enforces its own 12s timeout internally.
+    this.llmGateway.evaluateTurn(input).then(llmResult => {
+      this.compareAndLogShadowEvaluation(heuristicOutput, llmResult);
+    }).catch(err => {
+      console.warn("Background LLM evaluation failed:", err);
+    });
+
+    return heuristicOutput;
+  }
+
+  private compareAndLogShadowEvaluation(heuristicOutput: OrchestratorOutput, llmResult: any) {
+    if (llmResult.fallbackUsed) {
+      console.log("[SHADOW] LLM Fallback Used. No comparison made.");
+      return;
+    }
+
+    const heuristicAction = heuristicOutput.reflectionOutput.recommendedAction;
+    const llmAction = llmResult.reflectionProposal?.recommendedAction;
+    
+    const agreement = heuristicAction === llmAction;
+    const relevanceDifference = Math.abs(heuristicOutput.reflectionOutput.responseRelevance - (llmResult.reflectionProposal?.responseRelevance || 0));
+    const coherenceDifference = Math.abs(heuristicOutput.reflectionOutput.coherenceScore - (llmResult.reflectionProposal?.coherenceScore || 0));
+    
+    console.log("================ SHADOW EVALUATION ================");
+    console.log(`Agreement: ${agreement ? "✅ YES" : "❌ NO"}`);
+    console.log(`Heuristic Action: ${heuristicAction} | LLM Action: ${llmAction}`);
+    console.log(`Relevance Diff: ${relevanceDifference} | Coherence Diff: ${coherenceDifference}`);
+    console.log(`Safety Passed: ${llmResult.validationPassed}`);
+    console.log(`Latency: ${llmResult.telemetry?.latencyMs}ms`);
+    console.log("===================================================");
+    
+    // In a real production scenario, this would write to Firestore's discovery_llm_usage telemetry collection.
   }
 
   private handleSummaryReviewPhase(input: OrchestratorInput): OrchestratorOutput {
