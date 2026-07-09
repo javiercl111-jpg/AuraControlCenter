@@ -4,6 +4,7 @@ import type {
   OpportunityScoreBreakdown,
   RecommendedSuite,
 } from "../types/inegi";
+import { getNormalizedStateName } from "./marketQueryEngine";
 
 // Normalización de emails: Limpieza, minúsculas, validación de placeholders
 export function normalizeEmail(email: string | null | undefined): string {
@@ -635,7 +636,8 @@ export function normalizeRowWithMap(rowArray: any[], map: HeaderMap): InegiCompa
  */
 export function parseExcelWorkbook(
   workbook: any,
-  customState?: string
+  customState?: string,
+  filename?: string
 ): {
   sheetName: string;
   sheetNames: string[];
@@ -683,9 +685,7 @@ export function parseExcelWorkbook(
 
     try {
       const company = normalizeRowWithMap(rowArray, headerMap);
-      if (customState) {
-        company.estado = customState;
-      }
+      company.estado = getNormalizedStateName(customState || company.estado, filename);
       
       if (company.razonSocial || company.nombreComercial) {
         companies.push(company);

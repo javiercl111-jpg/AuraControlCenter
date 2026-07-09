@@ -30,6 +30,35 @@ export function normalizeState(str: string): string {
  * Resuelve de forma robusta el estado de una compañía a partir de múltiples posibles propiedades.
  * Realiza inferencia por municipio si el campo de estado está vacío.
  */
+export function getNormalizedStateName(stateVal: string, filename?: string): string {
+  const cleanVal = (stateVal || "").trim().toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (cleanVal.includes("queretaro") || cleanVal.includes("22")) return "Querétaro";
+  if (cleanVal.includes("tabasco") || cleanVal.includes("27")) return "Tabasco";
+  if (cleanVal.includes("jalisco") || cleanVal.includes("14")) return "Jalisco";
+  if (cleanVal.includes("nuevo leon") || cleanVal.includes("19")) return "Nuevo León";
+  if (cleanVal.includes("cdmx") || cleanVal.includes("ciudad de mexico") || cleanVal.includes("distrito federal") || cleanVal.includes("09")) return "Ciudad de México";
+
+  if (filename) {
+    const cleanFile = filename.toLowerCase();
+    if (cleanFile.includes("queretaro") || cleanFile.includes("22_")) return "Querétaro";
+    if (cleanFile.includes("tabasco") || cleanFile.includes("27_")) return "Tabasco";
+    if (cleanFile.includes("jalisco") || cleanFile.includes("14_")) return "Jalisco";
+    if (cleanFile.includes("nuevo") || cleanFile.includes("19_")) return "Nuevo León";
+    if (cleanFile.includes("cdmx") || cleanFile.includes("09_") || cleanFile.includes("ciudad de mexico") || cleanFile.includes("ciudad de me")) return "Ciudad de México";
+  }
+
+  if (cleanVal === "tab") return "Tabasco";
+  if (cleanVal === "qro") return "Querétaro";
+  if (cleanVal === "jal") return "Jalisco";
+  if (cleanVal === "nl") return "Nuevo León";
+  if (cleanVal === "df" || cleanVal === "distrito federal") return "Ciudad de México";
+
+  return stateVal && cleanVal !== "no especificado" && cleanVal !== "null" ? stateVal : "No Especificado";
+}
+
 export function getCompanyState(company: any): string {
   if (!company) return "";
   
@@ -43,8 +72,9 @@ export function getCompanyState(company: any): string {
     ""
   ).trim();
 
-  if (val && val.toLowerCase() !== "no especificado" && val.toLowerCase() !== "null") {
-    return val;
+  const normalized = getNormalizedStateName(val);
+  if (normalized && normalized !== "No Especificado") {
+    return normalized;
   }
 
   // 2. Inferir por municipio si está vacío
@@ -52,6 +82,9 @@ export function getCompanyState(company: any): string {
   if (munNorm) {
     if (munNorm.includes("queretaro")) {
       return "Querétaro";
+    }
+    if (munNorm.includes("villahermosa") || munNorm.includes("centrotabasco") || munNorm.includes("cardenas") || munNorm.includes("comalcalco")) {
+      return "Tabasco";
     }
     const nlMunicipios = [
       "monterrey",

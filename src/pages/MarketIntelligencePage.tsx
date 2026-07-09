@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { doc, onSnapshot, updateDoc, serverTimestamp, collection, query, where, getDocs, limit } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, serverTimestamp, collection, query, where, getDocs, limit, setDoc } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { uploadAndCreateImportJob, getActiveBackendJob } from "../modules/market-intelligence/services/backendImportService";
 
@@ -12,7 +12,7 @@ import CommercialDashboard from "../modules/market-intelligence/components/Comme
 import AuraIntelligenceRecommendationsPanel from "../modules/market-intelligence/components/AuraIntelligenceRecommendationsPanel";
 
 import MarketFirestoreService, { type ImportHistoryEntry } from "../modules/market-intelligence/services/marketFirestoreService";
-import MarketQueryEngine, { normalizeState, getCompanyState, getCompanyIndustry } from "../modules/market-intelligence/services/marketQueryEngine";
+import MarketQueryEngine, { normalizeState, getCompanyState, getCompanyIndustry, getNormalizedStateName } from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability } from "../services/rbacService";
@@ -329,10 +329,13 @@ export default function MarketIntelligencePage() {
       const filename = file.name;
       const fingerprint = `${filename}_${file.size}_${file.lastModified}`;
       
+      const stateName = getNormalizedStateName("", filename);
+      const statesArray = (stateName && stateName !== "No Especificado") ? [stateName] : [];
+
       const jobId = await uploadAndCreateImportJob(
         file,
         filename,
-        filename.toLowerCase().includes("queretaro") ? ["Querétaro"] : [],
+        statesArray,
         fingerprint,
         (progress) => {
           setUploadProgress(Math.round(progress));
@@ -1032,6 +1035,30 @@ export default function MarketIntelligencePage() {
       const uniqueStates = Array.from(new Set(companies.map(c => getCompanyState(c)).filter(Boolean)));
       if (uniqueStates.length > 0) {
         await MarketFirestoreService.updateUniqueStates(uniqueStates);
+        for (const st of uniqueStates) {
+          if (!st || st === "No Especificado") continue;
+          try {
+            const metaDocRef = doc(db, "market_dataset_metadata", st);
+            await setDoc(metaDocRef, {
+              state: st,
+              totalRecords: total,
+              lastImportJobId: jobId,
+              completedAt: serverTimestamp(),
+              fingerprint: fingerprint || "",
+            }, { merge: true });
+
+            const companiesMetaDocRef = doc(db, "market_companies_metadata", st);
+            await setDoc(companiesMetaDocRef, {
+              state: st,
+              totalRecords: total,
+              lastImportJobId: jobId,
+              completedAt: serverTimestamp(),
+              fingerprint: fingerprint || "",
+            }, { merge: true });
+          } catch (metaErr) {
+            console.warn("Fallo al escribir metadatos para el estado:", st, metaErr);
+          }
+        }
       }
 
       // 4. Actualización del Dataset Manager
@@ -1181,13 +1208,32 @@ export default function MarketIntelligencePage() {
     setSuccess("");
     setImportReport(null);
 
-    const size = fileMetadata?.size || 0;
-    const lastModified = fileMetadata?.lastModified || 0;
+    const size = fileMetadata?.size || rawFile?.size || 0;
+    const lastModified = fileMetadata?.lastModified || rawFile?.lastModified || 0;
     const total = importedCompanies.length;
-    const fingerprint = `${filename}_${total}_${size}_${lastModified}`;
+    const fingerprint = `${filename}_${size}_${lastModified}`;
+
+    // Cost protection: check completed jobs in backend database before any upload/process
+    try {
+      const q = query(
+        collection(db, "market_import_jobs"),
+        where("fingerprint", "==", fingerprint),
+        where("status", "==", "completed"),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        console.log("[Aura Backend Import] Duplicado de importación completado detectado!");
+        setDuplicateBackendJob({ file: rawFile || new File([], filename), fingerprint });
+        setIsProcessing(false);
+        return;
+      }
+    } catch (err: any) {
+      console.warn("[Aura Backend Import] Fallo al comprobar duplicado de importación en jobs:", err);
+    }
 
     const isMassive = total > 10000 || 
-                      /queretaro|nuevo\s*leon|jalisco|cdmx/i.test(filename) || 
+                      /queretaro|nuevo\s*leon|jalisco|cdmx|tabasco/i.test(filename) || 
                       filename.toLowerCase().includes(".zip") ||
                       filename.toLowerCase().includes("zip");
 
@@ -2554,6 +2600,10 @@ export default function MarketIntelligencePage() {
               <span>🔄</span> Recargar dataset
             </button>
           </div>
+          {/* Storage duplicates warning */}
+          <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-xs text-amber-200 leading-relaxed font-sans">
+            ⚠️ <strong>Nota:</strong> Archivos duplicados detectados en Storage: limpiar manualmente si corresponde.
+          </div>
         </div>
       </div>
     );
@@ -2848,7 +2898,7 @@ export default function MarketIntelligencePage() {
             </div>
 
             <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-200 leading-relaxed font-sans">
-              Este archivo ya fue importado correctamente en el pasado. Para proteger los costos de la infraestructura y bases de datos, te recomendamos usar el dataset existente.
+              Este archivo ya fue importado correctamente.
             </div>
 
             <div className="flex flex-wrap gap-2.5 justify-end pt-2">

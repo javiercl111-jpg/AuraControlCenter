@@ -89,6 +89,35 @@ function normalizePhone(phone: string | null | undefined): string {
   return cleaned;
 }
 
+function getNormalizedStateName(stateVal: string, filename?: string): string {
+  const cleanVal = (stateVal || "").trim().toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (cleanVal.includes("queretaro") || cleanVal.includes("22")) return "Querétaro";
+  if (cleanVal.includes("tabasco") || cleanVal.includes("27")) return "Tabasco";
+  if (cleanVal.includes("jalisco") || cleanVal.includes("14")) return "Jalisco";
+  if (cleanVal.includes("nuevo leon") || cleanVal.includes("19")) return "Nuevo León";
+  if (cleanVal.includes("cdmx") || cleanVal.includes("ciudad de mexico") || cleanVal.includes("distrito federal") || cleanVal.includes("09")) return "Ciudad de México";
+
+  if (filename) {
+    const cleanFile = filename.toLowerCase();
+    if (cleanFile.includes("queretaro") || cleanFile.includes("22_")) return "Querétaro";
+    if (cleanFile.includes("tabasco") || cleanFile.includes("27_")) return "Tabasco";
+    if (cleanFile.includes("jalisco") || cleanFile.includes("14_")) return "Jalisco";
+    if (cleanFile.includes("nuevo") || cleanFile.includes("19_")) return "Nuevo León";
+    if (cleanFile.includes("cdmx") || cleanFile.includes("09_") || cleanFile.includes("ciudad de mexico") || cleanFile.includes("ciudad de me")) return "Ciudad de México";
+  }
+
+  if (cleanVal === "tab") return "Tabasco";
+  if (cleanVal === "qro") return "Querétaro";
+  if (cleanVal === "jal") return "Jalisco";
+  if (cleanVal === "nl") return "Nuevo León";
+  if (cleanVal === "df" || cleanVal === "distrito federal") return "Ciudad de México";
+
+  return stateVal && cleanVal !== "no especificado" && cleanVal !== "null" ? stateVal : "No Especificado";
+}
+
 function generateDeterministicId(
   razonSocial: string | null | undefined,
   nombreComercial: string | null | undefined,
@@ -377,7 +406,7 @@ function normalizeRowWithMap(rowArray: any[], map: HeaderMap): any {
 
   const direccion = getValue(map.direccionIdx);
   const municipio = getValue(map.municipioIdx);
-  const estado = getValue(map.estadoIdx);
+  const estado = getNormalizedStateName(getValue(map.estadoIdx));
   const cp = getValue(map.cpIdx);
   const scian = getValue(map.scianIdx);
   const actividad = getValue(map.actividadIdx);
@@ -441,6 +470,44 @@ function normalizeRowWithMap(rowArray: any[], map: HeaderMap): any {
     nextAction: advisor.nextAction,
     status: "NEW",
   };
+}
+
+async function updateStateMetadataAndList(stateName: string, totalRecords: number, jobId: string, fingerprint: string) {
+  if (!stateName || stateName === "No Especificado") return;
+
+  const datasetMetaRef = db.collection("market_dataset_metadata").doc(stateName);
+  await datasetMetaRef.set({
+    state: stateName,
+    totalRecords,
+    lastImportJobId: jobId,
+    completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    fingerprint: fingerprint || "",
+  }, { merge: true });
+
+  const companiesMetaRef = db.collection("market_companies_metadata").doc(stateName);
+  await companiesMetaRef.set({
+    state: stateName,
+    totalRecords,
+    lastImportJobId: jobId,
+    completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    fingerprint: fingerprint || "",
+  }, { merge: true });
+
+  const statesRef = db.collection("market_companies_metadata").doc("states");
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(statesRef);
+    let currentStates: string[] = ["Querétaro", "Nuevo León"];
+    if (snap.exists) {
+      const data = snap.data();
+      if (data && Array.isArray(data.states)) {
+        currentStates = data.states;
+      }
+    }
+    if (!currentStates.includes(stateName)) {
+      const merged = Array.from(new Set([...currentStates, stateName])).sort();
+      transaction.set(statesRef, { states: merged });
+    }
+  });
 }
 
 // ----------------- Cloud Function Trigger -----------------
@@ -528,9 +595,7 @@ export const processMarketImportJob = onDocumentCreated(
           if (!row || row.length === 0) continue;
           try {
             const company = normalizeRowWithMap(row, headerMap);
-            if (customState) {
-              company.estado = customState;
-            }
+            company.estado = getNormalizedStateName(customState || company.estado, data.filename || "");
             if (company.razonSocial || company.nombreComercial) {
               companies.push(company);
             }
@@ -638,6 +703,12 @@ export const processMarketImportJob = onDocumentCreated(
         fingerprint: data.fingerprint || "",
         user: data.createdBy || "",
       });
+
+      // 4. Metadata: update state metadata and unique states list
+      const targetState = (data.states && data.states.length > 0) ? data.states[0] : null;
+      if (targetState && targetState !== "No Especificado") {
+        await updateStateMetadataAndList(targetState, totalRows, jobId, data.fingerprint || "");
+      }
 
       await snapshot.ref.update({
         status: "completed",

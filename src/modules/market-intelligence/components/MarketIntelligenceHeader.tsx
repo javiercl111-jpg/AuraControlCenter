@@ -412,7 +412,7 @@ export default function MarketIntelligenceHeader({
         const workbook = read(data, { type: "array" });
         
         // Usar pipeline unificado
-        const parsed = parseExcelWorkbook(workbook);
+        const parsed = parseExcelWorkbook(workbook, undefined, file.name);
 
         // Si no se detectó columna de estado, pausar e interrogar al usuario
         if (parsed.headerMap.estadoIdx === -1) {
