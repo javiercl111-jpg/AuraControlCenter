@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import DiscoveryLinkGenerator from "../modules/discovery/components/DiscoveryLinkGenerator";
+import ExecutiveBriefingDrawer from "../modules/discovery/components/ExecutiveBriefingDrawer";
+import DiscoverySessionService from "../modules/discovery/services/discoverySessionService";
+import type { DiscoverySession } from "../modules/discovery/types/discoveryTypes";
 
 import { MODULE_OPTIONS } from "../constants/clientOptions";
 import { convertLeadToClientAndTenant } from "../services/leadConversionService";
@@ -44,23 +47,31 @@ export default function CrmPage() {
     "AURA_HCM",
   ]);
 
+  const [discoverySessions, setDiscoverySessions] = useState<DiscoverySession[]>([]);
+  const [isBriefingDrawerOpen, setIsBriefingDrawerOpen] = useState(false);
+  const [selectedSessionForBriefing, setSelectedSessionForBriefing] = useState<DiscoverySession | null>(null);
+
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  async function loadLeads() {
+  async function loadData() {
     try {
       setError("");
-      const data = await getLeads();
-      setLeads(data);
+      const [leadsData, sessionsData] = await Promise.all([
+        getLeads(),
+        DiscoverySessionService.getDiscoverySessions()
+      ]);
+      setLeads(leadsData);
+      setDiscoverySessions(sessionsData);
     } catch (err) {
       console.error(err);
-      setError("No se pudieron cargar los prospectos.");
+      setError("No se pudieron cargar los datos (prospectos o sesiones).");
     }
   }
 
   useEffect(() => {
-    loadLeads();
+    loadData();
   }, []);
 
   function toggleModule(moduleCode: string) {
@@ -116,7 +127,7 @@ export default function CrmPage() {
       setInterestedModules(["AURA_HCM"]);
       setSuccessMessage("Prospecto creado correctamente.");
 
-      await loadLeads();
+      await loadData();
     } catch (err) {
       console.error(err);
       setError("No se pudo crear el prospecto.");
@@ -133,7 +144,7 @@ export default function CrmPage() {
     try {
       await updateLeadStage(leadId, stage);
       setSuccessMessage("Etapa actualizada correctamente.");
-      await loadLeads();
+      await loadData();
     } catch (err) {
       console.error(err);
       setError("No se pudo actualizar la etapa.");
@@ -156,7 +167,7 @@ export default function CrmPage() {
     try {
       await convertLeadToClientAndTenant(lead);
       setSuccessMessage("Prospecto convertido a cliente y tenant correctamente.");
-      await loadLeads();
+      await loadData();
     } catch (err) {
       console.error(err);
       setError(
@@ -331,7 +342,12 @@ export default function CrmPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {stageLeads.map((lead) => (
+                  {stageLeads.map((lead) => {
+                    const sessionMatch = discoverySessions.find(
+                      (s) => s.companyName.toLowerCase() === lead.companyName.toLowerCase()
+                    );
+                    
+                    return (
                     <article
                       key={lead.id}
                       className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
@@ -402,6 +418,24 @@ export default function CrmPage() {
                         ✨ Discovery Link
                       </button>
 
+                      {sessionMatch && (
+                        <div className="mt-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">✨</span>
+                            <span className="text-xs font-bold text-emerald-400 uppercase">Discovery Completado</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setSelectedSessionForBriefing(sessionMatch);
+                              setIsBriefingDrawerOpen(true);
+                            }}
+                            className="w-full rounded-xl bg-emerald-600/20 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/40 transition"
+                          >
+                            Ver Briefing
+                          </button>
+                        </div>
+                      )}
+
                       {lead.stage === "WON" && !lead.convertedClientId && (
                         <button
                           type="button"
@@ -419,7 +453,7 @@ export default function CrmPage() {
                         </p>
                       )}
                     </article>
-                  ))}
+                  )})}
 
                   {!stageLeads.length && (
                     <p className="text-sm text-slate-500">Sin prospectos.</p>
@@ -442,6 +476,15 @@ export default function CrmPage() {
           defaultContactName={selectedLeadForDiscovery.contactName}
         />
       )}
+
+      <ExecutiveBriefingDrawer
+        isOpen={isBriefingDrawerOpen}
+        onClose={() => {
+          setIsBriefingDrawerOpen(false);
+          setSelectedSessionForBriefing(null);
+        }}
+        session={selectedSessionForBriefing}
+      />
     </div>
   );
 }
