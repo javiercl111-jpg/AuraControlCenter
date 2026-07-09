@@ -12,6 +12,7 @@ import CommercialDashboard from "../modules/market-intelligence/components/Comme
 import AuraIntelligenceRecommendationsPanel from "../modules/market-intelligence/components/AuraIntelligenceRecommendationsPanel";
 
 import MarketFirestoreService, { type ImportHistoryEntry } from "../modules/market-intelligence/services/marketFirestoreService";
+import ErrorBoundary from "../modules/market-intelligence/components/ErrorBoundary";
 import MarketQueryEngine, { normalizeState, getCompanyState, getCompanyIndustry, getNormalizedStateName } from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
@@ -2676,7 +2677,8 @@ export default function MarketIntelligencePage() {
   };
 
   return (
-    <div className="space-y-6 pb-[env(safe-area-inset-bottom)] min-w-0 w-full font-sans">
+    <ErrorBoundary fallbackTitle="Error en Aura Market Intelligence">
+      <div className="space-y-6 pb-[env(safe-area-inset-bottom)] min-w-0 w-full font-sans">
       {/* Page Title & Subtitle */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -3065,7 +3067,8 @@ export default function MarketIntelligencePage() {
         canUpdate={capabilities.canUpdate}
         canConvert={capabilities.canConvert}
       />
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 
 }
