@@ -596,6 +596,32 @@ export default function MarketIntelligencePage() {
     };
   }, [filteredAndSortedDataset]);
 
+  const tempDiagnostics = useMemo(() => {
+    const rawCount = rawDataset.length;
+    const filteredCount = filteredAndSortedDataset.length;
+    const pagedCount = companies.length;
+    const kpisCount = stats.totalCount;
+    const sectorSelected = filters.sector || "Todos";
+    const estadoSelected = filters.estado || "Todos";
+    
+    const hotelCount = rawDataset.filter(c => getCompanyIndustry(c) === "Hoteles y Hospedaje").length;
+    const tableHotelCount = companies.filter(c => getCompanyIndustry(c) === "Hoteles y Hospedaje").length;
+    
+    const isInconsistent = (filteredCount > 0 && pagedCount === 0) || (kpisCount !== filteredCount);
+
+    return {
+      rawCount,
+      filteredCount,
+      pagedCount,
+      kpisCount,
+      sectorSelected,
+      estadoSelected,
+      hotelCount,
+      tableHotelCount,
+      isInconsistent
+    };
+  }, [rawDataset, filteredAndSortedDataset, companies, stats.totalCount, filters.sector, filters.estado]);
+
   // Estado del Drawer de Detalle
   const [selectedCompany, setSelectedCompany] = useState<InegiCompany | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -1529,6 +1555,8 @@ export default function MarketIntelligencePage() {
     }
   }
 
+  // HOOK ORDER SAFETY: all hooks above this line
+
   if (hasAccess === null) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center">
@@ -2251,31 +2279,7 @@ export default function MarketIntelligencePage() {
     );
   };
 
-  const tempDiagnostics = useMemo(() => {
-    const rawCount = rawDataset.length;
-    const filteredCount = filteredAndSortedDataset.length;
-    const pagedCount = companies.length;
-    const kpisCount = stats.totalCount;
-    const sectorSelected = filters.sector || "Todos";
-    const estadoSelected = filters.estado || "Todos";
-    
-    const hotelCount = rawDataset.filter(c => getCompanyIndustry(c) === "Hoteles y Hospedaje").length;
-    const tableHotelCount = companies.filter(c => getCompanyIndustry(c) === "Hoteles y Hospedaje").length;
-    
-    const isInconsistent = (filteredCount > 0 && pagedCount === 0) || (kpisCount !== filteredCount);
 
-    return {
-      rawCount,
-      filteredCount,
-      pagedCount,
-      kpisCount,
-      sectorSelected,
-      estadoSelected,
-      hotelCount,
-      tableHotelCount,
-      isInconsistent
-    };
-  }, [rawDataset, filteredAndSortedDataset, companies, stats.totalCount, filters.sector, filters.estado]);
 
   const renderDiagnosticsTab = () => {
     return (
