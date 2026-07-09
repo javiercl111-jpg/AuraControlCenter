@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { DiscoverySession } from "../types/discoveryTypes";
 import DiscoverySessionService from "../services/discoverySessionService";
+import RadiografiaEmpresarialModal from "./RadiografiaEmpresarialModal";
 
 interface ExecutiveBriefingDrawerProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export default function ExecutiveBriefingDrawer({
 }: ExecutiveBriefingDrawerProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [isRadiografiaModalOpen, setIsRadiografiaModalOpen] = useState(false);
 
   if (!isOpen || !session) return null;
 
@@ -115,7 +117,15 @@ export default function ExecutiveBriefingDrawer({
 
           {/* Radiografía & Modules */}
           <section>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-purple-400 mb-3 border-b border-slate-800 pb-2">Aura Radiografía</h3>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-purple-400">Aura Radiografía</h3>
+              <button
+                onClick={() => setIsRadiografiaModalOpen(true)}
+                className="text-[10px] font-bold uppercase tracking-widest text-purple-300 bg-purple-900/30 hover:bg-purple-900/60 px-3 py-1 rounded-md transition border border-purple-500/20"
+              >
+                Ver Radiografía
+              </button>
+            </div>
             {radiografiaEmpresarialDraft ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-4">
                 <div>
@@ -213,6 +223,12 @@ export default function ExecutiveBriefingDrawer({
 
         </div>
       </div>
+      
+      <RadiografiaEmpresarialModal
+        isOpen={isRadiografiaModalOpen}
+        onClose={() => setIsRadiografiaModalOpen(false)}
+        session={session}
+      />
     </div>
   );
 }
