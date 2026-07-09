@@ -12,12 +12,13 @@ import {
   updateDoc,
   where,
   writeBatch,
+  orderBy,
+  startAfter,
 } from "firebase/firestore";
 
 import { db } from "../../../config/firebase";
 import type { CompanyStatus, InegiCompany } from "../types/inegi";
 import type { PlatformOrganization } from "../../../types/platformOrganization";
-import { getNormalizedStateName, normalizeState } from "./marketQueryEngine";
 
 const MARKET_COMPANIES_COLLECTION = "market_companies";
 
@@ -588,92 +589,170 @@ export async function convertMarketCompanyToOrganization(
  * que se hayan importado con el campo "estado" vacío o incorrecto, utilizando el ID del documento
  * o el municipio.
  */
-export async function repairImportedStates(): Promise<{ totalChecked: number; repaired: number }> {
-  const collRef = collection(db, MARKET_COMPANIES_COLLECTION);
-  const snap = await getDocs(collRef);
-  
+export async function repairImportedStates(): Promise<{ totalChecked: number; repaired: number; omitted: number; errors: number }> {
   let totalChecked = 0;
   let repaired = 0;
-  
-  const batch = writeBatch(db);
-  let batchCount = 0;
+  let omitted = 0;
+  let errors = 0;
+  let hasMore = true;
+  let lastVisible: any = null;
+  const batchLimit = 400;
 
-  for (const docSnap of snap.docs) {
-    totalChecked++;
-    const data = docSnap.data();
-    const currentId = docSnap.id.toLowerCase();
-    const currentMunicipio = (data.municipio || "").toLowerCase();
-    const currentEstado = (data.estado || "").trim();
+  const tabascoMunNormalized = [
+    "centro", "villahermosa", "cardenas", "comalcalco", "paraiso",
+    "macuspana", "huimanguillo", "nacajuca", "cunduacan", "tenosique",
+    "balancan", "jalpa de mendez", "teapa", "tacotalpa", "emiliano zapata",
+    "jalapa", "jonuta"
+  ];
 
-    let resolvedState = getNormalizedStateName(currentEstado);
+  let totalTabascoCount = 0;
 
-    // Si sigue siendo No Especificado o incorrecto, intentar inferir
-    if (resolvedState === "No Especificado") {
-      if (currentId.includes("queretaro") || currentMunicipio.includes("querétaro") || currentMunicipio.includes("queretaro")) {
-        resolvedState = "Querétaro";
-      } else if (currentId.includes("nuevoleon") || currentId.includes("nuevo_leon") || currentMunicipio.includes("monterrey") || currentMunicipio.includes("san nicolas") || currentMunicipio.includes("san pedro")) {
-        resolvedState = "Nuevo León";
-      } else if (currentId.includes("jalisco") || currentMunicipio.includes("guadalajara") || currentMunicipio.includes("zapopan") || currentMunicipio.includes("tlaquepaque") || currentMunicipio.includes("el salto")) {
-        resolvedState = "Jalisco";
-      } else if (
-        currentId.includes("tabasco") || 
-        currentMunicipio.includes("villahermosa") || 
-        currentMunicipio.includes("centro") || 
-        currentMunicipio.includes("cardenas") || 
-        currentMunicipio.includes("comalcalco") || 
-        currentMunicipio.includes("macuspana") || 
-        currentMunicipio.includes("huimanguillo") || 
-        currentMunicipio.includes("cunduacan") || 
-        currentMunicipio.includes("paraiso") || 
-        currentMunicipio.includes("jalpa de mendez") || 
-        currentMunicipio.includes("nacajuca") || 
-        currentMunicipio.includes("tenosique") || 
-        currentMunicipio.includes("teapa") || 
-        currentMunicipio.includes("tacotalpa") || 
-        currentMunicipio.includes("jalapa") || 
-        currentMunicipio.includes("balancan") || 
-        currentMunicipio.includes("emiliano zapata") || 
-        currentMunicipio.includes("jonuta")
-      ) {
-        resolvedState = "Tabasco";
+  while (hasMore) {
+    try {
+      const collRef = collection(db, MARKET_COMPANIES_COLLECTION);
+      const queryConstraints: any[] = [orderBy("__name__"), limit(500)];
+      if (lastVisible) {
+        queryConstraints.push(startAfter(lastVisible));
       }
+
+      const q = query(collRef, ...queryConstraints);
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        hasMore = false;
+        break;
+      }
+
+      lastVisible = snap.docs[snap.docs.length - 1];
+      
+      let batch = writeBatch(db);
+      let batchCount = 0;
+
+      for (const docSnap of snap.docs) {
+        totalChecked++;
+        const data = docSnap.data();
+        
+        const currentEstado = (data.estado || "").trim();
+        const currentNormalized = (data.estadoNormalized || "").trim().toLowerCase();
+        const currentSourceState = (data.sourceState || "").trim();
+        const currentMunicipio = (data.municipio || "").trim();
+        const munNorm = currentMunicipio.toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9 ]/g, "")
+          .trim();
+
+        const filename = (data.filename || data.sourceFile || "").toLowerCase();
+        const razonSocial = (data.razonSocial || "").toLowerCase();
+        const nombreComercial = (data.nombreComercial || "").toLowerCase();
+
+        let shouldBeTabasco = false;
+
+        // Criterios para Tabasco
+        if (
+          filename.includes("27_tabasco") ||
+          filename.includes("27-tabasco") ||
+          currentSourceState.toLowerCase() === "tabasco" ||
+          currentEstado === "27" ||
+          currentNormalized === "27" ||
+          tabascoMunNormalized.some(m => munNorm === m || munNorm.includes(m)) ||
+          (munNorm === "centro" && (razonSocial.includes("villahermosa") || nombreComercial.includes("villahermosa")))
+        ) {
+          shouldBeTabasco = true;
+        }
+
+        if (shouldBeTabasco) {
+          totalTabascoCount++;
+          // Si no está configurado como Tabasco, actualizarlo
+          if (currentEstado !== "Tabasco" || currentNormalized !== "tabasco" || currentSourceState !== "Tabasco") {
+            try {
+              batch.update(docSnap.ref, {
+                estado: "Tabasco",
+                estadoNormalized: "tabasco",
+                sourceState: "Tabasco",
+                updatedAt: serverTimestamp()
+              });
+              repaired++;
+              batchCount++;
+
+              if (batchCount >= batchLimit) {
+                await batch.commit();
+                batch = writeBatch(db);
+                batchCount = 0;
+              }
+            } catch (err) {
+              console.error("Error al añadir actualización al batch:", err);
+              errors++;
+            }
+          } else {
+            omitted++;
+          }
+        } else {
+          omitted++;
+        }
+      }
+
+      if (batchCount > 0) {
+        try {
+          await batch.commit();
+        } catch (commitErr) {
+          console.error("Error al hacer commit del batch restante:", commitErr);
+          errors += batchCount;
+        }
+      }
+
+      // Si trajimos menos de 500 registros, es la última página
+      if (snap.docs.length < 500) {
+        hasMore = false;
+      }
+    } catch (pageErr) {
+      console.error("Error al procesar lote de reparación:", pageErr);
+      errors += 500;
+      hasMore = false;
     }
+  }
 
-    const currentNormalized = (data.estadoNormalized || "").trim();
-    const currentSource = (data.sourceState || "").trim();
+  // Actualizar metadatos
+  if (totalTabascoCount > 0) {
+    try {
+      const tabascoDatasetMetadataRef = doc(db, "market_dataset_metadata", "Tabasco");
+      await setDoc(tabascoDatasetMetadataRef, {
+        state: "Tabasco",
+        totalRecords: totalTabascoCount,
+        lastImportJobId: "manual_repair",
+        completedAt: serverTimestamp(),
+        fingerprint: "manual_repair_tabasco",
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
 
-    const expectedNormalized = normalizeState(resolvedState);
-    const expectedSource = currentSource || currentEstado || "No Especificado";
+      const tabascoCompaniesMetadataRef = doc(db, "market_companies_metadata", "Tabasco");
+      await setDoc(tabascoCompaniesMetadataRef, {
+        state: "Tabasco",
+        totalRecords: totalTabascoCount,
+        lastImportJobId: "manual_repair",
+        completedAt: serverTimestamp(),
+        fingerprint: "manual_repair_tabasco",
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
 
-    // Si cambió el estado o no tenía los campos de normalización, actualizar
-    if (
-      currentEstado !== resolvedState || 
-      currentNormalized !== expectedNormalized || 
-      currentSource !== expectedSource
-    ) {
-      batch.update(docSnap.ref, {
-        estado: resolvedState,
-        estadoNormalized: expectedNormalized,
-        sourceState: expectedSource,
-        updatedAt: serverTimestamp()
+      const statesRef = doc(db, "market_companies_metadata", "states");
+      await runTransaction(db, async (transaction) => {
+        const statesSnap = await transaction.get(statesRef);
+        let statesList: string[] = ["Querétaro", "Nuevo León", "Tabasco"];
+        if (statesSnap.exists()) {
+          const currentList = statesSnap.data()?.states || [];
+          const combined = new Set([...currentList, ...statesList]);
+          statesList = Array.from(combined).sort();
+        }
+        transaction.set(statesRef, { states: statesList }, { merge: true });
       });
-      repaired++;
-      batchCount++;
-
-      // Firestore batch limit is 500
-      if (batchCount >= 450) {
-        await batch.commit();
-        batchCount = 0;
-      }
+    } catch (metaErr) {
+      console.error("Error al actualizar metadatos durante reparación de estados:", metaErr);
     }
   }
 
-  if (batchCount > 0) {
-    await batch.commit();
-  }
-
-  console.log(`[MarketFirestoreService] Reparación de estados finalizada. Revisados: ${totalChecked}, Reparados: ${repaired}`);
-  return { totalChecked, repaired };
+  console.log(`[MarketFirestoreService] Reparación de estados finalizada. Revisados: ${totalChecked}, Reparados: ${repaired}, Omitidos: ${omitted}, Errores: ${errors}`);
+  return { totalChecked, repaired, omitted, errors };
 }
 
 /**

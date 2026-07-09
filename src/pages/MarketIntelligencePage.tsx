@@ -1525,9 +1525,13 @@ export default function MarketIntelligencePage() {
     setSuccess("");
     try {
       const result = await MarketFirestoreService.repairImportedStates();
-      setSuccess(`Mantenimiento completado. Se revisaron ${result.totalChecked} registros y se repararon ${result.repaired} sin estado.`);
+      setSuccess(`Reparación completada: ${result.repaired} registros reparados.`);
       datasetManager.clear();
       console.log("[Aura Dataset Hydration] datasetManager refreshed");
+      
+      const freshStates = await MarketFirestoreService.getUniqueStates();
+      setDbUniqueStates(freshStates);
+      
       await loadDataset(true, true);
     } catch (err: any) {
       console.error(err);
@@ -2695,11 +2699,28 @@ export default function MarketIntelligencePage() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              if ((window as any).__auraSWUpdateFn) {
-                (window as any).__auraSWUpdateFn();
-              } else {
+            onClick={async () => {
+              try {
+                console.log("[Aura PWA Update] Iniciando flujo de actualización seguro...");
+                if ((window as any).__auraSWUpdateFn) {
+                  (window as any).__auraSWUpdateFn();
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 1500);
+                  return;
+                }
+                if ('serviceWorker' in navigator) {
+                  const registrations = await navigator.serviceWorker.getRegistrations();
+                  for (const registration of registrations) {
+                    await registration.update();
+                  }
+                  window.location.reload();
+                  return;
+                }
                 window.location.reload();
+              } catch (err: any) {
+                console.error("[Aura PWA Update Error] Falló actualización:", err);
+                setError("No se pudo actualizar automáticamente. Cierra y vuelve a abrir la PWA.");
               }
             }}
             className="rounded-lg bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-slate-950 hover:bg-amber-400 transition active:scale-95"

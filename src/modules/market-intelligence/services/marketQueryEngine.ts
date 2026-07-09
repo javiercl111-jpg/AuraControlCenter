@@ -61,8 +61,29 @@ export function getNormalizedStateName(stateVal: string, filename?: string): str
 
 export function getCompanyState(company: any): string {
   if (!company) return "";
-  
-  // 1. Intentar resolver por propiedades directas en orden
+
+  const filename = (company.filename || company.sourceFile || company.sourceFileUrl || "").toLowerCase();
+  const sourceState = (company.sourceState || "").toLowerCase();
+  const estadoNormalized = (company.estadoNormalized || "").toLowerCase();
+  const razonSocial = (company.razonSocial || "").toLowerCase();
+  const nombreComercial = (company.nombreComercial || "").toLowerCase();
+  const currentEstado = (company.estado || "").trim().toLowerCase();
+
+  // 1. Si sourceFile/sourceState/estadoNormalized/filename/estado indica Tabasco, devolver Tabasco inmediatamente
+  if (
+    filename.includes("27_tabasco") ||
+    filename.includes("27-tabasco") ||
+    filename.includes("tabasco") ||
+    sourceState === "tabasco" ||
+    estadoNormalized === "tabasco" ||
+    estadoNormalized === "27" ||
+    currentEstado === "tabasco" ||
+    currentEstado === "27"
+  ) {
+    return "Tabasco";
+  }
+
+  // 2. Intentar resolver por propiedades directas en orden
   const val = (
     company.estado ||
     company.state ||
@@ -77,15 +98,32 @@ export function getCompanyState(company: any): string {
     return normalized;
   }
 
-  // 2. Inferir por municipio si está vacío
+  // 3. Inferir por municipio si está vacío
   const munNorm = normalizeState(company.municipio || "");
   if (munNorm) {
     if (munNorm.includes("queretaro")) {
       return "Querétaro";
     }
-    if (munNorm.includes("villahermosa") || munNorm === "centro" || munNorm.includes("centrotabasco") || munNorm.includes("cardenas") || munNorm.includes("comalcalco") || munNorm.includes("paraiso")) {
+
+    const hasTabascoSignals = 
+      razonSocial.includes("villahermosa") || 
+      nombreComercial.includes("villahermosa") || 
+      razonSocial.includes("tabasco") || 
+      nombreComercial.includes("tabasco") ||
+      filename.includes("tabasco") ||
+      sourceState.includes("tabasco");
+
+    if (
+      munNorm.includes("villahermosa") || 
+      munNorm === "centrotabasco" || 
+      munNorm.includes("cardenas") || 
+      munNorm.includes("comalcalco") || 
+      munNorm.includes("paraiso") ||
+      (munNorm === "centro" && (hasTabascoSignals || true))
+    ) {
       return "Tabasco";
     }
+
     const nlMunicipios = [
       "monterrey",
       "sannicolas",
