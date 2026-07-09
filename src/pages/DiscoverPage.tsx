@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../config/firebase";
-import type { DiscoveryLink, AuraThoughtState } from "../modules/discovery/types/discoveryTypes";
-import DiscoveryEngine, { DISCOVERY_QUESTIONS } from "../modules/discovery/services/discoveryEngine";
+import type { DiscoveryLink } from "../modules/discovery/types/discoveryTypes";
 import DossierBuilderService from "../modules/discovery/services/dossierBuilderService";
+import ConversationEngine from "../modules/intelligence/engine/services/ConversationEngine";
+import ConversationState from "../modules/intelligence/engine/domain/ConversationState";
 
 export default function DiscoverPage() {
   const { linkId } = useParams<{ linkId: string }>();
@@ -16,18 +17,23 @@ export default function DiscoverPage() {
 
   // Conversational Flow States
   const [screen, setScreen] = useState<"welcome" | "chat" | "completed">("welcome");
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
   
   // Real-time Chat log
   const [chatLog, setChatLog] = useState<{ sender: "aura" | "user"; text: string }[]>([]);
   const [isAuraTyping, setIsAuraTyping] = useState(false);
+  const [inputValue, setInputValue] = useState("");
 
-  // Thoughts Sidebar
-  const [thoughts, setThoughts] = useState<AuraThoughtState>({
-    hypothesis: "Iniciando canal de prospección. Esperando sector industrial para formular hipótesis operativa inicial.",
-    confidence: 15,
-    nextSteps: "Identificar el giro comercial principal del prospecto.",
+  // AI Engine Instances
+  const engineRef = useRef<ConversationEngine | null>(null);
+  const stateRef = useRef<ConversationState | null>(null);
+
+  // Thoughts Sidebar (Telemetry Mirror)
+  const [telemetry, setTelemetry] = useState({
+    intent: "INITIALIZING",
+    reason: "Awaiting sector to formulate initial hypothesis",
+    confidence: 0,
+    hypotheses: [] as string[],
+    internalSummary: ""
   });
 
   // Load link information on mount
@@ -76,63 +82,96 @@ export default function DiscoverPage() {
 
   // Welcome page text starts chat
   function handleStartChat() {
+    if (!linkInfo) return;
+    
+    // Instantiate AI Engine
+    engineRef.current = new ConversationEngine();
+    stateRef.current = new ConversationState(
+      linkId || "demo",
+      linkInfo.companyName,
+      "Industria General" // We can update this later if we know it
+    );
+
     setScreen("chat");
-    triggerAuraQuestion(0, {});
+    processTurn(""); // Start the conversation
   }
 
-  // Trigger Aura Question with typing animation
-  function triggerAuraQuestion(stepIndex: number, currentAnswers: Record<string, string>) {
-    if (stepIndex >= DISCOVERY_QUESTIONS.length) {
-      handleComplete(currentAnswers);
-      return;
-    }
+  async function processTurn(userText: string) {
+    if (!engineRef.current || !stateRef.current || !linkInfo) return;
 
-    const question = DISCOVERY_QUESTIONS[stepIndex];
-    let text = question.text;
-
-    // Personalizar pregunta en base al sector
-    if (question.id === "employees_method") {
-      const selectedSector = currentAnswers["sector"] || "tu sector";
-      text = `Entendido. En el sector de "${selectedSector}", la rotación y la coordinación horaria son críticas. ¿Cuántos colaboradores activos tienen actualmente y qué método utilizan para programar sus turnos?`;
+    // Record User Message
+    if (userText) {
+      stateRef.current.addMessage("user", userText);
+      setChatLog(prev => [...prev, { sender: "user", text: userText }]);
     }
 
     setIsAuraTyping(true);
-    setTimeout(() => {
-      setChatLog((prev) => [...prev, { sender: "aura", text }]);
-      setIsAuraTyping(false);
-    }, 1200);
 
-    // Actualizar pensamientos
-    const t = DiscoveryEngine.getAuraThoughts(currentAnswers);
-    setThoughts(t);
+    // Build Engine Input
+    const input = {
+      companyName: linkInfo.companyName,
+      industry: stateRef.current.industry,
+      context: {},
+      currentResponse: userText,
+      conversationHistory: stateRef.current.getHistory(),
+      hypotheses: stateRef.current.getHypotheses(),
+      confidenceLevel: stateRef.current.currentConfidence,
+      partialDossier: stateRef.current.dossier
+    };
+
+    // Simulate Network/Processing Delay for realism
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Process logic
+    const output = engineRef.current.processTurn(input);
+
+    // Apply Output to State
+    stateRef.current.updateConfidence(output.updatedConfidence);
+    stateRef.current.updateDossier(output.updatedDossier);
+    output.newHypotheses.forEach(h => stateRef.current?.addHypothesis(h));
+    output.discardedHypotheses.forEach(h => stateRef.current?.removeHypothesis(h));
+    
+    // Add Aura Message to State
+    stateRef.current.addMessage("aura", output.nextQuestion);
+    setChatLog(prev => [...prev, { sender: "aura", text: output.nextQuestion }]);
+
+    // Update Telemetry UI
+    setTelemetry({
+      intent: output.nextIntent,
+      reason: output.reason,
+      confidence: output.updatedConfidence,
+      hypotheses: stateRef.current.getHypotheses(),
+      internalSummary: output.internalSummary
+    });
+
+    setIsAuraTyping(false);
+
+    // Check Completion
+    if (output.nextIntent === "SUMMARIZE" || output.nextIntent === "CLOSING") {
+      handleComplete();
+    }
   }
 
-  // Handle User Response Selection
-  function handleUserSelect(value: string, label: string) {
-    const question = DISCOVERY_QUESTIONS[currentStepIndex];
-    const updatedAnswers = { ...answers, [question.id]: value };
-    setAnswers(updatedAnswers);
-
-    // Añadir respuesta al chat log
-    setChatLog((prev) => [...prev, { sender: "user", text: label }]);
-
-    const nextIndex = currentStepIndex + 1;
-    setCurrentStepIndex(nextIndex);
-
-    // Triggerear siguiente pregunta
-    triggerAuraQuestion(nextIndex, updatedAnswers);
+  function handleUserSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const text = inputValue.trim();
+    if (!text || isAuraTyping) return;
+    setInputValue("");
+    processTurn(text);
   }
 
   // Finalizar consultoría y persistir resultados
-  async function handleComplete(finalAnswers: Record<string, string>) {
-    if (!linkInfo) return;
+  async function handleComplete() {
+    if (!linkInfo || !stateRef.current) return;
     setIsAuraTyping(true);
     try {
       await DossierBuilderService.saveDiscoverySession(
         linkInfo.id,
         linkInfo.companyName,
         linkInfo.contactName,
-        finalAnswers
+        stateRef.current.dossier,
+        stateRef.current.getHistory(),
+        stateRef.current.getSnapshot()
       );
       setTimeout(() => {
         setScreen("completed");
@@ -220,7 +259,7 @@ export default function DiscoverPage() {
               <p>
                 Al finalizar recibirás gratuitamente tu <strong>Radiografía Empresarial Aura™</strong> y prepararé un Executive Briefing para nuestro consultor de negocios.
               </p>
-              <p className="text-[10px] text-slate-500 italic">Esta conversación toma aproximadamente 8 minutos.</p>
+              <p className="text-[10px] text-slate-500 italic">Esta conversación toma aproximadamente 3 minutos.</p>
             </div>
 
             <button
@@ -238,7 +277,7 @@ export default function DiscoverPage() {
         <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid gap-6 md:grid-cols-3 animate-fadeIn">
           {/* Chat Panel */}
           <div className="md:col-span-2 flex flex-col rounded-3xl border border-slate-900 bg-slate-900/20 shadow-xl overflow-hidden backdrop-blur-sm h-[calc(100vh-140px)]">
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
               {chatLog.map((chat, idx) => (
                 <div
                   key={idx}
@@ -267,31 +306,49 @@ export default function DiscoverPage() {
               )}
             </div>
 
-            {/* Input Selection Options */}
-            <div className="border-t border-slate-900 bg-slate-950/60 p-4">
-              {currentStepIndex < DISCOVERY_QUESTIONS.length && !isAuraTyping ? (
-                <div className="space-y-2">
-                  <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                    Selecciona tu respuesta:
-                  </span>
-                  <div className="grid gap-2">
-                    {DISCOVERY_QUESTIONS[currentStepIndex].options?.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => handleUserSelect(opt.value, opt.label)}
-                        className="w-full text-left rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-xs font-medium text-slate-200 hover:border-cyan-500/50 hover:bg-slate-900 transition active:scale-99"
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-4 text-xs text-slate-500 italic">
-                  Aura está procesando el análisis del expediente...
+            {/* Natural Text Input & Quick Suggestions */}
+            <div className="border-t border-slate-900 bg-slate-950/60 p-4 space-y-3">
+              {!isAuraTyping && telemetry.intent !== "SUMMARIZE" && (
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  <button
+                    onClick={() => setInputValue("Usamos Excel")}
+                    className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+                  >
+                    💡 "Usamos Excel"
+                  </button>
+                  <button
+                    onClick={() => setInputValue("Tenemos un sistema, pero no está integrado")}
+                    className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+                  >
+                    💡 "Tenemos un sistema, pero no está integrado"
+                  </button>
+                  <button
+                    onClick={() => setInputValue("Todo lo hacemos manualmente")}
+                    className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+                  >
+                    💡 "Todo lo hacemos manualmente"
+                  </button>
                 </div>
               )}
+              
+              <form onSubmit={handleUserSubmit} className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  disabled={isAuraTyping || telemetry.intent === "SUMMARIZE"}
+                  placeholder={isAuraTyping ? "Aura está procesando..." : "Escribe tu respuesta aquí..."}
+                  className="flex-1 rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-50"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={!inputValue.trim() || isAuraTyping || telemetry.intent === "SUMMARIZE"}
+                  className="rounded-xl bg-cyan-600 px-6 text-xs font-bold text-white hover:bg-cyan-500 transition disabled:opacity-50 disabled:hover:bg-cyan-600"
+                >
+                  Enviar
+                </button>
+              </form>
             </div>
           </div>
 
@@ -300,34 +357,48 @@ export default function DiscoverPage() {
             <div className="space-y-4">
               <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
-                  <span>🧠</span> Pensamiento de Aura
+                  <span>🧠</span> Aura Thoughts
                 </h3>
                 <span className="text-[10px] text-slate-500 font-mono">Live telemetry</span>
               </div>
 
               <div className="rounded-2xl border border-cyan-500/25 bg-cyan-950/10 p-4 space-y-2 animate-fadeIn">
-                <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-400">Hipótesis de Trabajo</span>
-                <p className="text-[11px] text-slate-300 leading-relaxed font-sans">{thoughts.hypothesis}</p>
+                <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-400">Current Intent</span>
+                <p className="text-[11px] text-slate-300 leading-relaxed font-mono font-bold text-emerald-400">[{telemetry.intent}]</p>
+                
+                <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-400 mt-3">Reasoning</span>
+                <p className="text-[11px] text-slate-400 leading-relaxed italic">"{telemetry.reason}"</p>
               </div>
+
+              {telemetry.hypotheses.length > 0 && (
+                <div className="rounded-2xl border border-amber-500/25 bg-amber-950/10 p-4 space-y-2 animate-fadeIn">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-400">Active Hypotheses</span>
+                  <ul className="list-disc list-inside text-[11px] text-slate-300 space-y-1">
+                    {telemetry.hypotheses.map((h, i) => <li key={i}>{h}</li>)}
+                  </ul>
+                </div>
+              )}
 
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                  <span>Nivel de Confianza</span>
-                  <span className="text-cyan-400 font-mono">{thoughts.confidence}%</span>
+                  <span>Confidence Level</span>
+                  <span className="text-cyan-400 font-mono">{telemetry.confidence}%</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-slate-950 overflow-hidden border border-slate-900">
                   <div
                     className="h-full bg-cyan-500 transition-all duration-700 ease-out"
-                    style={{ width: `${thoughts.confidence}%` }}
+                    style={{ width: `${telemetry.confidence}%` }}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="border-t border-slate-800 pt-4 space-y-2 text-xs">
-              <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500">Próxima Acción de IA</span>
-              <p className="text-[11px] text-slate-400 leading-relaxed">{thoughts.nextSteps}</p>
-            </div>
+            {telemetry.internalSummary && (
+              <div className="border-t border-slate-800 pt-4 space-y-2 text-xs">
+                <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500">Internal Summary</span>
+                <p className="text-[11px] text-slate-400 leading-relaxed">{telemetry.internalSummary}</p>
+              </div>
+            )}
           </div>
         </main>
       )}
@@ -345,7 +416,7 @@ export default function DiscoverPage() {
             <div className="space-y-2">
               <h2 className="text-sm font-bold text-white uppercase tracking-wider">¡Expediente Completado!</h2>
               <p className="text-xs text-slate-400">
-                Gracias por completar la experiencia, {linkInfo.contactName}. Hemos recopilado la información necesaria.
+                Gracias por completar la consultoría, {linkInfo.contactName}. Hemos recopilado la información necesaria.
               </p>
             </div>
 

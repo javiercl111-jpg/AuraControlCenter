@@ -45,7 +45,9 @@ export interface DiscoverySession {
   linkId: string;
   companyName: string;
   contactName: string;
-  answers: Record<string, string>;
+  answers: Record<string, string>; // Kept for legacy/fallback
+  conversationHistory?: any[]; // The messages
+  conversationStateSnapshot?: any; // The final state dump
   dossier: SmartBusinessDossier;
   executiveBriefingDraft: ExecutiveBriefingDraft;
   businessAssessmentDraft: BusinessAssessmentDraft;

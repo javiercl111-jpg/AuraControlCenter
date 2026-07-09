@@ -1,53 +1,45 @@
 import { doc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../../config/firebase";
 import type { DiscoverySession, SmartBusinessDossier, ExecutiveBriefingDraft, BusinessAssessmentDraft, RadiografiaEmpresarialDraft, SalesAdvisorContext } from "../types/discoveryTypes";
+import type { ConversationMessage } from "../../intelligence/engine/types/conversation.types";
 
 /**
- * Mapea las respuestas conversacionales y construye el SmartBusinessDossier y borradores de diagnóstico.
+ * Construye el SmartBusinessDossier y borradores de diagnóstico basado en el estado final.
  */
 export function buildDossierPayload(
   linkId: string,
   companyName: string,
   contactName: string,
-  answers: Record<string, string>
+  dossierState: Partial<SmartBusinessDossier>,
+  conversationHistory: ConversationMessage[],
+  conversationStateSnapshot: any
 ): Omit<DiscoverySession, "id"> {
-  const sector = answers["sector"] || "Otros";
-  const empMethod = answers["employees_method"] || "Pyme_Manual";
-  const payrollIssues = answers["payroll_issues"] || "No_Perfecto";
-  const priority = answers["priority"] || "Control_Asistencia";
-
-  // 1. Deducir empleados y método
-  let employees = 30;
-  if (empMethod.includes("Micro")) employees = 5;
-  else if (empMethod.includes("Pyme")) employees = 35;
-  else if (empMethod.includes("Mediana")) employees = 150;
-  else if (empMethod.includes("Grande")) employees = 650;
-
-  let schedulingMethod = "Excel y papel";
-  if (empMethod.includes("Local")) schedulingMethod = "Software local o ERP";
-  else if (empMethod.includes("Cloud")) schedulingMethod = "Sistema en la nube";
-
-  const payrollIncidents = payrollIssues === "Si_Frecuente" || payrollIssues === "Ocasional_Lento";
-
+  
   const dossier: SmartBusinessDossier = {
-    industry: sector,
-    employees,
-    schedulingMethod,
-    payrollIncidents,
-    priority,
+    industry: dossierState.industry || "Otros",
+    employees: dossierState.employees || 0,
+    schedulingMethod: dossierState.schedulingMethod || "No especificado",
+    payrollIncidents: dossierState.payrollIncidents || false,
+    priority: dossierState.priority || "Sin prioridad definida",
   };
+
+  const sector = dossier.industry;
+  const employees = dossier.employees;
+  const schedulingMethod = dossier.schedulingMethod;
+  const payrollIncidents = dossier.payrollIncidents;
+  const priority = dossier.priority;
 
   // 2. Calcular Score y Diagnósticos
   let score = 100;
-  if (schedulingMethod === "Excel y papel") score -= 30;
+  if (schedulingMethod.toLowerCase().includes("excel") || schedulingMethod.toLowerCase().includes("papel")) score -= 30;
   if (payrollIncidents) score -= 25;
-  if (priority === "Errores_Pago") score -= 10;
+  if (priority.toLowerCase().includes("error") || priority.toLowerCase().includes("nómina")) score -= 10;
   score = Math.max(45, score);
 
   const painPointsIdentified: string[] = [];
   const processGaps: string[] = [];
 
-  if (schedulingMethod === "Excel y papel") {
+  if (schedulingMethod.toLowerCase().includes("excel") || schedulingMethod.toLowerCase().includes("papel")) {
     painPointsIdentified.push("Falta de control centralizado y cuadrantes de asistencia físicos");
     processGaps.push("Validación manual de firmas o asistencia en sucursales");
   }
@@ -55,7 +47,7 @@ export function buildDossierPayload(
     painPointsIdentified.push("Discrepancias y quejas en los pagos de nómina por horas extras");
     processGaps.push("Conciliación offline lenta entre el reporte de asistencia y el software de nómina");
   }
-  if (priority === "Rotacion_Clima") {
+  if (priority.includes("Rotacion")) {
     painPointsIdentified.push("Alta rotación y desmotivación operativa por falta de canales digitales");
   }
 
@@ -63,8 +55,8 @@ export function buildDossierPayload(
   const keyObservations: string[] = [];
   const suggestedNextSteps: string[] = [];
 
-  keyObservations.push(`Prospecto en giro "${sector}" con ${employees} colaboradores.`);
-  if (schedulingMethod === "Excel y papel") {
+  keyObservations.push(`Prospecto en giro "${sector}" con aprox. ${employees > 0 ? employees : 'varios'} colaboradores.`);
+  if (schedulingMethod.toLowerCase().includes("excel")) {
     keyObservations.push("Planificación de personal altamente manual (papel o hojas de cálculo).");
     suggestedNextSteps.push("Demostración enfocada en Operations Suite para control de asistencia móvil y turnos.");
   }
@@ -96,10 +88,10 @@ export function buildDossierPayload(
   }
 
   const recommendedModules: string[] = ["People Suite"];
-  if (schedulingMethod === "Excel y papel") recommendedModules.push("Operations Suite");
+  if (schedulingMethod.toLowerCase().includes("excel") || schedulingMethod.toLowerCase().includes("papel")) recommendedModules.push("Operations Suite");
   if (payrollIncidents) recommendedModules.push("Compensation Suite");
 
-  const potentialSavings = schedulingMethod === "Excel y papel"
+  const potentialSavings = schedulingMethod.toLowerCase().includes("excel")
     ? "Ahorro proyectado del 10% al 15% del costo de horas extras no justificadas mediante validación biométrica facial Aura."
     : "Ahorro del 5% del tiempo administrativo de pre-nómina semanal.";
 
@@ -110,9 +102,9 @@ export function buildDossierPayload(
   };
 
   // Contexto del Asesor
-  let recommendedOpeningLine = `Hola ${contactName}, un gusto saludarte. Analicé el expediente que generaste en el Discovery Portal de Aura para ${companyName}. Vi que te interesa optimizar la gestión de tus ${employees} colaboradores...`;
+  let recommendedOpeningLine = `Hola ${contactName}, un gusto saludarte. Analicé el expediente que generaste con Aura para ${companyName}. Vi que te interesa optimizar la gestión de tus colaboradores...`;
   const alertFlags: string[] = [];
-  if (schedulingMethod === "Excel y papel") alertFlags.push("PROCESO_MANUAL");
+  if (schedulingMethod.toLowerCase().includes("excel")) alertFlags.push("PROCESO_MANUAL");
   if (payrollIncidents) alertFlags.push("RIESGO_CONCILIACION_NOMINA");
 
   const salesAdvisorContext: SalesAdvisorContext = {
@@ -125,7 +117,9 @@ export function buildDossierPayload(
     linkId,
     companyName,
     contactName,
-    answers,
+    answers: {}, // Legacy
+    conversationHistory,
+    conversationStateSnapshot,
     dossier,
     executiveBriefingDraft,
     businessAssessmentDraft,
@@ -142,10 +136,12 @@ export async function saveDiscoverySession(
   linkId: string,
   companyName: string,
   contactName: string,
-  answers: Record<string, string>
+  dossierState: Partial<SmartBusinessDossier>,
+  conversationHistory: ConversationMessage[],
+  conversationStateSnapshot: any
 ): Promise<string> {
   const dossierId = `dossier_${linkId}_${Date.now()}`;
-  const payload = buildDossierPayload(linkId, companyName, contactName, answers);
+  const payload = buildDossierPayload(linkId, companyName, contactName, dossierState, conversationHistory, conversationStateSnapshot);
 
   // 1. Guardar la sesión de consultoría
   const sessionRef = doc(db, "discovery_sessions", dossierId);
