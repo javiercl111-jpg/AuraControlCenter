@@ -60,7 +60,6 @@ export default function MarketIntelligencePage() {
   const [loadedState, setLoadedState] = useState<string | null>(null);
   const [dbUniqueStates, setDbUniqueStates] = useState<string[]>([]);
   const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
-  const [swUpdateAvailable, setSwUpdateAvailable] = useState(false);
   const [activeJob, setActiveJob] = useState<{
     jobId: string;
     filename: string;
@@ -444,19 +443,7 @@ export default function MarketIntelligencePage() {
     verifyPermissions();
   }, []);
 
-  // Escuchar actualizaciones de la PWA/Service Worker
-  useEffect(() => {
-    if ((window as any).__auraSWNeedRefresh) {
-      setSwUpdateAvailable(true);
-    }
-    const handleSWUpdate = () => {
-      setSwUpdateAvailable(true);
-    };
-    window.addEventListener("aura-sw-update-available", handleSWUpdate);
-    return () => {
-      window.removeEventListener("aura-sw-update-available", handleSWUpdate);
-    };
-  }, []);
+
 
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
@@ -2690,45 +2677,6 @@ export default function MarketIntelligencePage() {
 
   return (
     <div className="space-y-6 pb-[env(safe-area-inset-bottom)] min-w-0 w-full font-sans">
-      {/* SW Update Available Banner */}
-      {swUpdateAvailable && (
-        <div className="flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3.5 text-xs text-amber-200">
-          <div className="flex items-center gap-2">
-            <span>✨</span>
-            <span>Nueva versión disponible de Aura Control Center.</span>
-          </div>
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                console.log("[Aura PWA Update] Iniciando flujo de actualización seguro...");
-                if ((window as any).__auraSWUpdateFn) {
-                  (window as any).__auraSWUpdateFn();
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 1500);
-                  return;
-                }
-                if ('serviceWorker' in navigator) {
-                  const registrations = await navigator.serviceWorker.getRegistrations();
-                  for (const registration of registrations) {
-                    await registration.update();
-                  }
-                  window.location.reload();
-                  return;
-                }
-                window.location.reload();
-              } catch (err: any) {
-                console.error("[Aura PWA Update Error] Falló actualización:", err);
-                setError("No se pudo actualizar automáticamente. Cierra y vuelve a abrir la PWA.");
-              }
-            }}
-            className="rounded-lg bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-slate-950 hover:bg-amber-400 transition active:scale-95"
-          >
-            Actualizar Ahora
-          </button>
-        </div>
-      )}
       {/* Page Title & Subtitle */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
