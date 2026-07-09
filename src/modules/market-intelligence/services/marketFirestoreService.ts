@@ -17,6 +17,7 @@ import {
 import { db } from "../../../config/firebase";
 import type { CompanyStatus, InegiCompany } from "../types/inegi";
 import type { PlatformOrganization } from "../../../types/platformOrganization";
+import { getNormalizedStateName, normalizeState } from "./marketQueryEngine";
 
 const MARKET_COMPANIES_COLLECTION = "market_companies";
 
@@ -187,6 +188,8 @@ export async function importMarketCompaniesBatch(
           existing.direccion !== company.direccion ||
           existing.municipio !== company.municipio ||
           existing.estado !== company.estado ||
+          existing.estadoNormalized !== (company as any).estadoNormalized ||
+          existing.sourceState !== (company as any).sourceState ||
           existing.cp !== company.cp ||
           existing.scian !== company.scian ||
           existing.actividad !== company.actividad;
@@ -209,6 +212,8 @@ export async function importMarketCompaniesBatch(
             direccion: company.direccion,
             municipio: company.municipio,
             estado: company.estado,
+            estadoNormalized: (company as any).estadoNormalized || "",
+            sourceState: (company as any).sourceState || "No Especificado",
             cp: company.cp,
             scian: company.scian,
             actividad: company.actividad,
@@ -367,20 +372,52 @@ export async function getImportHistory(): Promise<ImportHistoryEntry[]> {
  * Si el documento no existe o está vacío, devuelve la muestra piloto por defecto.
  */
 export async function getUniqueStates(): Promise<string[]> {
+  const statesSet = new Set<string>(["Querétaro", "Nuevo León"]);
+  
   try {
     const docRef = doc(db, "market_companies_metadata", "states");
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const data = snap.data();
-      if (data && Array.isArray(data.states) && data.states.length > 0) {
-        return data.states;
+      if (data && Array.isArray(data.states)) {
+        data.states.forEach((s: any) => {
+          if (s && String(s).trim()) statesSet.add(String(s).trim());
+        });
       }
     }
   } catch (err) {
-    console.warn("No se pudieron cargar los estados únicos desde Firestore:", err);
+    console.warn("No se pudieron cargar los estados únicos desde market_companies_metadata/states:", err);
   }
-  // Fallback piloto por defecto
-  return ["Querétaro", "Nuevo León"];
+
+  try {
+    const q = query(collection(db, "market_dataset_metadata"));
+    const snap = await getDocs(q);
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data && data.state && String(data.state).trim()) {
+        statesSet.add(String(data.state).trim());
+      }
+    });
+  } catch (err) {
+    console.warn("No se pudieron cargar los estados únicos desde market_dataset_metadata:", err);
+  }
+
+  try {
+    const q = query(collection(db, "market_companies_metadata"));
+    const snap = await getDocs(q);
+    snap.forEach((docSnap) => {
+      if (docSnap.id !== "states") {
+        const data = docSnap.data();
+        if (data && data.state && String(data.state).trim()) {
+          statesSet.add(String(data.state).trim());
+        }
+      }
+    });
+  } catch (err) {
+    console.warn("No se pudieron cargar los estados únicos desde market_companies_metadata:", err);
+  }
+
+  return Array.from(statesSet).sort();
 }
 
 /**
@@ -568,32 +605,65 @@ export async function repairImportedStates(): Promise<{ totalChecked: number; re
     const currentMunicipio = (data.municipio || "").toLowerCase();
     const currentEstado = (data.estado || "").trim();
 
-    // Si el estado está vacío, intentar repararlo
-    if (!currentEstado || currentEstado === "No Especificado") {
-      let resolvedState = "";
+    let resolvedState = getNormalizedStateName(currentEstado);
 
-      // Coincidencias de ID o Municipio para Querétaro, Nuevo León o Jalisco
+    // Si sigue siendo No Especificado o incorrecto, intentar inferir
+    if (resolvedState === "No Especificado") {
       if (currentId.includes("queretaro") || currentMunicipio.includes("querétaro") || currentMunicipio.includes("queretaro")) {
         resolvedState = "Querétaro";
       } else if (currentId.includes("nuevoleon") || currentId.includes("nuevo_leon") || currentMunicipio.includes("monterrey") || currentMunicipio.includes("san nicolas") || currentMunicipio.includes("san pedro")) {
         resolvedState = "Nuevo León";
       } else if (currentId.includes("jalisco") || currentMunicipio.includes("guadalajara") || currentMunicipio.includes("zapopan") || currentMunicipio.includes("tlaquepaque") || currentMunicipio.includes("el salto")) {
         resolvedState = "Jalisco";
+      } else if (
+        currentId.includes("tabasco") || 
+        currentMunicipio.includes("villahermosa") || 
+        currentMunicipio.includes("centro") || 
+        currentMunicipio.includes("cardenas") || 
+        currentMunicipio.includes("comalcalco") || 
+        currentMunicipio.includes("macuspana") || 
+        currentMunicipio.includes("huimanguillo") || 
+        currentMunicipio.includes("cunduacan") || 
+        currentMunicipio.includes("paraiso") || 
+        currentMunicipio.includes("jalpa de mendez") || 
+        currentMunicipio.includes("nacajuca") || 
+        currentMunicipio.includes("tenosique") || 
+        currentMunicipio.includes("teapa") || 
+        currentMunicipio.includes("tacotalpa") || 
+        currentMunicipio.includes("jalapa") || 
+        currentMunicipio.includes("balancan") || 
+        currentMunicipio.includes("emiliano zapata") || 
+        currentMunicipio.includes("jonuta")
+      ) {
+        resolvedState = "Tabasco";
       }
+    }
 
-      if (resolvedState) {
-        batch.update(docSnap.ref, {
-          estado: resolvedState,
-          updatedAt: serverTimestamp()
-        });
-        repaired++;
-        batchCount++;
+    const currentNormalized = (data.estadoNormalized || "").trim();
+    const currentSource = (data.sourceState || "").trim();
 
-        // Firestore batch limit is 500
-        if (batchCount >= 450) {
-          await batch.commit();
-          batchCount = 0;
-        }
+    const expectedNormalized = normalizeState(resolvedState);
+    const expectedSource = currentSource || currentEstado || "No Especificado";
+
+    // Si cambió el estado o no tenía los campos de normalización, actualizar
+    if (
+      currentEstado !== resolvedState || 
+      currentNormalized !== expectedNormalized || 
+      currentSource !== expectedSource
+    ) {
+      batch.update(docSnap.ref, {
+        estado: resolvedState,
+        estadoNormalized: expectedNormalized,
+        sourceState: expectedSource,
+        updatedAt: serverTimestamp()
+      });
+      repaired++;
+      batchCount++;
+
+      // Firestore batch limit is 500
+      if (batchCount >= 450) {
+        await batch.commit();
+        batchCount = 0;
       }
     }
   }

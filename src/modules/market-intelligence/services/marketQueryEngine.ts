@@ -83,7 +83,7 @@ export function getCompanyState(company: any): string {
     if (munNorm.includes("queretaro")) {
       return "Querétaro";
     }
-    if (munNorm.includes("villahermosa") || munNorm.includes("centrotabasco") || munNorm.includes("cardenas") || munNorm.includes("comalcalco")) {
+    if (munNorm.includes("villahermosa") || munNorm === "centro" || munNorm.includes("centrotabasco") || munNorm.includes("cardenas") || munNorm.includes("comalcalco") || munNorm.includes("paraiso")) {
       return "Tabasco";
     }
     const nlMunicipios = [

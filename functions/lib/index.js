@@ -51,6 +51,13 @@ function normalizePhone(phone) {
     }
     return cleaned;
 }
+function normalizeState(str) {
+    return (str || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "");
+}
 function getNormalizedStateName(stateVal, filename) {
     const cleanVal = (stateVal || "").trim().toLowerCase()
         .normalize("NFD")
@@ -320,7 +327,10 @@ function normalizeRowWithMap(rowArray, map) {
     const sitioWeb = getValue(map.sitioWebIdx);
     const direccion = getValue(map.direccionIdx);
     const municipio = getValue(map.municipioIdx);
-    const estado = getNormalizedStateName(getValue(map.estadoIdx));
+    const rawEstado = getValue(map.estadoIdx);
+    const estado = getNormalizedStateName(rawEstado);
+    const sourceState = rawEstado || "No Especificado";
+    const estadoNormalized = normalizeState(estado);
     const cp = getValue(map.cpIdx);
     const scian = getValue(map.scianIdx);
     const actividad = getValue(map.actividadIdx);
@@ -362,6 +372,8 @@ function normalizeRowWithMap(rowArray, map) {
         motives: advisor.motives,
         nextAction: advisor.nextAction,
         status: "NEW",
+        sourceState,
+        estadoNormalized,
     };
 }
 async function updateStateMetadataAndList(stateName, totalRecords, jobId, fingerprint) {
@@ -466,6 +478,28 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
                 try {
                     const company = normalizeRowWithMap(row, headerMap);
                     company.estado = getNormalizedStateName(customState || company.estado, data.filename || "");
+                    if (company.estado === "No Especificado") {
+                        const munNorm = normalizeState(company.municipio || "");
+                        if (munNorm) {
+                            if (munNorm.includes("queretaro")) {
+                                company.estado = "Querétaro";
+                            }
+                            else if (munNorm.includes("villahermosa") || munNorm === "centro" || munNorm.includes("centrotabasco") || munNorm.includes("cardenas") || munNorm.includes("comalcalco") || munNorm.includes("paraiso")) {
+                                company.estado = "Tabasco";
+                            }
+                            else {
+                                const nlMunicipios = ["monterrey", "sannicolas", "apodaca", "guadalupe", "santacatarina", "sanpedrogarza", "sanpedrogarcia", "garcia", "escobedo"];
+                                if (nlMunicipios.some(m => munNorm.includes(m))) {
+                                    company.estado = "Nuevo León";
+                                }
+                            }
+                        }
+                    }
+                    company.estadoNormalized = normalizeState(company.estado);
+                    if (!company.sourceState) {
+                        const excelStateVal = headerMap.estadoIdx !== -1 && headerMap.estadoIdx < row.length ? String(row[headerMap.estadoIdx] || "").trim() : "";
+                        company.sourceState = excelStateVal || "No Especificado";
+                    }
                     if (company.razonSocial || company.nombreComercial) {
                         companies.push(company);
                     }
@@ -513,6 +547,8 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
                             existing.direccion !== company.direccion ||
                             existing.municipio !== company.municipio ||
                             existing.estado !== company.estado ||
+                            existing.estadoNormalized !== company.estadoNormalized ||
+                            existing.sourceState !== company.sourceState ||
                             existing.cp !== company.cp ||
                             existing.scian !== company.scian ||
                             existing.actividad !== company.actividad;

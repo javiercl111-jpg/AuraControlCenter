@@ -2259,9 +2259,84 @@ export default function MarketIntelligencePage() {
     );
   };
 
+  const tempDiagnostics = useMemo(() => {
+    const rawCount = rawDataset.length;
+    const filteredCount = filteredAndSortedDataset.length;
+    const pagedCount = companies.length;
+    const kpisCount = stats.totalCount;
+    const sectorSelected = filters.sector || "Todos";
+    const estadoSelected = filters.estado || "Todos";
+    
+    const hotelCount = rawDataset.filter(c => getCompanyIndustry(c) === "Hoteles y Hospedaje").length;
+    const tableHotelCount = companies.filter(c => getCompanyIndustry(c) === "Hoteles y Hospedaje").length;
+    
+    const isInconsistent = (filteredCount > 0 && pagedCount === 0) || (kpisCount !== filteredCount);
+
+    return {
+      rawCount,
+      filteredCount,
+      pagedCount,
+      kpisCount,
+      sectorSelected,
+      estadoSelected,
+      hotelCount,
+      tableHotelCount,
+      isInconsistent
+    };
+  }, [rawDataset, filteredAndSortedDataset, companies, stats.totalCount, filters.sector, filters.estado]);
+
   const renderDiagnosticsTab = () => {
     return (
       <div className="space-y-6 animate-fadeIn font-sans">
+        {/* Temporal Diagnostic Consistency Card */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 space-y-4 font-sans">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5 font-sans font-sans">
+              <span>🔍</span> Diagnóstico Temporal de Consistencia del Dataset
+            </h4>
+            {tempDiagnostics.isInconsistent && (
+              <span className="rounded bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 text-[9px] font-extrabold text-rose-400 uppercase tracking-wide animate-pulse font-sans">
+                Inconsistencia de Dataset
+              </span>
+            )}
+          </div>
+          
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-xs font-sans">
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Dataset Raw</span>
+              <span className="block text-sm font-bold text-white mt-1 font-mono">{tempDiagnostics.rawCount}</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Dataset Filtered</span>
+              <span className="block text-sm font-bold text-white mt-1 font-mono">{tempDiagnostics.filteredCount}</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Dataset Paged (Tabla)</span>
+              <span className="block text-sm font-bold text-white mt-1 font-mono">{tempDiagnostics.pagedCount}</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Dataset KPIs (stats)</span>
+              <span className="block text-sm font-bold text-white mt-1 font-mono">{tempDiagnostics.kpisCount}</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Estado Seleccionado</span>
+              <span className="block text-sm font-bold text-white mt-1">{tempDiagnostics.estadoSelected}</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Sector Seleccionado</span>
+              <span className="block text-sm font-bold text-white mt-1">{tempDiagnostics.sectorSelected}</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Hoteles en Raw</span>
+              <span className="block text-sm font-bold text-cyan-400 mt-1 font-mono">{tempDiagnostics.hotelCount}</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Hoteles Mostrados</span>
+              <span className="block text-sm font-bold text-cyan-400 mt-1 font-mono">{tempDiagnostics.tableHotelCount}</span>
+            </div>
+          </div>
+        </div>
+
         {/* Banner de Diagnóstico del Dataset Activo */}
         {activeMetadata && (
           <div className="rounded-2xl border border-cyan-500/25 bg-slate-950/40 p-5 backdrop-blur-md space-y-4 animate-fadeIn font-sans">
