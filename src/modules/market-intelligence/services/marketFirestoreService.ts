@@ -465,7 +465,7 @@ export async function getMarketCompanies(
   limitCount?: number
 ): Promise<InegiCompany[]> {
   const collRef = collection(db, MARKET_COMPANIES_COLLECTION);
-  const queryConstraints: any[] = [];
+  let queryConstraints: any[] = [];
 
   if (filters.estado && filters.estado !== "No Especificado") {
     queryConstraints.push(where("estado", "==", filters.estado));
@@ -478,10 +478,44 @@ export async function getMarketCompanies(
   const q = query(collRef, ...queryConstraints);
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map(doc => ({
+  let results = snapshot.docs.map(doc => ({
     id: doc.id,
     ...(doc.data() as Omit<InegiCompany, "id">),
   }));
+
+  // Fallback si retorna vacío y se busca un estado (para soportar registros viejos con estadoNormalized o sourceState)
+  if (results.length === 0 && filters.estado && filters.estado !== "No Especificado") {
+    console.log(`[Aura query fallback] Intentando búsqueda fallback por estadoNormalized para: ${filters.estado}`);
+    
+    // Probar por estadoNormalized
+    const qNorm = query(
+      collRef, 
+      where("estadoNormalized", "==", filters.estado.toLowerCase()),
+      ...(limitCount !== undefined ? [limit(limitCount)] : [])
+    );
+    const snapNorm = await getDocs(qNorm);
+    results = snapNorm.docs.map(doc => ({
+      id: doc.id,
+      ...(doc.data() as Omit<InegiCompany, "id">),
+    }));
+
+    if (results.length === 0) {
+      console.log(`[Aura query fallback] Intentando búsqueda fallback por sourceState para: ${filters.estado}`);
+      // Probar por sourceState
+      const qSource = query(
+        collRef, 
+        where("sourceState", "==", filters.estado),
+        ...(limitCount !== undefined ? [limit(limitCount)] : [])
+      );
+      const snapSource = await getDocs(qSource);
+      results = snapSource.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as Omit<InegiCompany, "id">),
+      }));
+    }
+  }
+
+  return results;
 }
 
 /**

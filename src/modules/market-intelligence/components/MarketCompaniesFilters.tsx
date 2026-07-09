@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FilterX, Search, SlidersHorizontal } from "lucide-react";
+import { FilterX, Search, SlidersHorizontal, Check } from "lucide-react";
 import type { CompanyStatus } from "../types/inegi";
 
 interface FiltersState {
@@ -61,23 +61,27 @@ export default function MarketCompaniesFilters({
   availableStates,
   sectorCounts,
 }: MarketCompaniesFiltersProps) {
+  const [draftFilters, setDraftFilters] = useState<FiltersState>(filters);
   const [localSearch, setLocalSearch] = useState(filters.search || "");
 
-  // Sincronizar búsqueda local si cambia desde el exterior
+  // Sincronizar filtros si cambian desde fuera (ej. limpiar filtros)
   useEffect(() => {
+    setDraftFilters(filters);
     setLocalSearch(filters.search || "");
-  }, [filters.search]);
+  }, [filters]);
 
-  // Aplicar debounce de 300ms al valor de búsqueda
+  // Auto-aplicar búsqueda con debounce de 400ms
   useEffect(() => {
     const handler = setTimeout(() => {
       if (localSearch !== (filters.search || "")) {
-        onFilterChange({
-          ...filters,
+        const updated = {
+          ...draftFilters,
           search: localSearch,
-        });
+        };
+        setDraftFilters(updated);
+        onFilterChange(updated);
       }
-    }, 300);
+    }, 400);
 
     return () => {
       clearTimeout(handler);
@@ -85,27 +89,41 @@ export default function MarketCompaniesFilters({
   }, [localSearch]);
 
   function handleChange(field: keyof FiltersState, value: any) {
-    onFilterChange({
-      ...filters,
+    setDraftFilters((prev) => ({
+      ...prev,
       [field]: value,
-    });
+    }));
+  }
+
+  function handleApply() {
+    onFilterChange(draftFilters);
   }
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6 backdrop-blur">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between flex-wrap gap-4">
         <h4 className="flex items-center gap-2 text-sm font-semibold tracking-wide text-cyan-200">
           <SlidersHorizontal className="h-4 w-4" />
           Filtros de Segmentación
         </h4>
-        <button
-          type="button"
-          onClick={onClearFilters}
-          className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-cyan-300"
-        >
-          <FilterX className="h-3 w-3" />
-          Limpiar filtros
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleApply}
+            className="flex items-center gap-1.5 rounded-xl bg-cyan-400 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-300 transition active:scale-95 shadow-md shadow-cyan-500/10"
+          >
+            <Check className="h-3.5 w-3.5" />
+            Aplicar filtros
+          </button>
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-slate-400 hover:text-cyan-300 transition"
+          >
+            <FilterX className="h-3.5 w-3.5" />
+            Limpiar filtros
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
@@ -132,9 +150,9 @@ export default function MarketCompaniesFilters({
             Estado (Piloto)
           </label>
           <select
-            value={filters.estado}
+            value={draftFilters.estado}
             onChange={(e) => handleChange("estado", e.target.value)}
-            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
           >
             <option value="">Todos los estados</option>
             {availableStates
@@ -156,9 +174,9 @@ export default function MarketCompaniesFilters({
             Estatus Comercial
           </label>
           <select
-            value={filters.status}
+            value={draftFilters.status}
             onChange={(e) => handleChange("status", e.target.value)}
-            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
           >
             {STATUSES.map((item) => (
               <option key={item.label} value={item.value}>
@@ -174,9 +192,9 @@ export default function MarketCompaniesFilters({
             Sector Económico
           </label>
           <select
-            value={filters.sector}
+            value={draftFilters.sector}
             onChange={(e) => handleChange("sector", e.target.value)}
-            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
           >
             {SECTORS.map((item) => {
               if (item.value === "") {
@@ -202,9 +220,9 @@ export default function MarketCompaniesFilters({
             Tamaño de Unidad
           </label>
           <select
-            value={filters.tamano}
+            value={draftFilters.tamano}
             onChange={(e) => handleChange("tamano", e.target.value)}
-            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
           >
             {SIZES.map((item) => (
               <option key={item.label} value={item.value}>
@@ -221,10 +239,10 @@ export default function MarketCompaniesFilters({
           </label>
           <input
             type="text"
-            value={filters.scian}
+            value={draftFilters.scian}
             onChange={(e) => handleChange("scian", e.target.value)}
             placeholder="Ej. 72 o 721110"
-            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-cyan-400"
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
           />
         </div>
 
@@ -234,9 +252,9 @@ export default function MarketCompaniesFilters({
             Ordenar Por
           </label>
           <select
-            value={filters.sortBy}
+            value={draftFilters.sortBy}
             onChange={(e) => handleChange("sortBy", e.target.value)}
-            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400"
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
           >
             {SORT_OPTIONS.map((item) => (
               <option key={item.value} value={item.value}>
@@ -252,14 +270,14 @@ export default function MarketCompaniesFilters({
         <div className="flex flex-col justify-center">
           <div className="flex justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <span>Score de Oportunidad Aura</span>
-            <span className="text-cyan-400 font-bold">{filters.minScore}+ pts</span>
+            <span className="text-cyan-400 font-bold">{draftFilters.minScore}+ pts</span>
           </div>
           <input
             type="range"
             min="0"
             max="100"
             step="5"
-            value={filters.minScore}
+            value={draftFilters.minScore}
             onChange={(e) => handleChange("minScore", Number(e.target.value))}
             className="mt-3 h-1.5 w-full cursor-pointer rounded-lg bg-slate-800 accent-cyan-400"
           />
@@ -270,7 +288,7 @@ export default function MarketCompaniesFilters({
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <input
               type="checkbox"
-              checked={filters.hasEmail}
+              checked={draftFilters.hasEmail}
               onChange={(e) => handleChange("hasEmail", e.target.checked)}
               className="h-4 w-4 rounded border-slate-800 bg-slate-950 text-cyan-400 focus:ring-0 cursor-pointer"
             />
@@ -282,7 +300,7 @@ export default function MarketCompaniesFilters({
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <input
               type="checkbox"
-              checked={filters.hasPhone}
+              checked={draftFilters.hasPhone}
               onChange={(e) => handleChange("hasPhone", e.target.checked)}
               className="h-4 w-4 rounded border-slate-800 bg-slate-950 text-cyan-400 focus:ring-0 cursor-pointer"
             />
@@ -294,7 +312,7 @@ export default function MarketCompaniesFilters({
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <input
               type="checkbox"
-              checked={filters.hasWebsite}
+              checked={draftFilters.hasWebsite}
               onChange={(e) => handleChange("hasWebsite", e.target.checked)}
               className="h-4 w-4 rounded border-slate-800 bg-slate-950 text-cyan-400 focus:ring-0 cursor-pointer"
             />

@@ -13,7 +13,7 @@ import AuraIntelligenceRecommendationsPanel from "../modules/market-intelligence
 
 import MarketFirestoreService, { type ImportHistoryEntry } from "../modules/market-intelligence/services/marketFirestoreService";
 import ErrorBoundary from "../modules/market-intelligence/components/ErrorBoundary";
-import MarketQueryEngine, { normalizeState, getCompanyState, getCompanyIndustry, getNormalizedStateName } from "../modules/market-intelligence/services/marketQueryEngine";
+import MarketQueryEngine, { getCompanyState, getCompanyIndustry, getNormalizedStateName } from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability } from "../services/rbacService";
@@ -445,41 +445,35 @@ export default function MarketIntelligencePage() {
 
   // Derivar estados disponibles de forma síncrona desde dbUniqueStates estable y filtro activo
   const availableStates = useMemo(() => {
-    const statesSet = new Set(dbUniqueStates);
+    const defaultStates = ["Jalisco", "Nuevo León", "Querétaro", "Tabasco"];
+    const statesSet = new Set([...defaultStates, ...dbUniqueStates]);
     if (filters.estado) {
       statesSet.add(filters.estado);
     }
+    const hasNoEspecificado = dbUniqueStates.includes("No Especificado") || 
+                              rawDataset.some(c => getCompanyState(c) === "No Especificado");
+    if (hasNoEspecificado) {
+      statesSet.add("No Especificado");
+    }
     return Array.from(statesSet).sort();
-  }, [dbUniqueStates, filters.estado]);
+  }, [dbUniqueStates, filters.estado, rawDataset]);
 
-  // Derivar estadísticas de sectores comerciales para diagnóstico
+  // Derivar estadísticas de sectores comerciales para diagnóstico (Una sola pasada optimizada)
   const industriesStats = useMemo(() => {
     const allCounts: Record<string, number> = {};
     const stateFilteredCounts: Record<string, number> = {};
 
-    const matchesCurrentState = (c: InegiCompany) => {
-      if (!filters.estado || filters.estado === "") return true;
-      const docState = getCompanyState(c);
-      const isFilterNoEspecificado = normalizeState(filters.estado) === "noespecificado";
-      const isDocNoEspecificado = docState === "No Especificado" || normalizeState(docState) === "noespecificado";
-      if (isFilterNoEspecificado) return isDocNoEspecificado;
-      return normalizeState(docState) === normalizeState(filters.estado);
-    };
-
     rawDataset.forEach((c) => {
       const ind = getCompanyIndustry(c) || "Otros Sectores";
       allCounts[ind] = (allCounts[ind] || 0) + 1;
-      
-      if (matchesCurrentState(c)) {
-        stateFilteredCounts[ind] = (stateFilteredCounts[ind] || 0) + 1;
-      }
+      stateFilteredCounts[ind] = (stateFilteredCounts[ind] || 0) + 1;
     });
 
     return {
       allCounts,
       stateFilteredCounts,
     };
-  }, [rawDataset, filters.estado]);
+  }, [rawDataset]);
 
   // Reporte de importación masiva realizada (Prioridad 4)
   const [importReport, setImportReport] = useState<{
@@ -647,8 +641,17 @@ export default function MarketIntelligencePage() {
       let currentRaw: InegiCompany[] = [];
       let entryMetadata: DatasetMetadata | null = null;
 
+      let forceFetchState = forceFetch;
+      if (targetStateKey === "Tabasco") {
+        const cached = datasetManager.getDataset("Tabasco");
+        if (!cached || cached.companies.length === 0) {
+          console.log("[Aura Tabasco Hydration] Forzando descarga fresca para Tabasco debido a dataset vacío.");
+          forceFetchState = true;
+        }
+      }
+
       // 1. Comprobar si ya existe en el Dataset Manager cacheado
-      if (!forceFetch && datasetManager.hasDataset(targetStateKey)) {
+      if (!forceFetchState && datasetManager.hasDataset(targetStateKey)) {
         console.log(`- Reutilizando dataset en cache para estado: "${targetStateKey || "Todos"}"`);
         const entry = datasetManager.getDataset(targetStateKey)!;
         currentRaw = entry.companies;
