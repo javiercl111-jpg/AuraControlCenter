@@ -4,8 +4,11 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "../config/firebase";
 import type { DiscoveryLink } from "../modules/discovery/types/discoveryTypes";
 import DossierBuilderService from "../modules/discovery/services/dossierBuilderService";
-import ConversationEngine from "../modules/intelligence/engine/services/ConversationEngine";
+import ConversationOrchestrator from "../modules/intelligence/engine/services/ConversationOrchestrator";
 import ConversationState from "../modules/intelligence/engine/domain/ConversationState";
+import { ReflectionEngine } from "../modules/intelligence/engine/services/ReflectionEngine";
+import type { ReflectionState, ConfidenceMatrix } from "../modules/intelligence/engine/types/reflection.types";
+import type { ConversationPhase } from "../modules/intelligence/engine/types/orchestrator.types";
 
 export default function DiscoverPage() {
   const { linkId } = useParams<{ linkId: string }>();
@@ -32,9 +35,11 @@ export default function DiscoverPage() {
     scrollToBottom();
   }, [chatLog, isAuraTyping]);
 
-  // AI Engine Instances
-  const engineRef = useRef<ConversationEngine | null>(null);
+  // AI Orchestrator & State Instances
+  const orchestratorRef = useRef<ConversationOrchestrator | null>(null);
   const stateRef = useRef<ConversationState | null>(null);
+  const reflectionStateRef = useRef<ReflectionState | null>(null);
+  const confidenceMatrixRef = useRef<ConfidenceMatrix | null>(null);
 
   // Thoughts Sidebar (Telemetry Mirror)
   const [telemetry, setTelemetry] = useState({
@@ -47,6 +52,12 @@ export default function DiscoverPage() {
     turnCount: 0,
     askedIntents: [] as string[],
     validationStatus: true,
+    reflectionAction: "-",
+    relevance: 0,
+    coherence: 100,
+    contradictions: 0,
+    dimensions: 0,
+    phase: "DISCOVERY" as ConversationPhase
   });
 
   // Load link information on mount
@@ -97,8 +108,11 @@ export default function DiscoverPage() {
   function handleStartChat() {
     if (!linkInfo) return;
     
-    // Instantiate AI Engine
-    engineRef.current = new ConversationEngine();
+    // Instantiate Orchestrator and States
+    orchestratorRef.current = new ConversationOrchestrator();
+    const tempReflectionEngine = new ReflectionEngine();
+    reflectionStateRef.current = tempReflectionEngine.createInitialState();
+    confidenceMatrixRef.current = reflectionStateRef.current.matrix;
     stateRef.current = new ConversationState(
       linkId || "demo",
       linkInfo.companyName,
@@ -110,7 +124,7 @@ export default function DiscoverPage() {
   }
 
   async function processTurn(userText: string) {
-    if (!engineRef.current || !stateRef.current || !linkInfo) return;
+    if (!orchestratorRef.current || !stateRef.current || !reflectionStateRef.current || !confidenceMatrixRef.current || !linkInfo) return;
 
     // Record User Message
     if (userText) {
@@ -121,7 +135,7 @@ export default function DiscoverPage() {
     setIsAuraTyping(true);
 
     // Build Engine Input
-    const input = {
+    const engineInput = {
       companyName: linkInfo.companyName,
       industry: stateRef.current.industry,
       context: {},
@@ -136,47 +150,71 @@ export default function DiscoverPage() {
       askedQuestions: Array.from(stateRef.current.askedQuestions)
     };
 
+    // Build Orchestrator Input
+    const input = {
+      engineInput,
+      conversationStateSnapshot: stateRef.current.getSnapshot(),
+      reflectionState: reflectionStateRef.current,
+      confidenceMatrix: confidenceMatrixRef.current
+    };
+
     // Simulate Network/Processing Delay for realism
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     // Process logic
-    const output = engineRef.current.processTurn(input);
+    const output = orchestratorRef.current.processTurn(input);
 
     // Apply Output to State
-    stateRef.current.updateConfidence(output.updatedConfidence);
-    stateRef.current.updateDossier(output.updatedDossier);
-    output.newHypotheses.forEach(h => stateRef.current?.addHypothesis(h));
-    output.discardedHypotheses.forEach(h => stateRef.current?.removeHypothesis(h));
+    reflectionStateRef.current = output.updatedReflectionState;
+    confidenceMatrixRef.current = output.updatedConfidenceMatrix;
     
-    // Update trackers
-    stateRef.current.turnCount += 1;
-    stateRef.current.askedIntents.add(output.nextIntent);
-    stateRef.current.askedQuestions.add(output.nextQuestion);
-    if (output.isValidResponse && userText) {
-      stateRef.current.usefulResponsesCount += 1;
+    stateRef.current.conversationPhase = output.updatedConversationPhase;
+    stateRef.current.pendingSummary = output.pendingSummary;
+
+    if (output.conversationOutput && (output.shouldAdvance || output.shouldPersistEvidence)) {
+      stateRef.current.updateConfidence(output.conversationOutput.updatedConfidence);
+      stateRef.current.updateDossier(output.conversationOutput.updatedDossier);
+      output.conversationOutput.newHypotheses.forEach(h => stateRef.current?.addHypothesis(h));
+      output.conversationOutput.discardedHypotheses.forEach(h => stateRef.current?.removeHypothesis(h));
+    }
+    
+    // Update trackers only if advanced
+    if (output.shouldAdvance) {
+      stateRef.current.turnCount += 1;
+      stateRef.current.askedIntents.add(output.finalIntent);
+      stateRef.current.askedQuestions.add(output.finalMessage);
+      if (userText) {
+        stateRef.current.usefulResponsesCount += 1;
+      }
     }
 
     // Add Aura Message to State
-    stateRef.current.addMessage("aura", output.nextQuestion);
-    setChatLog(prev => [...prev, { sender: "aura", text: output.nextQuestion }]);
+    stateRef.current.addMessage("aura", output.finalMessage);
+    setChatLog(prev => [...prev, { sender: "aura", text: output.finalMessage }]);
 
     // Update Telemetry UI
     setTelemetry({
-      intent: output.nextIntent,
-      reason: output.reason,
-      confidence: output.updatedConfidence,
+      intent: output.finalIntent,
+      reason: output.conversationOutput?.reason || output.reflectionOutput.internalReflection || "Clarification or Summary logic",
+      confidence: stateRef.current.currentConfidence,
       hypotheses: stateRef.current.getHypotheses(),
-      internalSummary: output.internalSummary,
+      internalSummary: output.conversationOutput?.internalSummary || output.reflectionOutput.internalReflection,
       usefulResponses: stateRef.current.usefulResponsesCount,
       turnCount: stateRef.current.turnCount,
       askedIntents: Array.from(stateRef.current.askedIntents),
-      validationStatus: output.isValidResponse,
+      validationStatus: !output.reflectionOutput.isTooShort && !output.reflectionOutput.isAmbiguous && !output.reflectionOutput.hasContradiction,
+      reflectionAction: output.reflectionOutput.recommendedAction,
+      relevance: output.reflectionOutput.responseRelevance,
+      coherence: output.reflectionOutput.coherenceScore,
+      contradictions: output.reflectionOutput.contradictionDetails.length,
+      dimensions: output.reflectionOutput.dimensionsUpdated.length,
+      phase: output.updatedConversationPhase
     });
 
     setIsAuraTyping(false);
 
     // Check Completion
-    if (output.nextIntent === "SUMMARIZE" || output.nextIntent === "CLOSING") {
+    if (output.shouldComplete) {
       handleComplete();
     }
   }
@@ -393,11 +431,35 @@ export default function DiscoverPage() {
               </div>
 
               <div className="rounded-2xl border border-cyan-500/25 bg-cyan-950/10 p-4 space-y-2 animate-fadeIn">
-                <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-400">Current Intent</span>
-                <p className="text-[11px] text-slate-300 leading-relaxed font-mono font-bold text-emerald-400">[{telemetry.intent}]</p>
+                <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-400">Current Phase & Intent</span>
+                <p className="text-[11px] text-slate-300 leading-relaxed font-mono font-bold text-emerald-400">[{telemetry.phase}] [{telemetry.intent}]</p>
                 
+                <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-400 mt-3">Cognitive Action</span>
+                <p className={`text-[11px] leading-relaxed font-mono font-bold ${telemetry.reflectionAction === "CLARIFY" || telemetry.reflectionAction === "CHALLENGE" ? "text-amber-400" : "text-cyan-400"}`}>
+                  [{telemetry.reflectionAction}]
+                </p>
+
                 <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-400 mt-3">Reasoning</span>
                 <p className="text-[11px] text-slate-400 leading-relaxed italic">"{telemetry.reason}"</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-2 text-center">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Relevance</span>
+                  <span className="text-sm font-black text-white">{telemetry.relevance}%</span>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-2 text-center">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Coherence</span>
+                  <span className="text-sm font-black text-white">{telemetry.coherence}%</span>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-2 text-center">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Contradictions</span>
+                  <span className={`text-sm font-black ${telemetry.contradictions > 0 ? "text-rose-500" : "text-emerald-500"}`}>{telemetry.contradictions}</span>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-2 text-center">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Dims Updated</span>
+                  <span className="text-sm font-black text-white">{telemetry.dimensions}</span>
+                </div>
               </div>
 
               {telemetry.hypotheses.length > 0 && (

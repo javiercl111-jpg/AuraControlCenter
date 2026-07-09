@@ -1,3 +1,4 @@
+import type { ConversationPhase, PendingSummary } from "../types/orchestrator.types";
 import type { ConversationMessage, SmartBusinessDossierPartial } from "../types/conversation.types";
 
 export class ConversationState {
@@ -9,6 +10,8 @@ export class ConversationState {
   public turnCount: number = 0;
   public askedIntents: Set<string> = new Set();
   public askedQuestions: Set<string> = new Set();
+  public conversationPhase: ConversationPhase = "DISCOVERY";
+  public pendingSummary?: PendingSummary;
 
   public readonly sessionId: string;
   public readonly companyName: string;
@@ -61,18 +64,21 @@ export class ConversationState {
     };
   }
 
-  public getSnapshot() {
+  public getSnapshot(): import("../types/orchestrator.types").ConversationStateSnapshot {
     return {
       sessionId: this.sessionId,
       companyName: this.companyName,
       industry: this.industry,
-      confidence: this.currentConfidence,
-      hypotheses: this.getHypotheses(),
-      dossier: { ...this.dossier },
-      messageCount: this.history.length,
+      history: [...this.history],
+      confidenceLevel: this.currentConfidence,
+      hypotheses: Array.from(this.activeHypotheses),
+      partialDossier: { ...this.dossier },
       usefulResponsesCount: this.usefulResponsesCount,
       turnCount: this.turnCount,
       askedIntents: Array.from(this.askedIntents),
+      askedQuestions: Array.from(this.askedQuestions),
+      conversationPhase: this.conversationPhase,
+      pendingSummary: this.pendingSummary,
     };
   }
 }
