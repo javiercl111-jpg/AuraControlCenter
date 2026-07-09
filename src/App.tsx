@@ -24,11 +24,14 @@ import SettingsPage from "./pages/SettingsPage";
 import SubscriptionsPage from "./pages/SubscriptionsPage";
 import TenantEnforcementPage from "./pages/TenantEnforcementPage";
 import TenantsPage from "./pages/TenantsPage";
+import DiscoverPage from "./pages/DiscoverPage";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/discover" element={<DiscoverPage />} />
+      <Route path="/discover/:linkId" element={<DiscoverPage />} />
 
       <Route
         path="/"

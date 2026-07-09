@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import DiscoveryLinkGenerator from "../modules/discovery/components/DiscoveryLinkGenerator";
 
 import { MODULE_OPTIONS } from "../constants/clientOptions";
 import { convertLeadToClientAndTenant } from "../services/leadConversionService";
@@ -28,6 +29,8 @@ function formatCurrency(value: number) {
 
 export default function CrmPage() {
   const [leads, setLeads] = useState<PlatformLead[]>([]);
+  const [isDiscoveryModalOpen, setIsDiscoveryModalOpen] = useState(false);
+  const [selectedLeadForDiscovery, setSelectedLeadForDiscovery] = useState<PlatformLead | null>(null);
 
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
@@ -388,6 +391,17 @@ export default function CrmPage() {
                         ))}
                       </select>
 
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLeadForDiscovery(lead);
+                          setIsDiscoveryModalOpen(true);
+                        }}
+                        className="mt-3 w-full rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition flex items-center justify-center gap-1.5"
+                      >
+                        ✨ Discovery Link
+                      </button>
+
                       {lead.stage === "WON" && !lead.convertedClientId && (
                         <button
                           type="button"
@@ -416,6 +430,18 @@ export default function CrmPage() {
           })}
         </div>
       </section>
+
+      {isDiscoveryModalOpen && selectedLeadForDiscovery && (
+        <DiscoveryLinkGenerator
+          isOpen={isDiscoveryModalOpen}
+          onClose={() => {
+            setIsDiscoveryModalOpen(false);
+            setSelectedLeadForDiscovery(null);
+          }}
+          defaultCompanyName={selectedLeadForDiscovery.companyName}
+          defaultContactName={selectedLeadForDiscovery.contactName}
+        />
+      )}
     </div>
   );
 }

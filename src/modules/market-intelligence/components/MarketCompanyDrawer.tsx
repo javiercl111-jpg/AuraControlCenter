@@ -24,6 +24,7 @@ interface MarketCompanyDrawerProps {
   onClose: () => void;
   onStatusChange: (status: CompanyStatus) => Promise<void>;
   onConvert: () => Promise<void>;
+  onGenerateDiscovery?: () => void;
   isProcessing: boolean;
   canUpdate: boolean;
   canConvert: boolean;
@@ -35,6 +36,7 @@ export default function MarketCompanyDrawer({
   onClose,
   onStatusChange,
   onConvert,
+  onGenerateDiscovery,
   isProcessing,
   canUpdate,
   canConvert,
@@ -79,6 +81,7 @@ export default function MarketCompanyDrawer({
         {/* Content */}
         <div className="flex-1 space-y-8 py-6">
           
+
 
 
           {/* Ficha Rápida Estatus & Score */}
@@ -290,7 +293,17 @@ export default function MarketCompanyDrawer({
         </div>
 
         {/* Acciones del pie */}
-        <div className="mt-6 border-t border-slate-800 pt-5">
+        <div className="mt-6 border-t border-slate-800 pt-5 space-y-3">
+          {onGenerateDiscovery && company.status !== "CONVERTED" && (
+            <button
+              type="button"
+              onClick={onGenerateDiscovery}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3.5 text-sm font-semibold text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+            >
+              ✨ Generar Enlace Discovery Portal
+            </button>
+          )}
+
           {company.status === "CONVERTED" ? (
             <Link
               to="/consulting"

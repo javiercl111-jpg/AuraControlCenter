@@ -163,5 +163,26 @@ service cloud.firestore {
     match /platform_discovery_requests/{requestId} {
       allow read, write: if isAuthenticated();
     }
+
+    // --- Aura Discovery Portal Security ---
+
+    // market_discovery_links
+    match /market_discovery_links/{linkId} {
+      allow get: if true;
+      allow list: if canReadMarket();
+      allow write: if canReadMarket();
+    }
+
+    // discovery_sessions
+    match /discovery_sessions/{sessionId} {
+      allow read: if canReadMarket();
+      allow create: if request.resource.data.linkId != null &&
+                      (request.resource.data.linkId == 'demo' || 
+                       (exists(/databases/$(database)/documents/market_discovery_links/$(request.resource.data.linkId)) &&
+                        get(/databases/$(database)/documents/market_discovery_links/$(request.resource.data.linkId)).data.status == 'pending')) &&
+                      request.resource.data.companyName.size() < 100 &&
+                      request.resource.data.contactName.size() < 100;
+      allow update, delete: if canReadMarket();
+    }
   }
 }

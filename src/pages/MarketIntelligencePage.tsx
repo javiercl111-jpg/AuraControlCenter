@@ -13,6 +13,7 @@ import AuraIntelligenceRecommendationsPanel from "../modules/market-intelligence
 
 import MarketFirestoreService, { type ImportHistoryEntry } from "../modules/market-intelligence/services/marketFirestoreService";
 import ErrorBoundary from "../modules/market-intelligence/components/ErrorBoundary";
+import DiscoveryLinkGenerator from "../modules/discovery/components/DiscoveryLinkGenerator";
 import MarketQueryEngine, { getCompanyState, getCompanyIndustry, getNormalizedStateName } from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
@@ -703,6 +704,7 @@ export default function MarketIntelligencePage() {
   // Estado del Drawer de Detalle
   const [selectedCompany, setSelectedCompany] = useState<InegiCompany | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isDiscoveryModalOpen, setIsDiscoveryModalOpen] = useState(false);
 
   // Estados de Auditoría Real de Tabasco
   const [auditReport, setAuditReport] = useState<any | null>(null);
@@ -3436,12 +3438,21 @@ export default function MarketIntelligencePage() {
         }}
         onStatusChange={handleStatusChange}
         onConvert={handleConvertCompany}
+        onGenerateDiscovery={() => setIsDiscoveryModalOpen(true)}
         isProcessing={isProcessing}
         canUpdate={capabilities.canUpdate}
         canConvert={capabilities.canConvert}
       />
+
+      {isDiscoveryModalOpen && selectedCompany && (
+        <DiscoveryLinkGenerator
+          isOpen={isDiscoveryModalOpen}
+          onClose={() => setIsDiscoveryModalOpen(false)}
+          defaultCompanyName={selectedCompany.nombreComercial || selectedCompany.razonSocial}
+          defaultContactName={""}
+        />
+      )}
       </div>
     </ErrorBoundary>
   );
-
 }
