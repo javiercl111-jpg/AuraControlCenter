@@ -22,6 +22,15 @@ export default function DiscoverPage() {
   const [chatLog, setChatLog] = useState<{ sender: "aura" | "user"; text: string }[]>([]);
   const [isAuraTyping, setIsAuraTyping] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatLog, isAuraTyping]);
 
   // AI Engine Instances
   const engineRef = useRef<ConversationEngine | null>(null);
@@ -33,7 +42,11 @@ export default function DiscoverPage() {
     reason: "Awaiting sector to formulate initial hypothesis",
     confidence: 0,
     hypotheses: [] as string[],
-    internalSummary: ""
+    internalSummary: "",
+    usefulResponses: 0,
+    turnCount: 0,
+    askedIntents: [] as string[],
+    validationStatus: true,
   });
 
   // Load link information on mount
@@ -116,7 +129,11 @@ export default function DiscoverPage() {
       conversationHistory: stateRef.current.getHistory(),
       hypotheses: stateRef.current.getHypotheses(),
       confidenceLevel: stateRef.current.currentConfidence,
-      partialDossier: stateRef.current.dossier
+      partialDossier: stateRef.current.dossier,
+      usefulResponsesCount: stateRef.current.usefulResponsesCount,
+      turnCount: stateRef.current.turnCount,
+      askedIntents: Array.from(stateRef.current.askedIntents),
+      askedQuestions: Array.from(stateRef.current.askedQuestions)
     };
 
     // Simulate Network/Processing Delay for realism
@@ -131,6 +148,14 @@ export default function DiscoverPage() {
     output.newHypotheses.forEach(h => stateRef.current?.addHypothesis(h));
     output.discardedHypotheses.forEach(h => stateRef.current?.removeHypothesis(h));
     
+    // Update trackers
+    stateRef.current.turnCount += 1;
+    stateRef.current.askedIntents.add(output.nextIntent);
+    stateRef.current.askedQuestions.add(output.nextQuestion);
+    if (output.isValidResponse && userText) {
+      stateRef.current.usefulResponsesCount += 1;
+    }
+
     // Add Aura Message to State
     stateRef.current.addMessage("aura", output.nextQuestion);
     setChatLog(prev => [...prev, { sender: "aura", text: output.nextQuestion }]);
@@ -141,7 +166,11 @@ export default function DiscoverPage() {
       reason: output.reason,
       confidence: output.updatedConfidence,
       hypotheses: stateRef.current.getHypotheses(),
-      internalSummary: output.internalSummary
+      internalSummary: output.internalSummary,
+      usefulResponses: stateRef.current.usefulResponsesCount,
+      turnCount: stateRef.current.turnCount,
+      askedIntents: Array.from(stateRef.current.askedIntents),
+      validationStatus: output.isValidResponse,
     });
 
     setIsAuraTyping(false);
@@ -304,6 +333,7 @@ export default function DiscoverPage() {
                   </div>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Natural Text Input & Quick Suggestions */}
@@ -389,6 +419,19 @@ export default function DiscoverPage() {
                     className="h-full bg-cyan-500 transition-all duration-700 ease-out"
                     style={{ width: `${telemetry.confidence}%` }}
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 text-center">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Turnos</span>
+                  <span className="text-lg font-black text-white">{telemetry.turnCount} <span className="text-xs text-slate-600">/ 8</span></span>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 text-center">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Útiles</span>
+                  <span className={`text-lg font-black ${telemetry.validationStatus ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {telemetry.usefulResponses} <span className="text-xs text-slate-600">/ 5</span>
+                  </span>
                 </div>
               </div>
             </div>

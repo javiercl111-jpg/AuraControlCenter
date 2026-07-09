@@ -58,15 +58,19 @@ export default function CrmPage() {
   async function loadData() {
     try {
       setError("");
-      const [leadsData, sessionsData] = await Promise.all([
-        getLeads(),
-        DiscoverySessionService.getDiscoverySessions()
-      ]);
+      const leadsData = await getLeads();
       setLeads(leadsData);
-      setDiscoverySessions(sessionsData);
+      
+      try {
+        const sessionsData = await DiscoverySessionService.getDiscoverySessions();
+        setDiscoverySessions(sessionsData);
+      } catch (sessionErr) {
+        console.error("Error loading discovery sessions:", sessionErr);
+        setError("No se pudieron cargar sesiones Discovery.");
+      }
     } catch (err) {
-      console.error(err);
-      setError("No se pudieron cargar los datos (prospectos o sesiones).");
+      console.error("Error loading leads:", err);
+      setError("No se pudieron cargar los prospectos.");
     }
   }
 

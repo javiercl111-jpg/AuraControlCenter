@@ -5,6 +5,10 @@ export class ConversationState {
   public currentConfidence: number = 0;
   public activeHypotheses: Set<string> = new Set();
   public dossier: SmartBusinessDossierPartial = {};
+  public usefulResponsesCount: number = 0;
+  public turnCount: number = 0;
+  public askedIntents: Set<string> = new Set();
+  public askedQuestions: Set<string> = new Set();
 
   public readonly sessionId: string;
   public readonly companyName: string;
@@ -66,6 +70,9 @@ export class ConversationState {
       hypotheses: this.getHypotheses(),
       dossier: { ...this.dossier },
       messageCount: this.history.length,
+      usefulResponsesCount: this.usefulResponsesCount,
+      turnCount: this.turnCount,
+      askedIntents: Array.from(this.askedIntents),
     };
   }
 }

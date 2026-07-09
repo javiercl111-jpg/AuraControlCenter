@@ -72,6 +72,11 @@ service cloud.firestore {
 
     // --- Aura Control Center Existing Collections Security ---
 
+    // Platform leads collection permissions
+    match /platform_leads/{leadId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // Platform clients collection permissions
     match /platform_clients/{clientId} {
       allow read, write: if isAuthenticated();

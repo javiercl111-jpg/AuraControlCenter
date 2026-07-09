@@ -23,10 +23,14 @@ export interface EngineInput {
   hypotheses: string[];
   confidenceLevel: number;
   partialDossier: SmartBusinessDossierPartial;
+  usefulResponsesCount: number;
+  turnCount: number;
+  askedIntents: string[];
+  askedQuestions: string[];
 }
 
 export interface EngineOutput {
-  nextIntent: "GREETING" | "DISCOVER_PROBLEM" | "CONFIRM_HYPOTHESIS" | "SUMMARIZE" | "CLOSING";
+  nextIntent: "GREETING" | "DISCOVER_PROBLEM" | "CONFIRM_HYPOTHESIS" | "SUMMARIZE" | "CLOSING" | "CLARIFICATION";
   nextQuestion: string;
   reason: string;
   newHypotheses: string[];
@@ -34,6 +38,7 @@ export interface EngineOutput {
   updatedConfidence: number;
   internalSummary: string;
   updatedDossier: SmartBusinessDossierPartial;
+  isValidResponse: boolean;
 }
 
 const ConversationTypes = {};
