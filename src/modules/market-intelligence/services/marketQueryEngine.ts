@@ -86,6 +86,8 @@ export function getCompanyState(company: any): string {
   // 2. Intentar resolver por propiedades directas en orden
   const val = (
     company.estado ||
+    company.estadoNormalized ||
+    company.sourceState ||
     company.state ||
     company.entidad ||
     company.entidadFederativa ||

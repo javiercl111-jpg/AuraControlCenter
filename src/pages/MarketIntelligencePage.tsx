@@ -388,13 +388,7 @@ export default function MarketIntelligencePage() {
     };
   }, [auth.currentUser]);
 
-  // Derivar estados disponibles de forma síncrona desde rawDatasetGlobal y base de datos
-  const availableStates = useMemo(() => {
-    const derived = rawDataset.map((c) => getCompanyState(c)).filter(Boolean);
-    return Array.from(
-      new Set([...dbUniqueStates, ...derived])
-    ).sort() as string[];
-  }, [rawDataset, dbUniqueStates]);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -448,6 +442,15 @@ export default function MarketIntelligencePage() {
 
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+
+  // Derivar estados disponibles de forma síncrona desde dbUniqueStates estable y filtro activo
+  const availableStates = useMemo(() => {
+    const statesSet = new Set(dbUniqueStates);
+    if (filters.estado) {
+      statesSet.add(filters.estado);
+    }
+    return Array.from(statesSet).sort();
+  }, [dbUniqueStates, filters.estado]);
 
   // Derivar estadísticas de sectores comerciales para diagnóstico
   const industriesStats = useMemo(() => {
@@ -725,10 +728,27 @@ export default function MarketIntelligencePage() {
   ]);
 
 
+  // Logs temporales de segmentación y telemetría
+  useEffect(() => {
+    console.log(`[Aura Filters] selected estado: "${filters.estado || ""}"`);
+    console.log(`[Aura Filters] selected sector: "${filters.sector || ""}"`);
+    console.log(`[Aura Filters] raw count: ${rawDataset.length}`);
+    console.log(`[Aura Filters] filtered count: ${filteredAndSortedDataset.length}`);
+  }, [filters.estado, filters.sector, rawDataset.length, filteredAndSortedDataset.length]);
+
   // Manejar el cambio de filtros manual
   function handleFilterChange(newFilters: FiltersState) {
-    setActiveSegmentId(null); // Quitar segmento activo si edita manual
-    setFilters(newFilters);
+    setActiveSegmentId(null);
+    if (newFilters.estado !== filters.estado) {
+      console.log(`[Aura Filters] change estado: "${filters.estado}" -> "${newFilters.estado}"`);
+      setFilters(newFilters);
+      loadDataset(true, false, newFilters.estado);
+    } else {
+      if (newFilters.sector !== filters.sector) {
+        console.log(`[Aura Filters] change sector: "${filters.sector}" -> "${newFilters.sector}"`);
+      }
+      setFilters(newFilters);
+    }
   }
 
   // Limpiar filtros a default
@@ -2329,6 +2349,18 @@ export default function MarketIntelligencePage() {
             <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60">
               <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Hoteles Mostrados</span>
               <span className="block text-sm font-bold text-cyan-400 mt-1 font-mono">{tempDiagnostics.tableHotelCount}</span>
+            </div>
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 col-span-2 sm:col-span-4">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Estados Disponibles (availableStates)</span>
+              <span className="block text-[11px] font-mono text-cyan-300 mt-1 break-all" title={availableStates.join(", ")}>
+                {availableStates.join(", ") || "(vacío)"}
+              </span>
+            </div>
+            <div className="rounded-xl bg-slate-900/30 p-3 border border-slate-900/60 col-span-2 sm:col-span-4">
+              <span className="block text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Estados en DB (dbUniqueStates)</span>
+              <span className="block text-[11px] font-mono text-emerald-400 mt-1 break-all" title={dbUniqueStates.join(", ")}>
+                {dbUniqueStates.join(", ") || "(vacío)"}
+              </span>
             </div>
           </div>
         </div>
