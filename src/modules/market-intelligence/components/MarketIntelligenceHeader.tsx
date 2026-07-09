@@ -313,6 +313,7 @@ export default function MarketIntelligenceHeader({
   const [showStateSelector, setShowStateSelector] = useState(false);
   const [selectedImportState, setSelectedImportState] = useState("");
   const [uploadedFilename, setUploadedFilename] = useState<string>("");
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [pendingImportData, setPendingImportData] = useState<{
     rows2D: any[][];
     headerMap: any;
@@ -353,11 +354,12 @@ export default function MarketIntelligenceHeader({
       }
 
       setParseStatus(`Importando ${processedRows.length} registros a Firestore...`);
-      await onImport(processedRows, uploadedFilename || "Importación Manual con Estado");
+      await onImport(processedRows, uploadedFilename || "Importación Manual con Estado", undefined, uploadedFile || undefined);
 
       setParseStatus(`Importación completada con éxito. ${processedRows.length} registros cargados.`);
       setTimeout(() => setParseStatus(""), 5000);
       setSelectedImportState("");
+      setUploadedFile(null);
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Error al importar los datos.");
@@ -370,6 +372,7 @@ export default function MarketIntelligenceHeader({
     setShowStateSelector(false);
     setPendingImportData(null);
     setSelectedImportState("");
+    setUploadedFile(null);
     setParseStatus("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -379,6 +382,7 @@ export default function MarketIntelligenceHeader({
     const file = event.target.files?.[0];
     if (!file) return;
     setUploadedFilename(file.name);
+    setUploadedFile(file);
     
     if (file.name.endsWith(".zip")) {
       setError("");

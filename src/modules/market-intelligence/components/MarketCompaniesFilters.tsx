@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { FilterX, Search, SlidersHorizontal } from "lucide-react";
 import type { CompanyStatus } from "../types/inegi";
 
@@ -60,6 +61,29 @@ export default function MarketCompaniesFilters({
   availableStates,
   sectorCounts,
 }: MarketCompaniesFiltersProps) {
+  const [localSearch, setLocalSearch] = useState(filters.search || "");
+
+  // Sincronizar búsqueda local si cambia desde el exterior
+  useEffect(() => {
+    setLocalSearch(filters.search || "");
+  }, [filters.search]);
+
+  // Aplicar debounce de 300ms al valor de búsqueda
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (localSearch !== (filters.search || "")) {
+        onFilterChange({
+          ...filters,
+          search: localSearch,
+        });
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [localSearch]);
+
   function handleChange(field: keyof FiltersState, value: any) {
     onFilterChange({
       ...filters,
@@ -94,8 +118,8 @@ export default function MarketCompaniesFilters({
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
-              value={filters.search}
-              onChange={(e) => handleChange("search", e.target.value)}
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
               placeholder="Ej. Bimbo o Panificación..."
               className="w-full rounded-xl border border-slate-800 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
             />

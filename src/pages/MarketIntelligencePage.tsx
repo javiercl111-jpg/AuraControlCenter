@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { doc, onSnapshot, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, serverTimestamp, collection, query, where, getDocs, limit } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { uploadAndCreateImportJob, getActiveBackendJob } from "../modules/market-intelligence/services/backendImportService";
 
@@ -54,8 +54,6 @@ export default function MarketIntelligencePage() {
   const modalFileInputRef = useRef<HTMLInputElement>(null);
 
   // Estados de carga e interfaz
-  const [companies, setCompanies] = useState<InegiCompany[]>([]);
-  const [activeMarketDataset, setActiveMarketDataset] = useState<InegiCompany[]>([]);
   const [rawDataset, setRawDataset] = useState<InegiCompany[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeMetadata, setActiveMetadata] = useState<DatasetMetadata | null>(null);
@@ -121,6 +119,11 @@ export default function MarketIntelligencePage() {
     filename: string;
     companies: InegiCompany[];
     existingImport: ImportHistoryEntry;
+  } | null>(null);
+
+  const [duplicateBackendJob, setDuplicateBackendJob] = useState<{
+    file: File;
+    fingerprint: string;
   } | null>(null);
 
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -252,7 +255,7 @@ export default function MarketIntelligencePage() {
   }
 
   // Iniciar importación masiva en Backend desde un archivo físico
-  async function startBackendImportFromFile(file: File) {
+  async function startBackendImportFromFile(file: File, bypassFingerprintCheck: boolean = false) {
     console.log("[Aura Backend Import] file selected:", file.name, file.size);
     if (!file) {
       console.warn("[Aura Backend Import] startBackendImportFromFile invocado sin archivo.");
@@ -262,6 +265,33 @@ export default function MarketIntelligencePage() {
     if (backendUploadInProgressRef.current) {
       console.warn("[Aura Backend Import] La carga ya está iniciando. Espera un momento.");
       return;
+    }
+
+    // Cost protection: verificar si el archivo ya fue importado
+    if (!bypassFingerprintCheck) {
+      setIsProcessing(true);
+      setError("");
+      setSuccess("");
+      try {
+        const fingerprint = `${file.name}_${file.size}_${file.lastModified}`;
+        console.log("[Aura Backend Import] Verificando costo y duplicados para fingerprint:", fingerprint);
+        
+        const q = query(
+          collection(db, "market_import_jobs"),
+          where("fingerprint", "==", fingerprint),
+          where("status", "==", "completed"),
+          limit(1)
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          console.log("[Aura Backend Import] Duplicado de importación completado detectado!");
+          setDuplicateBackendJob({ file, fingerprint });
+          setIsProcessing(false);
+          return;
+        }
+      } catch (err: any) {
+        console.warn("[Aura Backend Import] Fallo al comprobar duplicado de importación, continuando:", err);
+      }
     }
 
     backendUploadInProgressRef.current = true;
@@ -292,6 +322,7 @@ export default function MarketIntelligencePage() {
       console.log("[Aura Backend Import] job created:", jobId);
       setPendingResumeJob(null); // Cerrar modal
       setSelectedBackendFile(null); // Limpiar selectedBackendFile
+      setDuplicateBackendJob(null); // Limpiar duplicateBackendJob
       setActiveTab("import");
 
       listenToBackendJob(jobId);
@@ -457,15 +488,53 @@ export default function MarketIntelligencePage() {
 
   // Estados de Paginación (Costo Protegido)
   const [currentPage, setCurrentPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
 
-  // Estados de KPIs (Conteo Servidor y Promedios)
-  const [stats, setStats] = useState({
-    totalCount: 0,
-    convertedCount: 0,
-    qualifiedCount: 0,
-    avgScore: 0,
-  });
+  // Aplicar filtros dinámicos y ordenamiento en memoria usando useMemo
+  const filteredAndSortedDataset = useMemo(() => {
+    console.log("[Aura Filter Optimization] Evaluando filtros y orden en memoria...");
+    const filtered = MarketQueryEngine.filterMarketCompanies(rawDataset, {
+      estado: filters.estado,
+      status: filters.status,
+      tamano: filters.tamano,
+      sector: filters.sector,
+      municipio: filters.municipio,
+      hasEmail: filters.hasEmail,
+      hasPhone: filters.hasPhone,
+      hasWebsite: filters.hasWebsite,
+      minScore: filters.minScore,
+      search: filters.search,
+      scian: filters.scian,
+    });
+
+    return MarketQueryEngine.sortMarketCompanies(filtered, filters.sortBy || "scoreDesc");
+  }, [rawDataset, filters]);
+
+  const activeMarketDataset = filteredAndSortedDataset;
+
+  // Paginar la vista localmente (Costo Protegido)
+  const companies = useMemo(() => {
+    const start = (currentPage - 1) * 25;
+    return filteredAndSortedDataset.slice(start, start + 25);
+  }, [filteredAndSortedDataset, currentPage]);
+
+  const hasMore = filteredAndSortedDataset.length > currentPage * 25;
+
+  // Calcular estadísticas unificadas del dataset filtrado en memoria
+  const stats = useMemo(() => {
+    const total = filteredAndSortedDataset.length;
+    const converted = filteredAndSortedDataset.filter(c => c.status === "CONVERTED").length;
+    const qualified = filteredAndSortedDataset.filter(c => c.status === "QUALIFIED" || c.status === "CONTACTED").length;
+    const listAvg = total > 0
+      ? Math.round(filteredAndSortedDataset.reduce((acc, curr) => acc + curr.opportunityScore, 0) / total)
+      : 72;
+
+    return {
+      totalCount: total,
+      convertedCount: converted,
+      qualifiedCount: qualified,
+      avgScore: listAvg,
+    };
+  }, [filteredAndSortedDataset]);
 
   // Estado del Drawer de Detalle
   const [selectedCompany, setSelectedCompany] = useState<InegiCompany | null>(null);
@@ -519,57 +588,14 @@ export default function MarketIntelligencePage() {
       setRawDataset(currentRaw);
       setActiveMetadata(entryMetadata);
 
-      // 2. Aplicar filtros dinámicos en memoria usando el Market Query Engine centralizado
-      const filtered = MarketQueryEngine.filterMarketCompanies(currentRaw, {
-        estado: filters.estado,
-        status: filters.status,
-        tamano: filters.tamano,
-        sector: filters.sector,
-        municipio: filters.municipio,
-        hasEmail: filters.hasEmail,
-        hasPhone: filters.hasPhone,
-        hasWebsite: filters.hasWebsite,
-        minScore: filters.minScore,
-        search: filters.search,
-        scian: filters.scian,
-      });
-      console.log(`- docs después de MarketQueryEngine: ${filtered.length}`);
-
-      // 3. Aplicar ordenamiento
-      const sorted = MarketQueryEngine.sortMarketCompanies(filtered, filters.sortBy || "scoreDesc");
-
-      // 4. Guardar dataset activo unificado (Fuente Única de Verdad)
-      setActiveMarketDataset(sorted);
-
-      // 5. Paginar y cargar la primera página de la tabla (solo 25 registros)
-      const sliced = sorted.slice(0, 25);
-      setCompanies(sliced);
-      setHasMore(sorted.length > 25);
-      console.log(`- datos enviados a la tabla: ${sliced.length} (Página 1)`);
-
-      // 6. Calcular estadísticas unificadas del dataset filtrado
-      const total = sorted.length;
-      const converted = sorted.filter(c => c.status === "CONVERTED").length;
-      const qualified = sorted.filter(c => c.status === "QUALIFIED" || c.status === "CONTACTED").length;
-      const listAvg = sorted.length > 0
-        ? Math.round(sorted.reduce((acc, curr) => acc + curr.opportunityScore, 0) / sorted.length)
-        : 72;
-
-      const newStats = {
-        totalCount: total,
-        convertedCount: converted,
-        qualifiedCount: qualified,
-        avgScore: listAvg,
-      };
-      setStats(newStats);
-      console.log("- datos enviados al dashboard (KPIs):", newStats);
+      // Sincronizar fuentes de verdad locales
+      setRawDataset(currentRaw);
+      setActiveMetadata(entryMetadata);
 
       // Imprimir tabla de diagnóstico en consola
       console.table({
         activeState: targetStateKey || "Todos (Límite seguro)",
-        rawDatasetLength: currentRaw.length,
-        activeFilteredLength: sorted.length,
-        paginatedViewLength: sliced.length
+        rawDatasetLength: currentRaw.length
       });
 
     } catch (err: any) {
@@ -589,12 +615,16 @@ export default function MarketIntelligencePage() {
     }
   }
 
-  // Efecto inicial y ante cambios de filtro (Incluyendo búsqueda textual reactiva)
+  // Efecto inicial y ante cambios de estado (Único filtro que requiere fetching/cache)
   useEffect(() => {
     loadDataset(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.estado]);
+
+  // Resetear paginación al cambiar otros filtros locales
+  useEffect(() => {
+    setCurrentPage(1);
   }, [
-    filters.estado,
     filters.status,
     filters.tamano,
     filters.sector,
@@ -634,22 +664,13 @@ export default function MarketIntelligencePage() {
   function handleNextPage() {
     const totalPages = Math.ceil(activeMarketDataset.length / 25);
     if (currentPage >= totalPages) return;
-
-    const nextPage = currentPage + 1;
-    const sliced = activeMarketDataset.slice((nextPage - 1) * 25, nextPage * 25);
-    setCompanies(sliced);
-    setCurrentPage(nextPage);
-    setHasMore(activeMarketDataset.length > nextPage * 25);
+    setCurrentPage(currentPage + 1);
   }
 
   // Paginación: Página Anterior
   function handlePrevPage() {
     if (currentPage <= 1) return;
-    const prevPage = currentPage - 1;
-    const sliced = activeMarketDataset.slice((prevPage - 1) * 25, prevPage * 25);
-    setCompanies(sliced);
-    setCurrentPage(prevPage);
-    setHasMore(true);
+    setCurrentPage(currentPage - 1);
   }
 
   // Ejecutar el Job de Importación GTM con checkpoints y estadísticas
@@ -1333,11 +1354,8 @@ export default function MarketIntelligencePage() {
       setSelectedCompany(updated);
       setSuccess(`Estatus del prospecto actualizado a ${status}.`);
       
-      // Actualizar en el dataset activo local y la vista local
-      setActiveMarketDataset((prev) =>
-        prev.map((c) => (c.id === selectedCompany.id ? updated : c))
-      );
-      setCompanies((prev) =>
+      // Actualizar en el dataset de origen
+      setRawDataset((prev) =>
         prev.map((c) => (c.id === selectedCompany.id ? updated : c))
       );
     } catch (err: any) {
@@ -1370,28 +1388,10 @@ export default function MarketIntelligencePage() {
         `¡Conversión Exitosa! Creado expediente en platform_organizations con ID: ${orgId}.`
       );
 
-      // Actualizar en el dataset activo local y la vista local
-      setActiveMarketDataset((prev) =>
+      // Actualizar en el dataset de origen
+      setRawDataset((prev) =>
         prev.map((c) => (c.id === selectedCompany.id ? updated : c))
       );
-      setCompanies((prev) =>
-        prev.map((c) => (c.id === selectedCompany.id ? updated : c))
-      );
-
-      // Recargar estadísticas del dataset local modificado
-      const total = activeMarketDataset.length;
-      const converted = activeMarketDataset.map(c => c.id === selectedCompany.id ? updated : c).filter(c => c.status === "CONVERTED").length;
-      const qualified = activeMarketDataset.map(c => c.id === selectedCompany.id ? updated : c).filter(c => c.status === "QUALIFIED" || c.status === "CONTACTED").length;
-      const listAvg = activeMarketDataset.length > 0
-        ? Math.round(activeMarketDataset.map(c => c.id === selectedCompany.id ? updated : c).reduce((acc, curr) => acc + curr.opportunityScore, 0) / activeMarketDataset.length)
-        : 72;
-
-      setStats({
-        totalCount: total,
-        convertedCount: converted,
-        qualifiedCount: qualified,
-        avgScore: listAvg,
-      });
     } catch (err: any) {
       console.error(err);
       setError("Fallo al convertir prospecto: " + err.message);
@@ -2699,6 +2699,68 @@ export default function MarketIntelligencePage() {
           </div>
         );
       })()}
+
+      {duplicateBackendJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="w-full max-w-lg rounded-3xl border border-amber-500/30 bg-slate-900 p-6 shadow-2xl space-y-6 font-sans">
+            <div className="flex items-start gap-4 flex-col sm:flex-row">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-lg shrink-0 bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                ⚠️
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white font-sans">
+                  Archivo ya Importado
+                </h3>
+                <p className="text-xs text-slate-400 font-sans font-mono leading-relaxed">
+                  {duplicateBackendJob.file.name}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-200 leading-relaxed font-sans">
+              Este archivo ya fue importado correctamente en el pasado. Para proteger los costos de la infraestructura y bases de datos, te recomendamos usar el dataset existente.
+            </div>
+
+            <div className="flex flex-wrap gap-2.5 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingResumeJob(null);
+                  setDuplicateBackendJob(null);
+                  setSelectedBackendFile(null);
+                  setSuccess("Utilizando el dataset cargado existente con éxito.");
+                  setActiveTab("prospects");
+                }}
+                className="rounded-xl bg-cyan-400 text-slate-950 px-4 py-2.5 text-xs font-bold hover:bg-cyan-300 transition shadow-lg shadow-cyan-500/10 font-sans"
+              >
+                Usar dataset existente
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Fuerza reimportación: ¿Seguro de volver a importar y procesar este dataset masivo?")) {
+                    startBackendImportFromFile(duplicateBackendJob.file, true);
+                  }
+                }}
+                className="rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2.5 text-xs font-bold hover:bg-red-500/20 transition font-sans"
+              >
+                Forzar reimportación
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicateBackendJob(null);
+                }}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-800 transition font-sans"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab Navigation Menu */}
       <div className="flex border-b border-slate-800/80 overflow-x-auto select-none scroll-smooth no-scrollbar gap-1 font-sans font-sans">
