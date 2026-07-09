@@ -597,6 +597,12 @@ export const processMarketImportJob = onDocumentCreated(
       let omitted = 0;
       let failed = 0;
 
+      let unresolvedStateCount = 0;
+      let resolvedStateCount = 0;
+      const stateDistribution: Record<string, number> = {};
+      const sectorDistribution: Record<string, number> = {};
+      const validationErrors: string[] = [];
+
       const nowStr = new Date().toISOString();
       const customState = (data.states && data.states.length > 0) ? data.states[0] : null;
 
@@ -629,6 +635,33 @@ export const processMarketImportJob = onDocumentCreated(
               const excelStateVal = headerMap.estadoIdx !== -1 && headerMap.estadoIdx < row.length ? String(row[headerMap.estadoIdx] || "").trim() : "";
               company.sourceState = excelStateVal || "No Especificado";
             }
+            company.importJobId = jobId;
+            company.fingerprint = data.fingerprint || "";
+            company.sourceFile = data.filename || "";
+
+            const isUnresolved = !company.estado || company.estado === "No Especificado" || !company.estadoNormalized;
+            if (isUnresolved) {
+              unresolvedStateCount++;
+            } else {
+              resolvedStateCount++;
+            }
+
+            stateDistribution[company.estado] = (stateDistribution[company.estado] || 0) + 1;
+            const sectorNorm = company.sector || "Otros Sectores";
+            sectorDistribution[sectorNorm] = (sectorDistribution[sectorNorm] || 0) + 1;
+
+            const missingFields = [];
+            if (!company.estado) missingFields.push("estado");
+            if (!company.estadoNormalized) missingFields.push("estadoNormalized");
+            if (!company.sourceState) missingFields.push("sourceState");
+            if (!company.sourceFile) missingFields.push("sourceFile");
+            if (!company.importJobId) missingFields.push("importJobId");
+            if (!company.fingerprint) missingFields.push("fingerprint");
+
+            if (missingFields.length > 0 && validationErrors.length < 50) {
+              validationErrors.push(`Fila con Razón Social: "${company.razonSocial || company.nombreComercial}" le faltan campos: ${missingFields.join(", ")}`);
+            }
+
             if (company.razonSocial || company.nombreComercial) {
               companies.push(company);
             }
@@ -739,15 +772,30 @@ export const processMarketImportJob = onDocumentCreated(
         user: data.createdBy || "",
       });
 
-      // 4. Metadata: update state metadata and unique states list
-      const targetState = (data.states && data.states.length > 0) ? data.states[0] : null;
-      if (targetState && targetState !== "No Especificado") {
-        await updateStateMetadataAndList(targetState, totalRows, jobId, data.fingerprint || "");
+      // 4. Metadata & Validation update
+      const unresolvedPercentage = totalRows > 0 ? (unresolvedStateCount / totalRows) * 100 : 0;
+      const validationStatus = unresolvedPercentage > 1.0 ? "needs_review" : "valid";
+
+      if (validationStatus === "needs_review") {
+        validationErrors.push(`Más del 1% del dataset (${unresolvedPercentage.toFixed(2)}%) tiene estado vacío o No Especificado.`);
+      }
+
+      if (validationStatus === "valid") {
+        const targetState = (data.states && data.states.length > 0) ? data.states[0] : null;
+        if (targetState && targetState !== "No Especificado") {
+          await updateStateMetadataAndList(targetState, totalRows, jobId, data.fingerprint || "");
+        }
       }
 
       await snapshot.ref.update({
-        status: "completed",
-        currentStage: "completed",
+        status: validationStatus === "valid" ? "completed" : "needs_review",
+        currentStage: validationStatus === "valid" ? "completed" : "needs_review",
+        validationStatus,
+        validationErrors,
+        unresolvedStateCount,
+        resolvedStateCount,
+        stateDistribution,
+        sectorDistribution,
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });

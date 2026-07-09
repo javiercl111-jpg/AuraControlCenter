@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { doc, onSnapshot, updateDoc, serverTimestamp, collection, query, where, getDocs, limit, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, serverTimestamp, collection, query, where, getDocs, limit, setDoc, orderBy } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { uploadAndCreateImportJob, getActiveBackendJob } from "../modules/market-intelligence/services/backendImportService";
 
@@ -16,7 +16,7 @@ import ErrorBoundary from "../modules/market-intelligence/components/ErrorBounda
 import MarketQueryEngine, { getCompanyState, getCompanyIndustry, getNormalizedStateName } from "../modules/market-intelligence/services/marketQueryEngine";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
-import { checkUserCapability } from "../services/rbacService";
+import { checkUserCapability, getCurrentUserRole } from "../services/rbacService";
 import NationalZipImportService from "../modules/market-intelligence/services/nationalZipImportService";
 import datasetManager, { type DatasetMetadata } from "../modules/market-intelligence/services/datasetManager";
 
@@ -290,30 +290,104 @@ export default function MarketIntelligencePage() {
       return;
     }
 
-    // Cost protection: verificar si el archivo ya fue importado
+    const filename = file.name;
+    const fingerprint = `${filename}_${file.size}_${file.lastModified}`;
+
+    // 1. Requisitos C: No duplicate storage checks
     if (!bypassFingerprintCheck) {
       setIsProcessing(true);
       setError("");
       setSuccess("");
       try {
-        const fingerprint = `${file.name}_${file.size}_${file.lastModified}`;
         console.log("[Aura Backend Import] Verificando costo y duplicados para fingerprint:", fingerprint);
-        
         const q = query(
           collection(db, "market_import_jobs"),
           where("fingerprint", "==", fingerprint),
-          where("status", "==", "completed"),
+          where("status", "in", ["completed", "processing", "queued"]),
           limit(1)
         );
         const snap = await getDocs(q);
         if (!snap.empty) {
-          console.log("[Aura Backend Import] Duplicado de importación completado detectado!");
-          setDuplicateBackendJob({ file, fingerprint });
+          console.log("[Aura Backend Import] Duplicado de importación completado/processing/queued detectado!");
+          alert("Este archivo ya existe en Storage o está en proceso de importación. Por favor usa el dataset existente.");
           setIsProcessing(false);
           return;
         }
       } catch (err: any) {
         console.warn("[Aura Backend Import] Fallo al comprobar duplicado de importación, continuando:", err);
+      }
+    }
+
+    // 2. Requisitos B: Daily limit verification
+    if (!bypassFingerprintCheck) {
+      setIsProcessing(true);
+      setError("");
+      setSuccess("");
+      try {
+        const todayLimits = await MarketFirestoreService.getDailyImportLimits();
+        const fileSizeMb = file.size / (1024 * 1024);
+        const estimatedRecords = Math.round(file.size / 1000); // 1 record per 1KB roughly
+
+        const willExceedJobs = (todayLimits.totalJobs || 0) >= 3;
+        const willExceedRecords = (todayLimits.totalRecords || 0) + estimatedRecords > 150000;
+        const willExceedStorage = (todayLimits.totalStorageMb || 0) + fileSizeMb > 50;
+
+        if (willExceedJobs || willExceedRecords || willExceedStorage) {
+          const userRole = await getCurrentUserRole();
+          const isSuperAdmin = userRole === "SUPER_ADMIN";
+
+          if (isSuperAdmin) {
+            const confirmForce = window.confirm(
+              "Se alcanzó el límite diario de importaciones para proteger costos Firebase.\n\n" +
+              `Detalles de hoy:\n` +
+              `- Jobs: ${todayLimits.totalJobs}/3\n` +
+              `- Registros: ${todayLimits.totalRecords}/150,000\n` +
+              `- Almacenamiento: ${Math.round(todayLimits.totalStorageMb)} MB / 50 MB\n\n` +
+              "¿Deseas FORZAR IMPORTACIÓN como SUPER_ADMIN?"
+            );
+            if (!confirmForce) {
+              setIsProcessing(false);
+              return;
+            }
+            console.log("[Aura daily limits] Override activado por SUPER_ADMIN.");
+          } else {
+            alert("Se alcanzó el límite diario de importaciones para proteger costos Firebase.");
+            setIsProcessing(false);
+            return;
+          }
+        }
+      } catch (limitErr) {
+        console.warn("Fallo al verificar límites de costo diario:", limitErr);
+      }
+    }
+
+    // 3. Requisitos D: Next file safety (infer state from filename or code)
+    let stateName = getNormalizedStateName("", filename);
+    if (!stateName || stateName === "No Especificado") {
+      const match = filename.match(/\b(22|27|14|19|09)\b/);
+      if (match) {
+        const code = match[1];
+        if (code === "22") stateName = "Querétaro";
+        else if (code === "27") stateName = "Tabasco";
+        else if (code === "14") stateName = "Jalisco";
+        else if (code === "19") stateName = "Nuevo León";
+        else if (code === "09") stateName = "Ciudad de México";
+      }
+    }
+
+    if (!stateName || stateName === "No Especificado") {
+      const statesList = ["Jalisco", "Nuevo León", "Querétaro", "Tabasco", "Ciudad de México"];
+      const selected = window.prompt(
+        `No se pudo inferir automáticamente el estado para el archivo: ${filename}\n\n` +
+        `Escribe uno de los siguientes estados válidos:\n` +
+        `- Jalisco\n- Nuevo León\n- Querétaro\n- Tabasco\n- Ciudad de México`
+      );
+      if (selected && statesList.map(s => s.toLowerCase()).includes(selected.trim().toLowerCase())) {
+        stateName = statesList.find(s => s.toLowerCase() === selected.trim().toLowerCase())!;
+      } else {
+        alert("Selección de estado inválida o cancelada. Carga abortada.");
+        setIsProcessing(false);
+        return;
       }
     }
 
@@ -326,11 +400,7 @@ export default function MarketIntelligencePage() {
 
     try {
       console.log("[Aura Backend Import] upload started");
-      const filename = file.name;
-      const fingerprint = `${filename}_${file.size}_${file.lastModified}`;
-      
-      const stateName = getNormalizedStateName("", filename);
-      const statesArray = (stateName && stateName !== "No Especificado") ? [stateName] : [];
+      const statesArray = [stateName];
 
       const jobId = await uploadAndCreateImportJob(
         file,
@@ -345,10 +415,20 @@ export default function MarketIntelligencePage() {
         }
       );
 
+      // Registrar consumo del límite diario
+      try {
+        const fileSizeMb = file.size / (1024 * 1024);
+        const estimatedRecords = Math.round(file.size / 1000);
+        await MarketFirestoreService.recordImportJobInLimit(fileSizeMb, estimatedRecords);
+        await loadAuditData();
+      } catch (limitRecErr) {
+        console.warn("Fallo al registrar límites tras iniciar upload:", limitRecErr);
+      }
+
       console.log("[Aura Backend Import] job created:", jobId);
-      setPendingResumeJob(null); // Cerrar modal
-      setSelectedBackendFile(null); // Limpiar selectedBackendFile
-      setDuplicateBackendJob(null); // Limpiar duplicateBackendJob
+      setPendingResumeJob(null);
+      setSelectedBackendFile(null);
+      setDuplicateBackendJob(null);
       setActiveTab("import");
 
       listenToBackendJob(jobId);
@@ -502,6 +582,7 @@ export default function MarketIntelligencePage() {
   useEffect(() => {
     async function loadInitialData() {
       try {
+        await loadAuditData();
         const [history, states] = await Promise.all([
           MarketFirestoreService.getImportHistory(),
           MarketFirestoreService.getUniqueStates()
@@ -627,6 +708,29 @@ export default function MarketIntelligencePage() {
   const [auditReport, setAuditReport] = useState<any | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditProgress, setAuditProgress] = useState<{ processed: number; total: number } | null>(null);
+
+  // Estados de Gobernanza y Límites Diarios
+  const [todayLimitsData, setTodayLimitsData] = useState<any | null>(null);
+  const [lastJobData, setLastJobData] = useState<any | null>(null);
+
+  async function loadAuditData() {
+    try {
+      const limits = await MarketFirestoreService.getDailyImportLimits();
+      setTodayLimitsData(limits);
+
+      const q = query(
+        collection(db, "market_import_jobs"),
+        orderBy("createdAt", "desc"),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        setLastJobData(snap.docs[0].data());
+      }
+    } catch (err) {
+      console.warn("Error al cargar datos de auditoría de límites:", err);
+    }
+  }
 
   async function handleAuditTabasco() {
     setIsAuditing(true);
@@ -2477,6 +2581,61 @@ export default function MarketIntelligencePage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Requisitos E: Panel de Gobernanza e Importaciones de Hoy */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/10 p-5 space-y-4 font-sans animate-fadeIn">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            📊 Resumen de Gobernanza de Costos e Importación (Hoy)
+          </h4>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 text-xs font-mono">
+            <div className="p-3 bg-slate-900/40 rounded-xl border border-slate-800/60">
+              <span className="block text-[9px] text-slate-500 uppercase font-semibold">Importaciones de Hoy</span>
+              <span className="block text-sm font-bold text-white mt-1">
+                {todayLimitsData ? todayLimitsData.totalJobs : 0} / 3 jobs
+              </span>
+            </div>
+            <div className="p-3 bg-slate-900/40 rounded-xl border border-slate-800/60">
+              <span className="block text-[9px] text-slate-500 uppercase font-semibold">Registros Usados Hoy</span>
+              <span className="block text-sm font-bold text-white mt-1">
+                {(todayLimitsData ? todayLimitsData.totalRecords : 0).toLocaleString()} / 150,000
+              </span>
+            </div>
+            <div className="p-3 bg-slate-900/40 rounded-xl border border-slate-800/60">
+              <span className="block text-[9px] text-slate-500 uppercase font-semibold">MB Usados Hoy</span>
+              <span className="block text-sm font-bold text-white mt-1">
+                {todayLimitsData ? (todayLimitsData.totalStorageMb || 0).toFixed(2) : "0.00"} MB / 50 MB
+              </span>
+            </div>
+            <div className="p-3 bg-slate-900/40 rounded-xl border border-slate-800/60 col-span-2">
+              <span className="block text-[9px] text-slate-500 uppercase font-semibold text-cyan-400">Límite Restante</span>
+              <span className="block text-[11px] text-cyan-300 mt-1 font-sans space-y-0.5">
+                <div>• Jobs restantes: {todayLimitsData ? Math.max(0, 3 - todayLimitsData.totalJobs) : 3}</div>
+                <div>• Registros restantes: {todayLimitsData ? Math.max(0, 150000 - todayLimitsData.totalRecords).toLocaleString() : "150,000"}</div>
+                <div>• Almacenamiento restante: {todayLimitsData ? Math.max(0, 50 - todayLimitsData.totalStorageMb).toFixed(2) : "50.00"} MB</div>
+              </span>
+            </div>
+            <div className="p-3 bg-slate-900/40 rounded-xl border border-slate-800/60 col-span-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold">Último Job de Importación</span>
+                <span className="block text-[11px] font-sans text-slate-300 mt-0.5 truncate max-w-sm" title={lastJobData?.filename}>
+                  {lastJobData ? lastJobData.filename : "Ninguno registrado"}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="block text-[9px] text-slate-500 uppercase font-semibold">Validation Status</span>
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold mt-1 ${
+                  lastJobData?.validationStatus === "valid" || lastJobData?.status === "completed"
+                    ? "bg-emerald-950 text-emerald-400 border border-emerald-500/20"
+                    : lastJobData?.validationStatus === "needs_review"
+                    ? "bg-amber-950 text-amber-400 border border-amber-500/20"
+                    : "bg-slate-900 text-slate-500 border border-slate-800"
+                }`}>
+                  {lastJobData ? (lastJobData.validationStatus || lastJobData.status || "N/A").toUpperCase() : "N/A"}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Banner de Diagnóstico del Dataset Activo */}

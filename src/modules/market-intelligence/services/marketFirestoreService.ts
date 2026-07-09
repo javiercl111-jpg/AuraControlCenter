@@ -828,6 +828,67 @@ export async function writeImportAudit(audit: {
 }
 
 /**
+ * Obtiene los límites diarios de importación de Firestore para el día de hoy.
+ */
+export async function getDailyImportLimits(): Promise<any> {
+  const today = new Date();
+  const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const docRef = doc(db, "market_import_limits", `daily_${dateKey}`);
+  try {
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data();
+    }
+  } catch (err) {
+    console.warn("No se pudieron consultar los límites diarios en Firestore:", err);
+  }
+  return {
+    date: dateKey,
+    totalJobs: 0,
+    totalRecords: 0,
+    totalStorageMb: 0,
+    totalWritesEstimated: 0,
+  };
+}
+
+/**
+ * Registra un job de importación en el control de límites diarios utilizando una transacción.
+ */
+export async function recordImportJobInLimit(fileSizeMb: number, recordsCount: number): Promise<void> {
+  const today = new Date();
+  const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const docRef = doc(db, "market_import_limits", `daily_${dateKey}`);
+  
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(docRef);
+      let current = {
+        date: dateKey,
+        totalJobs: 0,
+        totalRecords: 0,
+        totalStorageMb: 0,
+        totalWritesEstimated: 0,
+      };
+      if (snap.exists()) {
+        current = snap.data() as any;
+      }
+      
+      transaction.set(docRef, {
+        date: dateKey,
+        totalJobs: (current.totalJobs || 0) + 1,
+        totalRecords: (current.totalRecords || 0) + recordsCount,
+        totalStorageMb: (current.totalStorageMb || 0) + fileSizeMb,
+        totalWritesEstimated: (current.totalWritesEstimated || 0) + recordsCount,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    });
+  } catch (err) {
+    console.error("Error al registrar job en límite diario en Firestore:", err);
+    throw err;
+  }
+}
+
+/**
  * Realiza una auditoría completa del estado de Tabasco en la colección de market_companies,
  * contando registros que tengan indicadores de Tabasco y aplicando un backfill masivo
  * si se detectan discrepancias.
@@ -1009,6 +1070,8 @@ const MarketFirestoreService = {
   repairImportedStates,
   writeImportAudit,
   auditAndRepairTabasco,
+  getDailyImportLimits,
+  recordImportJobInLimit,
 };
 
 export default MarketFirestoreService;
