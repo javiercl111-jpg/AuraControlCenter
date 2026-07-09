@@ -2305,6 +2305,28 @@ export default function MarketIntelligencePage() {
 
 
   const renderDiagnosticsTab = () => {
+    // 1. Obtener los sectores y su conteo
+    const sectorCountsList = (() => {
+      const counts: Record<string, number> = {};
+      rawDataset.forEach((c) => {
+        const ind = getCompanyIndustry(c) || "Otros Sectores";
+        counts[ind] = (counts[ind] || 0) + 1;
+      });
+      return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    })();
+
+    // 2. Obtener primeros 10 registros de Tabasco en rawDataset (o cargados en memoria)
+    const first10Tabasco = (() => {
+      const tabList: InegiCompany[] = [];
+      for (const c of rawDataset) {
+        if (getCompanyState(c) === "Tabasco") {
+          tabList.push(c);
+          if (tabList.length >= 10) break;
+        }
+      }
+      return tabList;
+    })();
+
     return (
       <div className="space-y-6 animate-fadeIn font-sans">
         {/* Temporal Diagnostic Consistency Card */}
@@ -2622,6 +2644,70 @@ export default function MarketIntelligencePage() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Sección de Sectores Encontrados */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 space-y-4 font-sans animate-fadeIn">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+              Sectores Encontrados en Dataset en Memoria ({sectorCountsList.length})
+            </h4>
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 text-xs text-slate-300">
+              {sectorCountsList.map(([secName, secCount]) => (
+                <div key={secName} className="rounded-xl border border-slate-900 bg-slate-950/50 p-2.5 flex justify-between items-center">
+                  <span className="truncate pr-2 font-medium">{secName}</span>
+                  <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-400 font-mono">
+                    {secCount}
+                  </span>
+                </div>
+              ))}
+              {sectorCountsList.length === 0 && (
+                <div className="col-span-full text-slate-500 text-center py-4">
+                  No hay sectores cargados en memoria.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sección de Auditoría de 10 registros de Tabasco */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 space-y-4 font-sans animate-fadeIn">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+              Primeros 10 Registros de Tabasco (Auditoría de Campos)
+            </h4>
+            <div className="overflow-x-auto rounded-xl border border-slate-900 bg-slate-950/50">
+              <table className="w-full text-[11px] text-slate-300 font-mono divide-y divide-slate-900">
+                <thead className="bg-slate-900/60 text-slate-400 uppercase text-[9px] tracking-wider text-left">
+                  <tr>
+                    <th className="px-4 py-3">Nombre</th>
+                    <th className="px-4 py-3">company.estado</th>
+                    <th className="px-4 py-3">sourceState</th>
+                    <th className="px-4 py-3">estadoNormalized</th>
+                    <th className="px-4 py-3">getCompanyState()</th>
+                    <th className="px-4 py-3">Sector resolved</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-900">
+                  {first10Tabasco.map((c, i) => (
+                    <tr key={c.id || i} className="hover:bg-slate-900/20 transition">
+                      <td className="px-4 py-2.5 truncate max-w-[150px] font-sans font-medium text-slate-200" title={c.nombreComercial || c.razonSocial}>
+                        {c.nombreComercial || c.razonSocial || "N/A"}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-400">{c.estado || "N/A"}</td>
+                      <td className="px-4 py-2.5 text-slate-400">{(c as any).sourceState || "N/A"}</td>
+                      <td className="px-4 py-2.5 text-slate-400">{(c as any).estadoNormalized || "N/A"}</td>
+                      <td className="px-4 py-2.5 text-cyan-400 font-bold">{getCompanyState(c)}</td>
+                      <td className="px-4 py-2.5 text-emerald-400">{getCompanyIndustry(c)}</td>
+                    </tr>
+                  ))}
+                  {first10Tabasco.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-6 text-center text-slate-500 font-sans">
+                        No se encontraron registros de Tabasco en el rawDataset actual en memoria.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

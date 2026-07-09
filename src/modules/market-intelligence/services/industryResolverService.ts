@@ -82,7 +82,30 @@ function normalizeText(text: string): string {
 export function resolveCommercialIndustry(scianSector: string): string {
   if (!scianSector) return "Otros Sectores";
 
-  // Si el valor ingresado contiene un código numérico SCIAN, resolver por prefijo
+  const normSector = normalizeText(scianSector);
+
+  // 1. Reglas prioritarias explícitas para Restaurantes y Alimentos / Hoteles y Hospedaje
+  if (
+    normSector.includes("restaurante") ||
+    normSector.includes("alimento") ||
+    normSector.includes("comida") ||
+    normSector.includes("bar") ||
+    normSector.includes("cafeteria") ||
+    normSector.includes("bebida")
+  ) {
+    return "Restaurantes y Alimentos";
+  }
+
+  if (
+    normSector.includes("hotel") ||
+    normSector.includes("hospedaje") ||
+    normSector.includes("motel") ||
+    normSector.includes("alojamiento")
+  ) {
+    return "Hoteles y Hospedaje";
+  }
+
+  // 2. Si el valor ingresado contiene un código numérico SCIAN, resolver por prefijo
   const codeMatch = scianSector.trim().match(/^\d+/);
   if (codeMatch) {
     const code = codeMatch[0];
@@ -101,9 +124,7 @@ export function resolveCommercialIndustry(scianSector: string): string {
     if (code.startsWith("51")) return "Medios y Telecomunicaciones";
     if (code.startsWith("54")) return "Servicios Profesionales";
   }
-  
-  const normSector = normalizeText(scianSector);
-  
+
   // Buscar en el diccionario
   for (const mapping of INDUSTRY_MAPPINGS) {
     for (const keyword of mapping.scianKeywords) {
