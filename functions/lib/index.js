@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processProspectLifecycle = exports.createSalesAdvisorUser = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
+exports.processProspectLifecycle = exports.createSalesAdvisorUser = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
@@ -688,6 +688,7 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
 __exportStar(require("./intelligence/evaluateConversation"), exports);
 var evaluateConversation_1 = require("./intelligence/evaluateConversation");
 Object.defineProperty(exports, "evaluateConversation", { enumerable: true, get: function () { return evaluateConversation_1.evaluateConversation; } });
+// --- Discovery ---
 var createDiscoveryLead_1 = require("./discovery/createDiscoveryLead");
 Object.defineProperty(exports, "createDiscoveryLead", { enumerable: true, get: function () { return createDiscoveryLead_1.createDiscoveryLead; } });
 var completeDiscoverySession_1 = require("./discovery/completeDiscoverySession");
@@ -696,6 +697,8 @@ var resolveDiscoverySession_1 = require("./discovery/resolveDiscoverySession");
 Object.defineProperty(exports, "resolveDiscoverySession", { enumerable: true, get: function () { return resolveDiscoverySession_1.resolveDiscoverySession; } });
 var exchangeDiscoveryToken_1 = require("./discovery/exchangeDiscoveryToken");
 Object.defineProperty(exports, "exchangeDiscoveryToken", { enumerable: true, get: function () { return exchangeDiscoveryToken_1.exchangeDiscoveryToken; } });
+var generateDiscoveryReport_1 = require("./discovery/reports/generateDiscoveryReport");
+Object.defineProperty(exports, "generateDiscoveryReport", { enumerable: true, get: function () { return generateDiscoveryReport_1.generateDiscoveryReport; } });
 // --- Sales Advisors ---
 var createSalesAdvisorUser_1 = require("./advisors/createSalesAdvisorUser");
 Object.defineProperty(exports, "createSalesAdvisorUser", { enumerable: true, get: function () { return createSalesAdvisorUser_1.createSalesAdvisorUser; } });

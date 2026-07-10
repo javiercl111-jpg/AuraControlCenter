@@ -316,13 +316,18 @@ export default function DiscoverPage() {
     processTurn(text);
   }
 
+  // State for report generation
+  const [reportStatus, setReportStatus] = useState<"IDLE" | "GENERATING" | "READY" | "ERROR">("IDLE");
+  const [reportId, setReportId] = useState<string | null>(null);
+
   // Finalizar consultoría y persistir resultados
   async function handleComplete() {
     if (!linkInfo || !stateRef.current) return;
     setIsAuraTyping(true);
+    setReportStatus("GENERATING");
     try {
       const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkInfo.id}`);
-      await DossierBuilderService.saveDiscoverySession(
+      const sessionId = await DossierBuilderService.saveDiscoverySession(
         linkInfo.id,
         linkInfo.companyName,
         linkInfo.contactName,
@@ -331,6 +336,23 @@ export default function DiscoverPage() {
         stateRef.current.getSnapshot(),
         sessionToken || undefined
       );
+      
+      // Request PDF Generation
+      try {
+        const generateReportFn = httpsCallable(functions, "generateDiscoveryReport");
+        const res = await generateReportFn({
+          sessionId,
+          prospectId: linkInfo.prospectId || "UNKNOWN",
+          isInternalOnly: false
+        });
+        const data = res.data as any;
+        setReportId(data.reportId);
+        setReportStatus("READY");
+      } catch (pdfErr: any) {
+        console.error("Error generating PDF:", pdfErr);
+        setReportStatus("ERROR");
+      }
+
       setTimeout(() => {
         setScreen("completed");
         setIsAuraTyping(false);
@@ -339,6 +361,7 @@ export default function DiscoverPage() {
       console.error("Error al guardar sesión de Discovery:", err);
       alert("Error al guardar expediente: " + err.message);
       setIsAuraTyping(false);
+      setReportStatus("ERROR");
     }
   }
 
@@ -785,6 +808,33 @@ export default function DiscoverPage() {
                 <span>Contexto de Asesor de Ventas (Sales Advisor Context creado)</span>
               </div>
             </div>
+
+            {reportStatus === "GENERATING" && (
+              <div className="p-4 rounded-xl border border-cyan-900/50 bg-cyan-950/20 text-cyan-400 text-xs flex flex-col items-center gap-2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+                Generando reporte ejecutivo PDF...
+              </div>
+            )}
+
+            {reportStatus === "READY" && (
+              <div className="p-4 rounded-xl border border-emerald-900/50 bg-emerald-950/20 space-y-3">
+                <p className="text-emerald-400 text-xs font-semibold">¡Tu Radiografía Empresarial en PDF está lista!</p>
+                <div className="flex gap-2">
+                  <button className="flex-1 rounded-lg bg-emerald-600/20 border border-emerald-500/30 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/40 transition">
+                    ⬇️ Descargar PDF
+                  </button>
+                  <button className="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition">
+                    ✉️ Enviar a mi correo
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {reportStatus === "ERROR" && (
+              <div className="p-4 rounded-xl border border-rose-900/50 bg-rose-950/20 text-rose-400 text-xs">
+                Hubo un error al generar tu PDF. Nuestro asesor te lo compartirá manualmente.
+              </div>
+            )}
 
             <p className="text-[11px] text-slate-500 leading-normal">
               Nuestro consultor de Aura revisará el expediente consolidado y se pondrá en contacto contigo muy pronto para agendar tu presentación comercial.

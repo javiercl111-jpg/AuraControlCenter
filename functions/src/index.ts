@@ -814,10 +814,12 @@ export const processMarketImportJob = onDocumentCreated(
 );
 export * from './intelligence/evaluateConversation';
 export { evaluateConversation } from "./intelligence/evaluateConversation";
+// --- Discovery ---
 export { createDiscoveryLead } from "./discovery/createDiscoveryLead";
 export { completeDiscoverySession } from "./discovery/completeDiscoverySession";
 export { resolveDiscoverySession } from "./discovery/resolveDiscoverySession";
 export { exchangeDiscoveryToken } from "./discovery/exchangeDiscoveryToken";
+export { generateDiscoveryReport } from "./discovery/reports/generateDiscoveryReport";
 
 // --- Sales Advisors ---
 export { createSalesAdvisorUser } from "./advisors/createSalesAdvisorUser";
