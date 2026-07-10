@@ -58,12 +58,40 @@ async function run() {
         },
         {
             id: "manufactura-extenso",
-            companyName: "Industrias Metálicas Aura",
-            contactName: "Carlos Ingeniero",
+            companyName: "Industrias Metálicas Aura Especializadas de la Sierra y el Bajío S.A. de C.V. (Grupo IMAESB)",
+            contactName: "Ing. Carlos Alberto Francisco De las Casas y Montes de Oca",
             industry: "Manufactura",
             deliveryLevel: "ALLOW_FULL",
             advisor: { displayName: "Ing. Pedro" },
             extended: true
+        },
+        {
+            id: "edge-score-0",
+            companyName: "Empresa Naciente",
+            contactName: "José Pérez",
+            industry: "Retail",
+            deliveryLevel: "ALLOW_FULL",
+            advisor: { displayName: "Juan Asesor" },
+            score: 0
+        },
+        {
+            id: "edge-score-100",
+            companyName: "Empresa Consolidada",
+            contactName: "María Directora",
+            industry: "Tech",
+            deliveryLevel: "ALLOW_FULL",
+            advisor: { displayName: "Juan Asesor" },
+            score: 100
+        },
+        {
+            id: "edge-one-opp",
+            companyName: "Empresa Estable",
+            contactName: "Luis Gerente",
+            industry: "Retail",
+            deliveryLevel: "ALLOW_FULL",
+            advisor: { displayName: "Juan Asesor" },
+            score: 85,
+            singleOpportunity: true
         }
     ];
     for (const s of scenarios) {
@@ -82,42 +110,57 @@ async function run() {
             } : undefined,
             generatedAt: new Date(),
             overallStatus: "Evaluación Crítica Recomendada",
-            maturityScore: s.extended ? 35 : 60,
-            keyFindings: [
-                "Falta de integración entre sistemas de ventas e inventarios.",
-                "Dependencia alta de procesos manuales en administración.",
-                s.extended ? "Carencia absoluta de controles en piso de producción que causan mermas del 15%." : ""
-            ].filter(x => x),
+            maturityScore: s.score !== undefined ? s.score : (s.extended ? 35 : 60),
+            keyFindings: s.extended
+                ? ["Hallazgo 1 áéíóú", "Hallazgo 2 con texto excepcionalmente largo para forzar el salto de línea y comprobar que las viñetas y el espaciado funcionan perfectamente bajo presión. Esta es una línea que no debería romperse de forma extraña.", "Hallazgo 3", "Hallazgo 4", "Hallazgo 5", "Hallazgo 6", "Hallazgo 7", "Hallazgo 8", "Hallazgo 9", "Hallazgo 10"]
+                : [
+                    "Falta de integración entre sistemas de ventas e inventarios.",
+                    "Dependencia alta de procesos manuales en administración."
+                ],
             operationalRisks: s.deliveryLevel === "ALLOW_FULL" ? [
                 "Riesgo de pérdida de datos por falta de respaldos.",
                 "Riesgo fiscal por facturación inconsistente.",
-                s.extended ? "Riesgo de fraude interno por falta de segregación de funciones." : ""
-            ].filter(x => x) : undefined,
-            opportunities: s.deliveryLevel === "ALLOW_FULL" ? [
-                "Implementar Aura Control Center para unificar operaciones.",
-                "Automatizar conciliación bancaria."
+                ...(s.extended ? ["Riesgo de fraude interno por falta de segregación de funciones.", "Riesgo de multas por normatividad laboral.", "Alta rotación de personal (30% anual)."] : [])
             ] : undefined,
+            opportunities: s.deliveryLevel === "ALLOW_FULL" ? (s.singleOpportunity
+                ? ["Implementar sistema ERP centralizado."]
+                : [
+                    "Implementar un ERP unificado.",
+                    "Automatizar nómina y asistencias.",
+                    ...(s.extended ? ["Desplegar kioscos de auto-atención RH.", "Integrar pasarela de pagos.", "Firma electrónica de contratos."] : [])
+                ]) : undefined,
             roadmap: s.deliveryLevel === "ALLOW_FULL" ? [
-                "Mes 1: Auditoría y configuración base.",
-                "Mes 2: Despliegue de módulo de ventas.",
-                "Mes 3: Capacitación y go-live."
+                "Auditoría y levantamiento de requerimientos técnicos y operativos.",
+                "Implementación fase 1: Contabilidad y Ventas.",
+                "Implementación fase 2: Nómina y RH.",
+                ...(s.extended ? [
+                    "Fase 3: Optimización de inventarios avanzados con AI.",
+                    "Fase 4: Despliegue de Business Intelligence y Dashboards en tiempo real.",
+                    "Fase 5: Capacitación general y adopción cultural extensiva en todas las sucursales del Bajío."
+                ] : [])
+            ] : undefined,
+            recommendedModules: s.deliveryLevel === "ALLOW_FULL" ? [
+                "Aura ERP", "Aura HR"
             ] : undefined
         };
-        console.log(`Generating External PDF for ${s.id}...`);
-        const externalBuffer = await ReportPdfGenerator_1.ReportPdfGenerator.generateExternalRadiografia(data, branding);
-        fs.writeFileSync(path.join(outDir, `${s.id}_external.pdf`), externalBuffer);
-        console.log(`Generating Internal PDF for ${s.id}...`);
-        const internalBuffer = await ReportPdfGenerator_1.ReportPdfGenerator.generateInternalBriefing({
+        console.log(`Generating External Radiografia for ${s.id}...`);
+        const extBuf = await ReportPdfGenerator_1.ReportPdfGenerator.generateExternalRadiografia(data, branding);
+        fs.writeFileSync(path.join(outDir, `${s.id}_external.pdf`), extBuf);
+        console.log(`Generating Internal Briefing for ${s.id}...`);
+        const intBuf = await ReportPdfGenerator_1.ReportPdfGenerator.generateInternalBriefing({
             ...data,
-            prospectId: `PROS-${s.id}`,
-            opportunityScore: 85,
-            probabilityOfClosing: "ALTA",
-            nextBestAction: "Agendar reunión presencial para demostración de módulo de inventarios.",
-            confidenceLevel: "HIGH_CONFIDENCE"
+            prospectId: `PROS-${Math.floor(Math.random() * 10000)}`,
+            opportunityScore: s.extended ? 95 : 65,
+            probabilityOfClosing: s.extended ? "HIGH" : "MEDIUM",
+            nextBestAction: "Agendar demo técnica de ERP.",
+            confidenceLevel: "HIGH"
         }, branding);
-        fs.writeFileSync(path.join(outDir, `${s.id}_internal.pdf`), internalBuffer);
+        fs.writeFileSync(path.join(outDir, `${s.id}_internal.pdf`), intBuf);
     }
-    console.log("PDF Fixtures generated successfully in /pdf-fixtures");
+    console.log("All fixtures generated successfully.");
 }
-run().catch(e => console.error(e));
+run().catch(err => {
+    console.error("Failed to generate fixtures:", err);
+    process.exit(1);
+});
 //# sourceMappingURL=runPdfFixtures.js.map

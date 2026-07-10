@@ -58,69 +58,74 @@ export class ReportPdfGenerator {
   }
 
   private static async drawCover(doc: jsPDF, ds: ReportDesignSystem, data: ReportViewModel, isInternal: boolean) {
-    // Aura Navy Background
-    doc.setFillColor(ds.colors.primary[0], ds.colors.primary[1], ds.colors.primary[2]);
+    // Elegant White Background (or extremely light surface)
+    doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, ds.pageWidth, ds.pageHeight, "F");
 
-    // Geometric subtle shapes (simulated light)
-    doc.setFillColor(ds.colors.secondary[0], ds.colors.secondary[1], ds.colors.secondary[2]);
-    // A faint rect to simulate a glow or tech line
-    doc.setDrawColor(ds.colors.secondary[0], ds.colors.secondary[1], ds.colors.secondary[2]);
-    doc.setLineWidth(0.1);
-    for(let i=0; i<5; i++) {
-      doc.line(0, 150 + (i*10), ds.pageWidth, 100 + (i*10)); // Diagonal tech lines
-    }
-    
-    // Logo
+    // Logo (Centered, elegant)
     await PdfComponents.drawAuraLogo(doc, ds, 70, 40, 70, 40);
 
-    // Title
+    // Subtitle (Brand)
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(28);
-    doc.setTextColor(255, 255, 255);
-    doc.text(isInternal ? "EXECUTIVE BRIEFING" : "RADIOGRAFÍA EMPRESARIAL", ds.pageWidth / 2, 120, { align: "center" });
-
-    // Subtitle
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(14);
+    doc.setFontSize(12);
     // @ts-ignore
-    doc.setCharSpace(2);
-    doc.setTextColor(ds.colors.secondary[0], ds.colors.secondary[1], ds.colors.secondary[2]);
-    doc.text("AURA INTELLIGENCE", ds.pageWidth / 2, 130, { align: "center" });
+    doc.setCharSpace(3);
+    doc.setTextColor(ds.colors.textMuted[0], ds.colors.textMuted[1], ds.colors.textMuted[2]);
+    doc.text("AURA INTELLIGENCE", ds.pageWidth / 2, 90, { align: "center" });
     // @ts-ignore
     doc.setCharSpace(0);
 
-    // Company & Contact
-    doc.setFontSize(18);
-    doc.setTextColor(255, 255, 255);
-    doc.text(data.companyName || "Empresa", ds.pageWidth / 2, 160, { align: "center" });
-    doc.setFontSize(12);
-    doc.setTextColor(200, 210, 220);
-    doc.text(`Preparado para: ${data.contactName}`, ds.pageWidth / 2, 170, { align: "center" });
+    // Divider Line
+    doc.setDrawColor(ds.colors.border[0], ds.colors.border[1], ds.colors.border[2]);
+    doc.setLineWidth(0.2);
+    doc.line(ds.pageWidth / 2 - 20, 105, ds.pageWidth / 2 + 20, 105);
 
-    // Footer Info
-    doc.setFontSize(10);
+    // Title
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(22);
+    doc.setTextColor(ds.colors.textDark[0], ds.colors.textDark[1], ds.colors.textDark[2]);
+    doc.text(isInternal ? "EXECUTIVE BRIEFING" : "RADIOGRAFÍA EMPRESARIAL", ds.pageWidth / 2, 125, { align: "center" });
+
+    // Company & Contact
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(ds.colors.primary[0], ds.colors.primary[1], ds.colors.primary[2]);
+    
+    // Split long company names if necessary
+    const companyLines = doc.splitTextToSize(data.companyName || "Empresa", 150);
+    doc.text(companyLines, ds.pageWidth / 2, 145, { align: "center" });
+    
+    const contactY = 145 + (companyLines.length * 8) + 10;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12);
+    doc.setTextColor(ds.colors.textMuted[0], ds.colors.textMuted[1], ds.colors.textMuted[2]);
+    doc.text(`Preparado para: ${data.contactName}`, ds.pageWidth / 2, contactY, { align: "center" });
+
+    // Footer Info (Very discreet)
+    doc.setFontSize(9);
     const dateStr = data.generatedAt ? new Date(data.generatedAt).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('es-MX');
-    doc.text(`Fecha: ${dateStr}`, ds.pageWidth / 2, 250, { align: "center" });
+    
+    let footerY = 260;
+    doc.text(dateStr, ds.pageWidth / 2, footerY, { align: "center" });
+    footerY += 6;
     
     if (data.folio) {
-      doc.text(`Folio: ${data.folio}`, ds.pageWidth / 2, 256, { align: "center" });
+      doc.text(`Folio: ${data.folio}`, ds.pageWidth / 2, footerY, { align: "center" });
+      footerY += 6;
     }
     
-    if (data.advisor && ds.branding.advisorPresentationEnabled) {
-      doc.text(`Asesor: ${data.advisor.displayName}`, ds.pageWidth / 2, 262, { align: "center" });
-    } else {
-      doc.text(`Equipo de Consultoría Aura`, ds.pageWidth / 2, 262, { align: "center" });
-    }
-
     if (isInternal) {
       doc.setFont("helvetica", "bold");
       // @ts-ignore
       doc.setCharSpace(1);
       doc.setTextColor(ds.colors.danger[0], ds.colors.danger[1], ds.colors.danger[2]);
-      doc.text("USO INTERNO - CONFIDENCIAL", ds.pageWidth / 2, 275, { align: "center" });
+      doc.text("USO INTERNO - CONFIDENCIAL", ds.pageWidth / 2, footerY + 5, { align: "center" });
       // @ts-ignore
       doc.setCharSpace(0);
+    } else {
+      // Confidentiality Notice
+      doc.setFontSize(8);
+      doc.text("DOCUMENTO ESTRICTAMENTE CONFIDENCIAL", ds.pageWidth / 2, footerY + 5, { align: "center" });
     }
   }
 
@@ -140,67 +145,140 @@ export class ReportPdfGenerator {
     // PAGE 1: COVER
     await this.drawCover(doc, ds, data, false);
 
-    // PAGE 2: RESUMEN & SCORE
+    // PAGE 2: CARTA EJECUTIVA
+    doc.addPage();
+    layout.resetY();
+    pageHeader();
+    layout.yPos += 20;
+
+    layout.drawText(`Estimado(a) ${data.contactName},`, ds.margin.left, ds.typography.bodyEmphasis);
+    layout.yPos += 15;
+
+    const letterBody = [
+      `Gracias por permitir que Aura Intelligence analizara la información compartida durante esta primera conversación de consultoría empresarial.`,
+      `El objetivo de este documento no es presentar una propuesta comercial. Nuestro propósito central es ayudarle a comprender con mayor claridad y perspectiva el estado operativo actual de su organización, identificar áreas latentes de evolución tecnológica y facilitar futuras conversaciones estratégicas en su mesa directiva.`,
+      `Las conclusiones y reflexiones aquí presentadas han sido estructuradas meticulosamente a partir de los datos proporcionados durante nuestra sesión de Discovery.`,
+      `Esperamos que este análisis crítico le resulte de alto valor para la toma de decisiones ejecutivas en el corto y mediano plazo.`
+    ];
+
+    for (const paragraph of letterBody) {
+      const pLines = doc.splitTextToSize(paragraph, ds.safeAreaWidth);
+      layout.drawText(pLines, ds.margin.left, ds.typography.body);
+      layout.yPos += pLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.lg;
+    }
+
+    layout.yPos += 15;
+    layout.drawText("Atentamente,", ds.margin.left, ds.typography.body);
+    layout.yPos += 10;
+    layout.drawText("Firma de Socios", ds.margin.left, ds.typography.bodyEmphasis);
+    layout.yPos += 5;
+    layout.drawText("Aura Intelligence", ds.margin.left, ds.typography.body);
+
+    // PAGE 3: RESUMEN Y MADUREZ
     doc.addPage();
     layout.resetY();
     pageHeader();
     
     layout.yPos += 10;
     layout.drawText("Resumen Ejecutivo", ds.margin.left, ds.typography.sectionTitle);
-    layout.yPos += 10;
+    layout.yPos += 15;
+
+    const narrativeIntro = `A través de nuestra evaluación, hemos identificado patrones operativos en ${data.companyName} que sugieren un punto de inflexión. La infraestructura actual requiere una revisión profunda para sostener el crecimiento proyectado sin incurrir en deuda técnica o riesgos operativos críticos.`;
+    const introLines = doc.splitTextToSize(narrativeIntro, ds.safeAreaWidth);
+    layout.drawText(introLines, ds.margin.left, ds.typography.body);
+    layout.yPos += introLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.xl;
 
     if (data.overallStatus) {
+      layout.drawText("Estado Actual de la Operación", ds.margin.left, ds.typography.subsectionTitle);
+      layout.yPos += 10;
       layout.drawText(data.overallStatus, ds.margin.left, ds.typography.bodyEmphasis, { maxWidth: ds.safeAreaWidth });
-      layout.yPos += 5;
+      layout.yPos += ds.spacing.xl;
     }
 
     if (data.maturityScore !== undefined) {
-      layout.ensureSpace(80, pageHeader);
-      PdfComponents.drawMaturityGauge(doc, ds, layout, data.maturityScore, ds.pageWidth / 2, layout.yPos + 35, 30);
-      layout.yPos += 80; // space occupied by gauge
+      layout.ensureSpace(90, pageHeader);
+      layout.drawText("Índice de Madurez Tecnológica", ds.margin.left, ds.typography.subsectionTitle);
+      layout.yPos += 15;
+      PdfComponents.drawMaturityGauge(doc, ds, layout, data.maturityScore, ds.pageWidth / 2, layout.yPos + 35, 35);
+      layout.yPos += 90; // space occupied by gauge
+      
+      // Explanation of score
+      const scoreExplanation = data.maturityScore < 50 
+        ? "Un índice fundamental indica que la empresa opera mediante procesos manuales o sistemas desconectados. El enfoque inmediato debe ser la centralización y la creación de cimientos digitales confiables."
+        : "Un índice consolidado sugiere que existen herramientas implementadas, pero carecen de orquestación unificada. El enfoque debe girar hacia la automatización inteligente y la visibilidad en tiempo real.";
+      
+      const expLines = doc.splitTextToSize(scoreExplanation, ds.safeAreaWidth);
+      layout.drawText(expLines, ds.margin.left, ds.typography.body);
+      layout.yPos += expLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.xl;
     }
 
     // FINDINGS
     if (data.keyFindings && data.keyFindings.length > 0) {
-      layout.ensureSpace(20, pageHeader);
-      layout.drawText("Hallazgos Principales", ds.margin.left, ds.typography.subsectionTitle);
-      layout.yPos += 5;
-      data.keyFindings.forEach((finding, idx) => {
-        PdfComponents.drawCard(doc, ds, layout, `Hallazgo ${idx + 1}`, finding, "finding", pageHeader);
+      layout.ensureSpace(30, pageHeader);
+      layout.drawText("Hallazgos Principales", ds.margin.left, ds.typography.sectionTitle);
+      layout.yPos += 15;
+      data.keyFindings.forEach((finding) => {
+        PdfComponents.drawCard(doc, ds, layout, "Observación de Campo", finding, "finding", pageHeader);
       });
     }
 
     // ALLOW_FULL DETAILS
     if (data.deliveryLevel === "ALLOW_FULL") {
       if (data.operationalRisks && data.operationalRisks.length > 0) {
-        layout.ensureSpace(20, pageHeader);
-        layout.drawText("Áreas de Riesgo", ds.margin.left, ds.typography.subsectionTitle);
-        layout.yPos += 5;
-        data.operationalRisks.forEach((risk, idx) => {
-          PdfComponents.drawCard(doc, ds, layout, `Riesgo ${idx + 1}`, risk, "risk", pageHeader);
+        layout.ensureSpace(30, pageHeader);
+        layout.drawText("Análisis de Riesgo Operativo", ds.margin.left, ds.typography.sectionTitle);
+        layout.yPos += 10;
+        const riskIntro = doc.splitTextToSize("Las siguientes vulnerabilidades representan contingencias potenciales que podrían impactar la continuidad del negocio o la eficiencia financiera si no son mitigadas estratégicamente.", ds.safeAreaWidth);
+        layout.drawText(riskIntro, ds.margin.left, ds.typography.body);
+        layout.yPos += riskIntro.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.lg;
+
+        data.operationalRisks.forEach((risk) => {
+          PdfComponents.drawCard(doc, ds, layout, "Riesgo Detectado", risk, "risk", pageHeader);
         });
       }
       
       if (data.opportunities && data.opportunities.length > 0) {
-        layout.ensureSpace(20, pageHeader);
-        layout.drawText("Oportunidades", ds.margin.left, ds.typography.subsectionTitle);
-        layout.yPos += 5;
-        data.opportunities.forEach((opp, idx) => {
-          PdfComponents.drawCard(doc, ds, layout, `Oportunidad ${idx + 1}`, opp, "opportunity", pageHeader);
+        layout.ensureSpace(30, pageHeader);
+        layout.drawText("Capacidades a Fortalecer (Oportunidades)", ds.margin.left, ds.typography.sectionTitle);
+        layout.yPos += 10;
+        const oppIntro = doc.splitTextToSize("Nuestra recomendación central no radica en la adquisición de software aislado, sino en el desarrollo sistémico de las siguientes capacidades organizacionales fundamentales:", ds.safeAreaWidth);
+        layout.drawText(oppIntro, ds.margin.left, ds.typography.body);
+        layout.yPos += oppIntro.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.lg;
+
+        data.opportunities.forEach((opp) => {
+          PdfComponents.drawCard(doc, ds, layout, "Iniciativa Estratégica", opp, "opportunity", pageHeader);
         });
       }
 
       if (data.roadmap && data.roadmap.length > 0) {
         layout.ensureSpace(40, pageHeader);
-        layout.drawText("Roadmap Sugerido", ds.margin.left, ds.typography.sectionTitle);
+        layout.drawText("Roadmap Estratégico", ds.margin.left, ds.typography.sectionTitle);
         layout.yPos += 10;
         PdfComponents.drawRoadmapTimeline(doc, ds, layout, data.roadmap, pageHeader);
       }
+      
+      // CIERRE
+      layout.ensureSpace(60, pageHeader);
+      layout.drawText("El Acompañamiento de Aura", ds.margin.left, ds.typography.sectionTitle);
+      layout.yPos += 15;
+      
+      const auraPillars = "Aura Intelligence se especializa en orquestar soluciones profundas para la Gestión de Personas, Operación Unificada e Inteligencia Empresarial. Nuestro enfoque garantiza que la tecnología se subordine a la estrategia de negocio.";
+      const pillarLines = doc.splitTextToSize(auraPillars, ds.safeAreaWidth);
+      layout.drawText(pillarLines, ds.margin.left, ds.typography.body);
+      layout.yPos += pillarLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.xl;
+
+      layout.drawText("Reflexión Final", ds.margin.left, ds.typography.subsectionTitle);
+      layout.yPos += 10;
+      const closing = "Toda organización evoluciona de forma distinta y a su propio ritmo. Este documento representa únicamente un punto de partida diagnóstico. El equipo de socios y asesores de Aura Intelligence estará a su entera disposición para profundizar en cualquiera de estos hallazgos cuando el liderazgo de su empresa lo considere oportuno.";
+      const closingLines = doc.splitTextToSize(closing, ds.safeAreaWidth);
+      layout.drawText(closingLines, ds.margin.left, ds.typography.body);
+      layout.yPos += closingLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.lg;
+
     } else {
       layout.ensureSpace(40, pageHeader);
       layout.drawText("Nota de Alcance", ds.margin.left, ds.typography.subsectionTitle);
       layout.yPos += 5;
-      const lines = doc.splitTextToSize("Se han detectado áreas de oportunidad en sus procesos actuales. Para acceder al análisis detallado, riesgos operativos y al roadmap estratégico de automatización propuesto, le sugerimos agendar una sesión de consultoría técnica con nuestro equipo.", ds.safeAreaWidth);
+      const lines = doc.splitTextToSize("Se han detectado áreas de oportunidad críticas en sus procesos actuales. Para acceder a la disección profunda de los riesgos operativos y al roadmap estratégico propuesto, sugerimos agendar una sesión de consultoría técnica privada con nuestro equipo de especialistas.", ds.safeAreaWidth);
       layout.drawText(lines, ds.margin.left, ds.typography.body);
     }
 
@@ -246,38 +324,48 @@ export class ReportPdfGenerator {
     layout.drawText("Briefing Estratégico", ds.margin.left, ds.typography.sectionTitle);
     layout.yPos += 10;
 
-    // Table-like structure for internal data
+    // Table-like structure for internal classified data
     const drawRow = (label: string, val: string | number) => {
-      layout.ensureSpace(15, pageHeader);
+      layout.ensureSpace(12, pageHeader);
       layout.drawText(label.toUpperCase(), ds.margin.left, ds.typography.metricLabel);
-      layout.drawText(String(val), ds.margin.left + 50, ds.typography.bodyEmphasis, { maxWidth: ds.safeAreaWidth - 50 });
-      layout.yPos += 5;
+      layout.drawText(String(val), ds.margin.left + 45, ds.typography.bodyEmphasis, { maxWidth: ds.safeAreaWidth - 45 });
+      layout.yPos += 4;
       doc.setDrawColor(ds.colors.border[0], ds.colors.border[1], ds.colors.border[2]);
+      doc.setLineWidth(0.2);
       doc.line(ds.margin.left, layout.yPos, ds.pageWidth - ds.margin.right, layout.yPos);
-      layout.yPos += 5;
+      layout.yPos += 6;
     };
 
-    drawRow("Prospect ID", data.prospectId || "N/A");
-    drawRow("Opportunity Score", data.opportunityScore || "N/A");
-    drawRow("Confidence", data.confidenceLevel || "N/A");
-    drawRow("Prob. Closing", data.probabilityOfClosing || "N/A");
-    drawRow("Next Best Action", data.nextBestAction || "N/A");
+    layout.drawText("Clasificación de Oportunidad", ds.margin.left, ds.typography.subsectionTitle);
+    layout.yPos += 8;
+
+    drawRow("ID de Prospecto", data.prospectId || "N/A");
+    drawRow("Score de Oportunidad", data.opportunityScore || "N/A");
+    drawRow("Nivel de Confianza", data.confidenceLevel || "N/A");
+    drawRow("Probabilidad de Cierre", data.probabilityOfClosing || "N/A");
+    
+    layout.yPos += ds.spacing.lg;
+    layout.drawText("Next Best Action (Recomendada)", ds.margin.left, ds.typography.subsectionTitle);
+    layout.yPos += 8;
+    const nbaLines = doc.splitTextToSize(data.nextBestAction || "N/A", ds.safeAreaWidth);
+    layout.drawText(nbaLines, ds.margin.left, ds.typography.bodyEmphasis);
+    layout.yPos += nbaLines.length * (ds.typography.bodyEmphasis.fontSize * 0.352778 * ds.typography.bodyEmphasis.lineHeight) + ds.spacing.xl;
 
     if (data.keyFindings && data.keyFindings.length > 0) {
       layout.ensureSpace(20, pageHeader);
-      layout.drawText("Señales Clave (Findings)", ds.margin.left, ds.typography.subsectionTitle);
-      layout.yPos += 5;
-      data.keyFindings.forEach((finding, idx) => {
-        PdfComponents.drawCard(doc, ds, layout, `Señal ${idx + 1}`, finding, "finding", pageHeader);
+      layout.drawText("Señales Comerciales Extraídas", ds.margin.left, ds.typography.sectionTitle);
+      layout.yPos += 10;
+      data.keyFindings.forEach((finding) => {
+        PdfComponents.drawCard(doc, ds, layout, "Señal Detectada", finding, "finding", pageHeader);
       });
     }
 
     if (data.operationalRisks && data.operationalRisks.length > 0) {
       layout.ensureSpace(20, pageHeader);
-      layout.drawText("Riesgos Comerciales/Operativos", ds.margin.left, ds.typography.subsectionTitle);
-      layout.yPos += 5;
-      data.operationalRisks.forEach((risk, idx) => {
-        PdfComponents.drawCard(doc, ds, layout, `Riesgo ${idx + 1}`, risk, "risk", pageHeader);
+      layout.drawText("Fricciones y Riesgos Comerciales", ds.margin.left, ds.typography.sectionTitle);
+      layout.yPos += 10;
+      data.operationalRisks.forEach((risk) => {
+        PdfComponents.drawCard(doc, ds, layout, "Alerta", risk, "risk", pageHeader);
       });
     }
 

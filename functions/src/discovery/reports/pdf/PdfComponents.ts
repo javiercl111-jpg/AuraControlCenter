@@ -131,50 +131,41 @@ export class PdfComponents {
   ) {
     const cardWidth = ds.safeAreaWidth;
     layout.applyTypography(ds.typography.body);
-    const textLines = doc.splitTextToSize(content, cardWidth - ds.spacing.xl * 2);
+    const textLines = doc.splitTextToSize(content, cardWidth - ds.spacing.xl);
     const textHeight = textLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight);
     
-    const paddingY = ds.spacing.lg;
-    const titleHeight = 10;
-    const totalHeight = paddingY * 2 + titleHeight + textHeight;
+    const paddingY = ds.spacing.md;
+    const titleHeight = 6;
+    const totalHeight = titleHeight + textHeight + paddingY;
 
     layout.ensureSpace(totalHeight + ds.spacing.md, headerCallback);
 
     // Semantics
-    let bgColor = ds.colors.surface;
     let iconColor = ds.colors.primary;
-    let iconStr = "•";
 
     if (type === "finding") {
-      bgColor = [ds.colors.warning[0], ds.colors.warning[1], ds.colors.warning[2]]; // Needs to be very light
       iconColor = ds.colors.warning;
-      iconStr = "✦";
     } else if (type === "risk") {
-      bgColor = [ds.colors.danger[0], ds.colors.danger[1], ds.colors.danger[2]];
       iconColor = ds.colors.danger;
-      iconStr = "⚠";
     } else if (type === "opportunity") {
-      bgColor = [ds.colors.success[0], ds.colors.success[1], ds.colors.success[2]];
       iconColor = ds.colors.success;
-      iconStr = "💡";
     }
 
-    doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
-    doc.setDrawColor(iconColor[0], iconColor[1], iconColor[2]);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(ds.margin.left, layout.yPos, cardWidth, totalHeight, ds.radii.lg, ds.radii.lg, "FD");
+    // Elegant left indicator instead of a full box
+    doc.setFillColor(iconColor[0], iconColor[1], iconColor[2]);
+    doc.rect(ds.margin.left, layout.yPos, 1.5, totalHeight, "F");
 
     // Title
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(iconColor[0], iconColor[1], iconColor[2]);
-    doc.text(`${iconStr}  ${title.toUpperCase()}`, ds.margin.left + ds.spacing.lg, layout.yPos + paddingY + 3);
+    doc.text(`${title.toUpperCase()}`, ds.margin.left + ds.spacing.lg, layout.yPos + 4);
 
     // Content
-    layout.yPos += paddingY + titleHeight;
+    layout.yPos += titleHeight + 2;
     layout.drawText(textLines, ds.margin.left + ds.spacing.lg, ds.typography.body);
     
-    layout.yPos += paddingY + ds.spacing.md; // space after card
+    layout.yPos += paddingY + ds.spacing.md; // space after item
   }
 
   public static drawRoadmapTimeline(
@@ -191,34 +182,53 @@ export class PdfComponents {
 
     phases.forEach((phase, index) => {
       layout.applyTypography(ds.typography.body);
-      const lines = doc.splitTextToSize(phase, maxTextWidth);
+      
+      // Parse phase (simulating strategic breakdown if the string is just one chunk)
+      const phaseParts = phase.split(":"); // Usually fixtures are "Fase 3: Optimización..."
+      const phaseTitle = phaseParts.length > 1 ? phaseParts[0].trim() : `Horizonte ${index + 1}`;
+      const phaseDesc = phaseParts.length > 1 ? phaseParts.slice(1).join(":").trim() : phase;
+
+      const lines = doc.splitTextToSize(phaseDesc, maxTextWidth);
       const textHeight = lines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight);
-      const nodeHeight = Math.max(textHeight + 10, 30);
+      const nodeHeight = Math.max(textHeight + 15, 30);
 
       layout.ensureSpace(nodeHeight + 10, headerCallback);
 
       // Draw line to next node (if not last)
       if (index < phases.length - 1) {
         doc.setDrawColor(ds.colors.border[0], ds.colors.border[1], ds.colors.border[2]);
-        doc.setLineWidth(1);
+        doc.setLineWidth(0.3); // Thinner, elegant line
         doc.line(startX, layout.yPos + 5, startX, layout.yPos + nodeHeight + 5);
       }
 
-      // Draw node circle
-      doc.setFillColor(ds.colors.primary[0], ds.colors.primary[1], ds.colors.primary[2]);
-      doc.circle(startX, layout.yPos + 5, 3, "F");
+      // Draw node circle (hollow circle is more elegant)
+      doc.setDrawColor(ds.colors.primary[0], ds.colors.primary[1], ds.colors.primary[2]);
+      doc.setFillColor(ds.colors.background[0], ds.colors.background[1], ds.colors.background[2]);
+      doc.setLineWidth(0.5);
+      doc.circle(startX, layout.yPos + 3, 2.5, "FD");
 
-      // Draw Phase Label
+      // Draw Phase Label (Strategic)
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
-      doc.setTextColor(ds.colors.primary[0], ds.colors.primary[1], ds.colors.primary[2]);
-      doc.text(`FASE ${index + 1}`, textX, layout.yPos + 5);
+      // @ts-ignore
+      doc.setCharSpace(1);
+      doc.setTextColor(ds.colors.textMuted[0], ds.colors.textMuted[1], ds.colors.textMuted[2]);
+      doc.text(`INICIATIVA ESTRATÉGICA 0${index + 1}`, textX, layout.yPos + 4);
+      // @ts-ignore
+      doc.setCharSpace(0);
 
-      // Draw Content
-      layout.yPos += 10;
+      // Draw Title
+      layout.yPos += 7;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(ds.colors.primary[0], ds.colors.primary[1], ds.colors.primary[2]);
+      doc.text(phaseTitle.toUpperCase(), textX, layout.yPos);
+
+      // Draw Content (The What and Why)
+      layout.yPos += 6;
       layout.drawText(lines, textX, ds.typography.body);
 
-      layout.yPos += (nodeHeight - textHeight);
+      layout.yPos += (nodeHeight - textHeight) - 5;
     });
   }
 }
