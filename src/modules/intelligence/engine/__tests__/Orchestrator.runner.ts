@@ -38,7 +38,9 @@ function createBaseInput(input: string, phase: "DISCOVERY" | "SUMMARY_REVIEW" = 
       turnCount: 0,
       askedIntents: [],
       askedQuestions: [],
-      conversationPhase: phase
+      conversationPhase: phase,
+      fallbackConsecutiveCount: 0,
+      llmModeForSession: "SHADOW"
     },
     reflectionState: reflectionEngine.createInitialState(),
     confidenceMatrix: reflectionEngine.createInitialState().matrix

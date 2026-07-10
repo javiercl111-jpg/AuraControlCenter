@@ -23,6 +23,11 @@ export interface ConversationStateSnapshot {
   askedQuestions: string[];
   conversationPhase: ConversationPhase;
   pendingSummary?: PendingSummary;
+  fallbackConsecutiveCount: number;
+  lastFallbackCode?: string;
+  lastFallbackMessage?: string;
+  llmModeForSession: "SHADOW" | "HEURISTIC_ONLY";
+  partialCompletionReason?: string;
 }
 
 export interface OrchestratorInput {
@@ -45,6 +50,11 @@ export interface OrchestratorOutput {
   updatedReflectionState: ReflectionState;
   updatedConfidenceMatrix: ConfidenceMatrix;
   pendingSummary?: PendingSummary;
+  updatedFallbackCount?: number;
+  updatedFallbackCode?: string;
+  updatedFallbackMessage?: string;
+  updatedLlmMode?: "SHADOW" | "HEURISTIC_ONLY";
+  partialCompletionReason?: string;
 }
 
 const OrchestratorTypes = {};

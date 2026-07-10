@@ -18,10 +18,23 @@ export class AuraLLMGateway {
       
       return result.data;
     } catch (error: any) {
-      console.warn("AuraLLMGateway failed, returning fallback flag:", error);
+      console.warn("AuraLLMGateway failed, returning fallback flag.");
+      
+      let safeErrorCode = "NETWORK_OR_SERVER_ERROR";
+      
+      if (error.message === "LLM_TIMEOUT" || error?.code === "functions/deadline-exceeded") {
+        safeErrorCode = "LLM_TIMEOUT";
+      } else if (error?.code === "functions/unauthenticated" || error?.code === "functions/failed-precondition") {
+        safeErrorCode = "APP_CHECK_REQUIRED";
+      } else if (error?.code === "functions/resource-exhausted") {
+        safeErrorCode = "RATE_LIMITED";
+      } else if (error?.code === "functions/internal" || error?.code === "functions/unavailable") {
+        safeErrorCode = "LLM_UNAVAILABLE";
+      }
+
       return {
         fallbackUsed: true,
-        safeErrorCode: error.message === "LLM_TIMEOUT" ? "TIMEOUT" : "NETWORK_OR_SERVER_ERROR"
+        safeErrorCode
       };
     }
   }

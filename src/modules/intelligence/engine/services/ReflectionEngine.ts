@@ -62,7 +62,7 @@ export class ReflectionEngine {
       responseRelevance = 0;
       coherenceScore = 10;
       recommendedAction = "CLARIFY";
-      suggestedClarification = "¿Podrías elaborar un poco más al respecto?";
+      suggestedClarification = "No logré relacionar esa respuesta con la operación de tu empresa. Para continuar, cuéntame algo sobre tus procesos, equipo, clientes, sistemas o prioridades actuales.";
       ambiguityReasons.push("Respuesta demasiado corta sin significado claro.");
       internalReflection = "User provided gibberish or extremely short invalid response.";
     } 
@@ -77,8 +77,12 @@ export class ReflectionEngine {
     else if (words.length <= 2 && this.isAmbiguousTopic(text)) {
       isAmbiguous = true;
       responseRelevance = 30;
-      recommendedAction = "DEEPEN";
-      suggestedClarification = `Mencionas ${text}. ¿Qué proceso exacto dentro de esa área te está generando más fricción?`;
+      recommendedAction = "CLARIFY";
+      if (text === "recursos humanos" || text === "rh") {
+        suggestedClarification = "Recursos Humanos puede abarcar varios temas. ¿Tu prioridad está relacionada principalmente con contratación, rotación, asistencia, nómina, capacitación o administración del personal?";
+      } else {
+        suggestedClarification = `Mencionas ${text}. ¿Qué proceso exacto dentro de esa área te está generando más fricción?`;
+      }
       ambiguityReasons.push("Mencionó un área general sin acción o proceso específico.");
       internalReflection = "User named a broad department but no specific pain point.";
     }

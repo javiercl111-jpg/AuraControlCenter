@@ -44,13 +44,26 @@ export class ConversationOrchestrator {
     let updatedConfidenceMatrix = updatedReflectionState.matrix;
     let pendingSummary: PendingSummary | undefined = conversationStateSnapshot.pendingSummary;
 
+    let fallbackCount = conversationStateSnapshot.fallbackConsecutiveCount || 0;
+    
     if (recommendedAction === "CLARIFY" || recommendedAction === "CHALLENGE") {
-      finalMessage = reflectionOutput.suggestedClarification || "Por favor, ¿podrías aclarar tu última respuesta?";
-      finalIntent = recommendedAction;
+      fallbackCount++;
       shouldAdvance = false;
       shouldPersistEvidence = false;
+      
+      if (fallbackCount === 1) {
+        finalMessage = reflectionOutput.suggestedClarification || "Por favor, ¿podrías aclarar tu última respuesta?";
+        finalIntent = recommendedAction;
+      } else if (fallbackCount === 2) {
+        finalMessage = "Parece que no logro procesar bien tu respuesta anterior. Intentémoslo de otra forma: ¿Qué procesos de tu área te generan más dolores de cabeza?";
+        finalIntent = "CLARIFY";
+      } else {
+        finalMessage = "He tenido dificultades continuas para comprender la información proporcionada. ¿Cómo te gustaría proceder?";
+        finalIntent = "FALLBACK_OPTIONS";
+      }
     } 
     else if (recommendedAction === "DEEPEN" || recommendedAction === "ACCEPT") {
+      fallbackCount = 0;
       // Pass the updated inputs (e.g. valid useful responses count)
       const modifiedEngineInput = {
         ...engineInput,
@@ -66,25 +79,27 @@ export class ConversationOrchestrator {
 
       // The Conversation Engine might also decide to Summarize/Close based on its internal limits
       if (conversationOutput.nextIntent === "SUMMARIZE") {
-        return this.generateSummaryTransition(reflectionOutput, updatedReflectionState);
+        return this.generateSummaryTransition(reflectionOutput, updatedReflectionState, fallbackCount);
       }
     } 
     else if (recommendedAction === "SUMMARIZE") {
-      return this.generateSummaryTransition(reflectionOutput, updatedReflectionState);
+      fallbackCount = 0;
+      return this.generateSummaryTransition(reflectionOutput, updatedReflectionState, fallbackCount);
     } 
     else if (recommendedAction === "STOP") {
+      fallbackCount = 0;
       finalMessage = "He recopilado toda la información necesaria. Muchas gracias por tu tiempo.";
       finalIntent = "STOP";
       shouldComplete = true;
       updatedConversationPhase = "COMPLETED";
     }
 
-    // Apply Aura Personality touch to final message if not closed
-    const personalityDecision = this.personality.evaluateContext(
+    // Apply Aura Personality touch to final message if not closed and not in fallback options
+    const personalityDecision = finalIntent !== "FALLBACK_OPTIONS" ? this.personality.evaluateContext(
       engineInput.conversationHistory.length,
       engineInput.confidenceLevel,
       engineInput.hypotheses.length
-    );
+    ) : {};
 
     const heuristicOutput: OrchestratorOutput = {
       finalMessage,
@@ -98,17 +113,18 @@ export class ConversationOrchestrator {
       updatedConversationPhase,
       updatedReflectionState,
       updatedConfidenceMatrix,
-      pendingSummary
+      pendingSummary,
+      updatedFallbackCount: fallbackCount,
     };
 
     // --- SHADOW MODE EVALUATION (Parallel / Background) ---
-    // We do not await this to avoid blocking the UI, as instructed: "Nunca esperar indefinidamente al LLM"
-    // The Gateway enforces its own 12s timeout internally.
-    this.llmGateway.evaluateTurn(input).then(llmResult => {
-      this.compareAndLogShadowEvaluation(heuristicOutput, llmResult);
-    }).catch(err => {
-      console.warn("Background LLM evaluation failed:", err);
-    });
+    if (conversationStateSnapshot.llmModeForSession !== "HEURISTIC_ONLY") {
+      this.llmGateway.evaluateTurn(input).then(llmResult => {
+        this.compareAndLogShadowEvaluation(heuristicOutput, llmResult);
+      }).catch(err => {
+        console.warn("Background LLM evaluation failed:", err);
+      });
+    }
 
     return heuristicOutput;
   }
@@ -155,7 +171,8 @@ export class ConversationOrchestrator {
         updatedConversationPhase: "COMPLETED",
         updatedReflectionState: input.reflectionState,
         updatedConfidenceMatrix: input.confidenceMatrix,
-        pendingSummary: undefined
+        pendingSummary: undefined,
+        updatedFallbackCount: 0
       };
     } else {
       // It's a correction
@@ -190,7 +207,7 @@ export class ConversationOrchestrator {
     }
   }
 
-  private generateSummaryTransition(reflectionOutput: any, updatedReflectionState: any): OrchestratorOutput {
+  private generateSummaryTransition(reflectionOutput: any, updatedReflectionState: any, fallbackCount: number): OrchestratorOutput {
     const summaryText = this.buildSummaryText(updatedReflectionState);
     const finalMessage = `Antes de concluir, quiero confirmar que comprendí correctamente tu organización:\n\n${summaryText}\n\n¿Esto refleja adecuadamente tu situación o te gustaría corregir algún punto?`;
 
@@ -209,7 +226,8 @@ export class ConversationOrchestrator {
         text: summaryText,
         generatedAt: new Date().toISOString(),
         awaitingConfirmation: true
-      }
+      },
+      updatedFallbackCount: fallbackCount,
     };
   }
 

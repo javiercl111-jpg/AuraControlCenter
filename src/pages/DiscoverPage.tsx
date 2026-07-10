@@ -170,6 +170,9 @@ export default function DiscoverPage() {
     
     stateRef.current.conversationPhase = output.updatedConversationPhase;
     stateRef.current.pendingSummary = output.pendingSummary;
+    if (output.updatedFallbackCount !== undefined) {
+      stateRef.current.fallbackConsecutiveCount = output.updatedFallbackCount;
+    }
 
     if (output.conversationOutput && (output.shouldAdvance || output.shouldPersistEvidence)) {
       stateRef.current.updateConfidence(output.conversationOutput.updatedConfidence);
@@ -376,47 +379,108 @@ export default function DiscoverPage() {
 
             {/* Natural Text Input & Quick Suggestions */}
             <div className="border-t border-slate-900 bg-slate-950/60 p-4 space-y-3">
-              {!isAuraTyping && telemetry.intent !== "SUMMARIZE" && (
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              {telemetry.intent === "FALLBACK_OPTIONS" && !isAuraTyping ? (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-amber-400 font-semibold mb-1">Opciones de recuperación:</p>
                   <button
-                    onClick={() => setInputValue("Usamos Excel")}
-                    className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+                    onClick={() => {
+                      if (stateRef.current) {
+                        stateRef.current.llmModeForSession = "HEURISTIC_ONLY";
+                        stateRef.current.fallbackConsecutiveCount = 0;
+                      }
+                      processTurn("Continuar con diagnóstico básico");
+                    }}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs text-white hover:border-cyan-500 hover:bg-slate-800 transition"
                   >
-                    💡 "Usamos Excel"
+                    Continuar con diagnóstico básico
                   </button>
                   <button
-                    onClick={() => setInputValue("Tenemos un sistema, pero no está integrado")}
-                    className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+                    onClick={() => {
+                      if (stateRef.current) stateRef.current.fallbackConsecutiveCount = 0;
+                      setInputValue("");
+                      // Just allow typing again by updating intent to something else to reveal input
+                      setTelemetry(prev => ({ ...prev, intent: "CLARIFY" }));
+                    }}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs text-white hover:border-cyan-500 hover:bg-slate-800 transition"
                   >
-                    💡 "Tenemos un sistema, pero no está integrado"
+                    Intentar nuevamente (escribir otra respuesta)
                   </button>
                   <button
-                    onClick={() => setInputValue("Todo lo hacemos manualmente")}
-                    className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+                    onClick={() => {
+                      if (stateRef.current) {
+                        stateRef.current.conversationPhase = "SUMMARY_REVIEW";
+                      }
+                      processTurn("Finalizar");
+                    }}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs text-white hover:border-emerald-500 hover:bg-slate-800 transition"
                   >
-                    💡 "Todo lo hacemos manualmente"
+                    Finalizar y guardar lo aprendido
                   </button>
                 </div>
+              ) : telemetry.phase === "SUMMARY_REVIEW" && !isAuraTyping ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => processTurn("Sí, es correcto")}
+                    className="flex-1 rounded-xl bg-emerald-600 px-6 py-3 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-lg"
+                  >
+                    ✅ Sí, es correcto
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Allow user to type a correction
+                      setTelemetry(prev => ({ ...prev, phase: "DISCOVERY", intent: "SUMMARY_REVIEW" }));
+                      setInputValue("Quiero corregir: ");
+                    }}
+                    className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-6 py-3 text-xs font-bold text-white hover:bg-slate-700 transition"
+                  >
+                    ✏️ Quiero corregir algo
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {!isAuraTyping && telemetry.intent !== "SUMMARIZE" && (
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                      <button
+                        onClick={() => setInputValue("Usamos Excel")}
+                        className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+                      >
+                        💡 "Usamos Excel"
+                      </button>
+                      <button
+                        onClick={() => setInputValue("Tenemos un sistema, pero no está integrado")}
+                        className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+                      >
+                        💡 "Tenemos un sistema, pero no está integrado"
+                      </button>
+                      <button
+                        onClick={() => setInputValue("Todo lo hacemos manualmente")}
+                        className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:bg-slate-900 transition"
+                      >
+                        💡 "Todo lo hacemos manualmente"
+                      </button>
+                    </div>
+                  )}
+                  
+                  <form onSubmit={handleUserSubmit} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      disabled={isAuraTyping || telemetry.intent === "SUMMARIZE"}
+                      placeholder={isAuraTyping ? "Aura está procesando..." : "Escribe tu respuesta aquí..."}
+                      className="flex-1 rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-50"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      disabled={!inputValue.trim() || isAuraTyping || telemetry.intent === "SUMMARIZE"}
+                      className="rounded-xl bg-cyan-600 px-6 text-xs font-bold text-white hover:bg-cyan-500 transition disabled:opacity-50 disabled:hover:bg-cyan-600"
+                    >
+                      Enviar
+                    </button>
+                  </form>
+                </>
               )}
-              
-              <form onSubmit={handleUserSubmit} className="flex gap-2">
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  disabled={isAuraTyping || telemetry.intent === "SUMMARIZE"}
-                  placeholder={isAuraTyping ? "Aura está procesando..." : "Escribe tu respuesta aquí..."}
-                  className="flex-1 rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-50"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  disabled={!inputValue.trim() || isAuraTyping || telemetry.intent === "SUMMARIZE"}
-                  className="rounded-xl bg-cyan-600 px-6 text-xs font-bold text-white hover:bg-cyan-500 transition disabled:opacity-50 disabled:hover:bg-cyan-600"
-                >
-                  Enviar
-                </button>
-              </form>
             </div>
           </div>
 

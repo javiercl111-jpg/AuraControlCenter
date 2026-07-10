@@ -1,4 +1,5 @@
 import type { CommercialDecisionInput, ProbabilityOfClosing } from '../types';
+import { toFiniteNumber } from '../utils/numbers';
 
 export class ClosingProbabilityCalculator {
   static calculate(input: CommercialDecisionInput): ProbabilityOfClosing {
@@ -9,24 +10,30 @@ export class ClosingProbabilityCalculator {
     let baseProbability = 50; // Starting point
 
     // Evaluate signals
-    if (input.dossier?.urgencyLevel && input.dossier.urgencyLevel > 75) {
-      baseProbability += 15;
-      positiveSignals.push('High urgency detected');
-    } else if (input.dossier?.urgencyLevel && input.dossier.urgencyLevel < 30) {
-      baseProbability -= 15;
-      negativeSignals.push('Low urgency detected');
+    if (input.dossier?.urgencyLevel != null) {
+      const urgency = toFiniteNumber(input.dossier.urgencyLevel, 0);
+      if (urgency > 75) {
+        baseProbability += 15;
+        positiveSignals.push('High urgency detected');
+      } else if (urgency < 30) {
+        baseProbability -= 15;
+        negativeSignals.push('Low urgency detected');
+      } else {
+        missingSignals.push('Clear urgency not established');
+      }
     } else {
       missingSignals.push('Clear urgency not established');
     }
 
-    if (input.dossier?.painPoints && input.dossier.painPoints.some(p => p.intensity > 80)) {
+    if (input.dossier?.painPoints && input.dossier.painPoints.some(p => toFiniteNumber(p.intensity, 0) > 80)) {
       baseProbability += 20;
       positiveSignals.push('Critical pain point identified');
     } else {
       missingSignals.push('No critical pain points explicitly defined');
     }
 
-    if (input.prospectMetadata.economicPotential.confidence > 70) {
+    const economicConf = toFiniteNumber(input.prospectMetadata?.economicPotential?.confidence, 0);
+    if (economicConf > 70) {
       baseProbability += 10;
       positiveSignals.push('Economic potential is validated');
     } else {
@@ -34,31 +41,32 @@ export class ClosingProbabilityCalculator {
     }
 
     // Confidence
-    const confidence = Math.min(
-      input.confidenceMatrix.discoveryQuality,
-      input.confidenceMatrix.diagnosticConfidence
-    );
+    const diagConf = toFiniteNumber(input.confidenceMatrix?.diagnosticConfidence, 0);
+    const discQual = toFiniteNumber(input.confidenceMatrix?.discoveryQuality, 0);
+    
+    const confidence = Math.min(discQual, diagConf);
 
     // If confidence is low, the probability shouldn't be high precision.
     // Also, if there's insufficient evidence, drop confidence.
-    let finalConfidence = confidence;
+    let finalConfidence = toFiniteNumber(confidence);
     if (missingSignals.length > 1) {
       finalConfidence -= 20;
     }
-    finalConfidence = Math.max(finalConfidence, 0);
+    finalConfidence = Math.min(Math.max(toFiniteNumber(finalConfidence), 0), 100);
 
     // Adjust probability based on confidence. If confidence is very low, probability is extremely uncertain.
-    const probability = finalConfidence < 40 ? 0 : Math.min(Math.max(baseProbability, 0), 100);
+    let probability = finalConfidence < 40 ? 0 : Math.min(Math.max(toFiniteNumber(baseProbability), 0), 100);
+    probability = toFiniteNumber(probability, 0);
 
     return {
-      probability,
-      confidence: finalConfidence,
+      probability: Math.round(probability),
+      confidence: Math.round(finalConfidence),
       positiveSignals,
       negativeSignals,
       missingSignals,
       explanation: finalConfidence < 40 
         ? 'Insufficient commercial evidence to calculate a reliable closing probability.' 
-        : `Calculated ${probability}% probability based on ${positiveSignals.length} positive signals and ${negativeSignals.length} negative signals.`
+        : `Calculated ${Math.round(probability)}% probability based on ${positiveSignals.length} positive signals and ${negativeSignals.length} negative signals.`
     };
   }
 }

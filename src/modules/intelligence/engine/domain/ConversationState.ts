@@ -12,6 +12,11 @@ export class ConversationState {
   public askedQuestions: Set<string> = new Set();
   public conversationPhase: ConversationPhase = "DISCOVERY";
   public pendingSummary?: PendingSummary;
+  public fallbackConsecutiveCount: number = 0;
+  public lastFallbackCode?: string;
+  public lastFallbackMessage?: string;
+  public llmModeForSession: "SHADOW" | "HEURISTIC_ONLY" = "SHADOW";
+  public partialCompletionReason?: string;
 
   public readonly sessionId: string;
   public readonly companyName: string;
@@ -79,6 +84,11 @@ export class ConversationState {
       askedQuestions: Array.from(this.askedQuestions),
       conversationPhase: this.conversationPhase,
       pendingSummary: this.pendingSummary,
+      fallbackConsecutiveCount: this.fallbackConsecutiveCount,
+      lastFallbackCode: this.lastFallbackCode,
+      lastFallbackMessage: this.lastFallbackMessage,
+      llmModeForSession: this.llmModeForSession,
+      partialCompletionReason: this.partialCompletionReason,
     };
   }
 }

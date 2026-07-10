@@ -40,7 +40,9 @@ function createBaseInput(input: string): OrchestratorInput {
       turnCount: 0,
       askedIntents: [],
       askedQuestions: [],
-      conversationPhase: "DISCOVERY"
+      conversationPhase: "DISCOVERY",
+      fallbackConsecutiveCount: 0,
+      llmModeForSession: "SHADOW"
     },
     reflectionState: reflectionEngine.createInitialState(),
     confidenceMatrix: reflectionEngine.createInitialState().matrix
