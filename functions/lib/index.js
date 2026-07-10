@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processProspectLifecycle = exports.createSalesAdvisorUser = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
+exports.processProspectLifecycle = exports.createSalesAdvisorUser = exports.requestExecutiveDocument = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
@@ -699,6 +699,8 @@ var exchangeDiscoveryToken_1 = require("./discovery/exchangeDiscoveryToken");
 Object.defineProperty(exports, "exchangeDiscoveryToken", { enumerable: true, get: function () { return exchangeDiscoveryToken_1.exchangeDiscoveryToken; } });
 var generateDiscoveryReport_1 = require("./discovery/reports/generateDiscoveryReport");
 Object.defineProperty(exports, "generateDiscoveryReport", { enumerable: true, get: function () { return generateDiscoveryReport_1.generateDiscoveryReport; } });
+var requestExecutiveDocument_1 = require("./discovery/reports/requestExecutiveDocument");
+Object.defineProperty(exports, "requestExecutiveDocument", { enumerable: true, get: function () { return requestExecutiveDocument_1.requestExecutiveDocument; } });
 // --- Sales Advisors ---
 var createSalesAdvisorUser_1 = require("./advisors/createSalesAdvisorUser");
 Object.defineProperty(exports, "createSalesAdvisorUser", { enumerable: true, get: function () { return createSalesAdvisorUser_1.createSalesAdvisorUser; } });

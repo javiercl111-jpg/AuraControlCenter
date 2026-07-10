@@ -820,6 +820,7 @@ export { completeDiscoverySession } from "./discovery/completeDiscoverySession";
 export { resolveDiscoverySession } from "./discovery/resolveDiscoverySession";
 export { exchangeDiscoveryToken } from "./discovery/exchangeDiscoveryToken";
 export { generateDiscoveryReport } from "./discovery/reports/generateDiscoveryReport";
+export { requestExecutiveDocument } from "./discovery/reports/requestExecutiveDocument";
 
 // --- Sales Advisors ---
 export { createSalesAdvisorUser } from "./advisors/createSalesAdvisorUser";

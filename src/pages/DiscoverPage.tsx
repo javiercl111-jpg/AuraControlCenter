@@ -23,6 +23,23 @@ interface GenerateDiscoveryReportResponse {
   message: string;
 }
 
+interface RequestExecutiveDocumentRequest {
+  reportId: string;
+  sessionToken: string;
+}
+
+interface RequestExecutiveDocumentResponse {
+  status: "READY" | "GENERATING" | "REVOKED" | "ERROR";
+  reportId?: string;
+  reportType?: string;
+  documentVersion?: string;
+  downloadUrl?: string;
+  expiresAt?: string;
+  generatedAt?: string;
+  retryAfterSeconds?: number;
+  safeErrorCode?: string;
+}
+
 export default function DiscoverPage() {
   const { linkId, commercialCode } = useParams<{ linkId?: string, commercialCode?: string }>();
   const [searchParams] = useSearchParams();
@@ -331,7 +348,10 @@ export default function DiscoverPage() {
   }
 
   // State for report generation
-  const [reportStatus, setReportStatus] = useState<"IDLE" | "GENERATING" | "READY" | "ERROR">("IDLE");
+  const [reportStatus, setReportStatus] = useState<"IDLE" | "GENERATING" | "READY" | "REVOKED" | "ERROR">("IDLE");
+  const [generatedReportId, setGeneratedReportId] = useState<string | null>(null);
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   // Finalizar consultoría y persistir resultados
   async function handleComplete() {
@@ -362,6 +382,7 @@ export default function DiscoverPage() {
           isInternalOnly: false
         });
         console.log("Report generated:", res.data.reportId);
+        setGeneratedReportId(res.data.reportId);
         setReportStatus("READY");
       } catch (pdfErr: any) {
         console.error("Error generating PDF:", pdfErr);
@@ -377,6 +398,46 @@ export default function DiscoverPage() {
       alert("Error al guardar expediente: " + err.message);
       setIsAuraTyping(false);
       setReportStatus("ERROR");
+    }
+  }
+
+  async function handleDownloadReport() {
+    if (!generatedReportId || !linkInfo) return;
+    const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkInfo.id}`);
+    if (!sessionToken) {
+      setDownloadError("Sesión expirada. Por favor recargue la página e ingrese nuevamente.");
+      return;
+    }
+
+    setDownloadingReport(true);
+    setDownloadError("");
+
+    try {
+      const requestDocFn = httpsCallable<RequestExecutiveDocumentRequest, RequestExecutiveDocumentResponse>(
+        functions,
+        "requestExecutiveDocument"
+      );
+      const res = await requestDocFn({ reportId: generatedReportId, sessionToken });
+
+      const data = res.data;
+      if (data.status === "READY" && data.downloadUrl) {
+        setReportStatus("READY");
+        window.open(data.downloadUrl, "_blank", "noopener,noreferrer");
+      } else if (data.status === "GENERATING") {
+        setReportStatus("GENERATING");
+        setTimeout(() => handleDownloadReport(), (data.retryAfterSeconds || 5) * 1000);
+      } else if (data.status === "REVOKED") {
+        setReportStatus("REVOKED");
+        setDownloadError("Este documento ha sido revocado por razones de seguridad o actualización.");
+      } else {
+        setReportStatus("ERROR");
+        setDownloadError("Ocurrió un error al preparar el documento.");
+      }
+    } catch (error: any) {
+      console.error("Download report error:", error);
+      setDownloadError("No se pudo obtener el documento. Intente nuevamente más tarde.");
+    } finally {
+      setDownloadingReport(false);
     }
   }
 
@@ -835,19 +896,34 @@ export default function DiscoverPage() {
               <div className="p-4 rounded-xl border border-emerald-900/50 bg-emerald-950/20 space-y-3">
                 <p className="text-emerald-400 text-xs font-semibold">¡Tu Radiografía Empresarial en PDF está lista!</p>
                 <div className="flex gap-2">
-                  <button className="flex-1 rounded-lg bg-emerald-600/20 border border-emerald-500/30 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/40 transition">
-                    ⬇️ Descargar PDF
+                  <button 
+                    onClick={handleDownloadReport}
+                    disabled={downloadingReport}
+                    className="flex-1 rounded-lg bg-emerald-600/20 border border-emerald-500/30 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/40 transition disabled:opacity-50"
+                  >
+                    {downloadingReport ? "Preparando..." : "Abrir y descargar Radiografía"}
                   </button>
                   <button className="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition">
                     ✉️ Enviar a mi correo
                   </button>
                 </div>
+                {downloadError && (
+                  <p className="text-rose-400 text-[10px] text-center pt-2">{downloadError}</p>
+                )}
+              </div>
+            )}
+
+            {reportStatus === "REVOKED" && (
+              <div className="p-4 rounded-xl border border-rose-900/50 bg-rose-950/20 space-y-3">
+                <p className="text-rose-400 text-xs font-semibold">Documento Revocado</p>
+                <p className="text-rose-300 text-[10px] text-center pt-1">{downloadError || "Este documento ya no está disponible."}</p>
               </div>
             )}
 
             {reportStatus === "ERROR" && (
               <div className="p-4 rounded-xl border border-rose-900/50 bg-rose-950/20 text-rose-400 text-xs">
-                Hubo un error al generar tu PDF. Nuestro asesor te lo compartirá manualmente.
+                Hubo un error al procesar tu documento PDF.
+
               </div>
             )}
 

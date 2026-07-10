@@ -2,7 +2,25 @@ import { useState } from "react";
 import type { DiscoverySession } from "../types/discoveryTypes";
 import DiscoverySessionService from "../services/discoverySessionService";
 import RadiografiaEmpresarialModal from "./RadiografiaEmpresarialModal";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../../../config/firebase";
 
+interface RequestExecutiveDocumentRequest {
+  reportId: string;
+  sessionToken?: string;
+}
+
+interface RequestExecutiveDocumentResponse {
+  status: "READY" | "GENERATING" | "REVOKED" | "ERROR";
+  reportId?: string;
+  reportType?: string;
+  documentVersion?: string;
+  downloadUrl?: string;
+  expiresAt?: string;
+  generatedAt?: string;
+  retryAfterSeconds?: number;
+  safeErrorCode?: string;
+}
 interface ExecutiveBriefingDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -17,6 +35,8 @@ export default function ExecutiveBriefingDrawer({
   const [isUpdating, setIsUpdating] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isRadiografiaModalOpen, setIsRadiografiaModalOpen] = useState(false);
+  const [downloadingDoc, setDownloadingDoc] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState("");
 
   if (!isOpen || !session) return null;
 
@@ -52,6 +72,40 @@ export default function ExecutiveBriefingDrawer({
     }
   };
 
+  const handleDownloadPdf = async (reportType: "EXTERNAL_RADIOGRAFIA" | "INTERNAL_BRIEFING") => {
+    setDownloadingDoc(reportType);
+    setDownloadError("");
+
+    // reportId is constructed as sessionId_reportType_v1.0
+    // The service can resolve it if it's not present, or we can build it:
+    const documentVersion = "1.0";
+    const reportId = `${session.id}_${reportType}_v${documentVersion}`;
+
+    try {
+      const requestDocFn = httpsCallable<RequestExecutiveDocumentRequest, RequestExecutiveDocumentResponse>(
+        functions,
+        "requestExecutiveDocument"
+      );
+      const res = await requestDocFn({ reportId });
+
+      const data = res.data;
+      if (data.status === "READY" && data.downloadUrl) {
+        window.open(data.downloadUrl, "_blank", "noopener,noreferrer");
+      } else if (data.status === "GENERATING") {
+        setDownloadError("El documento se está generando. Por favor intente en unos segundos.");
+      } else if (data.status === "REVOKED") {
+        setDownloadError("El documento ha sido revocado.");
+      } else {
+        setDownloadError("Error en la preparación del documento.");
+      }
+    } catch (error: any) {
+      console.error("Download error:", error);
+      setDownloadError("No se pudo obtener el documento. Verifique sus permisos.");
+    } finally {
+      setDownloadingDoc(null);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-sm transition-opacity">
       <div className="flex h-full w-full max-w-2xl flex-col bg-slate-900 border-l border-slate-800 shadow-2xl overflow-y-auto animate-slideLeft font-sans">
@@ -74,7 +128,19 @@ export default function ExecutiveBriefingDrawer({
           
           {/* Executive Summary */}
           <section>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-3 border-b border-slate-800 pb-2">Executive Summary</h3>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">Executive Summary</h3>
+              <button
+                onClick={() => handleDownloadPdf("INTERNAL_BRIEFING")}
+                disabled={downloadingDoc !== null}
+                className="text-[10px] font-bold uppercase tracking-widest text-cyan-300 bg-cyan-900/30 hover:bg-cyan-900/60 px-3 py-1 rounded-md transition border border-cyan-500/20 disabled:opacity-50"
+              >
+                {downloadingDoc === "INTERNAL_BRIEFING" ? "Descargando..." : "Descargar Briefing"}
+              </button>
+            </div>
+            {downloadError && downloadingDoc === "INTERNAL_BRIEFING" && (
+              <p className="text-rose-400 text-[10px] mb-2">{downloadError}</p>
+            )}
             {executiveBriefingDraft ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-4">
                 <p className="text-sm text-slate-300 leading-relaxed">{executiveBriefingDraft.summary}</p>
@@ -119,13 +185,25 @@ export default function ExecutiveBriefingDrawer({
           <section>
             <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-purple-400">Aura Radiografía</h3>
-              <button
-                onClick={() => setIsRadiografiaModalOpen(true)}
-                className="text-[10px] font-bold uppercase tracking-widest text-purple-300 bg-purple-900/30 hover:bg-purple-900/60 px-3 py-1 rounded-md transition border border-purple-500/20"
-              >
-                Ver Radiografía
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsRadiografiaModalOpen(true)}
+                  className="text-[10px] font-bold uppercase tracking-widest text-purple-300 bg-purple-900/30 hover:bg-purple-900/60 px-3 py-1 rounded-md transition border border-purple-500/20"
+                >
+                  Visualizar
+                </button>
+                <button
+                  onClick={() => handleDownloadPdf("EXTERNAL_RADIOGRAFIA")}
+                  disabled={downloadingDoc !== null}
+                  className="text-[10px] font-bold uppercase tracking-widest text-purple-300 bg-purple-900/30 hover:bg-purple-900/60 px-3 py-1 rounded-md transition border border-purple-500/20 disabled:opacity-50"
+                >
+                  {downloadingDoc === "EXTERNAL_RADIOGRAFIA" ? "Descargando..." : "Descargar PDF"}
+                </button>
+              </div>
             </div>
+            {downloadError && downloadingDoc === "EXTERNAL_RADIOGRAFIA" && (
+              <p className="text-rose-400 text-[10px] mb-2">{downloadError}</p>
+            )}
             {radiografiaEmpresarialDraft ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-4">
                 <div>
