@@ -74,9 +74,9 @@ import {
 
     const advisors = await getSalesAdvisors();
     const activeAdvisors = advisors.filter((a) =>
-      a.status &&
-      typeof a.status === "string" &&
-      ["active", "activo"].includes(a.status.toLowerCase())
+      a.advisorStatus &&
+      typeof a.advisorStatus === "string" &&
+      ["active", "activo"].includes(a.advisorStatus.toLowerCase())
     );
 
     // 1. Try matching by userId

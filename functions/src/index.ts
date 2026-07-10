@@ -813,3 +813,8 @@ export const processMarketImportJob = onDocumentCreated(
   }
 );
 export * from './intelligence/evaluateConversation';
+export { createSalesAdvisorUser } from './advisors/createSalesAdvisorUser';
+export { createDiscoveryLead } from './discovery/createDiscoveryLead';
+export { exchangeDiscoveryToken } from './discovery/exchangeDiscoveryToken';
+export { resolveDiscoverySession } from './discovery/resolveDiscoverySession';
+export { completeDiscoverySession } from './discovery/completeDiscoverySession';

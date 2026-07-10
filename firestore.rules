@@ -114,7 +114,8 @@ service cloud.firestore {
 
     // Platform sales advisors permissions
     match /platform_sales_advisors/{advisorId} {
-      allow read, write: if isAuthenticated();
+      allow read: if true; // Public read for resolving commercialCode
+      allow write: if hasRole('SUPER_ADMIN') || hasRole('FOUNDER') || hasRole('SALES_DIRECTOR');
     }
 
     // Platform global admins permissions
@@ -173,21 +174,12 @@ service cloud.firestore {
 
     // market_discovery_links
     match /market_discovery_links/{linkId} {
-      allow get: if true;
-      allow list: if canReadMarket();
-      allow write: if canReadMarket();
+      allow read, write: if canReadMarket();
     }
 
     // discovery_sessions
     match /discovery_sessions/{sessionId} {
-      allow read: if canReadMarket();
-      allow create: if request.resource.data.linkId != null &&
-                      (request.resource.data.linkId == 'demo' || 
-                       (exists(/databases/$(database)/documents/market_discovery_links/$(request.resource.data.linkId)) &&
-                        get(/databases/$(database)/documents/market_discovery_links/$(request.resource.data.linkId)).data.status == 'pending')) &&
-                      request.resource.data.companyName.size() < 100 &&
-                      request.resource.data.contactName.size() < 100;
-      allow update, delete: if canReadMarket();
+      allow read, write: if canReadMarket();
     }
   }
 }

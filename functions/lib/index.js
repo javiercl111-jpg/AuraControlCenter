@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processMarketImportJob = void 0;
+exports.completeDiscoverySession = exports.resolveDiscoverySession = exports.exchangeDiscoveryToken = exports.createDiscoveryLead = exports.createSalesAdvisorUser = exports.processMarketImportJob = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
@@ -686,4 +686,14 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
     }
 });
 __exportStar(require("./intelligence/evaluateConversation"), exports);
+var createSalesAdvisorUser_1 = require("./advisors/createSalesAdvisorUser");
+Object.defineProperty(exports, "createSalesAdvisorUser", { enumerable: true, get: function () { return createSalesAdvisorUser_1.createSalesAdvisorUser; } });
+var createDiscoveryLead_1 = require("./discovery/createDiscoveryLead");
+Object.defineProperty(exports, "createDiscoveryLead", { enumerable: true, get: function () { return createDiscoveryLead_1.createDiscoveryLead; } });
+var exchangeDiscoveryToken_1 = require("./discovery/exchangeDiscoveryToken");
+Object.defineProperty(exports, "exchangeDiscoveryToken", { enumerable: true, get: function () { return exchangeDiscoveryToken_1.exchangeDiscoveryToken; } });
+var resolveDiscoverySession_1 = require("./discovery/resolveDiscoverySession");
+Object.defineProperty(exports, "resolveDiscoverySession", { enumerable: true, get: function () { return resolveDiscoverySession_1.resolveDiscoverySession; } });
+var completeDiscoverySession_1 = require("./discovery/completeDiscoverySession");
+Object.defineProperty(exports, "completeDiscoverySession", { enumerable: true, get: function () { return completeDiscoverySession_1.completeDiscoverySession; } });
 //# sourceMappingURL=index.js.map

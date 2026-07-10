@@ -1,29 +1,44 @@
-export type SalesAdvisorStatus =
-  | "ACTIVE"
-  | "INACTIVE";
+export type AuthStatus = "NOT_CREATED" | "CREATED" | "DISABLED";
+export type InvitationStatus = "PENDING" | "LINK_GENERATED" | "SENT" | "ACCEPTED" | "EXPIRED" | "SEND_FAILED";
+export type AdvisorStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
 
-export interface PlatformSalesAdvisor {
-  id: string;
+export interface AdvisorProfile {
+  id?: string;
+  advisorId: string;
+  uid?: string | null;
 
   name: string;
-
   email: string;
+  phone?: string;
 
-  phone: string;
+  commercialCode?: string;
+  discoveryLink?: string;
 
-  status: SalesAdvisorStatus;
+  assignedStates: string[];
+  assignedCities: string[];
+  specialties: string[];
 
-  commissionYear1: number;
+  authStatus: AuthStatus;
+  invitationStatus: InvitationStatus;
+  advisorStatus: AdvisorStatus;
 
-  commissionRenewal: number;
+  commissionPlanId?: string;
 
-  bonusLevel: number;
-
+  // Legacy fields for UI compatibility, to be removed or mapped later
+  commissionYear1?: number;
+  commissionRenewal?: number;
+  bonusLevel?: number;
   notes?: string;
 
-  userId?: string | null;
-
   createdAt?: unknown;
-
+  createdBy?: string;
   updatedAt?: unknown;
+  lastLoginAt?: unknown;
+
+  provisioningStatus?: "PENDING" | "SUCCESS" | "ERROR";
+  lastSafeErrorCode?: string;
 }
+
+// Retro-compatibility export
+export type PlatformSalesAdvisor = AdvisorProfile;
+export type SalesAdvisorStatus = AdvisorStatus;

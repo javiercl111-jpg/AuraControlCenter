@@ -1,7 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../config/firebase";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import type { DiscoveryLink } from "../modules/discovery/types/discoveryTypes";
 import DossierBuilderService from "../modules/discovery/services/dossierBuilderService";
 import ConversationOrchestrator from "../modules/intelligence/engine/services/ConversationOrchestrator";
@@ -9,9 +7,11 @@ import ConversationState from "../modules/intelligence/engine/domain/Conversatio
 import { ReflectionEngine } from "../modules/intelligence/engine/services/ReflectionEngine";
 import type { ReflectionState, ConfidenceMatrix } from "../modules/intelligence/engine/types/reflection.types";
 import type { ConversationPhase } from "../modules/intelligence/engine/types/orchestrator.types";
+import { resolveAdvisorByCode, createDiscoveryLink, exchangeDiscoveryToken, resolveDiscoverySession } from "../modules/discovery/services/discoveryLinkService";
 
 export default function DiscoverPage() {
-  const { linkId } = useParams<{ linkId: string }>();
+  const { linkId, commercialCode } = useParams<{ linkId?: string, commercialCode?: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [linkInfo, setLinkInfo] = useState<DiscoveryLink | null>(null);
@@ -19,8 +19,21 @@ export default function DiscoverPage() {
   const [error, setError] = useState("");
 
   // Conversational Flow States
-  const [screen, setScreen] = useState<"welcome" | "chat" | "completed">("welcome");
+  const [screen, setScreen] = useState<"preform" | "welcome" | "chat" | "completed">("welcome");
   
+  // Pre-form States
+  const [advisorContext, setAdvisorContext] = useState<any>(null);
+  const [companyName, setCompanyName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("");
+  const [location, setLocation] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [acquisitionSource, setAcquisitionSource] = useState("DIRECT");
+  const [manualAdvisorCode, setManualAdvisorCode] = useState("");
+
   // Real-time Chat log
   const [chatLog, setChatLog] = useState<{ sender: "aura" | "user"; text: string }[]>([]);
   const [isAuraTyping, setIsAuraTyping] = useState(false);
@@ -63,7 +76,30 @@ export default function DiscoverPage() {
   // Load link information on mount
   useEffect(() => {
     async function loadLink() {
-      if (!linkId || linkId === "demo") {
+      if (commercialCode) {
+        try {
+          const advisor = await resolveAdvisorByCode(commercialCode);
+          if (advisor) {
+            setAdvisorContext(advisor);
+          }
+          setScreen("preform");
+        } catch (err: any) {
+          console.error("Error resolving advisor:", err);
+          setScreen("preform");
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      // If no linkId and no commercialCode, it's a direct website visit
+      if (!linkId) {
+        setScreen("preform");
+        setLoading(false);
+        return;
+      }
+
+      if (linkId === "demo") {
         setLinkInfo({
           id: "demo",
           companyName: "Empresa Demo S.A.",
@@ -78,31 +114,81 @@ export default function DiscoverPage() {
       }
 
       try {
-        const docRef = doc(db, "market_discovery_links", linkId);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) {
-          setError("El enlace de consultoría inteligente no es válido o ha expirado.");
+        const access = searchParams.get("access");
+        
+        if (access) {
+          // Exchange one-time token
+          const result = await exchangeDiscoveryToken(linkId, access);
+          sessionStorage.setItem(`discovery_session_token_${linkId}`, result.sessionAccessToken);
+          
+          // Clear URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          
+          setLinkInfo(result as any);
           setLoading(false);
           return;
         }
 
-        const data = snap.data() as DiscoveryLink;
-        if (data.status === "completed") {
+        const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkId}`);
+        if (!sessionToken) {
+          setError("El enlace no contiene un token de acceso o la sesión ha caducado.");
+          setLoading(false);
+          return;
+        }
+
+        const result = await resolveDiscoverySession(linkId, sessionToken);
+        
+        if (result.status === "completed") {
           setError("Esta sesión de consultoría inteligente ya ha sido completada anteriormente. ¡Muchas gracias!");
           setLoading(false);
           return;
         }
 
-        setLinkInfo(data);
+        setLinkInfo(result as any);
       } catch (err: any) {
         console.error("Error al cargar enlace Discovery:", err);
-        setError("Error al conectar con el servidor: " + err.message);
+        setError("Error de seguridad: " + (err.message || "Enlace no válido o expirado."));
       } finally {
         setLoading(false);
       }
     }
     loadLink();
-  }, [linkId]);
+  }, [linkId, commercialCode, searchParams]);
+
+  async function handlePreformSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!companyName.trim() || !contactName.trim() || !email.trim() || !consent) {
+      alert("Por favor completa los campos obligatorios y acepta la política de privacidad.");
+      return;
+    }
+
+    setCreatingLink(true);
+    try {
+      let finalAdvisorContext = advisorContext;
+      
+      if (!finalAdvisorContext && manualAdvisorCode.trim()) {
+        const advisor = await resolveAdvisorByCode(manualAdvisorCode.trim());
+        if (advisor) finalAdvisorContext = advisor;
+      }
+
+      const newLink = await createDiscoveryLink({
+        companyName,
+        contactName,
+        email,
+        phone,
+        role,
+        location,
+        consent,
+        acquisitionSource
+      }, finalAdvisorContext);
+
+      navigate(`/discover/${newLink.linkId}?access=${newLink.oneTimeToken}`, { replace: true });
+    } catch (err) {
+      console.error(err);
+      alert("Error al iniciar sesión de descubrimiento.");
+      setCreatingLink(false);
+    }
+  }
 
   // Welcome page text starts chat
   function handleStartChat() {
@@ -235,13 +321,15 @@ export default function DiscoverPage() {
     if (!linkInfo || !stateRef.current) return;
     setIsAuraTyping(true);
     try {
+      const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkInfo.id}`);
       await DossierBuilderService.saveDiscoverySession(
         linkInfo.id,
         linkInfo.companyName,
         linkInfo.contactName,
         stateRef.current.dossier,
         stateRef.current.getHistory(),
-        stateRef.current.getSnapshot()
+        stateRef.current.getSnapshot(),
+        sessionToken || undefined
       );
       setTimeout(() => {
         setScreen("completed");
@@ -298,6 +386,100 @@ export default function DiscoverPage() {
           Aura Intelligence V1
         </div>
       </header>
+
+      {/* Pre-Form: Company Data (Only when accessed via general advisor link) */}
+      {screen === "preform" && (
+        <main className="flex-1 flex items-center justify-center p-6 animate-fadeIn">
+          <div className="w-full max-w-xl rounded-3xl border border-slate-900 bg-slate-900/40 p-8 space-y-6 shadow-2xl relative overflow-hidden backdrop-blur-sm">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-cyan-950 border border-cyan-500/30 flex items-center justify-center text-lg shadow-inner">
+                ✨
+              </div>
+              <div>
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">Aura Intelligence™</h2>
+                <p className="text-[10px] text-cyan-400">Validación de Perfil Empresarial</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-slate-300 text-xs leading-relaxed font-normal">
+              {advisorContext ? (
+                <p><strong>{advisorContext.name}</strong> me pidió acompañarte durante este diagnóstico empresarial. Mi objetivo es comprender mejor cómo funciona tu organización para preparar un análisis útil antes de su conversación. Por favor, ingresa los datos mínimos de tu empresa para comenzar.</p>
+              ) : (
+                <p>Estás a punto de iniciar un diagnóstico comercial. Por favor, ingresa los datos mínimos de tu empresa para comenzar.</p>
+              )}
+            </div>
+
+            <form onSubmit={handlePreformSubmit} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Nombre de la Empresa *</label>
+                  <input required value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Tu Nombre *</label>
+                  <input required value={contactName} onChange={e => setContactName(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Correo Electrónico *</label>
+                  <input required type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Teléfono (Opcional)</label>
+                  <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Cargo (Opcional)</label>
+                  <input value={role} onChange={e => setRole(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Estado / Ciudad (Opcional)</label>
+                  <input value={location} onChange={e => setLocation(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                </div>
+
+                {!advisorContext && (
+                  <>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">¿Algún asesor de Aura te invitó? (Código)</label>
+                      <input value={manualAdvisorCode} onChange={e => setManualAdvisorCode(e.target.value)} placeholder="Ej. ADV123 (Opcional)" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">¿Cómo nos conociste?</label>
+                      <select value={acquisitionSource} onChange={e => setAcquisitionSource(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white appearance-none">
+                        <option value="DIRECT">Directo / Búsqueda web</option>
+                        <option value="GOOGLE">Búsqueda en Google</option>
+                        <option value="LINKEDIN">LinkedIn</option>
+                        <option value="WHATSAPP">WhatsApp</option>
+                        <option value="EMAIL">Correo electrónico</option>
+                        <option value="REFERRAL">Recomendación</option>
+                        <option value="EVENT">Evento</option>
+                        <option value="QR">Código QR</option>
+                        <option value="OTHER">Otro</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-start gap-2 pt-2">
+                <input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-1" />
+                <span className="text-[10px] text-slate-500">
+                  Acepto la política de privacidad de Aura Intelligence y autorizo el procesamiento de estos datos para el diagnóstico de descubrimiento y contacto comercial.
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={creatingLink}
+                className="w-full rounded-xl bg-cyan-600 px-5 py-3 text-xs font-bold text-white hover:bg-cyan-500 transition shadow-lg active:scale-98 disabled:opacity-50"
+              >
+                {creatingLink ? "Generando sesión..." : "Iniciar Diagnóstico"}
+              </button>
+            </form>
+          </div>
+        </main>
+      )}
 
       {/* Screen 1: Welcome Greeting */}
       {screen === "welcome" && linkInfo && (

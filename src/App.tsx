@@ -31,6 +31,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/discover" element={<DiscoverPage />} />
+      <Route path="/discover/advisor/:commercialCode" element={<DiscoverPage />} />
       <Route path="/discover/:linkId" element={<DiscoverPage />} />
 
       <Route

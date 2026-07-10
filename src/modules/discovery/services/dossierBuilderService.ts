@@ -1,5 +1,4 @@
-import { doc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../../../config/firebase";
+import { serverTimestamp } from "firebase/firestore";
 import type { DiscoverySession, SmartBusinessDossier, ExecutiveBriefingDraft, BusinessAssessmentDraft, RadiografiaEmpresarialDraft, SalesAdvisorContext } from "../types/discoveryTypes";
 import type { ConversationMessage } from "../../intelligence/engine/types/conversation.types";
 
@@ -129,42 +128,28 @@ export function buildDossierPayload(
   };
 }
 
-/**
- * Guarda el expediente completo en Firestore y marca el enlace único como completado.
- */
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../../../config/firebase";
+
 export async function saveDiscoverySession(
   linkId: string,
   companyName: string,
   contactName: string,
   dossierState: Partial<SmartBusinessDossier>,
   conversationHistory: ConversationMessage[],
-  conversationStateSnapshot: any
+  conversationStateSnapshot: any,
+  sessionToken?: string
 ): Promise<string> {
-  const dossierId = `dossier_${linkId}_${Date.now()}`;
   const payload = buildDossierPayload(linkId, companyName, contactName, dossierState, conversationHistory, conversationStateSnapshot);
 
-  // 1. Guardar la sesión de consultoría
-  const sessionRef = doc(db, "discovery_sessions", dossierId);
-  await setDoc(sessionRef, {
-    id: dossierId,
-    ...payload,
-    completedAt: serverTimestamp(),
+  const completeFn = httpsCallable(functions, "completeDiscoverySession");
+  const result = await completeFn({
+    linkId,
+    sessionToken,
+    dossierPayload: payload
   });
 
-  // 2. Si no es una sesión demo, marcar el enlace de prospección como completado
-  if (linkId && linkId !== "demo") {
-    try {
-      const linkRef = doc(db, "market_discovery_links", linkId);
-      await updateDoc(linkRef, {
-        status: "completed",
-        dossierId: dossierId,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      console.warn("No se pudo actualizar el enlace de prospección a completado (podría ser demo):", err);
-    }
-  }
-
+  const { dossierId } = result.data as any;
   return dossierId;
 }
 

@@ -67,4 +67,4 @@ if (typeof window !== "undefined") {
   }
 }
 
-export const appCheck = appCheckInstance;
+export const appCheck = appCheckInstance;import { getFunctions } from "firebase/functions"; export const functions = getFunctions(firebaseApp);
