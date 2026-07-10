@@ -2,6 +2,9 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { generateTokenHash } from "./discoverySecurityService";
 
+import { ProspectResolutionEngine } from "../prospects/ProspectResolutionEngine";
+import { MergePayload, ProspectOrigin, AcquisitionSource } from "../prospects/types";
+
 export const completeDiscoverySession = functions.https.onCall(async (request) => {
   if (request.app == undefined) {
     throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
@@ -14,69 +17,113 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
   }
 
   const db = admin.firestore();
-  const linkRef = db.collection("market_discovery_links").doc(linkId);
-  const linkSnap = await linkRef.get();
-
-  if (!linkSnap.exists) {
-    throw new functions.https.HttpsError("not-found", "Session not found.");
-  }
-
-  const linkData = linkSnap.data() as any;
-  const sessionTokenHash = generateTokenHash(sessionToken);
-
-  if (linkData.sessionTokenHash !== sessionTokenHash) {
-    throw new functions.https.HttpsError("permission-denied", "Invalid session token.");
-  }
-
-  const dossierId = `dossier_${linkId}_${Date.now()}`;
-
-  // Trust score and delivery rules logic check to modify payload if needed
-  let finalExecutiveBriefing = dossierPayload.executiveBriefingDraft;
-  let finalRadiografia = dossierPayload.radiografiaEmpresarialDraft;
-
-  const trustDecision = linkData.trustScore?.decision || "ALLOW_FULL";
-
-  if (trustDecision === "ALLOW_BASIC" || trustDecision === "REQUIRE_MANUAL_REVIEW" || trustDecision === "BLOCK_ABUSE") {
-    // Basic delivery, strip out sensitive observations
-    if (finalExecutiveBriefing) {
-      finalExecutiveBriefing.keyObservations = ["Reporte en validación."];
-      finalExecutiveBriefing.suggestedNextSteps = ["Un especialista de Aura evaluará tus respuestas."];
-    }
-    if (finalRadiografia) {
-      finalRadiografia.overallStatus = "En evaluación...";
-      finalRadiografia.recommendedModules = [];
-      finalRadiografia.potentialSavings = "Pendiente de validación comercial.";
-    }
-  }
-
-  if (trustDecision === "BLOCK_ABUSE") {
-    finalExecutiveBriefing = null;
-    finalRadiografia = null;
-  }
-
-  const finalPayload = {
-    id: dossierId,
-    linkId,
-    ...dossierPayload,
-    executiveBriefingDraft: finalExecutiveBriefing,
-    radiografiaEmpresarialDraft: finalRadiografia,
-    completedAt: admin.firestore.FieldValue.serverTimestamp()
-  };
-
-  const batch = db.batch();
   
-  const sessionRef = db.collection("discovery_sessions").doc(dossierId);
-  batch.set(sessionRef, finalPayload);
+  return await db.runTransaction(async (t) => {
+    const linkRef = db.collection("market_discovery_links").doc(linkId);
+    const linkSnap = await t.get(linkRef);
 
-  if (linkId !== "demo") {
-    batch.update(linkRef, {
-      status: "completed",
-      dossierId: dossierId,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-  }
+    if (!linkSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Session not found.");
+    }
 
-  await batch.commit();
+    const linkData = linkSnap.data() as any;
+    const sessionTokenHash = generateTokenHash(sessionToken);
 
-  return { dossierId, trustDecision };
+    if (linkData.sessionTokenHash !== sessionTokenHash) {
+      throw new functions.https.HttpsError("permission-denied", "Invalid session token.");
+    }
+
+    const dossierId = `dossier_${linkId}_${Date.now()}`;
+
+    // Trust score and delivery rules logic check to modify payload if needed
+    let finalExecutiveBriefing = dossierPayload.executiveBriefingDraft;
+    let finalRadiografia = dossierPayload.radiografiaEmpresarialDraft;
+
+    const trustDecision = linkData.trustScore?.decision || "ALLOW_FULL";
+
+    if (trustDecision === "ALLOW_BASIC" || trustDecision === "REQUIRE_MANUAL_REVIEW" || trustDecision === "BLOCK_ABUSE") {
+      if (finalExecutiveBriefing) {
+        finalExecutiveBriefing.keyObservations = ["Reporte en validación."];
+        finalExecutiveBriefing.suggestedNextSteps = ["Un especialista de Aura evaluará tus respuestas."];
+      }
+      if (finalRadiografia) {
+        finalRadiografia.overallStatus = "En evaluación...";
+        finalRadiografia.recommendedModules = [];
+        finalRadiografia.potentialSavings = "Pendiente de validación comercial.";
+      }
+    }
+
+    if (trustDecision === "BLOCK_ABUSE") {
+      finalExecutiveBriefing = null;
+      finalRadiografia = null;
+    }
+
+    const finalPayload = {
+      id: dossierId,
+      linkId,
+      ...dossierPayload,
+      executiveBriefingDraft: finalExecutiveBriefing,
+      radiografiaEmpresarialDraft: finalRadiografia,
+      completedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    const sessionRef = db.collection("discovery_sessions").doc(dossierId);
+    t.set(sessionRef, finalPayload);
+
+    if (linkId !== "demo") {
+      t.update(linkRef, {
+        status: "completed",
+        dossierId: dossierId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    
+    // Call Prospect Resolution Engine
+    const engine = new ProspectResolutionEngine();
+    
+    // Build payload for resolution
+    const mergePayload: MergePayload = {
+      companyName: dossierPayload.companyName || linkData.companyName || "Unknown",
+      contactName: dossierPayload.contactName || linkData.contactName || "Unknown",
+      email: linkData.email || "", // we might want to get email from dossierPayload if it asks
+      phone: linkData.phone || "",
+      advisorId: linkData.advisorId,
+      advisorUid: linkData.advisorUid,
+      linkId: linkId,
+      sourceLeadId: linkData.prospectId,
+      origin: ProspectOrigin.WEBSITE, // or ADVISOR_SHARE if there's an advisor
+      acquisitionSource: linkData.acquisitionSource || AcquisitionSource.DIRECT
+    };
+    
+    if (linkData.advisorId && linkData.advisorId !== "UNKNOWN") {
+      mergePayload.origin = ProspectOrigin.ADVISOR_SHARE;
+    }
+
+    const resolutionResult = await engine.resolveProspect(mergePayload, t);
+    
+    // Update dossier to reference the prospect
+    if (resolutionResult.matchedProspectId) {
+       t.update(sessionRef, { prospectId: resolutionResult.matchedProspectId });
+       // Also emit DOSSIER_ATTACHED event
+       const eventRef = db.collection("platform_events").doc();
+       t.set(eventRef, {
+          eventId: eventRef.id,
+          type: "DOSSIER_ATTACHED",
+          prospectId: resolutionResult.matchedProspectId,
+          linkId,
+          sessionId: dossierId,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          actorType: "SYSTEM",
+          source: "completeDiscoverySession",
+          metadata: { dossierId }
+       });
+    }
+
+    return { 
+      dossierId, 
+      trustDecision,
+      prospectId: resolutionResult.matchedProspectId,
+      resolutionStatus: resolutionResult.resolutionReason
+    };
+  });
 });
