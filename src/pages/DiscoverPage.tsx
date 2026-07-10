@@ -8,6 +8,20 @@ import { ReflectionEngine } from "../modules/intelligence/engine/services/Reflec
 import type { ReflectionState, ConfidenceMatrix } from "../modules/intelligence/engine/types/reflection.types";
 import type { ConversationPhase } from "../modules/intelligence/engine/types/orchestrator.types";
 import { resolveAdvisorByCode, createDiscoveryLink, exchangeDiscoveryToken, resolveDiscoverySession } from "../modules/discovery/services/discoveryLinkService";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../config/firebase";
+
+interface GenerateDiscoveryReportRequest {
+  sessionId: string;
+  prospectId: string;
+  isInternalOnly?: boolean;
+}
+
+interface GenerateDiscoveryReportResponse {
+  success: boolean;
+  reportId: string;
+  message: string;
+}
 
 export default function DiscoverPage() {
   const { linkId, commercialCode } = useParams<{ linkId?: string, commercialCode?: string }>();
@@ -318,7 +332,6 @@ export default function DiscoverPage() {
 
   // State for report generation
   const [reportStatus, setReportStatus] = useState<"IDLE" | "GENERATING" | "READY" | "ERROR">("IDLE");
-  const [reportId, setReportId] = useState<string | null>(null);
 
   // Finalizar consultoría y persistir resultados
   async function handleComplete() {
@@ -327,7 +340,7 @@ export default function DiscoverPage() {
     setReportStatus("GENERATING");
     try {
       const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkInfo.id}`);
-      const sessionId = await DossierBuilderService.saveDiscoverySession(
+      const { sessionId, prospectId } = await DossierBuilderService.saveDiscoverySession(
         linkInfo.id,
         linkInfo.companyName,
         linkInfo.contactName,
@@ -339,14 +352,16 @@ export default function DiscoverPage() {
       
       // Request PDF Generation
       try {
-        const generateReportFn = httpsCallable(functions, "generateDiscoveryReport");
+        const generateReportFn = httpsCallable<GenerateDiscoveryReportRequest, GenerateDiscoveryReportResponse>(
+          functions,
+          "generateDiscoveryReport"
+        );
         const res = await generateReportFn({
           sessionId,
-          prospectId: linkInfo.prospectId || "UNKNOWN",
+          prospectId: prospectId || "UNKNOWN",
           isInternalOnly: false
         });
-        const data = res.data as any;
-        setReportId(data.reportId);
+        console.log("Report generated:", res.data.reportId);
         setReportStatus("READY");
       } catch (pdfErr: any) {
         console.error("Error generating PDF:", pdfErr);

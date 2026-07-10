@@ -3,19 +3,22 @@ import { doc, getDoc } from "firebase/firestore";
 
 import { db } from "../config/firebase";
 import type { PlatformQuote } from "../types/quote";
+import {
+  AuraDesignTokens,
+  AuraPdfComponents
+} from "aura-executive-documents";
+import type { AuraDocumentAssets } from "aura-executive-documents";
 
-const LOGO_PATH = "/Logo Aura Oficial.png";
+const LOGO_PATH = "/branding/aura-logo-oficial-800.png";
 
-const PAGE_WIDTH = 210;
-const PAGE_HEIGHT = 297;
-const MARGIN_X = 18;
+const PAGE_WIDTH = AuraDesignTokens.pageWidth;
+const MARGIN_X = AuraDesignTokens.margin.left;
 
-const AURA_NAVY = [7, 20, 38] as const;
-const AURA_CYAN = [28, 210, 230] as const;
-const AURA_MAGENTA = [236, 72, 153] as const;
-const TEXT_DARK = [20, 30, 45] as const;
-const TEXT_MUTED = [95, 105, 120] as const;
-const BORDER = [220, 225, 235] as const;
+const AURA_NAVY = AuraDesignTokens.colors.primary;
+const AURA_CYAN = AuraDesignTokens.colors.secondary;
+const TEXT_DARK = AuraDesignTokens.colors.textDark;
+const TEXT_MUTED = AuraDesignTokens.colors.textMuted;
+const BORDER = AuraDesignTokens.colors.border;
 
 const HCM_SETUP_POINT_PRICE = 2500;
 const MAINTENANCE_SETUP_POINT_PRICE = 2000;
@@ -98,32 +101,11 @@ function setDrawColor(doc: jsPDF, color: readonly [number, number, number]) {
 }
 
 function addFooter(doc: jsPDF, pageNumber: number, totalPages: number) {
-  setDrawColor(doc, BORDER);
-  doc.line(MARGIN_X, 276, PAGE_WIDTH - MARGIN_X, 276);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  setTextColor(doc, TEXT_MUTED);
-  doc.text(
-    "Aura Nexus · admin@auranexus.io · 442-350-8472 · auranexus.io",
-    MARGIN_X,
-    284
-  );
-
-  doc.text(`Página ${pageNumber} de ${totalPages}`, PAGE_WIDTH - MARGIN_X, 284, {
-    align: "right",
-  });
+  AuraPdfComponents.addFooter(doc, pageNumber, totalPages);
 }
 
 function addTopBrandBar(doc: jsPDF) {
-  setFillColor(doc, AURA_NAVY);
-  doc.rect(0, 0, PAGE_WIDTH, 14, "F");
-
-  setFillColor(doc, AURA_CYAN);
-  doc.rect(0, 14, PAGE_WIDTH * 0.62, 1.8, "F");
-
-  setFillColor(doc, AURA_MAGENTA);
-  doc.rect(PAGE_WIDTH * 0.62, 14, PAGE_WIDTH * 0.38, 1.8, "F");
+  AuraPdfComponents.addTopBrandBar(doc);
 }
 
 function addSectionTitle(doc: jsPDF, title: string, y: number) {
@@ -168,36 +150,19 @@ function addCoverPage(
   logo: string | null,
   advisorEmail?: string | null
 ) {
-  setFillColor(doc, AURA_NAVY);
-  doc.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, "F");
+  const assets: AuraDocumentAssets = {
+    logoDataUrl: logo || undefined,
+    logoWidth: 70,
+    logoHeight: 42,
+    fallbackBrandText: "Aura Nexus"
+  };
 
-  setFillColor(doc, AURA_CYAN);
-  doc.rect(0, 0, 8, PAGE_HEIGHT, "F");
+  AuraPdfComponents.drawCoverPage(doc, assets, "Propuesta Comercial", "Ecosistema Aura", quote.prospectName || "Cliente pendiente", "");
+  
+  // Clear the area below the company name where contactName would be in Radiografia
+  // We don't have to clear it since we passed an empty string, we can just continue drawing proposal specific stuff.
 
-  setFillColor(doc, AURA_MAGENTA);
-  doc.rect(8, 0, 3, PAGE_HEIGHT, "F");
 
-  if (logo) {
-    doc.addImage(logo, "PNG", 70, 42, 70, 42);
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(28);
-  setTextColor(doc, [255, 255, 255]);
-  doc.text("Propuesta Comercial", PAGE_WIDTH / 2, 112, { align: "center" });
-
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "normal");
-  doc.text("Ecosistema Aura", PAGE_WIDTH / 2, 124, { align: "center" });
-
-  setDrawColor(doc, AURA_CYAN);
-  doc.line(54, 137, 156, 137);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text(quote.prospectName || "Cliente pendiente", PAGE_WIDTH / 2, 160, {
-    align: "center",
-  });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);

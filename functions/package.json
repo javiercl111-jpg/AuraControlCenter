@@ -14,6 +14,7 @@
   "main": "lib/index.js",
   "dependencies": {
     "@google/genai": "^2.11.0",
+    "aura-executive-documents": "file:vendor/aura-executive-documents-1.0.0.tgz",
     "firebase-admin": "^12.0.0",
     "firebase-functions": "^6.0.0",
     "jspdf": "^4.2.1",

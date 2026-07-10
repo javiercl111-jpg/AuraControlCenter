@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run build --prefix packages/aura-executive-documents && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "aura-executive-documents": "file:packages/aura-executive-documents",
     "firebase": "^12.15.0",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",

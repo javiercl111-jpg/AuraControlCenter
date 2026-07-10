@@ -131,6 +131,11 @@ export function buildDossierPayload(
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../../../config/firebase";
 
+export interface SaveDiscoverySessionResult {
+  sessionId: string;
+  prospectId: string;
+}
+
 export async function saveDiscoverySession(
   linkId: string,
   companyName: string,
@@ -139,18 +144,18 @@ export async function saveDiscoverySession(
   conversationHistory: ConversationMessage[],
   conversationStateSnapshot: any,
   sessionToken?: string
-): Promise<string> {
+): Promise<SaveDiscoverySessionResult> {
   const payload = buildDossierPayload(linkId, companyName, contactName, dossierState, conversationHistory, conversationStateSnapshot);
 
-  const completeFn = httpsCallable(functions, "completeDiscoverySession");
+  const completeFn = httpsCallable<any, { dossierId: string; prospectId: string }>(functions, "completeDiscoverySession");
   const result = await completeFn({
     linkId,
     sessionToken,
     dossierPayload: payload
   });
 
-  const { dossierId } = result.data as any;
-  return dossierId;
+  const { dossierId, prospectId } = result.data;
+  return { sessionId: dossierId, prospectId };
 }
 
 const DossierBuilderService = {
