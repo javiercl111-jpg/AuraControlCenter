@@ -53,6 +53,105 @@ export class AuraPdfComponents {
     }
   }
 
+  public static drawFittedTextBlock(options: {
+    doc: jsPDF;
+    text: string;
+    x: number;
+    y: number;
+    maxWidth: number;
+    maxHeight?: number;
+    initialFontSize: number;
+    minimumFontSize?: number;
+    lineHeight?: number;
+    fontStyle?: "normal" | "bold" | "italic";
+    align?: "left" | "center" | "right";
+    maxLines?: number;
+  }): number {
+    const {
+      doc,
+      text,
+      x,
+      y,
+      maxWidth,
+      maxHeight = 99999,
+      initialFontSize,
+      minimumFontSize = 8,
+      lineHeight = 1.4,
+      fontStyle = "normal",
+      align = "left",
+      maxLines = 999
+    } = options;
+
+    const sanitizedText = text ? text.replace(/\s+/g, " ").trim() : "";
+    if (!sanitizedText) return 0;
+
+    let currentFontSize = initialFontSize;
+    let lines: string[] = [];
+    let lineH = 0;
+    let totalHeight = 0;
+
+    doc.setFont("helvetica", fontStyle);
+
+    while (currentFontSize >= minimumFontSize) {
+      doc.setFontSize(currentFontSize);
+      lineH = currentFontSize * 0.352778 * lineHeight; // in mm
+      lines = doc.splitTextToSize(sanitizedText, maxWidth);
+      
+      if (lines.length > maxLines) {
+        lines = lines.slice(0, maxLines);
+      }
+      
+      totalHeight = lines.length * lineH;
+      
+      if (totalHeight <= maxHeight) {
+        break;
+      }
+      currentFontSize -= 0.5;
+    }
+
+    doc.setFontSize(currentFontSize);
+    
+    lines.forEach((line, index) => {
+      const lineY = y + index * lineH;
+      doc.text(line, x, lineY, { align });
+    });
+
+    // Track bounds for testing
+    let maxW = 0;
+    lines.forEach(l => {
+      const w = doc.getTextWidth(l);
+      if (w > maxW) maxW = w;
+    });
+    
+    let x1 = x;
+    let x2 = x + maxW;
+    if (align === "center") {
+      x1 = x - (maxW / 2);
+      x2 = x + (maxW / 2);
+    } else if (align === "right") {
+      x1 = x - maxW;
+      x2 = x;
+    }
+    
+    const y1 = y - (currentFontSize * 0.352778);
+    const y2 = y + totalHeight;
+    
+    if (!(doc as any).drawnBounds) {
+      (doc as any).drawnBounds = [];
+    }
+    (doc as any).drawnBounds.push({
+      text: sanitizedText,
+      x1,
+      y1,
+      x2,
+      y2,
+      page: (doc.internal as any).getCurrentPageInfo().pageNumber,
+      fontSize: currentFontSize
+    });
+
+    return totalHeight;
+  }
+
   public static drawCoverPage(
     doc: jsPDF, 
     assets: AuraDocumentAssets, 
@@ -77,29 +176,71 @@ export class AuraPdfComponents {
     // Logo
     this.drawLogo(doc, assets, 70, 42);
 
-    // Title
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(28);
-    doc.setTextColor(255, 255, 255);
-    doc.text(title, pageWidth / 2, 112, { align: "center" });
-
+    // Dynamic Title Layout
+    let currentY = 112;
+    const titleH = this.drawFittedTextBlock({
+      doc,
+      text: title,
+      x: pageWidth / 2,
+      y: currentY,
+      maxWidth: 170,
+      initialFontSize: 28,
+      minimumFontSize: 16,
+      align: "center",
+      fontStyle: "bold"
+    });
+    
+    currentY += titleH + 4;
+    
     // Subtitle
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "normal");
-    doc.text(subtitle, pageWidth / 2, 124, { align: "center" });
+    const subtitleH = this.drawFittedTextBlock({
+      doc,
+      text: subtitle,
+      x: pageWidth / 2,
+      y: currentY,
+      maxWidth: 170,
+      initialFontSize: 16,
+      minimumFontSize: 11,
+      align: "center",
+      fontStyle: "normal"
+    });
 
+    currentY += subtitleH + 8;
+    
     doc.setDrawColor(AURA_CYAN[0], AURA_CYAN[1], AURA_CYAN[2]);
-    doc.line(54, 137, 156, 137);
+    doc.line(54, currentY, 156, currentY);
+    
+    currentY += 18;
 
     // Company
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.text(companyName, pageWidth / 2, 160, { align: "center" });
+    const companyH = this.drawFittedTextBlock({
+      doc,
+      text: companyName,
+      x: pageWidth / 2,
+      y: currentY,
+      maxWidth: 170,
+      initialFontSize: 20,
+      minimumFontSize: 11,
+      align: "center",
+      fontStyle: "bold"
+    });
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(12);
-    doc.setTextColor(200, 210, 220);
-    doc.text(`Preparado para: ${contactName}`, pageWidth / 2, 172, { align: "center" });
+    currentY += companyH + 8;
+
+    // Contact
+    if (contactName) {
+      this.drawFittedTextBlock({
+        doc,
+        text: `Preparado para: ${contactName}`,
+        x: pageWidth / 2,
+        y: currentY,
+        maxWidth: 170,
+        initialFontSize: 12,
+        minimumFontSize: 9,
+        align: "center",
+        fontStyle: "normal"
+      });
+    }
   }
 
   public static drawCard(
@@ -158,22 +299,31 @@ export class AuraPdfComponents {
     const textX = startX + 15;
 
     phases.forEach((phase, index) => {
-      layout.applyTypography(AuraDesignTokens.typography.body);
-      
       const phaseParts = phase.split(":");
       const phaseTitle = phaseParts.length > 1 ? phaseParts[0].trim() : `Horizonte ${index + 1}`;
       const phaseDesc = phaseParts.length > 1 ? phaseParts.slice(1).join(":").trim() : phase;
 
-      const lines = doc.splitTextToSize(phaseDesc, maxTextWidth);
-      const textHeight = lines.length * (AuraDesignTokens.typography.body.fontSize * 0.352778 * AuraDesignTokens.typography.body.lineHeight);
-      const nodeHeight = Math.max(textHeight + 15, 30);
+      // Measure title
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      const titleLines = doc.splitTextToSize(phaseTitle.toUpperCase(), maxTextWidth);
+      const titleHeight = titleLines.length * (11 * 0.352778 * 1.2);
 
-      layout.ensureSpace(nodeHeight + 10, headerCallback);
+      // Measure desc
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      const descLines = doc.splitTextToSize(phaseDesc, maxTextWidth);
+      const descHeight = descLines.length * (10 * 0.352778 * 1.4);
+
+      const eyebrowHeight = 4;
+      const totalNodeHeight = eyebrowHeight + 6 + titleHeight + 6 + descHeight + 10;
+
+      layout.ensureSpace(totalNodeHeight + 10, headerCallback);
 
       if (index < phases.length - 1) {
         doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
         doc.setLineWidth(0.3);
-        doc.line(startX, layout.yPos + 5, startX, layout.yPos + nodeHeight + 5);
+        doc.line(startX, layout.yPos + 3, startX, layout.yPos + totalNodeHeight + 3);
       }
 
       doc.setDrawColor(AURA_NAVY[0], AURA_NAVY[1], AURA_NAVY[2]);
@@ -182,7 +332,7 @@ export class AuraPdfComponents {
       doc.circle(startX, layout.yPos + 3, 2.5, "FD");
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
+      doc.setFontSize(8);
       // @ts-ignore
       doc.setCharSpace(1);
       doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
@@ -190,16 +340,37 @@ export class AuraPdfComponents {
       // @ts-ignore
       doc.setCharSpace(0);
 
-      layout.yPos += 7;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(AURA_NAVY[0], AURA_NAVY[1], AURA_NAVY[2]);
-      doc.text(phaseTitle.toUpperCase(), textX, layout.yPos);
+      let currentY = layout.yPos + 10;
 
-      layout.yPos += 6;
-      layout.drawText(lines, textX, AuraDesignTokens.typography.body);
+      // Title
+      this.drawFittedTextBlock({
+        doc,
+        text: phaseTitle.toUpperCase(),
+        x: textX,
+        y: currentY,
+        maxWidth: maxTextWidth,
+        initialFontSize: 11,
+        minimumFontSize: 9,
+        align: "left",
+        fontStyle: "bold"
+      });
+      currentY += titleHeight + 4;
 
-      layout.yPos += (nodeHeight - textHeight) - 5;
+      // Description
+      this.drawFittedTextBlock({
+        doc,
+        text: phaseDesc,
+        x: textX,
+        y: currentY,
+        maxWidth: maxTextWidth,
+        initialFontSize: 10,
+        minimumFontSize: 8,
+        align: "left",
+        fontStyle: "normal",
+        lineHeight: 1.4
+      });
+
+      layout.yPos += totalNodeHeight;
     });
   }
 

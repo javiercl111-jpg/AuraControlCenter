@@ -92,6 +92,16 @@ async function run() {
             advisor: { displayName: "Juan Asesor" },
             score: 85,
             singleOpportunity: true
+        },
+        {
+            id: "extreme-company-name",
+            companyName: "Corporación de Servicios de Logística y Distribución de Alimentos de Alta Calidad para el Sector Turístico & Restaurantero del Norte de México S.A. de C.V. / Grupo Transportes Rápidos Áéíóúñ",
+            contactName: "Ing. Francisco Javier Maximiliano de la Santísima Trinidad y Montes de Oca y Ocampo",
+            industry: "Servicios",
+            deliveryLevel: "ALLOW_FULL",
+            advisor: { displayName: "Asesor Principal Áéíóúñ" },
+            extended: true,
+            longRoadmap: true
         }
     ];
     for (const s of scenarios) {
@@ -129,7 +139,10 @@ async function run() {
                     "Automatizar nómina y asistencias.",
                     ...(s.extended ? ["Desplegar kioscos de auto-atención RH.", "Integrar pasarela de pagos.", "Firma electrónica de contratos."] : [])
                 ]) : undefined,
-            roadmap: s.deliveryLevel === "ALLOW_FULL" ? [
+            roadmap: s.deliveryLevel === "ALLOW_FULL" ? (s.longRoadmap ? [
+                "Fase 1 - Migración del núcleo central de gestión: Migración del núcleo central de gestión del talento e incidencias complejas de nómina de toda la zona norte y Bajío.",
+                "Fase 2 - Despliegue masivo y adopción cultural: Despliegue masivo y adopción cultural en sitio de los módulos biométricos faciales y control operativo móvil en más de cincuenta sucursales regionales."
+            ] : [
                 "Auditoría y levantamiento de requerimientos técnicos y operativos.",
                 "Implementación fase 1: Contabilidad y Ventas.",
                 "Implementación fase 2: Nómina y RH.",
@@ -138,7 +151,7 @@ async function run() {
                     "Fase 4: Despliegue de Business Intelligence y Dashboards en tiempo real.",
                     "Fase 5: Capacitación general y adopción cultural extensiva en todas las sucursales del Bajío."
                 ] : [])
-            ] : undefined,
+            ]) : undefined,
             recommendedModules: s.deliveryLevel === "ALLOW_FULL" ? [
                 "Aura ERP", "Aura HR"
             ] : undefined

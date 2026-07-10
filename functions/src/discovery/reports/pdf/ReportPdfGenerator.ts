@@ -6,7 +6,8 @@ import {
   AuraPdfComponents,
   AuraPdfLayout,
   AuraDesignTokens,
-  AuraDocumentAssets
+  AuraDocumentAssets,
+  validatePdfBounds
 } from "aura-executive-documents";
 
 export class ReportPdfGenerator {
@@ -51,7 +52,7 @@ export class ReportPdfGenerator {
     doc.setTextColor(230, 235, 240);
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
-    doc.text(`CONFIDENCIAL - EXCLUSIVO PARA ${company.toUpperCase()}`, AuraDesignTokens.margin.left, AuraDesignTokens.pageHeight - AuraDesignTokens.margin.bottom + 10);
+    doc.text("CONFIDENCIAL — EXCLUSIVO PARA EL DESTINATARIO", AuraDesignTokens.margin.left, AuraDesignTokens.pageHeight - AuraDesignTokens.margin.bottom + 10);
     doc.restoreGraphicsState();
   }
 
@@ -158,12 +159,16 @@ export class ReportPdfGenerator {
     // ALLOW_FULL DETAILS
     if (data.deliveryLevel === "ALLOW_FULL") {
       if (data.operationalRisks && data.operationalRisks.length > 0) {
-        layout.ensureSpace(30, pageHeader);
+        const riskIntroText = "Las siguientes vulnerabilidades representan contingencias potenciales que podrían impactar la continuidad del negocio o la eficiencia financiera si no son mitigadas estratégicamente.";
+        const riskIntro = doc.splitTextToSize(riskIntroText, ds.pageWidth - ds.margin.left - ds.margin.right);
+        const riskIntroHeight = riskIntro.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight);
+        const sectionHeaderHeight = 6 + 10 + riskIntroHeight + ds.spacing.lg;
+
+        layout.ensureSpace(sectionHeaderHeight, pageHeader);
         layout.drawText("Análisis de Riesgo Operativo", ds.margin.left, ds.typography.sectionTitle);
         layout.yPos += 10;
-        const riskIntro = doc.splitTextToSize("Las siguientes vulnerabilidades representan contingencias potenciales que podrían impactar la continuidad del negocio o la eficiencia financiera si no son mitigadas estratégicamente.", ds.pageWidth - ds.margin.left - ds.margin.right);
         layout.drawText(riskIntro, ds.margin.left, ds.typography.body);
-        layout.yPos += riskIntro.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.lg;
+        layout.yPos += riskIntroHeight + ds.spacing.lg;
 
         data.operationalRisks.forEach((risk) => {
           AuraPdfComponents.drawCard(doc, layout, "Riesgo Detectado", risk, "risk", pageHeader);
@@ -171,12 +176,16 @@ export class ReportPdfGenerator {
       }
       
       if (data.opportunities && data.opportunities.length > 0) {
-        layout.ensureSpace(30, pageHeader);
+        const oppIntroText = "Nuestra recomendación central no radica en la adquisición de software aislado, sino en el desarrollo sistémico de las siguientes capacidades organizacionales fundamentales:";
+        const oppIntro = doc.splitTextToSize(oppIntroText, ds.pageWidth - ds.margin.left - ds.margin.right);
+        const oppIntroHeight = oppIntro.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight);
+        const sectionHeaderHeight = 6 + 10 + oppIntroHeight + ds.spacing.lg;
+
+        layout.ensureSpace(sectionHeaderHeight, pageHeader);
         layout.drawText("Capacidades a Fortalecer (Oportunidades)", ds.margin.left, ds.typography.sectionTitle);
         layout.yPos += 10;
-        const oppIntro = doc.splitTextToSize("Nuestra recomendación central no radica en la adquisición de software aislado, sino en el desarrollo sistémico de las siguientes capacidades organizacionales fundamentales:", ds.pageWidth - ds.margin.left - ds.margin.right);
         layout.drawText(oppIntro, ds.margin.left, ds.typography.body);
-        layout.yPos += oppIntro.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.lg;
+        layout.yPos += oppIntroHeight + ds.spacing.lg;
 
         data.opportunities.forEach((opp) => {
           AuraPdfComponents.drawCard(doc, layout, "Iniciativa Estratégica", opp, "opportunity", pageHeader);
@@ -184,35 +193,46 @@ export class ReportPdfGenerator {
       }
 
       if (data.roadmap && data.roadmap.length > 0) {
-        layout.ensureSpace(40, pageHeader);
+        layout.ensureSpace(20, pageHeader);
         layout.drawText("Roadmap Estratégico", ds.margin.left, ds.typography.sectionTitle);
         layout.yPos += 10;
         AuraPdfComponents.drawRoadmapTimeline(doc, layout, data.roadmap, pageHeader);
       }
       
       // CIERRE
-      layout.ensureSpace(60, pageHeader);
-      layout.drawText("El Acompañamiento de Aura", ds.margin.left, ds.typography.sectionTitle);
-      layout.yPos += 15;
-      
       const auraPillars = "Aura Intelligence se especializa en orquestar soluciones profundas para la Gestión de Personas, Operación Unificada e Inteligencia Empresarial. Nuestro enfoque garantiza que la tecnología se subordine a la estrategia de negocio.";
       const pillarLines = doc.splitTextToSize(auraPillars, ds.pageWidth - ds.margin.left - ds.margin.right);
-      layout.drawText(pillarLines, ds.margin.left, ds.typography.body);
-      layout.yPos += pillarLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.xl;
+      const pillarHeight = pillarLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight);
+      const pillarBlockHeight = 6 + 15 + pillarHeight + ds.spacing.xl;
 
-      layout.drawText("Reflexión Final", ds.margin.left, ds.typography.subsectionTitle);
-      layout.yPos += 10;
+      layout.ensureSpace(pillarBlockHeight, pageHeader);
+      layout.drawText("El Acompañamiento de Aura", ds.margin.left, ds.typography.sectionTitle);
+      layout.yPos += 15;
+      layout.drawText(pillarLines, ds.margin.left, ds.typography.body);
+      layout.yPos += pillarHeight + ds.spacing.xl;
+
       const closing = "Toda organización evoluciona de forma distinta y a su propio ritmo. Este documento representa únicamente un punto de partida diagnóstico. El equipo de socios y asesores de Aura Intelligence estará a su entera disposición para profundizar en cualquiera de estos hallazgos cuando el liderazgo de su empresa lo considere oportuno.";
       const closingLines = doc.splitTextToSize(closing, ds.pageWidth - ds.margin.left - ds.margin.right);
+      const closingHeight = closingLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight);
+      const totalBlockHeight = 6 + 10 + closingHeight + ds.spacing.lg;
+
+      layout.ensureSpace(totalBlockHeight, pageHeader);
+      layout.drawText("Reflexión Final", ds.margin.left, ds.typography.subsectionTitle);
+      layout.yPos += 10;
       layout.drawText(closingLines, ds.margin.left, ds.typography.body);
-      layout.yPos += closingLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.lg;
+      layout.yPos += closingHeight + ds.spacing.lg;
 
     } else {
-      layout.ensureSpace(40, pageHeader);
+      const scopeNotice = "Se han detectado áreas de oportunidad críticas en sus procesos actuales. Para acceder a la disección profunda de los riesgos operativos y al roadmap estratégico propuesto, sugerimos agendar una sesión de consultoría técnica privada con nuestro equipo de especialistas.";
+      const scopeLines = doc.splitTextToSize(scopeNotice, ds.pageWidth - ds.margin.left - ds.margin.right);
+      const scopeHeight = scopeLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight);
+      const totalBlockHeight = 6 + 5 + scopeHeight;
+
+      layout.ensureSpace(totalBlockHeight, pageHeader);
       layout.drawText("Nota de Alcance", ds.margin.left, ds.typography.subsectionTitle);
       layout.yPos += 5;
-      const lines = doc.splitTextToSize("Se han detectado áreas de oportunidad críticas en sus procesos actuales. Para acceder a la disección profunda de los riesgos operativos y al roadmap estratégico propuesto, sugerimos agendar una sesión de consultoría técnica privada con nuestro equipo de especialistas.", ds.pageWidth - ds.margin.left - ds.margin.right);
-      layout.drawText(lines, ds.margin.left, ds.typography.body);
+      layout.drawText(scopeLines, ds.margin.left, ds.typography.body);
+      layout.yPos += scopeHeight;
     }
 
     // ADD FOOTERS TO ALL PAGES (Except cover)
@@ -221,6 +241,8 @@ export class ReportPdfGenerator {
       doc.setPage(i);
       AuraPdfComponents.addFooter(doc, i - 1, pageCount - 1);
     }
+
+    validatePdfBounds(doc);
 
     return Buffer.from(doc.output("arraybuffer"));
   }
@@ -325,6 +347,8 @@ export class ReportPdfGenerator {
       doc.setPage(i);
       AuraPdfComponents.addFooter(doc, i - 1, pageCount - 1);
     }
+
+    validatePdfBounds(doc);
 
     return Buffer.from(doc.output("arraybuffer"));
   }
