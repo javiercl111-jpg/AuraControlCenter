@@ -1,48 +1,103 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DataConfidenceLevel = exports.AcquisitionSource = exports.ProspectOrigin = exports.MatchClassification = exports.PROSPECT_RESOLUTION_VERSION = void 0;
+exports.WorkQueueCode = exports.ContactOutcome = exports.LifecycleEventType = exports.ProspectLifecycleStatus = exports.AcquisitionSource = exports.ProspectOrigin = exports.MatchClassification = exports.PROSPECT_LIFECYCLE_VERSION = exports.PROSPECT_RESOLUTION_VERSION = void 0;
 exports.PROSPECT_RESOLUTION_VERSION = "1.0";
-var MatchClassification;
-(function (MatchClassification) {
-    MatchClassification["EXACT_MATCH"] = "EXACT_MATCH";
-    MatchClassification["HIGH_CONFIDENCE"] = "HIGH_CONFIDENCE";
-    MatchClassification["POSSIBLE_DUPLICATE"] = "POSSIBLE_DUPLICATE";
-    MatchClassification["NEW_COMPANY"] = "NEW_COMPANY";
-})(MatchClassification || (exports.MatchClassification = MatchClassification = {}));
-var ProspectOrigin;
-(function (ProspectOrigin) {
-    ProspectOrigin["CONTROL_CENTER"] = "CONTROL_CENTER";
-    ProspectOrigin["ADVISOR_SHARE"] = "ADVISOR_SHARE";
-    ProspectOrigin["WEBSITE"] = "WEBSITE";
-    ProspectOrigin["QR"] = "QR";
-    ProspectOrigin["EMAIL"] = "EMAIL";
-    ProspectOrigin["LINKEDIN"] = "LINKEDIN";
-    ProspectOrigin["REFERRAL"] = "REFERRAL";
-    ProspectOrigin["CAMPAIGN"] = "CAMPAIGN";
-    ProspectOrigin["EVENT"] = "EVENT";
-    ProspectOrigin["API"] = "API";
-    ProspectOrigin["UNKNOWN"] = "UNKNOWN";
-})(ProspectOrigin || (exports.ProspectOrigin = ProspectOrigin = {}));
-var AcquisitionSource;
-(function (AcquisitionSource) {
-    AcquisitionSource["GOOGLE"] = "GOOGLE";
-    AcquisitionSource["LINKEDIN"] = "LINKEDIN";
-    AcquisitionSource["WHATSAPP"] = "WHATSAPP";
-    AcquisitionSource["EMAIL"] = "EMAIL";
-    AcquisitionSource["QR"] = "QR";
-    AcquisitionSource["EVENT"] = "EVENT";
-    AcquisitionSource["REFERRAL"] = "REFERRAL";
-    AcquisitionSource["DIRECT"] = "DIRECT";
-    AcquisitionSource["OTHER"] = "OTHER";
-    AcquisitionSource["UNKNOWN"] = "UNKNOWN";
-})(AcquisitionSource || (exports.AcquisitionSource = AcquisitionSource = {}));
-var DataConfidenceLevel;
-(function (DataConfidenceLevel) {
-    DataConfidenceLevel[DataConfidenceLevel["DISCOVERY_CONFIRMED"] = 100] = "DISCOVERY_CONFIRMED";
-    DataConfidenceLevel[DataConfidenceLevel["ADVISOR_VALIDATED"] = 90] = "ADVISOR_VALIDATED";
-    DataConfidenceLevel[DataConfidenceLevel["CRM"] = 80] = "CRM";
-    DataConfidenceLevel[DataConfidenceLevel["DENUE"] = 70] = "DENUE";
-    DataConfidenceLevel[DataConfidenceLevel["INFERENCE"] = 60] = "INFERENCE";
-    DataConfidenceLevel[DataConfidenceLevel["LEGACY_IMPORT"] = 50] = "LEGACY_IMPORT";
-})(DataConfidenceLevel || (exports.DataConfidenceLevel = DataConfidenceLevel = {}));
+exports.PROSPECT_LIFECYCLE_VERSION = "1.0";
+// --- Const Objects & Union Types ---
+exports.MatchClassification = {
+    EXACT_MATCH: "EXACT_MATCH",
+    HIGH_CONFIDENCE: "HIGH_CONFIDENCE",
+    POSSIBLE_DUPLICATE: "POSSIBLE_DUPLICATE",
+    NEW_COMPANY: "NEW_COMPANY",
+};
+exports.ProspectOrigin = {
+    CONTROL_CENTER: "CONTROL_CENTER",
+    ADVISOR_SHARE: "ADVISOR_SHARE",
+    WEBSITE: "WEBSITE",
+    QR: "QR",
+    EMAIL: "EMAIL",
+    LINKEDIN: "LINKEDIN",
+    REFERRAL: "REFERRAL",
+    CAMPAIGN: "CAMPAIGN",
+    EVENT: "EVENT",
+    API: "API",
+    UNKNOWN: "UNKNOWN",
+};
+exports.AcquisitionSource = {
+    GOOGLE: "GOOGLE",
+    LINKEDIN: "LINKEDIN",
+    WHATSAPP: "WHATSAPP",
+    EMAIL: "EMAIL",
+    QR: "QR",
+    EVENT: "EVENT",
+    REFERRAL: "REFERRAL",
+    DIRECT: "DIRECT",
+    OTHER: "OTHER",
+    UNKNOWN: "UNKNOWN",
+};
+exports.ProspectLifecycleStatus = {
+    NEW: "NEW",
+    QUALIFIED: "QUALIFIED",
+    CONTACT_PENDING: "CONTACT_PENDING",
+    CONTACTED: "CONTACTED",
+    DISCOVERY_SENT: "DISCOVERY_SENT",
+    DISCOVERY_IN_PROGRESS: "DISCOVERY_IN_PROGRESS",
+    DISCOVERY_COMPLETED: "DISCOVERY_COMPLETED",
+    FOLLOW_UP: "FOLLOW_UP",
+    PROPOSAL_PENDING: "PROPOSAL_PENDING",
+    NEGOTIATION: "NEGOTIATION",
+    CUSTOMER: "CUSTOMER",
+    NO_RESPONSE: "NO_RESPONSE",
+    NURTURE: "NURTURE",
+    ARCHIVED: "ARCHIVED",
+    DISQUALIFIED: "DISQUALIFIED"
+};
+exports.LifecycleEventType = {
+    PROSPECT_CREATED: "PROSPECT_CREATED",
+    PROSPECT_UPDATED: "PROSPECT_UPDATED",
+    PROSPECT_MERGED: "PROSPECT_MERGED",
+    POSSIBLE_DUPLICATE_DETECTED: "POSSIBLE_DUPLICATE_DETECTED",
+    DISCOVERY_ATTACHED: "DISCOVERY_ATTACHED",
+    DOSSIER_ATTACHED: "DOSSIER_ATTACHED",
+    ADVISOR_ASSIGNED: "ADVISOR_ASSIGNED",
+    ADVISOR_REASSIGNED: "ADVISOR_REASSIGNED",
+    ADVISOR_ATTRIBUTION_CONFLICT: "ADVISOR_ATTRIBUTION_CONFLICT",
+    UNASSIGNED_CREATED: "UNASSIGNED_CREATED",
+    DISCOVERY_SENT: "DISCOVERY_SENT",
+    DISCOVERY_STARTED: "DISCOVERY_STARTED",
+    DISCOVERY_COMPLETED: "DISCOVERY_COMPLETED",
+    PROSPECT_REPLIED: "PROSPECT_REPLIED",
+    PROSPECT_STATUS_CHANGED: "PROSPECT_STATUS_CHANGED",
+    CONTACT_ATTEMPT_RECORDED: "CONTACT_ATTEMPT_RECORDED",
+    FOLLOW_UP_SCHEDULED: "FOLLOW_UP_SCHEDULED",
+    FOLLOW_UP_OVERDUE: "FOLLOW_UP_OVERDUE",
+    NO_RESPONSE_ENTERED: "NO_RESPONSE_ENTERED",
+    NURTURE_ENTERED: "NURTURE_ENTERED",
+    PROSPECT_ARCHIVED: "PROSPECT_ARCHIVED",
+    PROSPECT_REACTIVATED: "PROSPECT_REACTIVATED"
+};
+exports.ContactOutcome = {
+    NO_ANSWER: "NO_ANSWER",
+    LEFT_MESSAGE: "LEFT_MESSAGE",
+    REJECTED: "REJECTED",
+    INTERESTED: "INTERESTED",
+    MEETING_BOOKED: "MEETING_BOOKED",
+    CALL_BACK_LATER: "CALL_BACK_LATER",
+    INVALID_NUMBER: "INVALID_NUMBER"
+};
+exports.WorkQueueCode = {
+    ATTEND_TODAY: "ATTEND_TODAY",
+    HIGH_PRIORITY: "HIGH_PRIORITY",
+    UNASSIGNED: "UNASSIGNED",
+    DISCOVERY_PENDING: "DISCOVERY_PENDING",
+    DISCOVERY_IN_PROGRESS: "DISCOVERY_IN_PROGRESS",
+    DISCOVERY_COMPLETED: "DISCOVERY_COMPLETED",
+    FOLLOW_UP_DUE: "FOLLOW_UP_DUE",
+    NO_RESPONSE: "NO_RESPONSE",
+    NURTURE: "NURTURE",
+    ARCHIVED: "ARCHIVED",
+    POSSIBLE_DUPLICATES: "POSSIBLE_DUPLICATES",
+    ATTRIBUTION_CONFLICTS: "ATTRIBUTION_CONFLICTS",
+    CUSTOMERS: "CUSTOMERS"
+};
 //# sourceMappingURL=types.js.map

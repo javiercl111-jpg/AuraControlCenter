@@ -8,7 +8,8 @@ import {
   PlatformEvent, 
   PlatformLeadV2, 
   MergePayload, 
-  ProspectResolutionOutput 
+  ProspectResolutionOutput,
+  LifecycleEventType
 } from "./types";
 
 const PUBLIC_DOMAINS = new Set([
@@ -88,7 +89,7 @@ export class ProspectResolutionEngine {
     };
 
     let matchedProspectId: string | null = null;
-    let matchClassification = MatchClassification.NEW_COMPANY;
+    let matchClassification: MatchClassification = MatchClassification.NEW_COMPANY;
     let matchScore = 0;
     let matchStrategy = "NO_MATCH";
     let matchedFields: string[] = [];
@@ -253,6 +254,20 @@ export class ProspectResolutionEngine {
       duplicateRisk: output.duplicateRisk,
       possibleDuplicateIds: output.possibleDuplicateIds || [],
       
+      lifecycleStatus: "NEW",
+      lifecycleVersion: "1.0",
+      statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+      statusChangedBy: "SYSTEM",
+      statusChangeReason: "Initial Resolution",
+      lastContactAt: null,
+      nextContactAt: null,
+      lastResponseAt: null,
+      contactAttemptsCount: 0,
+      noResponseSince: null,
+      nurtureUntil: null,
+      archivedAt: null,
+      reactivatedAt: null,
+      
       currentStage: "NEW",
       
       originalAdvisorId: payload.advisorId || "UNASSIGNED",
@@ -364,7 +379,7 @@ export class ProspectResolutionEngine {
 
   private emitEvent(
     prospectId: string, 
-    type: string, 
+    type: LifecycleEventType, 
     actorType: "SYSTEM" | "ADVISOR" | "PROSPECT", 
     source: string, 
     metadata: any, 

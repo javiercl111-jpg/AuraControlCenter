@@ -813,8 +813,14 @@ export const processMarketImportJob = onDocumentCreated(
   }
 );
 export * from './intelligence/evaluateConversation';
-export { createSalesAdvisorUser } from './advisors/createSalesAdvisorUser';
-export { createDiscoveryLead } from './discovery/createDiscoveryLead';
-export { exchangeDiscoveryToken } from './discovery/exchangeDiscoveryToken';
-export { resolveDiscoverySession } from './discovery/resolveDiscoverySession';
-export { completeDiscoverySession } from './discovery/completeDiscoverySession';
+export { evaluateConversation } from "./intelligence/evaluateConversation";
+export { createDiscoveryLead } from "./discovery/createDiscoveryLead";
+export { completeDiscoverySession } from "./discovery/completeDiscoverySession";
+export { resolveDiscoverySession } from "./discovery/resolveDiscoverySession";
+export { exchangeDiscoveryToken } from "./discovery/exchangeDiscoveryToken";
+
+// --- Sales Advisors ---
+export { createSalesAdvisorUser } from "./advisors/createSalesAdvisorUser";
+
+// --- Prospects ---
+export { processProspectLifecycle } from "./prospects/processProspectLifecycle";
