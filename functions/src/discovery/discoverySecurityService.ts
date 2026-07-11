@@ -121,11 +121,10 @@ export async function computeTrustScore(email: string, advisorContext: any | nul
   };
 }
 
-export function generateIpHash(ip: string | undefined): string {
+export function generateIpHash(ip: string | undefined, saltValue: string): string {
   if (!ip) return "unknown";
   const normalized = ip.trim().split(",")[0];
-  const salt = process.env.IP_HASH_SALT || "AURA_IP_SALT_V1";
-  return crypto.createHmac("sha256", salt).update(normalized).digest("hex");
+  return crypto.createHmac("sha256", saltValue).update(normalized).digest("hex");
 }
 
 export async function checkIpRateLimit(ipHash: string, limit: number, windowMs: number): Promise<void> {

@@ -25,6 +25,7 @@ import SubscriptionsPage from "./pages/SubscriptionsPage";
 import TenantEnforcementPage from "./pages/TenantEnforcementPage";
 import TenantsPage from "./pages/TenantsPage";
 import DiscoverPage from "./pages/DiscoverPage";
+import ExecutiveIntakeSmokeTestPage from "./pages/dev/ExecutiveIntakeSmokeTestPage";
 
 export default function App() {
   return (
@@ -33,6 +34,10 @@ export default function App() {
       <Route path="/discover" element={<DiscoverPage />} />
       <Route path="/discover/advisor/:commercialCode" element={<DiscoverPage />} />
       <Route path="/discover/:linkId" element={<DiscoverPage />} />
+
+      {import.meta.env.DEV && (
+        <Route path="/dev/executive-intake-smoke-test" element={<ExecutiveIntakeSmokeTestPage />} />
+      )}
 
       <Route
         path="/"

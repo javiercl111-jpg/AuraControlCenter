@@ -1,15 +1,19 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateIpHash, checkIpRateLimit } from "../discovery/discoverySecurityService";
+import { defineSecret } from "firebase-functions/params";
+
+const ipHashSalt = defineSecret("IP_HASH_SALT");
 
 export const resolveAdvisorByCode = onCall(
   {
     region: "us-central1",
     enforceAppCheck: true,
+    secrets: [ipHashSalt],
   },
   async (request) => {
     // 1. IP Rate Limiting
-    const ipHash = generateIpHash(request.rawRequest?.ip);
+    const ipHash = generateIpHash(request.rawRequest?.ip, ipHashSalt.value());
     try {
       // Limit to 10 attempts per hour per IP
       await checkIpRateLimit(ipHash, 10, 60 * 60 * 1000);

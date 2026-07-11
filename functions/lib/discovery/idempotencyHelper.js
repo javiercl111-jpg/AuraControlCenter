@@ -3,12 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateIdempotencyHash = generateIdempotencyHash;
 exports.generateRequestHash = generateRequestHash;
 const crypto = require("crypto");
-function generateIdempotencyHash(idempotencyKey) {
-    // Use a stable, private server-side salt. In a real app this should be in Secret Manager
-    // but for Sprint L1, we use a constant to avoid extra setup unless secrets are already configured.
-    // The user says: "calcular: idempotencyHash = HMAC_SHA256(idempotencyKey, secret)"
-    const secret = process.env.IDEMPOTENCY_SECRET || "AURA_NEXUS_DEFAULT_IDEMPOTENCY_SECRET";
-    return crypto.createHmac("sha256", secret).update(idempotencyKey).digest("hex");
+function generateIdempotencyHash(idempotencyKey, secretValue) {
+    // Use a stable, private server-side salt.
+    return crypto.createHmac("sha256", secretValue).update(idempotencyKey).digest("hex");
 }
 function generateRequestHash(payload) {
     // Extract strictly the fields that determine if it's a new request

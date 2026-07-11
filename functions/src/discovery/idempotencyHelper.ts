@@ -1,11 +1,8 @@
 import * as crypto from "crypto";
 
-export function generateIdempotencyHash(idempotencyKey: string): string {
-  // Use a stable, private server-side salt. In a real app this should be in Secret Manager
-  // but for Sprint L1, we use a constant to avoid extra setup unless secrets are already configured.
-  // The user says: "calcular: idempotencyHash = HMAC_SHA256(idempotencyKey, secret)"
-  const secret = process.env.IDEMPOTENCY_SECRET || "AURA_NEXUS_DEFAULT_IDEMPOTENCY_SECRET";
-  return crypto.createHmac("sha256", secret).update(idempotencyKey).digest("hex");
+export function generateIdempotencyHash(idempotencyKey: string, secretValue: string): string {
+  // Use a stable, private server-side salt.
+  return crypto.createHmac("sha256", secretValue).update(idempotencyKey).digest("hex");
 }
 
 export function generateRequestHash(payload: Record<string, any>): string {

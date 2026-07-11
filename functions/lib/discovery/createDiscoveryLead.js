@@ -5,9 +5,12 @@ const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const discoverySecurityService_1 = require("./discoverySecurityService");
 const idempotencyHelper_1 = require("./idempotencyHelper");
+const params_1 = require("firebase-functions/params");
+const idempotencySecret = (0, params_1.defineSecret)("IDEMPOTENCY_SECRET");
 exports.createDiscoveryLead = (0, https_1.onCall)({
     region: "us-central1",
     enforceAppCheck: true,
+    secrets: [idempotencySecret],
 }, async (request) => {
     if (request.app == undefined) {
         throw new https_1.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
@@ -59,7 +62,7 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
     if (!idempotencyKey || typeof idempotencyKey !== "string" || idempotencyKey.length > 100) {
         throw new https_1.HttpsError("invalid-argument", "INVALID_INPUT");
     }
-    const idempotencyHash = (0, idempotencyHelper_1.generateIdempotencyHash)(idempotencyKey);
+    const idempotencyHash = (0, idempotencyHelper_1.generateIdempotencyHash)(idempotencyKey, idempotencySecret.value());
     const requestHash = (0, idempotencyHelper_1.generateRequestHash)(payload);
     const db = admin.firestore();
     const idempotencyRef = db.collection("discovery_intake_idempotency").doc(idempotencyHash);

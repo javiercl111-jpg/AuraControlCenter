@@ -97,12 +97,11 @@ async function computeTrustScore(email, advisorContext, acquisitionSource) {
         competitiveReason
     };
 }
-function generateIpHash(ip) {
+function generateIpHash(ip, saltValue) {
     if (!ip)
         return "unknown";
     const normalized = ip.trim().split(",")[0];
-    const salt = process.env.IP_HASH_SALT || "AURA_IP_SALT_V1";
-    return crypto.createHmac("sha256", salt).update(normalized).digest("hex");
+    return crypto.createHmac("sha256", saltValue).update(normalized).digest("hex");
 }
 async function checkIpRateLimit(ipHash, limit, windowMs) {
     const db = admin.firestore();

@@ -49,7 +49,11 @@ let appCheckInstance = null;
 if (typeof window !== "undefined") {
   try {
     if (import.meta.env.DEV) {
-      (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      const debugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
+      (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken || true;
+      if (!debugToken) {
+        console.info("[Aura Control Center] No VITE_FIREBASE_APPCHECK_DEBUG_TOKEN found. Firebase will generate a debug token in the console. Please register it in Firebase Console -> App Check -> Apps -> Manage debug tokens.");
+      }
     }
 
     const siteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY;

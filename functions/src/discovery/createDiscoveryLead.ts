@@ -2,11 +2,15 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateOpaqueToken, generateTokenHash, computeTrustScore, getDiscoverySecurityConfig } from "./discoverySecurityService";
 import { generateIdempotencyHash, generateRequestHash } from "./idempotencyHelper";
+import { defineSecret } from "firebase-functions/params";
+
+const idempotencySecret = defineSecret("IDEMPOTENCY_SECRET");
 
 export const createDiscoveryLead = onCall(
   {
     region: "us-central1",
     enforceAppCheck: true,
+    secrets: [idempotencySecret],
   },
   async (request) => {
     if (request.app == undefined) {
@@ -67,7 +71,7 @@ export const createDiscoveryLead = onCall(
       throw new HttpsError("invalid-argument", "INVALID_INPUT");
     }
 
-    const idempotencyHash = generateIdempotencyHash(idempotencyKey);
+    const idempotencyHash = generateIdempotencyHash(idempotencyKey, idempotencySecret.value());
     const requestHash = generateRequestHash(payload);
 
     const db = admin.firestore();

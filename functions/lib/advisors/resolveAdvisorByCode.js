@@ -4,12 +4,15 @@ exports.resolveAdvisorByCode = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const discoverySecurityService_1 = require("../discovery/discoverySecurityService");
+const params_1 = require("firebase-functions/params");
+const ipHashSalt = (0, params_1.defineSecret)("IP_HASH_SALT");
 exports.resolveAdvisorByCode = (0, https_1.onCall)({
     region: "us-central1",
     enforceAppCheck: true,
+    secrets: [ipHashSalt],
 }, async (request) => {
     // 1. IP Rate Limiting
-    const ipHash = (0, discoverySecurityService_1.generateIpHash)(request.rawRequest?.ip);
+    const ipHash = (0, discoverySecurityService_1.generateIpHash)(request.rawRequest?.ip, ipHashSalt.value());
     try {
         // Limit to 10 attempts per hour per IP
         await (0, discoverySecurityService_1.checkIpRateLimit)(ipHash, 10, 60 * 60 * 1000);

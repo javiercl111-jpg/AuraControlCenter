@@ -2,6 +2,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { generateIdempotencyHash, generateRequestHash } from "../discovery/idempotencyHelper";
 
 export function runExecutiveIntakeFixtures() {
+  const MOCK_SECRET = "test-secret-value";
   console.log("=== Corriendo Fixtures Puros de Executive Intake ===\n");
   let passed = 0;
   let failed = 0;
@@ -114,7 +115,7 @@ export function runExecutiveIntakeFixtures() {
   // 13. Idempotency key diferente
   const p3 = buildPayload({ idempotencyKey: "submit-2" });
   assert(generateRequestHash(p1) === generateRequestHash(p3), "Request hash is identical"); // Wait request hash ignores key!
-  assert(generateIdempotencyHash(p1.idempotencyKey) !== generateIdempotencyHash(p3.idempotencyKey), "13. Idempotency Key diferente genera distinto idempotencyHash");
+  assert(generateIdempotencyHash(p1.idempotencyKey, MOCK_SECRET) !== generateIdempotencyHash(p3.idempotencyKey, MOCK_SECRET), "13. Idempotency Key diferente genera distinto idempotencyHash");
 
   // 14. Payload malformado
   try { simulateValidation({}); assert(false, "14. Payload malformado (Debería fallar)"); }
