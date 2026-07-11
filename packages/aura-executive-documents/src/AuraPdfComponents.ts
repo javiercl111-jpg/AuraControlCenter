@@ -1,4 +1,4 @@
-import { jsPDF } from "jspdf";
+import jsPDF from "jspdf";
 import { AuraDesignTokens, AURA_NAVY, AURA_CYAN, AURA_MAGENTA, TEXT_DARK, TEXT_MUTED, BORDER } from "./AuraDesignTokens";
 import { AuraPdfLayout } from "./AuraPdfLayout";
 import { AuraDocumentAssets } from "./AuraDocumentTypes";
@@ -392,10 +392,10 @@ export class AuraPdfComponents {
       const angle = Math.PI + (i / segments) * Math.PI;
       const ptX = x + radius * Math.cos(angle);
       const ptY = y + radius * Math.sin(angle);
-      if (i === 0) doc.moveTo(ptX, ptY);
-      else doc.lineTo(ptX, ptY);
+      if (i === 0) (doc as any).moveTo(ptX, ptY);
+      else (doc as any).lineTo(ptX, ptY);
     }
-    doc.stroke();
+    (doc as any).stroke();
 
     // Draw active arc
     doc.setDrawColor(AURA_CYAN[0], AURA_CYAN[1], AURA_CYAN[2]);
@@ -405,10 +405,10 @@ export class AuraPdfComponents {
       const angle = Math.PI + (i / segments) * Math.PI;
       const ptX = x + radius * Math.cos(angle);
       const ptY = y + radius * Math.sin(angle);
-      if (i === 0) doc.moveTo(ptX, ptY);
-      else doc.lineTo(ptX, ptY);
+      if (i === 0) (doc as any).moveTo(ptX, ptY);
+      else (doc as any).lineTo(ptX, ptY);
     }
-    doc.stroke();
+    (doc as any).stroke();
 
     // Draw score text
     doc.setFont("helvetica", "bold");

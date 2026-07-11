@@ -1,4 +1,4 @@
-import { jsPDF } from "jspdf";
+import jsPDF from "jspdf";
 import { AuraDesignTokens, TypographyToken } from "./AuraDesignTokens";
 
 export class AuraPdfLayout {
