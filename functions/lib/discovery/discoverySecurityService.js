@@ -4,6 +4,8 @@ exports.getDiscoverySecurityConfig = getDiscoverySecurityConfig;
 exports.generateTokenHash = generateTokenHash;
 exports.generateOpaqueToken = generateOpaqueToken;
 exports.computeTrustScore = computeTrustScore;
+exports.generateIpHash = generateIpHash;
+exports.checkIpRateLimit = checkIpRateLimit;
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 let cachedConfig = null;
@@ -94,5 +96,31 @@ async function computeTrustScore(email, advisorContext, acquisitionSource) {
         competitiveFlag,
         competitiveReason
     };
+}
+function generateIpHash(ip) {
+    if (!ip)
+        return "unknown";
+    const normalized = ip.trim().split(",")[0];
+    const salt = process.env.IP_HASH_SALT || "AURA_IP_SALT_V1";
+    return crypto.createHmac("sha256", salt).update(normalized).digest("hex");
+}
+async function checkIpRateLimit(ipHash, limit, windowMs) {
+    const db = admin.firestore();
+    const bucketId = Math.floor(Date.now() / windowMs).toString();
+    const docId = `${ipHash}_${bucketId}`;
+    const ref = db.collection("platform_rate_limits").doc(docId);
+    await db.runTransaction(async (t) => {
+        const snap = await t.get(ref);
+        if (!snap.exists) {
+            t.set(ref, { count: 1, expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + windowMs) });
+        }
+        else {
+            const data = snap.data();
+            if (data.count >= limit) {
+                throw new Error("RATE_LIMITED");
+            }
+            t.update(ref, { count: admin.firestore.FieldValue.increment(1) });
+        }
+    });
 }
 //# sourceMappingURL=discoverySecurityService.js.map

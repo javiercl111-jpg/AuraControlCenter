@@ -120,3 +120,31 @@ export async function computeTrustScore(email: string, advisorContext: any | nul
     competitiveReason
   };
 }
+
+export function generateIpHash(ip: string | undefined): string {
+  if (!ip) return "unknown";
+  const normalized = ip.trim().split(",")[0];
+  const salt = process.env.IP_HASH_SALT || "AURA_IP_SALT_V1";
+  return crypto.createHmac("sha256", salt).update(normalized).digest("hex");
+}
+
+export async function checkIpRateLimit(ipHash: string, limit: number, windowMs: number): Promise<void> {
+  const db = admin.firestore();
+  const bucketId = Math.floor(Date.now() / windowMs).toString();
+  const docId = `${ipHash}_${bucketId}`;
+  const ref = db.collection("platform_rate_limits").doc(docId);
+
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) {
+      t.set(ref, { count: 1, expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + windowMs) });
+    } else {
+      const data = snap.data()!;
+      if (data.count >= limit) {
+        throw new Error("RATE_LIMITED");
+      }
+      t.update(ref, { count: admin.firestore.FieldValue.increment(1) });
+    }
+  });
+}
+

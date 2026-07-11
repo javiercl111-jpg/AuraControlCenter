@@ -824,6 +824,7 @@ export { requestExecutiveDocument } from "./discovery/reports/requestExecutiveDo
 
 // --- Sales Advisors ---
 export { createSalesAdvisorUser } from "./advisors/createSalesAdvisorUser";
+export { resolveAdvisorByCode } from "./advisors/resolveAdvisorByCode";
 
 // --- Prospects ---
 export { processProspectLifecycle } from "./prospects/processProspectLifecycle";

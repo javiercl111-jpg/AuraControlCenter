@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processProspectLifecycle = exports.createSalesAdvisorUser = exports.requestExecutiveDocument = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
+exports.processProspectLifecycle = exports.resolveAdvisorByCode = exports.createSalesAdvisorUser = exports.requestExecutiveDocument = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
@@ -704,6 +704,8 @@ Object.defineProperty(exports, "requestExecutiveDocument", { enumerable: true, g
 // --- Sales Advisors ---
 var createSalesAdvisorUser_1 = require("./advisors/createSalesAdvisorUser");
 Object.defineProperty(exports, "createSalesAdvisorUser", { enumerable: true, get: function () { return createSalesAdvisorUser_1.createSalesAdvisorUser; } });
+var resolveAdvisorByCode_1 = require("./advisors/resolveAdvisorByCode");
+Object.defineProperty(exports, "resolveAdvisorByCode", { enumerable: true, get: function () { return resolveAdvisorByCode_1.resolveAdvisorByCode; } });
 // --- Prospects ---
 var processProspectLifecycle_1 = require("./prospects/processProspectLifecycle");
 Object.defineProperty(exports, "processProspectLifecycle", { enumerable: true, get: function () { return processProspectLifecycle_1.processProspectLifecycle; } });
