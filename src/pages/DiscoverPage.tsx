@@ -144,6 +144,10 @@ export default function DiscoverPage() {
         return;
       }
 
+      if (import.meta.env.DEV) {
+        console.info("PUBLIC_DISCOVERY_PATH_MATCHED", { pathnameMatched: true });
+      }
+
       try {
         const access = searchParams.get("access");
         
@@ -178,7 +182,34 @@ export default function DiscoverPage() {
         setLinkInfo(result as any);
       } catch (err: any) {
         console.error("Error al cargar enlace Discovery:", err);
-        setError("Error de seguridad: " + (err.message || "Enlace no válido o expirado."));
+        
+        const fbCode = err?.code || "";
+        const safeCode = err?.details?.safeErrorCode || "";
+        const messageStr = err?.message || "";
+        
+        let mappedError = "UNKNOWN";
+        if (fbCode === "functions/failed-precondition" || messageStr.includes("APP_CHECK")) {
+          mappedError = "APP_CHECK_REQUIRED";
+        } else if (safeCode === "TOKEN_EXPIRED" || messageStr.includes("expired")) {
+          mappedError = "TOKEN_EXPIRED";
+        } else if (safeCode === "TOKEN_ALREADY_USED" || messageStr.includes("used")) {
+          mappedError = "TOKEN_ALREADY_USED";
+        } else if (fbCode === "functions/not-found" || safeCode === "LINK_NOT_FOUND") {
+          mappedError = "LINK_NOT_FOUND";
+        } else if (fbCode === "functions/permission-denied") {
+          mappedError = "CONTRACT_ERROR";
+        }
+
+        if (import.meta.env.DEV) {
+          console.info("TOKEN_EXCHANGE_FAILED", {
+            pathnameMatched: true,
+            hasAccessParam: !!searchParams.get("access"),
+            hasSessionToken: !!sessionStorage.getItem(`discovery_session_token_${linkId}`),
+            safeErrorCode: mappedError,
+            appCheckConfigured: !!import.meta.env.VITE_RECAPTCHA_SITE_KEY
+          });
+        }
+        setError(mappedError);
       } finally {
         setLoading(false);
       }
@@ -453,18 +484,50 @@ export default function DiscoverPage() {
   }
 
   if (error) {
+    let displayMessage = "Ocurrió un error inesperado. Inténtalo nuevamente.";
+    let showRetry = false;
+    
+    if (error === "TOKEN_EXPIRED" || error === "TOKEN_ALREADY_USED") {
+      displayMessage = "Este acceso ya no está disponible. Solicita uno nuevo desde Aura Nexus.";
+    } else if (error === "APP_CHECK_REQUIRED" || error === "APP_CHECK_REJECTED") {
+      displayMessage = "No fue posible validar este acceso de forma segura. Recarga la página.";
+      showRetry = true;
+    } else if (error === "TEMPORARILY_UNAVAILABLE") {
+      displayMessage = "Temporalmente no pudimos abrir el diagnóstico. Inténtalo nuevamente.";
+      showRetry = true;
+    } else if (error === "LINK_NOT_FOUND") {
+      displayMessage = "Este acceso no es válido.";
+    } else if (error.includes("sesión de consultoría inteligente ya ha sido completada")) {
+      displayMessage = error;
+    }
+
     return (
       <div className="flex h-screen items-center justify-center bg-slate-950 p-4 font-sans text-center">
-        <div className="max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4 shadow-xl">
-          <span className="text-3xl">⚠️</span>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">Acceso Restringido</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
-          <button
-            onClick={() => navigate("/login")}
-            className="rounded-xl bg-slate-800 px-5 py-2.5 text-xs font-semibold text-white hover:bg-slate-700 transition"
-          >
-            Ir a Control Center
-          </button>
+        <div className="max-w-md w-full rounded-3xl border border-slate-800 bg-slate-900 p-8 space-y-6 shadow-2xl">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-800/50 text-3xl">
+            ⚠️
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-bold text-white uppercase tracking-wider">Acceso Restringido</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">{displayMessage}</p>
+          </div>
+          
+          <div className="flex flex-col gap-3 pt-2">
+            {showRetry && (
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full rounded-xl bg-cyan-600 px-5 py-3 text-xs font-bold text-white hover:bg-cyan-500 transition active:scale-95"
+              >
+                Reintentar
+              </button>
+            )}
+            <a
+              href="https://auranexus.io"
+              className="inline-block w-full rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-xs font-bold text-white hover:bg-slate-700 transition active:scale-95"
+            >
+              Volver a Aura Nexus
+            </a>
+          </div>
         </div>
       </div>
     );

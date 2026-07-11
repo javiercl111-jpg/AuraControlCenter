@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./layouts/AppLayout";
@@ -26,6 +26,7 @@ import TenantEnforcementPage from "./pages/TenantEnforcementPage";
 import TenantsPage from "./pages/TenantsPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import ExecutiveIntakeSmokeTestPage from "./pages/dev/ExecutiveIntakeSmokeTestPage";
+import PublicNotFoundPage from "./pages/PublicNotFoundPage";
 
 export default function App() {
   return (
@@ -69,7 +70,7 @@ export default function App() {
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<PublicNotFoundPage />} />
     </Routes>
   );
 }

@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 
 // Only enforce environment variables in the browser (Vite context)
 if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -56,19 +56,21 @@ if (typeof window !== "undefined") {
       }
     }
 
-    const siteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY;
+    const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
     if (siteKey) {
       appCheckInstance = initializeAppCheck(firebaseApp, {
-        provider: new ReCaptchaV3Provider(siteKey),
+        provider: new ReCaptchaEnterpriseProvider(siteKey),
         isTokenAutoRefreshEnabled: true,
       });
       console.log("[Aura Control Center] Firebase App Check initialized.");
     } else {
-      console.warn("[Aura Control Center] VITE_FIREBASE_APPCHECK_SITE_KEY missing. App Check not initialized in frontend.");
+      console.warn("[Aura Control Center] VITE_RECAPTCHA_SITE_KEY missing. App Check not initialized in frontend.");
     }
   } catch (err) {
     console.error("[Aura Control Center] Failed to initialize App Check:", err);
   }
 }
 
-export const appCheck = appCheckInstance;import { getFunctions } from "firebase/functions"; export const functions = getFunctions(firebaseApp);
+export const appCheck = appCheckInstance;
+import { getFunctions } from "firebase/functions"; 
+export const functions = getFunctions(firebaseApp);
