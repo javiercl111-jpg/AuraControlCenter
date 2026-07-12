@@ -1,86 +1,116 @@
-import { initializeApp } from "firebase/app";
+import {
+  getApp,
+  getApps,
+  initializeApp,
+  type FirebaseApp,
+  type FirebaseOptions,
+} from "firebase/app";
+import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  type AppCheck,
+} from "firebase/app-check";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 
-// Only enforce environment variables in the browser (Vite context)
-if (typeof import.meta !== 'undefined' && import.meta.env) {
-  const requiredEnvVars = [
-    'VITE_FIREBASE_API_KEY',
-    'VITE_FIREBASE_AUTH_DOMAIN',
-    'VITE_FIREBASE_PROJECT_ID',
-    'VITE_FIREBASE_STORAGE_BUCKET',
-    'VITE_FIREBASE_MESSAGING_SENDER_ID',
-    'VITE_FIREBASE_APP_ID'
-  ];
-
-  requiredEnvVars.forEach(key => {
-    if (!import.meta.env[key]) {
-      console.warn(`Environment variable missing: ${key}`);
-    }
-  });
+declare global {
+  interface Window {
+    FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string;
+    __AURA_APP_CHECK__?: AppCheck;
+  }
 }
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID,
+function readRequiredEnv(name: string): string {
+  const rawValue = import.meta.env[name] as string | undefined;
+  const normalizedValue = rawValue?.trim();
+
+  if (!normalizedValue) {
+    throw new Error(`FIREBASE_CONFIGURATION_MISSING:${name}`);
+  }
+
+  return normalizedValue;
+}
+
+const firebaseConfig: FirebaseOptions = {
+  apiKey: readRequiredEnv("VITE_FIREBASE_API_KEY"),
+  authDomain: readRequiredEnv("VITE_FIREBASE_AUTH_DOMAIN"),
+  projectId: readRequiredEnv("VITE_FIREBASE_PROJECT_ID"),
+  storageBucket: readRequiredEnv("VITE_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: readRequiredEnv(
+    "VITE_FIREBASE_MESSAGING_SENDER_ID",
+  ),
+  appId: readRequiredEnv("VITE_FIREBASE_APP_ID"),
 };
 
-const apiKey = firebaseConfig.apiKey?.trim();
+if (!firebaseConfig.apiKey?.startsWith("AIza")) {
+  throw new Error("FIREBASE_CONFIGURATION_INVALID:API_KEY_FORMAT");
+}
 
-if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) {
+if (import.meta.env.DEV) {
   console.info("[Firebase Config Check]", {
-    hasApiKey: Boolean(apiKey),
-    apiKeyLength: apiKey?.length ?? 0,
-    apiKeyPrefixValid: apiKey?.startsWith("AIza") ?? false,
+    hasApiKey: Boolean(firebaseConfig.apiKey),
+    apiKeyLength: firebaseConfig.apiKey?.length ?? 0,
+    apiKeyPrefixValid: firebaseConfig.apiKey?.startsWith("AIza") ?? false,
     projectId: firebaseConfig.projectId,
     hasAppId: Boolean(firebaseConfig.appId),
   });
-} else {
-  if (!apiKey || !apiKey.startsWith("AIza")) {
-    throw new Error("FIREBASE_CONFIGURATION_INVALID");
-  }
 }
 
+export const firebaseApp: FirebaseApp =
+  getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-export const firebaseApp = initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
 export const db = getFirestore(firebaseApp);
 export const storage = getStorage(firebaseApp);
+export const functions = getFunctions(firebaseApp, "us-central1");
 
-// App Check Initialization
-let appCheckInstance = null;
+function initializeAuraAppCheck(): AppCheck | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
 
-if (typeof window !== "undefined") {
+  const siteKey = (
+    import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined
+  )?.trim();
+
+  if (!siteKey) {
+    console.warn(
+      "[Aura Control Center] APP_CHECK_CONFIGURATION_REQUIRED: " +
+      "VITE_RECAPTCHA_SITE_KEY is missing.",
+    );
+    return null;
+  }
+
+  if (import.meta.env.DEV) {
+    const debugToken = (
+      import.meta.env
+        .VITE_FIREBASE_APPCHECK_DEBUG_TOKEN as string | undefined
+    )?.trim();
+
+    window.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken || true;
+  }
+
+  if (window.__AURA_APP_CHECK__) {
+    return window.__AURA_APP_CHECK__;
+  }
+
   try {
-    if (import.meta.env.DEV) {
-      const debugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
-      (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken || true;
-      if (!debugToken) {
-        console.info("[Aura Control Center] No VITE_FIREBASE_APPCHECK_DEBUG_TOKEN found. Firebase will generate a debug token in the console. Please register it in Firebase Console -> App Check -> Apps -> Manage debug tokens.");
-      }
-    }
+    const instance = initializeAppCheck(firebaseApp, {
+      provider: new ReCaptchaEnterpriseProvider(siteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
 
-    const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
-    if (siteKey) {
-      appCheckInstance = initializeAppCheck(firebaseApp, {
-        provider: new ReCaptchaEnterpriseProvider(siteKey),
-        isTokenAutoRefreshEnabled: true,
-      });
-      console.log("[Aura Control Center] Firebase App Check initialized.");
-    } else {
-      console.warn("[Aura Control Center] VITE_RECAPTCHA_SITE_KEY missing. App Check not initialized in frontend.");
-    }
-  } catch (err) {
-    console.error("[Aura Control Center] Failed to initialize App Check:", err);
+    window.__AURA_APP_CHECK__ = instance;
+    return instance;
+  } catch (error) {
+    console.error(
+      "[Aura Control Center] Failed to initialize App Check.",
+      error,
+    );
+    return null;
   }
 }
 
-export const appCheck = appCheckInstance;
-import { getFunctions } from "firebase/functions"; 
-export const functions = getFunctions(firebaseApp);
+export const appCheck = initializeAuraAppCheck();
