@@ -41,6 +41,7 @@ interface RequestExecutiveDocumentResponse {
 }
 
 export default function DiscoverPage() {
+  const showAuraThoughts = false; // Disabled by default for public experience
   const { linkId, commercialCode } = useParams<{ linkId?: string, commercialCode?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -538,7 +539,7 @@ export default function DiscoverPage() {
       {/* Header bar */}
       <header className="border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-45 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-lg">🌌</span>
+          <img src="/branding/aura-logo-oficial-800.png" alt="Aura Logo" className="h-8 w-auto object-contain" />
           <div>
             <span className="text-xs font-black uppercase tracking-widest text-cyan-400">Aura</span>
             <span className="text-[10px] text-slate-500 ml-1.5 uppercase font-medium tracking-wider">Discovery Portal™</span>
@@ -688,9 +689,9 @@ export default function DiscoverPage() {
 
       {/* Screen 2: Interactive Conversational Engine */}
       {screen === "chat" && linkInfo && (
-        <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid gap-6 md:grid-cols-3 animate-fadeIn">
+        <main className={`flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid gap-6 animate-fadeIn ${showAuraThoughts ? 'md:grid-cols-3' : 'grid-cols-1'}`}>
           {/* Chat Panel */}
-          <div className="md:col-span-2 flex flex-col rounded-3xl border border-slate-900 bg-slate-900/20 shadow-xl overflow-hidden backdrop-blur-sm h-[calc(100vh-140px)]">
+          <div className={`${showAuraThoughts ? 'md:col-span-2' : 'col-span-1'} flex flex-col rounded-3xl border border-slate-900 bg-slate-900/20 shadow-xl overflow-hidden backdrop-blur-sm h-[calc(100vh-140px)]`}>
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
               {chatLog.map((chat, idx) => (
                 <div
@@ -829,6 +830,7 @@ export default function DiscoverPage() {
           </div>
 
           {/* Real-time Aura Thoughts Sidebar */}
+          {showAuraThoughts && (
           <div className="flex flex-col rounded-3xl border border-slate-900 bg-slate-900/20 p-5 shadow-xl space-y-5 h-[calc(100vh-140px)] justify-between overflow-y-auto">
             <div className="space-y-4">
               <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between">
@@ -913,6 +915,7 @@ export default function DiscoverPage() {
               </div>
             )}
           </div>
+          )}
         </main>
       )}
 

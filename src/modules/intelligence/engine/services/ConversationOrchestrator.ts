@@ -20,6 +20,46 @@ export class ConversationOrchestrator {
     }
 
     // --- PHASE: DISCOVERY ---
+    const isInitialTurn = engineInput.conversationHistory.length === 0 && engineInput.currentResponse.trim() === "";
+
+    if (isInitialTurn) {
+      const initialState = this.reflectionEngine.createInitialState();
+      const conversationOutput = this.conversationEngine.processTurn(engineInput);
+      const personalityDecision = this.personality.evaluateContext(0, engineInput.confidenceLevel, engineInput.hypotheses.length);
+
+      return {
+        finalMessage: conversationOutput.nextQuestion,
+        finalIntent: conversationOutput.nextIntent,
+        reflectionOutput: {
+          contradictionDetails: [],
+          evidenceExtracted: [],
+          dimensionsUpdated: [],
+          responseRelevance: 0,
+          coherenceScore: 100,
+          ambiguityReasons: [],
+          omittedTopics: [],
+          isTooShort: false,
+          isAmbiguous: false,
+          hasContradiction: false,
+          recommendedAction: "ACCEPT",
+          suggestedClarification: null,
+          shouldDeepen: false,
+          hasEnoughEvidence: false,
+          internalReflection: "Initial turn, starting conversation."
+        },
+        conversationOutput,
+        personalityDecision,
+        shouldAdvance: false,
+        shouldPersistEvidence: false,
+        shouldComplete: false,
+        updatedConversationPhase: currentPhase,
+        updatedReflectionState: initialState,
+        updatedConfidenceMatrix: initialState.matrix,
+        pendingSummary: conversationStateSnapshot.pendingSummary,
+        updatedFallbackCount: 0,
+      };
+    }
+
     // 1. Reflect on the user's input
     const { output: reflectionOutput, newState: updatedReflectionState } = 
       this.reflectionEngine.analyzeResponse({
@@ -65,8 +105,13 @@ export class ConversationOrchestrator {
     else if (recommendedAction === "DEEPEN" || recommendedAction === "ACCEPT") {
       fallbackCount = 0;
       // Pass the updated inputs (e.g. valid useful responses count)
+      const historyQuestions = engineInput.conversationHistory
+        .filter(m => m.role === "aura")
+        .map(m => m.content);
+
       const modifiedEngineInput = {
         ...engineInput,
+        askedQuestions: Array.from(new Set([...engineInput.askedQuestions, ...historyQuestions])),
         partialDossier: { ...engineInput.partialDossier, ...reflectionOutput.dimensionsUpdated.reduce((acc, dim) => ({...acc, [dim]: true}), {}) },
       };
       
