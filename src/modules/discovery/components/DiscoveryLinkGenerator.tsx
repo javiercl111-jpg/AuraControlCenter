@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { db, auth } from "../../../config/firebase";
+import { QRCodeCanvas } from "qrcode.react";
+import { createDiscoveryLink } from "../services/discoveryLinkService";
 
 interface DiscoveryLinkGeneratorProps {
   isOpen: boolean;
@@ -24,10 +24,10 @@ export default function DiscoveryLinkGenerator({
 
   if (!isOpen) return null;
 
-  function generateShortCode(): string {
+  function generateIdempotencyKey(): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let code = "";
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 16; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
@@ -48,21 +48,21 @@ export default function DiscoveryLinkGenerator({
     setSuccess("");
 
     try {
-      const code = generateShortCode();
       const origin = window.location.origin;
-      const link = `${origin}/discover/${code}`;
+      const idempotencyKey = generateIdempotencyKey();
 
-      // Crear registro en Firestore
-      const linkRef = doc(db, "market_discovery_links", code);
-      await setDoc(linkRef, {
-        id: code,
+      const newLink = await createDiscoveryLink({
         companyName: companyName.trim(),
         contactName: contactName.trim(),
-        createdAt: serverTimestamp(),
-        createdBy: auth.currentUser?.email || "anonymous",
-        status: "pending",
-        dossierId: "",
+        email: "asesor@auranexus.io", // Default fallback email if not asked
+        phone: "",
+        consent: true, // Advisor generated
+        origin: "ADVISOR_SHARE",
+        acquisitionSource: "DIRECT",
+        idempotencyKey
       });
+
+      const link = `${origin}/discover/${newLink.linkId}#access=${newLink.oneTimeToken}`;
 
       setGeneratedLink(link);
       setSuccess("¡Enlace único de Discovery generado con éxito!");
@@ -217,20 +217,7 @@ ${generatedLink}`;
             <div className="flex flex-col items-center justify-center border-t border-slate-800 pt-4 space-y-2">
               <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Código QR Aura</span>
               <div className="bg-white p-3 rounded-2xl inline-block shadow-lg">
-                {/* SVG simplificado de QR */}
-                <svg className="w-28 h-28 text-slate-900" viewBox="0 0 100 100" fill="currentColor">
-                  <path d="M 0,0 H 30 V 30 H 0 Z M 10,10 V 20 H 20 V 10 Z" />
-                  <path d="M 70,0 H 100 V 30 H 70 Z M 80,10 V 20 H 90 V 10 Z" />
-                  <path d="M 0,70 H 30 V 100 H 0 Z M 10,80 V 90 H 20 V 80 Z" />
-                  <rect x="40" y="10" width="10" height="20" />
-                  <rect x="50" y="40" width="20" height="10" />
-                  <rect x="10" y="40" width="20" height="20" />
-                  <rect x="40" y="70" width="20" height="20" />
-                  <rect x="70" y="70" width="20" height="20" />
-                  <rect x="80" y="40" width="10" height="10" />
-                  <rect x="40" y="50" width="10" height="10" />
-                  <rect x="90" y="90" width="10" height="10" />
-                </svg>
+                <QRCodeCanvas value={generatedLink} size={112} level="H" />
               </div>
               <p className="text-[9px] text-slate-500">Escanea desde un dispositivo móvil para iniciar la consultoría.</p>
             </div>

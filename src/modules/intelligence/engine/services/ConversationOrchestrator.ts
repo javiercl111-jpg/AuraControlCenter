@@ -123,7 +123,12 @@ export class ConversationOrchestrator {
       shouldPersistEvidence = true;
 
       // The Conversation Engine might also decide to Summarize/Close based on its internal limits
-      if (conversationOutput.nextIntent === "SUMMARIZE") {
+      if (conversationOutput.nextIntent === "CLOSING") {
+        shouldComplete = true;
+        updatedConversationPhase = "COMPLETED";
+        shouldAdvance = false;
+        fallbackCount = 0;
+      } else if (conversationOutput.nextIntent === "SUMMARIZE") {
         return this.generateSummaryTransition(reflectionOutput, updatedReflectionState, fallbackCount);
       }
     } 

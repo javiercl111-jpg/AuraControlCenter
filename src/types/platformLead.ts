@@ -16,7 +16,10 @@ export interface PlatformLead {
   source: string;
   interestedModules: string[];
   estimatedValue: number;
-  stage: LeadStage;
+  stage?: LeadStage; // Legacy V1 stage
+  currentStage?: string; // V2 stage
+  lifecycleStatus?: string;
+  schemaVersion?: number;
   notes: string;
   nextFollowUpDate?: string;
   convertedClientId?: string;

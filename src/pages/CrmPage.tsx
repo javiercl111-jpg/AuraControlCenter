@@ -23,6 +23,18 @@ const LEAD_STAGES: { value: LeadStage; label: string }[] = [
   { value: "LOST", label: "Perdido" },
 ];
 
+function normalizeLeadStage(lead: PlatformLead): LeadStage {
+  if (lead.stage) return lead.stage;
+  if (lead.currentStage === "NEW") return "NEW_LEAD";
+  if (lead.currentStage === "CONTACTED") return "CONTACTED";
+  if (lead.currentStage === "QUALIFYING") return "DEMO_SCHEDULED";
+  if (lead.currentStage === "PROPOSAL") return "PROPOSAL_SENT";
+  if (lead.currentStage === "NEGOTIATION") return "NEGOTIATION";
+  if (lead.currentStage === "CLOSED_WON") return "WON";
+  if (lead.currentStage === "CLOSED_LOST") return "LOST";
+  return "NEW_LEAD";
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
@@ -321,7 +333,7 @@ export default function CrmPage() {
         <div className="grid gap-4 xl:grid-cols-3">
           {LEAD_STAGES.map((stage) => {
             const stageLeads = leads.filter(
-              (lead) => lead.stage === stage.value
+              (lead) => normalizeLeadStage(lead) === stage.value
             );
 
             const stageTotal = stageLeads.reduce(
@@ -339,7 +351,7 @@ export default function CrmPage() {
                     <h3 className="font-bold text-white">{stage.label}</h3>
 
                     <p className="text-xs text-slate-500">
-                      {stageLeads.length} prospectos ·{" "}
+                      {stageLeads.length === 1 ? "1 prospecto" : `${stageLeads.length} prospectos`} ·{" "}
                       {formatCurrency(stageTotal)}
                     </p>
                   </div>

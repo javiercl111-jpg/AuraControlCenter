@@ -51,8 +51,11 @@ export default function DiscoverPage() {
   const [error, setError] = useState("");
 
   // Conversational Flow States
-  const [screen, setScreen] = useState<"preform" | "welcome" | "chat" | "completed">("welcome");
-  
+  const [screen, setScreen] = useState<"landing" | "preform" | "welcome" | "chat" | "completed">("welcome");
+
+  // Pending Token State for Landing
+  const [pendingAccessToken, setPendingAccessToken] = useState<string | null>(null);
+
   // Pre-form States
   const [advisorContext, setAdvisorContext] = useState<any>(null);
   const [companyName, setCompanyName] = useState("");
@@ -150,17 +153,14 @@ export default function DiscoverPage() {
       }
 
       try {
-        const access = searchParams.get("access");
-        
+        const hash = window.location.hash;
+        const hashParams = new URLSearchParams(hash.substring(1)); // Remove '#'
+        const access = hashParams.get("access");
+
         if (access) {
-          // Exchange one-time token
-          const result = await exchangeDiscoveryToken(linkId, access);
-          sessionStorage.setItem(`discovery_session_token_${linkId}`, result.sessionAccessToken);
-          
-          // Clear URL
-          window.history.replaceState({}, document.title, window.location.pathname);
-          
-          setLinkInfo(result as any);
+          // We don't automatically exchange it. We show landing.
+          setPendingAccessToken(access);
+          setScreen("landing");
           setLoading(false);
           return;
         }
@@ -173,7 +173,7 @@ export default function DiscoverPage() {
         }
 
         const result = await resolveDiscoverySession(linkId, sessionToken);
-        
+
         if (result.status === "completed") {
           setError("Esta sesión de consultoría inteligente ya ha sido completada anteriormente. ¡Muchas gracias!");
           setLoading(false);
@@ -183,11 +183,11 @@ export default function DiscoverPage() {
         setLinkInfo(result as any);
       } catch (err: any) {
         console.error("Error al cargar enlace Discovery:", err);
-        
+
         const fbCode = err?.code || "";
         const safeCode = err?.details?.safeErrorCode || "";
         const messageStr = err?.message || "";
-        
+
         let mappedError = "UNKNOWN";
         if (fbCode === "functions/failed-precondition" || messageStr.includes("APP_CHECK")) {
           mappedError = "APP_CHECK_REQUIRED";
@@ -228,7 +228,7 @@ export default function DiscoverPage() {
     setCreatingLink(true);
     try {
       let finalAdvisorContext = advisorContext;
-      
+
       if (!finalAdvisorContext && manualAdvisorCode.trim()) {
         const advisor = await resolveAdvisorByCode(manualAdvisorCode.trim());
         if (advisor) finalAdvisorContext = advisor;
@@ -253,10 +253,32 @@ export default function DiscoverPage() {
     }
   }
 
+  async function handleStartFromLanding() {
+    if (!linkId || !pendingAccessToken) return;
+    setLoading(true);
+    setError("");
+    try {
+      const result = await exchangeDiscoveryToken(linkId, pendingAccessToken);
+      sessionStorage.setItem(`discovery_session_token_${linkId}`, result.sessionAccessToken);
+
+      // Clear URL fragment without exposing token
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+
+      setLinkInfo(result as any);
+      setPendingAccessToken(null);
+      setScreen("welcome");
+    } catch (err: any) {
+      console.error("Error exchanging token:", err);
+      setError("El enlace no es válido, ya fue utilizado o ha expirado.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // Welcome page text starts chat
   function handleStartChat() {
     if (!linkInfo) return;
-    
+
     // Instantiate Orchestrator and States
     orchestratorRef.current = new ConversationOrchestrator();
     const tempReflectionEngine = new ReflectionEngine();
@@ -316,7 +338,7 @@ export default function DiscoverPage() {
     // Apply Output to State
     reflectionStateRef.current = output.updatedReflectionState;
     confidenceMatrixRef.current = output.updatedConfidenceMatrix;
-    
+
     stateRef.current.conversationPhase = output.updatedConversationPhase;
     stateRef.current.pendingSummary = output.pendingSummary;
     if (output.updatedFallbackCount !== undefined) {
@@ -329,7 +351,7 @@ export default function DiscoverPage() {
       output.conversationOutput.newHypotheses.forEach(h => stateRef.current?.addHypothesis(h));
       output.conversationOutput.discardedHypotheses.forEach(h => stateRef.current?.removeHypothesis(h));
     }
-    
+
     // Update trackers only if advanced
     if (output.shouldAdvance) {
       stateRef.current.turnCount += 1;
@@ -385,9 +407,14 @@ export default function DiscoverPage() {
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [downloadError, setDownloadError] = useState("");
 
+  const hasHandledComplete = useRef(false);
+
   // Finalizar consultoría y persistir resultados
   async function handleComplete() {
     if (!linkInfo || !stateRef.current) return;
+    if (hasHandledComplete.current) return;
+    hasHandledComplete.current = true;
+
     setIsAuraTyping(true);
     setReportStatus("GENERATING");
     try {
@@ -401,7 +428,7 @@ export default function DiscoverPage() {
         stateRef.current.getSnapshot(),
         sessionToken || undefined
       );
-      
+
       // Request PDF Generation
       try {
         const generateReportFn = httpsCallable<GenerateDiscoveryReportRequest, GenerateDiscoveryReportResponse>(
@@ -428,6 +455,7 @@ export default function DiscoverPage() {
     } catch (err: any) {
       console.error("Error al guardar sesión de Discovery:", err);
       alert("Error al guardar expediente: " + err.message);
+      hasHandledComplete.current = false;
       setIsAuraTyping(false);
       setReportStatus("ERROR");
     }
@@ -475,11 +503,46 @@ export default function DiscoverPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-950 text-white font-sans">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
-          <p className="text-xs font-semibold text-slate-400 tracking-wider">Aura Discovery Portal™</p>
+      <div className="flex items-center justify-center min-h-screen bg-slate-950 text-white font-sans p-6">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+          <p className="text-slate-400 text-sm">Aura está preparando el entorno...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (screen === "landing") {
+    return (
+      <div className="flex flex-col min-h-screen bg-slate-950 text-white font-sans">
+        <header className="p-6 border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center justify-center">
+              <div className="w-3 h-3 bg-slate-950 rounded-full" />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+              Aura Discovery
+            </h1>
+          </div>
+        </header>
+
+        <main className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full items-center justify-center py-20">
+          <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 p-8 rounded-2xl w-full max-w-xl text-center space-y-6">
+            <h2 className="text-2xl font-semibold tracking-tight">Consultoría Inteligente</h2>
+            <p className="text-slate-300">
+              Estás a punto de iniciar un diagnóstico empresarial guiado por Aura.
+            </p>
+            <p className="text-sm text-slate-500">
+              No necesitas preparar información técnica. Será una conversación ejecutiva.
+            </p>
+            <button
+              onClick={handleStartFromLanding}
+              className="mt-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-8 py-3 rounded-lg transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]"
+            >
+              Comenzar diagnóstico
+            </button>
+          </div>
+        </main>
       </div>
     );
   }
@@ -487,7 +550,7 @@ export default function DiscoverPage() {
   if (error) {
     let displayMessage = "Ocurrió un error inesperado. Inténtalo nuevamente.";
     let showRetry = false;
-    
+
     if (error === "TOKEN_EXPIRED" || error === "TOKEN_ALREADY_USED") {
       displayMessage = "Este acceso ya no está disponible. Solicita uno nuevo desde Aura Nexus.";
     } else if (error === "APP_CHECK_REQUIRED" || error === "APP_CHECK_REJECTED") {
@@ -512,7 +575,7 @@ export default function DiscoverPage() {
             <h3 className="mb-2 text-sm font-bold text-white uppercase tracking-wider">Acceso Restringido</h3>
             <p className="text-xs text-slate-400 leading-relaxed">{displayMessage}</p>
           </div>
-          
+
           <div className="flex flex-col gap-3 pt-2">
             {showRetry && (
               <button
@@ -555,7 +618,7 @@ export default function DiscoverPage() {
         <main className="flex-1 flex items-center justify-center p-6 animate-fadeIn">
           <div className="w-full max-w-xl rounded-3xl border border-slate-900 bg-slate-900/40 p-8 space-y-6 shadow-2xl relative overflow-hidden backdrop-blur-sm">
             <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-            
+
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-cyan-950 border border-cyan-500/30 flex items-center justify-center text-lg shadow-inner">
                 ✨
@@ -649,7 +712,7 @@ export default function DiscoverPage() {
         <main className="flex-1 flex items-center justify-center p-6 animate-fadeIn">
           <div className="w-full max-w-xl rounded-3xl border border-slate-900 bg-slate-900/40 p-8 space-y-6 shadow-2xl relative overflow-hidden backdrop-blur-sm">
             <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-            
+
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-cyan-950 border border-cyan-500/30 flex items-center justify-center text-lg shadow-inner">
                 🤖
@@ -805,7 +868,7 @@ export default function DiscoverPage() {
                       </button>
                     </div>
                   )}
-                  
+
                   <form onSubmit={handleUserSubmit} className="flex gap-2">
                     <input
                       type="text"
@@ -843,7 +906,7 @@ export default function DiscoverPage() {
               <div className="rounded-2xl border border-cyan-500/25 bg-cyan-950/10 p-4 space-y-2 animate-fadeIn">
                 <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-400">Current Phase & Intent</span>
                 <p className="text-[11px] text-slate-300 leading-relaxed font-mono font-bold text-emerald-400">[{telemetry.phase}] [{telemetry.intent}]</p>
-                
+
                 <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-400 mt-3">Cognitive Action</span>
                 <p className={`text-[11px] leading-relaxed font-mono font-bold ${telemetry.reflectionAction === "CLARIFY" || telemetry.reflectionAction === "CHALLENGE" ? "text-amber-400" : "text-cyan-400"}`}>
                   [{telemetry.reflectionAction}]
@@ -962,7 +1025,7 @@ export default function DiscoverPage() {
               <div className="p-4 rounded-xl border border-emerald-900/50 bg-emerald-950/20 space-y-3">
                 <p className="text-emerald-400 text-xs font-semibold">¡Tu Radiografía Empresarial en PDF está lista!</p>
                 <div className="flex gap-2">
-                  <button 
+                  <button
                     onClick={handleDownloadReport}
                     disabled={downloadingReport}
                     className="flex-1 rounded-lg bg-emerald-600/20 border border-emerald-500/30 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/40 transition disabled:opacity-50"
