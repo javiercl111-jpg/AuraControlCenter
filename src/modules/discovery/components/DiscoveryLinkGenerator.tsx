@@ -62,13 +62,21 @@ export default function DiscoveryLinkGenerator({
         idempotencyKey
       });
 
-      const link = `${origin}/discover/${newLink.linkId}#access=${newLink.oneTimeToken}`;
+      if (!newLink || !newLink.linkId || !newLink.oneTimeToken || newLink.linkId === "undefined" || newLink.oneTimeToken === "undefined") {
+        throw new Error("Respuesta inválida del servidor al generar el enlace.");
+      }
+
+      const link = `${origin}/discover/${encodeURIComponent(newLink.linkId)}#access=${encodeURIComponent(newLink.oneTimeToken)}`;
 
       setGeneratedLink(link);
       setSuccess("¡Enlace único de Discovery generado con éxito!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error al generar enlace de Discovery:", err);
-      setError("Error al guardar en base de datos: " + err.message);
+      if (err instanceof Error) {
+        setError("Error al guardar en base de datos: " + err.message);
+      } else {
+        setError("Error desconocido al generar el enlace.");
+      }
     } finally {
       setIsGenerating(false);
     }

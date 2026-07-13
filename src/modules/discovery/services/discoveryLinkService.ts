@@ -11,7 +11,30 @@ export async function resolveAdvisorByCode(commercialCode: string) {
   return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as any;
 }
 
-export async function createDiscoveryLink(data: any, advisorContext?: any) {
+export interface CreateDiscoveryLeadResponse {
+  status: string;
+  nextAction: string;
+  discoveryUrl: string;
+  linkId: string;
+  oneTimeToken: string;
+  advisorDisplayName?: string;
+  organizationProfile: string;
+  requiresManualReview: boolean;
+}
+
+export function isCreateDiscoveryLeadResponse(value: unknown): value is CreateDiscoveryLeadResponse {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj.status === "string" &&
+    typeof obj.nextAction === "string" &&
+    typeof obj.discoveryUrl === "string" &&
+    typeof obj.linkId === "string" && obj.linkId.trim() !== "" &&
+    typeof obj.oneTimeToken === "string" && obj.oneTimeToken.trim() !== ""
+  );
+}
+
+export async function createDiscoveryLink(data: any, advisorContext?: any): Promise<CreateDiscoveryLeadResponse> {
   const createDiscoveryLeadFn = httpsCallable(functions, "createDiscoveryLead");
   
   const payload: any = {
@@ -31,7 +54,12 @@ export async function createDiscoveryLink(data: any, advisorContext?: any) {
   }
 
   const result = await createDiscoveryLeadFn(payload);
-  return result.data as { linkId: string; oneTimeToken: string; trustScoreDecision: string; expiresAt: string };
+
+  if (!isCreateDiscoveryLeadResponse(result.data)) {
+    throw new Error("DISCOVERY_LINK_RESPONSE_INVALID");
+  }
+
+  return result.data;
 }
 
 export async function exchangeDiscoveryToken(linkId: string, oneTimeToken: string) {

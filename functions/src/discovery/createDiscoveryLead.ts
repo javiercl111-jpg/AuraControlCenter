@@ -203,12 +203,14 @@ export const createDiscoveryLead = onCall(
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        const discoveryUrl = `https://controlcenter.auranexus.io/discover/${linkSnap.id}?access=${newOneTimeToken}`;
+        const discoveryUrl = `https://controlcenter.auranexus.io/discover/${linkSnap.id}#access=${newOneTimeToken}`;
 
         return {
           status: "SUCCESS",
           nextAction: "REDIRECT_DISCOVERY",
           discoveryUrl,
+          linkId: linkSnap.id,
+          oneTimeToken: newOneTimeToken,
           advisorDisplayName: advisorContext ? (advisorContext.displayName || advisorContext.name) : undefined,
           organizationProfile: "UNKNOWN",
           requiresManualReview: linkData.trustScore?.decision === "REQUIRE_MANUAL_REVIEW"
@@ -282,12 +284,14 @@ export const createDiscoveryLead = onCall(
         expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)) // retain 30 days
       });
 
-      const discoveryUrl = `https://controlcenter.auranexus.io/discover/${docRef.id}?access=${oneTimeToken}`;
+      const discoveryUrl = `https://controlcenter.auranexus.io/discover/${docRef.id}#access=${oneTimeToken}`;
 
       return {
         status: "SUCCESS",
         nextAction: "REDIRECT_DISCOVERY",
         discoveryUrl,
+        linkId: docRef.id,
+        oneTimeToken,
         advisorDisplayName: advisorContext ? (advisorContext.displayName || advisorContext.name) : undefined,
         organizationProfile: "UNKNOWN",
         requiresManualReview: trustScoreResult.decision === "REQUIRE_MANUAL_REVIEW"

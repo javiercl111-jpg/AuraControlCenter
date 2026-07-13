@@ -128,7 +128,7 @@ export default function DiscoverPage() {
       }
 
       // If no linkId and no commercialCode, it's a direct website visit
-      if (!linkId) {
+      if (!linkId || linkId === "undefined" || linkId === "null" || linkId.trim() === "") {
         setScreen("preform");
         setLoading(false);
         return;
@@ -512,41 +512,6 @@ export default function DiscoverPage() {
     );
   }
 
-  if (screen === "landing") {
-    return (
-      <div className="flex flex-col min-h-screen bg-slate-950 text-white font-sans">
-        <header className="p-6 border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center justify-center">
-              <div className="w-3 h-3 bg-slate-950 rounded-full" />
-            </div>
-            <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-              Aura Discovery
-            </h1>
-          </div>
-        </header>
-
-        <main className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full items-center justify-center py-20">
-          <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 p-8 rounded-2xl w-full max-w-xl text-center space-y-6">
-            <h2 className="text-2xl font-semibold tracking-tight">Consultoría Inteligente</h2>
-            <p className="text-slate-300">
-              Estás a punto de iniciar un diagnóstico empresarial guiado por Aura.
-            </p>
-            <p className="text-sm text-slate-500">
-              No necesitas preparar información técnica. Será una conversación ejecutiva.
-            </p>
-            <button
-              onClick={handleStartFromLanding}
-              className="mt-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-8 py-3 rounded-lg transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]"
-            >
-              Comenzar diagnóstico
-            </button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   if (error) {
     let displayMessage = "Ocurrió un error inesperado. Inténtalo nuevamente.";
     let showRetry = false;
@@ -596,6 +561,43 @@ export default function DiscoverPage() {
       </div>
     );
   }
+
+  if (screen === "landing") {
+    return (
+      <div className="flex flex-col min-h-screen bg-slate-950 text-white font-sans">
+        <header className="p-6 border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center justify-center">
+              <div className="w-3 h-3 bg-slate-950 rounded-full" />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+              Aura Discovery
+            </h1>
+          </div>
+        </header>
+
+        <main className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full items-center justify-center py-20">
+          <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 p-8 rounded-2xl w-full max-w-xl text-center space-y-6">
+            <h2 className="text-2xl font-semibold tracking-tight">Consultoría Inteligente</h2>
+            <p className="text-slate-300">
+              Estás a punto de iniciar un diagnóstico empresarial guiado por Aura.
+            </p>
+            <p className="text-sm text-slate-500">
+              No necesitas preparar información técnica. Será una conversación ejecutiva.
+            </p>
+            <button
+              onClick={handleStartFromLanding}
+              className="mt-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-8 py-3 rounded-lg transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]"
+            >
+              Comenzar diagnóstico
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col selection:bg-cyan-500/30">
