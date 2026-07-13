@@ -22,7 +22,8 @@ export async function createDiscoveryLink(data: any, advisorContext?: any) {
     role: data.role || "",
     location: data.location || "",
     consent: data.consent,
-    acquisitionSource: data.acquisitionSource || "DIRECT"
+    acquisitionSource: data.acquisitionSource || "DIRECT",
+    idempotencyKey: data.idempotencyKey
   };
 
   if (advisorContext) {

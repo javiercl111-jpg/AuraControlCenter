@@ -262,14 +262,17 @@ export default function CrmPage() {
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           />
 
-          <input
-            type="number"
-            min={0}
-            value={estimatedValue}
-            onChange={(event) => setEstimatedValue(Number(event.target.value))}
-            placeholder="Valor estimado"
-            className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-          />
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pl-1">Valor estimado</label>
+            <input
+              type="number"
+              min={0}
+              value={estimatedValue}
+              onChange={(event) => setEstimatedValue(Number(event.target.value))}
+              placeholder="Valor estimado"
+              className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
+            />
+          </div>
 
           <input
             type="date"
@@ -468,6 +471,20 @@ export default function CrmPage() {
                           Convertido a cliente
                         </p>
                       )}
+
+                      {/* Botón de eliminación - Deshabilitado por falta de seguridad backend verificable */}
+                      {/*
+                      {isPlatformOwner && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLead(lead.id)}
+                          className="mt-4 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20"
+                          title="Eliminar prospecto (No seguro aún)"
+                        >
+                          🗑 Eliminar
+                        </button>
+                      )}
+                      */}
                     </article>
                   )})}
 
