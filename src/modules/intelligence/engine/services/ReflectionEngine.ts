@@ -55,9 +55,30 @@ export class ReflectionEngine {
     const omittedTopics: string[] = [];
     let internalReflection = "";
 
-    // 1. Edge Case: Empty or Gibberish (e.g. "asdf")
+    // 0. Edge Case: Conversational Confirmations during clarification
+    const isConfirmation = this.isConversationalConfirmation(text);
+
+    // Check if we are waiting for a clarification
+    const lastAuraMsg = input.conversationHistory.filter(m => m.role === "aura").pop();
+    const isWaitingForClarification = lastAuraMsg && (
+      lastAuraMsg.content.includes("Quiero asegurarme de comprender") ||
+      lastAuraMsg.content.includes("aclarar tu última respuesta") ||
+      lastAuraMsg.content.includes("no logro procesar bien")
+    );
+
     const words = text.split(/\s+/);
-    if (words.length === 1 && text.length < 5 && !this.isKnownShortValid(text)) {
+
+    if (isConfirmation && isWaitingForClarification) {
+      isTooShort = true;
+      responseRelevance = 0;
+      coherenceScore = 10;
+      recommendedAction = "CLARIFY";
+      suggestedClarification = "Gracias. Para orientarnos mejor, cuéntame cómo realizan actualmente ese proceso en tu empresa y qué parte suele generar más dificultades.";
+      ambiguityReasons.push("Conversational confirmation instead of business answer.");
+      internalReflection = "User replied with a conversational confirmation during clarify flow.";
+    }
+    // 1. Edge Case: Gibberish (e.g. "asdf")
+    else if (words.length === 1 && text.length < 5 && !this.isKnownShortValid(text)) {
       isTooShort = true;
       responseRelevance = 0;
       coherenceScore = 10;
@@ -73,7 +94,6 @@ export class ReflectionEngine {
       dimensionsUpdated.push("technology", "digitalization");
       internalReflection = "User provided a short but highly relevant categorical answer.";
     }
-    // 3. Ambiguous response (e.g. "Recursos humanos")
     else if (words.length <= 2 && this.isAmbiguousTopic(text)) {
       isAmbiguous = true;
       responseRelevance = 30;
@@ -174,6 +194,14 @@ export class ReflectionEngine {
   }
 
   // --- Heuristics Helpers ---
+
+  private isConversationalConfirmation(text: string): boolean {
+    const confirmations = [
+      "claro", "si", "sí", "de acuerdo", "por supuesto", "adelante", "correcto", "esta bien", "está bien"
+    ];
+    const normalized = text.toLowerCase().trim().replace(/[.,!¡¿?]/g, '');
+    return confirmations.includes(normalized);
+  }
 
   private isKnownShortValid(text: string): boolean {
     const validTerms = ["sap", "oracle", "salesforce", "excel", "si", "sí", "no", "nunca", "hubspot", "jira"];
