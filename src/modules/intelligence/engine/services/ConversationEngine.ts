@@ -95,7 +95,7 @@ export class ConversationEngine {
     const availableQuestions = [
       {
         intent: "GREETING",
-        q: `Entendido. En el sector de "${input.industry}", el cumplimiento y la gestión eficiente son claves. ¿Cuántos colaboradores activos tienen actualmente y qué método utilizan para programar sus turnos y horarios de trabajo?`,
+        q: "Gracias por tu tiempo. El objetivo de este diagnóstico es entender cómo opera tu organización para diseñar soluciones precisas que les aporten valor. No necesitas contar con información técnica; tendremos una charla sencilla sobre tu día a día. Para comenzar, me gustaría saber, ¿cuál es el giro de tu empresa y cuál consideras que es su reto administrativo u operativo más importante en este momento?",
         c: 20
       },
       {
