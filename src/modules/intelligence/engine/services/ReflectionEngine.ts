@@ -60,22 +60,43 @@ export class ReflectionEngine {
 
     // Check if we are waiting for a clarification
     const lastAuraMsg = input.conversationHistory.filter(m => m.role === "aura").pop();
-    const isWaitingForClarification = lastAuraMsg && (
-      lastAuraMsg.content.includes("Quiero asegurarme de comprender") ||
-      lastAuraMsg.content.includes("aclarar tu última respuesta") ||
-      lastAuraMsg.content.includes("no logro procesar bien")
-    );
+    const lastQuestion = lastAuraMsg ? lastAuraMsg.content.toLowerCase() : "";
+    const isWaitingForClarification = lastQuestion.includes("quiero asegurarme de comprender") ||
+      lastQuestion.includes("aclarar tu última respuesta") ||
+      lastQuestion.includes("no logro procesar bien");
+
+    const isIndustryQuestion = lastQuestion.includes("giro de tu empresa") || lastQuestion.includes("a qué se dedica");
+    const isBinaryQuestion = lastQuestion.includes("experimentado alguna queja") ||
+                             lastQuestion.includes("están listos para") ||
+                             lastQuestion.includes("han tenido");
 
     const words = text.split(/\s+/);
+    const normalizedConfirm = text.replace(/[.,!¡¿?]/g, '');
 
-    if (isConfirmation && isWaitingForClarification) {
+    if (isConfirmation) {
       isTooShort = true;
       responseRelevance = 0;
       coherenceScore = 10;
       recommendedAction = "CLARIFY";
-      suggestedClarification = "Gracias. Para orientarnos mejor, cuéntame cómo realizan actualmente ese proceso en tu empresa y qué parte suele generar más dificultades.";
       ambiguityReasons.push("Conversational confirmation instead of business answer.");
-      internalReflection = "User replied with a conversational confirmation during clarify flow.";
+      internalReflection = "User replied with a conversational confirmation.";
+
+      if (isWaitingForClarification) {
+        suggestedClarification = "Gracias. Para orientarnos mejor, cuéntame cómo realizan actualmente ese proceso en tu empresa y qué parte suele generar más dificultades.";
+      } else {
+        suggestedClarification = "Entiendo. Para poder avanzar con el diagnóstico, ¿podrías detallar un poco más tu respuesta anterior?";
+      }
+    }
+    else if (isBinaryQuestion && (["si", "sí", "no", "correcto", "así es", "no hemos tenido", "sí hemos tenido"].includes(normalizedConfirm) || text.includes("si ") || text.includes("no "))) {
+      responseRelevance = 100;
+      evidenceExtracted.push(`Respondió a pregunta binaria: ${text}`);
+      internalReflection = "User provided a valid binary answer.";
+    }
+    else if (isIndustryQuestion && words.length <= 3 && text.length >= 4 && !/^([a-z])\1+$/.test(text) && !/asdf|qwer/.test(text)) {
+      responseRelevance = 100;
+      evidenceExtracted.push(`Mencionó giro/industria: ${text}`);
+      dimensionsUpdated.push("business_model");
+      internalReflection = "User provided a short valid industry answer.";
     }
     // 1. Edge Case: Gibberish (e.g. "asdf")
     else if (words.length === 1 && text.length < 5 && !this.isKnownShortValid(text)) {

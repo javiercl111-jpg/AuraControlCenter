@@ -8,9 +8,33 @@ export class ConversationEngine {
     this.personality = personality || new AuraPersonality();
   }
 
-  private isResponseValid(response: string): boolean {
+  private isResponseValid(response: string, input?: EngineInput): boolean {
     const text = response.toLowerCase().trim();
     if (!text) return false;
+
+    if (input && input.conversationHistory && input.conversationHistory.length > 0) {
+      const lastAuraMsg = input.conversationHistory.filter(m => m.role === "aura").pop();
+      const lastQuestion = lastAuraMsg ? lastAuraMsg.content.toLowerCase() : "";
+
+      const isIndustryQuestion = lastQuestion.includes("giro de tu empresa") || lastQuestion.includes("a qué se dedica");
+      const isBinaryQuestion = lastQuestion.includes("experimentado alguna queja") ||
+                               lastQuestion.includes("están listos para") ||
+                               lastQuestion.includes("han tenido");
+
+      if (isBinaryQuestion) {
+        const binaryAnswers = ["si", "sí", "no", "correcto", "así es", "no hemos tenido", "sí hemos tenido"];
+        const normalized = text.replace(/[.,!¡¿?]/g, '');
+        if (binaryAnswers.includes(normalized) || text.includes("si ") || text.includes("no ")) {
+          return true;
+        }
+      }
+
+      if (isIndustryQuestion) {
+        if (text.length >= 4 && !/^([a-z])\1+$/.test(text) && !/asdf|qwer/.test(text)) {
+          return true;
+        }
+      }
+    }
 
     const wordCount = text.split(/\s+/).length;
     const charCount = text.length;
@@ -25,7 +49,9 @@ export class ConversationEngine {
       "rh", "recursos humanos", "clientes", "cliente", "inventario", "inventarios",
       "mantenimiento", "prioridades", "prioridad", "excel", "papel", "manual",
       "si", "sí", "no", "nunca", "siempre", "queja", "frecuente", "problema", 
-      "error", "pago", "nomina", "nómina", "tiempo", "dinero"
+      "error", "pago", "nomina", "nómina", "tiempo", "dinero", "hospedaje", "logistica",
+      "logística", "construccion", "construcción", "transporte", "consultoria", "consultoría",
+      "comercio", "manufactura"
     ];
 
     return keywords.some(kw => text.includes(kw));
@@ -39,7 +65,7 @@ export class ConversationEngine {
     const updatedDossier: any = { ...input.partialDossier };
     
     // 1. Validation
-    if (historyLength > 0 && !this.isResponseValid(currentResponse)) {
+    if (historyLength > 0 && !this.isResponseValid(currentResponse, input)) {
       return {
         nextIntent: "CLARIFICATION",
         nextQuestion: "Quiero asegurarme de comprender correctamente tu empresa. ¿Podrías responderlo pensando en tus procesos, equipo, operación o administración?",
