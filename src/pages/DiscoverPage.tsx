@@ -1018,38 +1018,30 @@ export default function DiscoverPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-left space-y-3 font-sans">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-left font-sans">
               <div className="flex items-center gap-2.5 text-xs text-slate-200">
                 <span className="text-emerald-400 font-bold">✓</span>
-                <span>Radiografía Empresarial Aura™ (Estructura lista en Control Center)</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs text-slate-200">
-                <span className="text-emerald-400 font-bold">✓</span>
-                <span>Executive Briefing™ (Draft de consultoría generado)</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs text-slate-200">
-                <span className="text-emerald-400 font-bold">✓</span>
-                <span>Contexto de Asesor de Ventas (Sales Advisor Context creado)</span>
+                <span>Diagnóstico completado exitosamente</span>
               </div>
             </div>
 
             {reportStatus === "GENERATING" && (
               <div className="p-4 rounded-xl border border-cyan-900/50 bg-cyan-950/20 text-cyan-400 text-xs flex flex-col items-center gap-2">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-                Generando reporte ejecutivo PDF...
+                Tu diagnóstico fue recibido. Estamos preparando tu Radiografía Empresarial.
               </div>
             )}
 
             {reportStatus === "READY" && (
               <div className="p-4 rounded-xl border border-emerald-900/50 bg-emerald-950/20 space-y-3">
-                <p className="text-emerald-400 text-xs font-semibold">¡Tu Radiografía Empresarial en PDF está lista!</p>
+                <p className="text-emerald-400 text-xs font-semibold">Tu Radiografía Empresarial Aura™ está lista.</p>
                 <div className="flex gap-2">
                   <button
                     onClick={handleDownloadReport}
                     disabled={downloadingReport}
                     className="flex-1 rounded-lg bg-emerald-600/20 border border-emerald-500/30 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/40 transition disabled:opacity-50"
                   >
-                    {downloadingReport ? "Preparando..." : "Abrir y descargar Radiografía"}
+                    {downloadingReport ? "Preparando..." : "Descargar Radiografía"}
                   </button>
                   <button className="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition">
                     ✉️ Enviar a mi correo
@@ -1070,8 +1062,7 @@ export default function DiscoverPage() {
 
             {reportStatus === "ERROR" && (
               <div className="p-4 rounded-xl border border-rose-900/50 bg-rose-950/20 text-rose-400 text-xs">
-                Hubo un error al procesar tu documento PDF.
-
+                Tu diagnóstico fue recibido correctamente, pero no fue posible generar el documento en este momento. Nuestro equipo dará seguimiento.
               </div>
             )}
 
@@ -1083,7 +1074,7 @@ export default function DiscoverPage() {
               onClick={() => navigate("/login")}
               className="w-full rounded-xl bg-slate-800 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-700 transition active:scale-98"
             >
-              Regresar al Portal
+              Finalizar y volver a Aura Nexus
             </button>
           </div>
         </main>

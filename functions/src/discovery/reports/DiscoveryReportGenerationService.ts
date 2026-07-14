@@ -18,7 +18,7 @@ export class DiscoveryReportGenerationService {
     const db = admin.firestore();
     const storage = admin.storage();
 
-    const sessionDoc = await db.collection("platform_discovery_sessions").doc(sessionId).get();
+    const sessionDoc = await db.collection("discovery_sessions").doc(sessionId).get();
     if (!sessionDoc.exists) {
       throw new Error("Discovery Session not found.");
     }

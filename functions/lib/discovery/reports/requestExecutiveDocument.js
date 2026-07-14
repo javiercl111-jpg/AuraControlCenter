@@ -60,7 +60,7 @@ exports.requestExecutiveDocument = functions.https.onCall(async (request) => {
         targetSessionId = match[1];
         targetReportType = match[2];
         // We still need prospectId. We can get it from discovery_sessions -> prospectId
-        const sessionSnap = await db.collection("platform_discovery_sessions").doc(targetSessionId).get();
+        const sessionSnap = await db.collection("discovery_sessions").doc(targetSessionId).get();
         if (!sessionSnap.exists) {
             throw new functions.https.HttpsError("not-found", "Session not found.");
         }
