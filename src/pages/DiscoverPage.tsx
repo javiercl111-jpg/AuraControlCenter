@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import type { DiscoveryLink } from "../modules/discovery/types/discoveryTypes";
+
 import DossierBuilderService from "../modules/discovery/services/dossierBuilderService";
 import ConversationOrchestrator from "../modules/intelligence/engine/services/ConversationOrchestrator";
 import ConversationState from "../modules/intelligence/engine/domain/ConversationState";
@@ -10,6 +10,12 @@ import type { ConversationPhase } from "../modules/intelligence/engine/types/orc
 import { resolveAdvisorByCode, createDiscoveryLink, exchangeDiscoveryToken, resolveDiscoverySession } from "../modules/discovery/services/discoveryLinkService";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../config/firebase";
+
+interface SessionLinkInfo {
+  linkId: string;
+  companyName: string;
+  contactName: string;
+}
 
 interface GenerateDiscoveryReportRequest {
   sessionId: string;
@@ -46,7 +52,7 @@ export default function DiscoverPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const [linkInfo, setLinkInfo] = useState<DiscoveryLink | null>(null);
+  const [linkInfo, setLinkInfo] = useState<SessionLinkInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -136,13 +142,9 @@ export default function DiscoverPage() {
 
       if (linkId === "demo") {
         setLinkInfo({
-          id: "demo",
+          linkId: "demo",
           companyName: "Empresa Demo S.A.",
-          contactName: "Invitado",
-          createdAt: new Date(),
-          createdBy: "system",
-          status: "pending",
-          dossierId: "",
+          contactName: "Invitado"
         });
         setLoading(false);
         return;
@@ -180,7 +182,11 @@ export default function DiscoverPage() {
           return;
         }
 
-        setLinkInfo(result as any);
+        setLinkInfo({
+          linkId: result.id,
+          companyName: result.companyName,
+          contactName: result.contactName
+        });
       } catch (err: any) {
         console.error("Error al cargar enlace Discovery:", err);
 
@@ -264,10 +270,14 @@ export default function DiscoverPage() {
       // Clear URL fragment without exposing token
       window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
 
-      setLinkInfo(result as any);
+      setLinkInfo({
+        linkId: result.linkId,
+        companyName: result.companyName,
+        contactName: result.contactName
+      });
       setPendingAccessToken(null);
       setScreen("welcome");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error exchanging token:", err);
       setError("El enlace no es válido, ya fue utilizado o ha expirado.");
     } finally {
@@ -418,15 +428,22 @@ export default function DiscoverPage() {
     setIsAuraTyping(true);
     setReportStatus("GENERATING");
     try {
-      const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkInfo.id}`);
+      const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkInfo.linkId}`);
+
+      if (!linkInfo.linkId || !sessionToken) {
+        setError("Error crítico: Faltan parámetros de sesión obligatorios.");
+        setReportStatus("ERROR");
+        return;
+      }
+
       const { sessionId, prospectId } = await DossierBuilderService.saveDiscoverySession(
-        linkInfo.id,
+        linkInfo.linkId,
         linkInfo.companyName,
         linkInfo.contactName,
         stateRef.current.dossier,
         stateRef.current.getHistory(),
         stateRef.current.getSnapshot(),
-        sessionToken || undefined
+        sessionToken
       );
 
       // Request PDF Generation
@@ -443,7 +460,7 @@ export default function DiscoverPage() {
         console.log("Report generated:", res.data.reportId);
         setGeneratedReportId(res.data.reportId);
         setReportStatus("READY");
-      } catch (pdfErr: any) {
+      } catch (pdfErr) {
         console.error("Error generating PDF:", pdfErr);
         setReportStatus("ERROR");
       }
@@ -463,7 +480,7 @@ export default function DiscoverPage() {
 
   async function handleDownloadReport() {
     if (!generatedReportId || !linkInfo) return;
-    const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkInfo.id}`);
+    const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkInfo.linkId}`);
     if (!sessionToken) {
       setDownloadError("Sesión expirada. Por favor recargue la página e ingrese nuevamente.");
       return;

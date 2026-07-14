@@ -62,10 +62,35 @@ export async function createDiscoveryLink(data: any, advisorContext?: any): Prom
   return result.data;
 }
 
-export async function exchangeDiscoveryToken(linkId: string, oneTimeToken: string) {
+export interface ExchangeDiscoveryTokenResponse {
+  sessionAccessToken: string;
+  linkId: string;
+  trustScoreDecision: string;
+  companyName: string;
+  contactName: string;
+}
+
+export function isExchangeDiscoveryTokenResponse(value: unknown): value is ExchangeDiscoveryTokenResponse {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj.sessionAccessToken === "string" && obj.sessionAccessToken.trim() !== "" &&
+    typeof obj.linkId === "string" && obj.linkId.trim() !== "" &&
+    typeof obj.trustScoreDecision === "string" &&
+    typeof obj.companyName === "string" &&
+    typeof obj.contactName === "string"
+  );
+}
+
+export async function exchangeDiscoveryToken(linkId: string, oneTimeToken: string): Promise<ExchangeDiscoveryTokenResponse> {
   const exchangeFn = httpsCallable(functions, "exchangeDiscoveryToken");
   const result = await exchangeFn({ linkId, oneTimeToken });
-  return result.data as { sessionAccessToken: string; linkId: string; trustScoreDecision: string; companyName: string; contactName: string };
+
+  if (!isExchangeDiscoveryTokenResponse(result.data)) {
+    throw new Error("EXCHANGE_TOKEN_RESPONSE_INVALID");
+  }
+
+  return result.data;
 }
 
 export async function resolveDiscoverySession(linkId: string, sessionToken: string) {
