@@ -106,6 +106,9 @@ export const discardPipelineProspect = onCall(
         if (advisorDoc.data()?.uid !== callerUid) {
           throw new HttpsError("permission-denied", "No tienes permisos para descartar este prospecto asignado.");
         }
+        if (advisorDoc.data()?.advisorStatus === "INACTIVE" || advisorDoc.data()?.advisorStatus === "SUSPENDED") {
+          throw new HttpsError("permission-denied", "Tu cuenta de asesor está inactiva o suspendida.");
+        }
       }
 
       const companyRef = db.collection("market_companies").doc(companyId);

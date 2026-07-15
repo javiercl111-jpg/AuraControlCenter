@@ -81,12 +81,25 @@ exports.replenishAdvisorPipeline = (0, https_1.onCall)({
         if (advisorQuery.empty) {
             throw new https_1.HttpsError("permission-denied", "No se encontró un perfil de asesor comercial asociado.");
         }
-        advisorId = advisorQuery.docs[0].id;
+        const advDoc = advisorQuery.docs[0];
+        const advData = advDoc.data();
+        if (advData?.advisorStatus === "INACTIVE" || advData?.advisorStatus === "SUSPENDED") {
+            throw new https_1.HttpsError("permission-denied", "Tu cuenta de asesor está inactiva o suspendida.");
+        }
+        advisorId = advDoc.id;
     }
     else {
         // If specifying another advisor, caller must be admin
         if (!isAdmin && advisorId !== callerData?.advisorId) {
             throw new https_1.HttpsError("permission-denied", "No tienes permisos para reponer el pipeline de otro asesor.");
+        }
+        const advisorDoc = await db.collection("platform_sales_advisors").doc(advisorId).get();
+        if (!advisorDoc.exists) {
+            throw new https_1.HttpsError("not-found", "Asesor comercial no encontrado.");
+        }
+        const advData = advisorDoc.data();
+        if (advData.advisorStatus === "INACTIVE" || advData.advisorStatus === "SUSPENDED") {
+            throw new https_1.HttpsError("permission-denied", "El asesor comercial está inactivo o suspendido.");
         }
     }
     // Target size bounds validation (1 to 20, default 10)

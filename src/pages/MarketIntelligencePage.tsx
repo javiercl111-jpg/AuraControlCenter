@@ -15,7 +15,7 @@ import MarketFirestoreService, { type ImportHistoryEntry } from "../modules/mark
 import ErrorBoundary from "../modules/market-intelligence/components/ErrorBoundary";
 import DiscoveryLinkGenerator from "../modules/discovery/components/DiscoveryLinkGenerator";
 import MarketQueryEngine, { getCompanyState, getCompanyIndustry, getNormalizedStateName } from "../modules/market-intelligence/services/marketQueryEngine";
-import { resolveCanonicalIndustry } from "../modules/market-intelligence/services/industryResolverService";
+import { getCanonicalCommercialIndustry } from "../modules/market-intelligence/services/industryResolverService";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability, getCurrentUserRole } from "../services/rbacService";
@@ -55,6 +55,7 @@ const DEFAULT_FILTERS: FiltersState = {
 export default function MarketIntelligencePage() {
   const isCancelledRef = useRef<boolean>(false);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
+  const activeLoadRequestRef = useRef<string | null>(null);
 
   // Estados de carga e interfaz
   const [rawDataset, setRawDataset] = useState<InegiCompany[]>([]);
@@ -560,13 +561,31 @@ export default function MarketIntelligencePage() {
     return Array.from(statesSet).sort();
   }, [dbUniqueStates, filters.estado, rawDataset]);
 
+  // Dataset para los conteos del selector de sector (con todos los filtros aplicados excepto el sector seleccionado)
+  const sectorCountsDataset = useMemo(() => {
+    return MarketQueryEngine.filterMarketCompanies(rawDataset, {
+      estado: filters.estado,
+      status: filters.status,
+      tamano: filters.tamano,
+      sector: "", // SIN sector para evitar conteo en cero
+      municipio: filters.municipio,
+      hasEmail: filters.hasEmail,
+      hasPhone: filters.hasPhone,
+      hasWebsite: filters.hasWebsite,
+      minScore: filters.minScore,
+      search: filters.search,
+      scian: filters.scian,
+    });
+  }, [rawDataset, filters]);
+
   // Derivar estadísticas de sectores comerciales para diagnóstico (Una sola pasada optimizada)
   const industriesStats = useMemo(() => {
     const allCounts: Record<string, number> = {};
     const stateFilteredCounts: Record<string, number> = {};
 
-    rawDataset.forEach((c) => {
-      const code = c.commercialIndustryCode || resolveCanonicalIndustry(c).code;
+    sectorCountsDataset.forEach((c) => {
+      const canonical = getCanonicalCommercialIndustry(c);
+      const code = canonical.code;
       allCounts[code] = (allCounts[code] || 0) + 1;
       stateFilteredCounts[code] = (stateFilteredCounts[code] || 0) + 1;
     });
@@ -575,7 +594,7 @@ export default function MarketIntelligencePage() {
       allCounts,
       stateFilteredCounts,
     };
-  }, [rawDataset]);
+  }, [sectorCountsDataset]);
 
   // Reporte de importación masiva realizada (Prioridad 4)
   const [importReport, setImportReport] = useState<{
@@ -777,6 +796,8 @@ export default function MarketIntelligencePage() {
 
   // Cargar conjunto de datos (Aura Dataset Manager & Firestore)
   async function loadDataset(resetPage = false, forceFetch = false, overrideState?: string) {
+    const requestId = Math.random().toString(36).substring(7);
+    activeLoadRequestRef.current = requestId;
     setIsLoading(true);
     setError("");
 
@@ -829,6 +850,12 @@ export default function MarketIntelligencePage() {
         }
       }
 
+      // Evitar race conditions asíncronas
+      if (activeLoadRequestRef.current !== requestId) {
+        console.log(`[Aura loadDataset] Cancelando actualización de estado obsoleta para petición: ${targetStateKey}`);
+        return;
+      }
+
       // Sincronizar fuentes de verdad locales
       setRawDataset(currentRaw);
       setActiveMetadata(entryMetadata);
@@ -842,6 +869,7 @@ export default function MarketIntelligencePage() {
       });
 
     } catch (err: any) {
+      if (activeLoadRequestRef.current !== requestId) return;
       console.error({
         code: err.code || null,
         message: err.message || null,
@@ -854,7 +882,9 @@ export default function MarketIntelligencePage() {
       });
       setError("Error al cargar los prospectos de mercado: " + err.message);
     } finally {
-      setIsLoading(false);
+      if (activeLoadRequestRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   }
 
@@ -1805,6 +1835,7 @@ export default function MarketIntelligencePage() {
           onSelectCompany={handleSelectCompany}
           stats={stats}
           advisorId={advisorId}
+          loadedState={loadedState}
         />
       </div>
     );

@@ -251,13 +251,53 @@ export function resolveCanonicalIndustry(company: {
 }
 
 /**
+ * Resuelve de forma robusta la clasificación comercial canónica validando contra el catálogo permitido.
+ * Si el código es inválido o falta su etiqueta, recalcula mediante resolveCanonicalIndustry.
+ */
+export function getCanonicalCommercialIndustry(company: {
+  commercialIndustryCode?: string | null;
+  commercialIndustryLabel?: string | null;
+  scian?: string | null;
+  actividad?: string | null;
+  nombreActividad?: string | null;
+  descripcionActividad?: string | null;
+  claseActividad?: string | null;
+  sector?: string | null;
+}): CanonicalIndustry {
+  const code = company.commercialIndustryCode;
+  const label = company.commercialIndustryLabel;
+  const allowed = new Set([
+    "HOTELS_LODGING",
+    "RESTAURANTS_FOOD",
+    "MANUFACTURING",
+    "CONSTRUCTION",
+    "HEALTHCARE",
+    "EDUCATION",
+    "PROFESSIONAL_SERVICES",
+    "RETAIL",
+    "WHOLESALE",
+    "TRANSPORT_LOGISTICS",
+    "TECHNOLOGY",
+    "GOVERNMENT",
+    "FINANCIAL_SERVICES",
+    "GENERAL_SERVICES",
+    "OTHER"
+  ]);
+
+  if (code && allowed.has(code) && label) {
+    return { code, label };
+  }
+  return resolveCanonicalIndustry(company);
+}
+
+/**
  * Traduce un sector del SCIAN a su categoría comercial normalizada.
  * Si no se encuentra coincidencia, retorna una versión limpia/capitalizada del sector original.
  * Conserva compatibilidad con firmas antiguas.
  */
 export function resolveCommercialIndustry(scianSector: string): string {
   if (!scianSector) return "Otros Sectores";
-  const canonical = resolveCanonicalIndustry({ sector: scianSector });
+  const canonical = getCanonicalCommercialIndustry({ sector: scianSector });
   if (canonical.code === "OTHER") {
     const clean = scianSector.trim();
     return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
@@ -293,6 +333,7 @@ const industryResolverService = {
   resolveCanonicalIndustry,
   resolveCommercialIndustry,
   getCommercialSectorsDropdown,
+  getCanonicalCommercialIndustry,
   INDUSTRY_MAPPINGS
 };
 

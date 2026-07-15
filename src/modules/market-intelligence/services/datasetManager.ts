@@ -1,6 +1,6 @@
 import type { InegiCompany } from "../types/inegi";
 import { generateAuraSalesAdvice } from "./auraSalesAdvisorService";
-import { resolveCommercialIndustry } from "./industryResolverService";
+import { getCanonicalCommercialIndustry } from "./industryResolverService";
 
 export interface DatasetMetadata {
   stateName: string;
@@ -36,7 +36,7 @@ export function generateMetadata(
 
   companies.forEach((company) => {
     // Clasificar industria
-    const resolvedIndustry = resolveCommercialIndustry(company.sector) || "Otros Sectores";
+    const resolvedIndustry = getCanonicalCommercialIndustry(company).label || "Otros Sectores";
     industryDistribution[resolvedIndustry] = (industryDistribution[resolvedIndustry] || 0) + 1;
 
     // Calcular analítica de ventas del asesor

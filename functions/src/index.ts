@@ -1001,6 +1001,7 @@ export { requestExecutiveDocument } from "./discovery/reports/requestExecutiveDo
 export { createSalesAdvisorUser } from "./advisors/createSalesAdvisorUser";
 export { provisionCommercialAdvisor } from "./advisors/provisionCommercialAdvisor";
 export { resolveAdvisorByCode } from "./advisors/resolveAdvisorByCode";
+export { manageAdvisorAccess } from "./advisors/manageAdvisorAccess";
 
 // --- Prospects ---
 export { processProspectLifecycle } from "./prospects/processProspectLifecycle";

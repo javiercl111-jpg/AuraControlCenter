@@ -195,7 +195,7 @@ export function getNormalizedSizeCategory(tamano: string): string {
   return "micro";
 }
 
-import { resolveCommercialIndustry, resolveCanonicalIndustry } from "./industryResolverService";
+import { resolveCommercialIndustry, getCanonicalCommercialIndustry } from "./industryResolverService";
 
 /**
  * Resuelve de forma robusta la descripción de industria de una compañía
@@ -203,8 +203,7 @@ import { resolveCommercialIndustry, resolveCanonicalIndustry } from "./industryR
  */
 export function getCompanyIndustry(company: any): string {
   if (!company) return "";
-  if (company.commercialIndustryLabel) return company.commercialIndustryLabel;
-  return resolveCanonicalIndustry(company).label;
+  return getCanonicalCommercialIndustry(company).label;
 }
 
 /**
@@ -212,9 +211,7 @@ export function getCompanyIndustry(company: any): string {
  */
 export function matchesSector(company: any, filterSector: string): boolean {
   if (!filterSector) return true;
-  const canonical = company.commercialIndustryCode && company.commercialIndustryLabel
-    ? { code: company.commercialIndustryCode, label: company.commercialIndustryLabel }
-    : resolveCanonicalIndustry(company);
+  const canonical = getCanonicalCommercialIndustry(company);
 
   const normFilter = normalizeString(filterSector);
   return (

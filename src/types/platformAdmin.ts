@@ -14,5 +14,6 @@ export interface PlatformGlobalAdmin {
   displayName: string;
   role: PlatformAdminRole;
   isActive: boolean;
+  advisorId?: string;
   createdAt?: unknown;
 }

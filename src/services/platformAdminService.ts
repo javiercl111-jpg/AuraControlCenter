@@ -23,6 +23,7 @@ export async function getPlatformAdminByEmailOrUid(
         displayName: data.displayName || "",
         role: (data.role || data.roleCode || data.type || "VIEWER") as PlatformAdminRole,
         isActive: Boolean(data.isActive) || data.status === "ACTIVE",
+        advisorId: data.advisorId,
         createdAt: data.createdAt,
       };
     }
@@ -43,6 +44,7 @@ export async function getPlatformAdminByEmailOrUid(
     displayName: data.displayName || "",
     role: (data.role || data.roleCode || data.type || "VIEWER") as PlatformAdminRole,
     isActive: Boolean(data.isActive) || data.status === "ACTIVE",
+    advisorId: data.advisorId,
     createdAt: data.createdAt,
   };
 }
@@ -62,7 +64,26 @@ export async function getPlatformAdminByEmail(
  */
 export async function isGlobalAdmin(email: string, uid?: string): Promise<boolean> {
   const admin = await getPlatformAdminByEmailOrUid(email, uid);
-  return Boolean(admin && admin.isActive);
+  if (!admin || !admin.isActive) return false;
+
+  // Si es un asesor comercial, validar que su perfil de asesor no esté INACTIVO o SUSPENDIDO
+  if (admin.role === "SALES_ADVISOR") {
+    if (!admin.advisorId) return false;
+    try {
+      const advisorRef = doc(db, "platform_sales_advisors", admin.advisorId);
+      const snapshot = await getDoc(advisorRef);
+      if (!snapshot.exists()) return false;
+      const advData = snapshot.data();
+      if (advData?.advisorStatus === "INACTIVE" || advData?.advisorStatus === "SUSPENDED") {
+        return false;
+      }
+    } catch (err) {
+      console.error("[rbacService] Error al comprobar estado del asesor:", err);
+      return false;
+    }
+  }
+
+  return true;
 }
 
 const PlatformAdminService = {

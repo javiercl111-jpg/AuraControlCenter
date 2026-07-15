@@ -152,6 +152,7 @@ exports.provisionCommercialAdvisor = (0, https_1.onCall)({
             email: normalizedEmail,
             role: "SALES_ADVISOR",
             advisorId,
+            isActive: true, // Allow login
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
         // 7. Update Custom Claims
@@ -178,6 +179,26 @@ exports.provisionCommercialAdvisor = (0, https_1.onCall)({
         }
         catch (err) {
             throw new Error("Error generando el enlace de activación: " + err.message);
+        }
+        // 8b. Emit event for notifications (ADVISOR_PROVISIONED)
+        try {
+            const eventId = db.collection("platform_events").doc().id;
+            await db.collection("platform_events").doc(eventId).set({
+                eventId,
+                type: "ADVISOR_PROVISIONED",
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                recipientAdvisorId: advisorId,
+                actorId: request.auth.uid,
+                metadata: {
+                    advisorId,
+                    name,
+                    email: normalizedEmail,
+                    commercialCode,
+                }
+            });
+        }
+        catch (evtErr) {
+            console.error("Fallo al registrar evento ADVISOR_PROVISIONED:", evtErr);
         }
         return {
             success: true,

@@ -99,6 +99,9 @@ exports.discardPipelineProspect = (0, https_1.onCall)({
             if (advisorDoc.data()?.uid !== callerUid) {
                 throw new https_1.HttpsError("permission-denied", "No tienes permisos para descartar este prospecto asignado.");
             }
+            if (advisorDoc.data()?.advisorStatus === "INACTIVE" || advisorDoc.data()?.advisorStatus === "SUSPENDED") {
+                throw new https_1.HttpsError("permission-denied", "Tu cuenta de asesor está inactiva o suspendida.");
+            }
         }
         const companyRef = db.collection("market_companies").doc(companyId);
         const companySnap = await transaction.get(companyRef);

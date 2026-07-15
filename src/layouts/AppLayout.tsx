@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   BadgeDollarSign,
   Briefcase,
@@ -25,6 +25,8 @@ import {
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { auth } from "../config/firebase";
+import { getCurrentUserRole } from "../services/rbacService";
+import type { PlatformAdminRole } from "../types/platformAdmin";
 
 const navItems = [
   { label: "Dashboard", path: "/", icon: Gauge },
@@ -58,6 +60,35 @@ const bottomNavItems = [
 export default function AppLayout() {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [userRole, setUserRole] = useState<PlatformAdminRole | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchRole() {
+      const role = await getCurrentUserRole();
+      if (active) {
+        setUserRole(role);
+      }
+    }
+    fetchRole();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const filteredNavItems = navItems.filter((item) => {
+    if (userRole === "SALES_ADVISOR") {
+      return ["Dashboard", "CRM", "Aura Prospect Intelligence"].includes(item.label);
+    }
+    return true;
+  });
+
+  const filteredBottomNavItems = bottomNavItems.filter((item) => {
+    if (userRole === "SALES_ADVISOR") {
+      return ["Dashboard", "Aura Prospect Intelligence"].includes(item.label);
+    }
+    return true;
+  });
 
   async function handleLogout() {
     await auth.signOut();
@@ -114,7 +145,7 @@ export default function AppLayout() {
             </div>
 
             <nav className="space-y-1.5 flex-1 pb-8">
-              {navItems.map((item) => {
+              {filteredNavItems.map((item) => {
                 const Icon = item.icon;
 
                 return (
@@ -182,7 +213,7 @@ export default function AppLayout() {
         </div>
 
         <nav className="space-y-2 pb-8">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const Icon = item.icon;
 
             return (
@@ -220,7 +251,7 @@ export default function AppLayout() {
 
       {/* BOTTOM NAV MÓVIL (Pantallas < xl) */}
       <nav className="fixed bottom-0 inset-x-0 z-40 flex h-16 items-center justify-around border-t border-cyan-400/10 bg-slate-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur px-2 py-2 xl:hidden">
-        {bottomNavItems.map((item) => {
+        {filteredBottomNavItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink

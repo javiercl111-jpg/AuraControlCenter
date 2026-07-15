@@ -17,6 +17,7 @@ interface CommercialDashboardProps {
     avgScore: number;
   };
   advisorId?: string;
+  loadedState?: string | null;
 }
 
 export default function CommercialDashboard({
@@ -24,8 +25,9 @@ export default function CommercialDashboard({
   onSelectCompany,
   stats,
   advisorId,
+  loadedState,
 }: CommercialDashboardProps) {
-  const report = CommercialAdvisorService.generateAdvisorReport(companies);
+  const report = CommercialAdvisorService.generateAdvisorReport(companies, loadedState);
 
   // Totales
   const critical = companies.filter(
@@ -68,8 +70,13 @@ export default function CommercialDashboard({
       {/* 2. KPIs principales */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 font-sans">
         <div className="rounded-xl border border-slate-800 bg-slate-900/20 p-4.5">
-          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prospectos</span>
+          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prospectos analizados</span>
           <span className="block text-2xl font-extrabold text-white mt-1">{stats.totalCount}</span>
+          {!loadedState && (
+            <span className="block text-[8px] text-amber-500/80 mt-1 leading-normal font-medium">
+              Muestra actual: hasta 2,000 registros
+            </span>
+          )}
         </div>
         <div className="rounded-xl border border-rose-500/15 bg-rose-500/5 p-4.5">
           <span className="block text-[10px] font-bold text-rose-400 uppercase tracking-wider">Críticos</span>
@@ -113,7 +120,7 @@ export default function CommercialDashboard({
           </div>
         </div>
         <div className="rounded-xl border border-indigo-500/15 bg-indigo-500/5 p-4.5">
-          <span className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Estados Activos</span>
+          <span className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Estados representados en la muestra</span>
           <span className="block text-2xl font-extrabold text-indigo-300 mt-1">{activeStates}</span>
         </div>
       </div>

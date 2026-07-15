@@ -1,7 +1,11 @@
 import { ShieldAlert } from "lucide-react";
 import { Link } from "react-router-dom";
 
-export default function PermissionDenied() {
+interface PermissionDeniedProps {
+  description?: string;
+}
+
+export default function PermissionDenied({ description }: PermissionDeniedProps) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-3xl border border-red-500/10 bg-slate-900/20 p-8 text-center backdrop-blur">
       <div className="rounded-2xl bg-red-500/10 p-4 text-red-400">
@@ -13,8 +17,7 @@ export default function PermissionDenied() {
       </h2>
       
       <p className="mt-2 text-sm text-slate-400 max-w-md leading-relaxed">
-        Tu rol de seguridad actual en Aura Control Center no cuenta con las capacidades 
-        requeridas para consultar o interactuar con el motor de Market Intelligence.
+        {description || "Tu rol de seguridad actual en Aura Control Center no cuenta con las capacidades requeridas para consultar o interactuar con este módulo."}
       </p>
       
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">

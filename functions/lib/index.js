@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.reactivatePipelineProspect = exports.discardPipelineProspect = exports.replenishAdvisorPipeline = exports.processProspectLifecycle = exports.resolveAdvisorByCode = exports.provisionCommercialAdvisor = exports.createSalesAdvisorUser = exports.requestExecutiveDocument = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
+exports.reactivatePipelineProspect = exports.discardPipelineProspect = exports.replenishAdvisorPipeline = exports.processProspectLifecycle = exports.manageAdvisorAccess = exports.resolveAdvisorByCode = exports.provisionCommercialAdvisor = exports.createSalesAdvisorUser = exports.requestExecutiveDocument = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
@@ -848,6 +848,8 @@ var provisionCommercialAdvisor_1 = require("./advisors/provisionCommercialAdviso
 Object.defineProperty(exports, "provisionCommercialAdvisor", { enumerable: true, get: function () { return provisionCommercialAdvisor_1.provisionCommercialAdvisor; } });
 var resolveAdvisorByCode_1 = require("./advisors/resolveAdvisorByCode");
 Object.defineProperty(exports, "resolveAdvisorByCode", { enumerable: true, get: function () { return resolveAdvisorByCode_1.resolveAdvisorByCode; } });
+var manageAdvisorAccess_1 = require("./advisors/manageAdvisorAccess");
+Object.defineProperty(exports, "manageAdvisorAccess", { enumerable: true, get: function () { return manageAdvisorAccess_1.manageAdvisorAccess; } });
 // --- Prospects ---
 var processProspectLifecycle_1 = require("./prospects/processProspectLifecycle");
 Object.defineProperty(exports, "processProspectLifecycle", { enumerable: true, get: function () { return processProspectLifecycle_1.processProspectLifecycle; } });

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../config/firebase";
 import { getCurrentUserRole } from "../services/rbacService";
+import PermissionDenied from "../components/PermissionDenied";
 
 import {
   getSalesAdvisors,
@@ -29,6 +30,7 @@ export default function SalesAdvisorsPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [isOwner, setIsOwner] = useState(false);
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
   async function loadAdvisors() {
     try {
@@ -44,6 +46,9 @@ export default function SalesAdvisorsPage() {
     loadAdvisors();
     async function checkRole() {
       const role = await getCurrentUserRole();
+      const allowedRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER"];
+      const allowed = allowedRoles.includes(role || "");
+      setHasAccess(allowed);
       setIsOwner(role === "SUPER_ADMIN" || role === "FOUNDER" || (role as string) === "PLATFORM_OWNER");
     }
     checkRole();
@@ -99,6 +104,34 @@ export default function SalesAdvisorsPage() {
     }
   }
 
+  async function handleAdvisorAccessAction(action: "reinvite" | "deactivate" | "reactivate" | "resetPassword", advisorId: string) {
+    setIsLoading(true);
+    setError("");
+    setSuccess("");
+    setActivationLink("");
+
+    try {
+      const manageAdvisorAccess = httpsCallable(functions, "manageAdvisorAccess");
+      const result = await manageAdvisorAccess({ action, advisorId });
+      const data = result.data as any;
+
+      if (data.success) {
+        setSuccess(data.message || "Operación realizada con éxito.");
+        if (data.activationLink) {
+          setActivationLink(data.activationLink);
+        }
+        await loadAdvisors();
+      } else {
+        setError("Error en la operación.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "No se pudo realizar la acción.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -107,6 +140,20 @@ export default function SalesAdvisorsPage() {
       alert("No se pudo copiar el enlace.");
     }
   };
+
+  if (hasAccess === null) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-cyan-300">
+        Validando permisos de administrador...
+      </div>
+    );
+  }
+
+  if (hasAccess === false) {
+    return (
+      <PermissionDenied description="Tu rol de seguridad actual en Aura Control Center no cuenta con las capacidades requeridas para gestionar asesores comerciales." />
+    );
+  }
 
   return (
     <div>
@@ -213,18 +260,38 @@ export default function SalesAdvisorsPage() {
                 <div>
                   <h3 className="font-bold text-white flex items-center gap-2">
                     {advisor.name}
+                    {advisor.advisorStatus === 'INACTIVE' && (
+                      <span className="bg-red-950 text-red-400 text-[10px] px-2 py-0.5 rounded-full border border-red-500/20 uppercase font-bold tracking-wider">
+                        INACTIVO
+                      </span>
+                    )}
                     {advisor.advisorStatus === 'SUSPENDED' && (
-                      <span className="bg-red-900/50 text-red-400 text-[10px] px-2 py-0.5 rounded-full border border-red-500/30">
+                      <span className="bg-red-900/50 text-red-400 text-[10px] px-2 py-0.5 rounded-full border border-red-500/30 uppercase font-bold tracking-wider">
                         SUSPENDIDO
                       </span>
                     )}
-                    {advisor.invitationStatus === 'PENDING' && (
-                      <span className="bg-amber-900/50 text-amber-400 text-[10px] px-2 py-0.5 rounded-full border border-amber-500/30">
+                    {advisor.advisorStatus === 'ACTIVE' && (
+                      <span className="bg-emerald-950 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase font-bold tracking-wider">
+                        ACTIVO
+                      </span>
+                    )}
+                    {(advisor.invitationStatus === 'PENDING' || advisor.invitationStatus === 'SEND_FAILED') && (
+                      <span className="bg-amber-950 text-amber-400 text-[10px] px-2 py-0.5 rounded-full border border-amber-500/20 uppercase font-bold tracking-wider">
                         INVITACIÓN PENDIENTE
+                      </span>
+                    )}
+                    {advisor.lastSafeErrorCode === 'AUTH_CONFLICT' && (
+                      <span className="bg-amber-950 text-amber-500 text-[10px] px-2 py-0.5 rounded-full border border-amber-500/20 uppercase font-bold tracking-wider">
+                        CONFLICTO DE AUTH
                       </span>
                     )}
                   </h3>
                   <p className="text-slate-400 text-sm mt-1">{advisor.email}</p>
+                  {advisor.uid && (
+                    <span className="text-[10px] text-slate-500 font-mono block mt-1">
+                      UID: {advisor.uid}
+                    </span>
+                  )}
                 </div>
                 
                 {advisor.commercialCode && (
@@ -257,6 +324,46 @@ export default function SalesAdvisorsPage() {
                       WhatsApp
                     </button>
                   </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex gap-2 justify-end border-t border-slate-800/30 pt-3">
+                {(advisor.invitationStatus === 'PENDING' || advisor.invitationStatus === 'SEND_FAILED') && (
+                  <button
+                    onClick={() => handleAdvisorAccessAction("reinvite", advisor.id!)}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 bg-indigo-900/60 hover:bg-indigo-800/60 text-indigo-300 border border-indigo-500/20 rounded text-xs font-bold transition"
+                  >
+                    Reenviar Invitación
+                  </button>
+                )}
+
+                {advisor.advisorStatus === 'ACTIVE' && (
+                  <button
+                    onClick={() => handleAdvisorAccessAction("resetPassword", advisor.id!)}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-bold transition"
+                  >
+                    Restablecer Contraseña
+                  </button>
+                )}
+
+                {advisor.advisorStatus === 'ACTIVE' ? (
+                  <button
+                    onClick={() => handleAdvisorAccessAction("deactivate", advisor.id!)}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 bg-red-900/40 border border-red-500/20 hover:bg-red-900/60 text-red-300 rounded text-xs font-bold transition"
+                  >
+                    Desactivar Acceso
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleAdvisorAccessAction("reactivate", advisor.id!)}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 bg-emerald-900/40 border border-emerald-500/20 hover:bg-emerald-900/60 text-emerald-300 rounded text-xs font-bold transition"
+                  >
+                    Reactivar Acceso
+                  </button>
                 )}
               </div>
 

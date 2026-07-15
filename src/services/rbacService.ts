@@ -11,7 +11,12 @@ export type Capability =
   | "market.export" // Nueva capacidad, lista para UI futura
   | "market.assign" // Nueva capacidad, lista para UI futura
   | "organization.create"
-  | "timeline.create";
+  | "timeline.create"
+  | "market.pipeline.read"
+  | "market.pipeline.manage_own"
+  | "crm.leads.read_own"
+  | "crm.leads.update_own"
+  | "notifications.read_own";
 
 // Mapeo canónico de Roles de Seguridad a sus respectivas Capacidades
 const ROLE_CAPABILITIES: Record<PlatformAdminRole, Capability[]> = {
@@ -24,6 +29,11 @@ const ROLE_CAPABILITIES: Record<PlatformAdminRole, Capability[]> = {
     "market.assign",
     "organization.create",
     "timeline.create",
+    "market.pipeline.read",
+    "market.pipeline.manage_own",
+    "crm.leads.read_own",
+    "crm.leads.update_own",
+    "notifications.read_own",
   ],
   FOUNDER: [
     "market.read",
@@ -34,6 +44,11 @@ const ROLE_CAPABILITIES: Record<PlatformAdminRole, Capability[]> = {
     "market.assign",
     "organization.create",
     "timeline.create",
+    "market.pipeline.read",
+    "market.pipeline.manage_own",
+    "crm.leads.read_own",
+    "crm.leads.update_own",
+    "notifications.read_own",
   ],
   SALES_DIRECTOR: [
     "market.read",
@@ -44,6 +59,11 @@ const ROLE_CAPABILITIES: Record<PlatformAdminRole, Capability[]> = {
     "market.assign",
     "organization.create",
     "timeline.create",
+    "market.pipeline.read",
+    "market.pipeline.manage_own",
+    "crm.leads.read_own",
+    "crm.leads.update_own",
+    "notifications.read_own",
   ],
   CONSULTANT: [
     "market.read",
@@ -55,8 +75,11 @@ const ROLE_CAPABILITIES: Record<PlatformAdminRole, Capability[]> = {
   ],
   SALES_ADVISOR: [
     "market.read",
-    "market.update",
-    "market.assign",
+    "market.pipeline.read",
+    "market.pipeline.manage_own",
+    "crm.leads.read_own",
+    "crm.leads.update_own",
+    "notifications.read_own",
   ],
   VIEWER: [
     "market.read",
@@ -70,6 +93,11 @@ const ROLE_CAPABILITIES: Record<PlatformAdminRole, Capability[]> = {
     "market.assign",
     "organization.create",
     "timeline.create",
+    "market.pipeline.read",
+    "market.pipeline.manage_own",
+    "crm.leads.read_own",
+    "crm.leads.update_own",
+    "notifications.read_own",
   ],
   SUPPORT: [
     "market.read",

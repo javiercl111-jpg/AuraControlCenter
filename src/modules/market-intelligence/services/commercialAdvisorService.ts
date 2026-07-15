@@ -31,7 +31,8 @@ export interface CommercialAdvisorReport {
  * Analiza un conjunto de prospectos para guiar la prospección comercial del asesor.
  */
 export function generateAdvisorReport(
-  companies: InegiCompany[]
+  companies: InegiCompany[],
+  activeStateName?: string | null
 ): CommercialAdvisorReport {
   // 1. Valores fallback si no hay datos
   if (companies.length === 0) {
@@ -54,93 +55,84 @@ export function generateAdvisorReport(
   let highCount = 0;
   let mediumCount = 0;
   let lowCount = 0;
-  let totalScore = 0;
   let contactCompleteCount = 0;
 
-  // Contadores por estado
-  const stateGroups: Record<
-    string,
-    {
-      totalCount: number;
-      totalScore: number;
-      criticalCount: number;
-      highCount: number;
-      suiteCounts: Record<string, number>;
-    }
-  > = {};
-
-  // Contadores de suites
+  let totalScore = 0;
   const globalSuiteCounts: Record<string, number> = {};
 
-  for (const company of companies) {
-    const score = company.opportunityScore;
+  const stateGroups: Record<string, {
+    totalScore: number;
+    totalCount: number;
+    criticalCount: number;
+    highCount: number;
+    suites: Record<string, number>;
+  }> = {};
+
+  companies.forEach((company) => {
+    const score = company.opportunityScore || 50;
     totalScore += score;
 
-    // Calcular prioridad
-    const priority =
-      company.priorityLevel ||
-      (score >= 85 ? "CRITICAL" : score >= 70 ? "HIGH" : score >= 45 ? "MEDIUM" : "LOW");
+    // Prioridad
+    if (company.priorityLevel === "CRITICAL" || score >= 85) {
+      criticalCount++;
+    } else if (company.priorityLevel === "HIGH" || score >= 70) {
+      highCount++;
+    } else if (company.priorityLevel === "MEDIUM" || score >= 50) {
+      mediumCount++;
+    } else {
+      lowCount++;
+    }
 
-    if (priority === "CRITICAL") criticalCount++;
-    else if (priority === "HIGH") highCount++;
-    else if (priority === "MEDIUM") mediumCount++;
-    else lowCount++;
-
-    // Contacto completo (Email Y Teléfono disponibles)
+    // Datos de contacto completos
     const hasEmail = company.email && company.email !== "no disponible";
     const hasPhone = company.telefono && company.telefono !== "no disponible";
     if (hasEmail && hasPhone) {
       contactCompleteCount++;
     }
 
-    // Suites recomendadas
-    if (company.recommendedSuites) {
-      for (const suite of company.recommendedSuites) {
-        globalSuiteCounts[suite] = (globalSuiteCounts[suite] || 0) + 1;
-      }
-    }
+    // Suites sugeridas
+    const companySuites = company.recommendedSuites || ["People Suite"];
+    companySuites.forEach((suite) => {
+      globalSuiteCounts[suite] = (globalSuiteCounts[suite] || 0) + 1;
+    });
 
     // Agrupación por estado
-    const state = getCompanyState(company) || "No Especificado";
+    const state = getCompanyState(company);
     if (!stateGroups[state]) {
       stateGroups[state] = {
-        totalCount: 0,
         totalScore: 0,
+        totalCount: 0,
         criticalCount: 0,
         highCount: 0,
-        suiteCounts: {},
+        suites: {},
       };
     }
-    const stGroup = stateGroups[state];
-    stGroup.totalCount++;
-    stGroup.totalScore += score;
-    if (priority === "CRITICAL") stGroup.criticalCount++;
-    if (priority === "HIGH") stGroup.highCount++;
-
-    if (company.recommendedSuites) {
-      for (const suite of company.recommendedSuites) {
-        stGroup.suiteCounts[suite] = (stGroup.suiteCounts[suite] || 0) + 1;
-      }
+    const group = stateGroups[state];
+    group.totalCount++;
+    group.totalScore += score;
+    if (company.priorityLevel === "CRITICAL" || score >= 85) {
+      group.criticalCount++;
+    } else if (company.priorityLevel === "HIGH" || score >= 70) {
+      group.highCount++;
     }
-  }
+    companySuites.forEach((suite) => {
+      group.suites[suite] = (group.suites[suite] || 0) + 1;
+    });
+  });
 
   // 3. Estimar MRR Potencial
   let estimatedPotentialMrr = 0;
   for (const company of companies) {
-    const score = company.opportunityScore;
-    const priority =
-      company.priorityLevel ||
-      (score >= 85 ? "CRITICAL" : score >= 70 ? "HIGH" : score >= 45 ? "MEDIUM" : "LOW");
+    const score = company.opportunityScore || 50;
+    const priority = (company.priorityLevel || (score >= 85 ? "CRITICAL" : score >= 70 ? "HIGH" : score >= 45 ? "MEDIUM" : "LOW")) as keyof typeof POTENTIAL_MRR_LITE;
     estimatedPotentialMrr += POTENTIAL_MRR_LITE[priority];
   }
 
-  // 4. Generar reportes por estado
+  // 4. Mapear grupos por estado
   const opportunityByState = Object.entries(stateGroups).map(([state, data]) => {
-    // Dominantes (top 2 suites más repetidas en el estado)
-    const sortedSuites = Object.entries(data.suiteCounts)
+    const sortedSuites = Object.entries(data.suites)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 2)
-      .map(([name]) => name);
+      .map(([suite]) => suite);
 
     return {
       state,
@@ -148,18 +140,20 @@ export function generateAdvisorReport(
       avgScore: Math.round(data.totalScore / data.totalCount),
       criticalCount: data.criticalCount,
       highCount: data.highCount,
-      dominantSuites: sortedSuites.length > 0 ? sortedSuites : ["Sales Suite"],
+      dominantSuites: sortedSuites.length > 0 ? sortedSuites.slice(0, 2) : ["Sales Suite"],
     };
   });
 
-  // Ordenar estados por volumen y criticidad
+  // Ordenar estados por volumen
   opportunityByState.sort((a, b) => b.totalCount - a.totalCount);
 
   // 5. Executive Summary & recommended Focus
   const avgScoreGlobal = Math.round(totalScore / companies.length);
   const bestStates = opportunityByState.slice(0, 2).map((s) => s.state).join(" y ");
   
-  const executiveSummary = `Analicé un conjunto de ${companies.length} prospectos en base local. El nivel medio de afinidad tecnológica es del ${avgScoreGlobal}%. Identifiqué ${criticalCount} prospectos críticos y ${highCount} de alta prioridad que requieren atención inmediata.`;
+  const executiveSummary = activeStateName
+    ? `Analicé una muestra de ${companies.length} prospectos de ${activeStateName}. El nivel medio de afinidad tecnológica es del ${avgScoreGlobal}%. Identifiqué ${criticalCount} prospectos críticos y ${highCount} de alta prioridad que requieren atención inmediata.`
+    : `Analicé un conjunto de ${companies.length} prospectos en base local. El nivel medio de afinidad tecnológica es del ${avgScoreGlobal}%. Identifiqué ${criticalCount} prospectos críticos y ${highCount} de alta prioridad que requieren atención inmediata.`;
 
   let recommendedFocus = `Recomiendo enfocar los esfuerzos en la región de ${bestStates || "estados activos"}. `;
   if (criticalCount > 0) {
