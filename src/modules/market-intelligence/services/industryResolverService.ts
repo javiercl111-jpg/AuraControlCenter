@@ -75,90 +75,222 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-/**
- * Traduce un sector del SCIAN a su categoría comercial normalizada.
- * Si no se encuentra coincidencia, retorna una versión limpia/capitalizada del sector original.
- */
-export function resolveCommercialIndustry(scianSector: string): string {
-  if (!scianSector) return "Otros Sectores";
-
-  const normSector = normalizeText(scianSector);
-
-  // 1. Reglas prioritarias explícitas para Restaurantes y Alimentos / Hoteles y Hospedaje
-  if (
-    normSector.includes("restaurante") ||
-    normSector.includes("alimento") ||
-    normSector.includes("comida") ||
-    normSector.includes("bar") ||
-    normSector.includes("cafeteria") ||
-    normSector.includes("bebida")
-  ) {
-    return "Restaurantes y Alimentos";
-  }
-
-  if (
-    normSector.includes("hotel") ||
-    normSector.includes("hospedaje") ||
-    normSector.includes("motel") ||
-    normSector.includes("alojamiento")
-  ) {
-    return "Hoteles y Hospedaje";
-  }
-
-  // 2. Si el valor ingresado contiene un código numérico SCIAN, resolver por prefijo
-  const codeMatch = scianSector.trim().match(/^\d+/);
-  if (codeMatch) {
-    const code = codeMatch[0];
-    if (code.startsWith("721")) return "Hoteles y Hospedaje";
-    if (code.startsWith("722")) return "Restaurantes y Alimentos";
-    if (code.startsWith("72")) return "Restaurantes y Alimentos"; // Genérico 72
-    if (code.startsWith("62")) return "Hospitales";
-    if (code.startsWith("31") || code.startsWith("32") || code.startsWith("33")) return "Manufactura";
-    if (code.startsWith("43")) return "Comercio Mayorista";
-    if (code.startsWith("46")) return "Comercio Minorista";
-    if (code.startsWith("23")) return "Construcción";
-    if (code.startsWith("61")) return "Educación";
-    if (code.startsWith("48") || code.startsWith("49")) return "Logística";
-    if (code.startsWith("93")) return "Gobierno";
-    if (code.startsWith("52") || code.startsWith("55")) return "Servicios Financieros";
-    if (code.startsWith("51")) return "Medios y Telecomunicaciones";
-    if (code.startsWith("54")) return "Servicios Profesionales";
-  }
-
-  // Buscar en el diccionario
-  for (const mapping of INDUSTRY_MAPPINGS) {
-    for (const keyword of mapping.scianKeywords) {
-      const normKeyword = normalizeText(keyword);
-      if (normSector.includes(normKeyword) || normKeyword.includes(normSector)) {
-        return mapping.commercial;
-      }
-    }
-  }
-  
-  // Si no hay mapeo específico, retornar un valor por defecto o la descripción simplificada
-  if (normSector.includes("servicio")) {
-    return "Servicios Generales";
-  }
-  
-  // Capitalizar primer caracter
-  const clean = scianSector.trim();
-  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+export interface CanonicalIndustry {
+  code: string;
+  label: string;
 }
 
 /**
- * Retorna todos los sectores comerciales únicos para listados o dropdowns de filtros.
+ * Resuelve de forma robusta la clasificación comercial canónica (código y etiqueta)
+ * siguiendo un orden estricto de especificidad: SCIAN 6 dígitos -> SCIAN clase -> Actividad -> Sector.
+ */
+export function resolveCanonicalIndustry(company: {
+  scian?: string | null;
+  actividad?: string | null;
+  nombreActividad?: string | null;
+  descripcionActividad?: string | null;
+  claseActividad?: string | null;
+  sector?: string | null;
+}): CanonicalIndustry {
+  const getScianCode = (): string => {
+    if (company.scian) {
+      const match = String(company.scian).trim().match(/^\d+/);
+      if (match) return match[0];
+    }
+    const fields = [
+      company.actividad,
+      company.nombreActividad,
+      company.descripcionActividad,
+      company.claseActividad,
+      company.sector
+    ];
+    for (const f of fields) {
+      if (f) {
+        const match = String(f).trim().match(/^\d+/);
+        if (match) return match[0];
+      }
+    }
+    return "";
+  };
+
+  const scianCode = getScianCode();
+
+  if (scianCode) {
+    if (scianCode.startsWith("721")) {
+      return { code: "HOTELS_LODGING", label: "Hoteles y Hospedaje" };
+    }
+    if (scianCode.startsWith("722")) {
+      return { code: "RESTAURANTS_FOOD", label: "Restaurantes y Alimentos" };
+    }
+    if (scianCode.startsWith("31") || scianCode.startsWith("32") || scianCode.startsWith("33")) {
+      return { code: "MANUFACTURING", label: "Manufactura" };
+    }
+    if (scianCode.startsWith("23")) {
+      return { code: "CONSTRUCTION", label: "Construcción" };
+    }
+    if (scianCode.startsWith("62")) {
+      return { code: "HEALTHCARE", label: "Hospitales" };
+    }
+    if (scianCode.startsWith("61")) {
+      return { code: "EDUCATION", label: "Educación" };
+    }
+    if (scianCode.startsWith("54")) {
+      return { code: "PROFESSIONAL_SERVICES", label: "Servicios Profesionales" };
+    }
+    if (scianCode.startsWith("46")) {
+      return { code: "RETAIL", label: "Comercio Minorista" };
+    }
+    if (scianCode.startsWith("43")) {
+      return { code: "WHOLESALE", label: "Comercio Mayorista" };
+    }
+    if (scianCode.startsWith("48") || scianCode.startsWith("49")) {
+      return { code: "TRANSPORT_LOGISTICS", label: "Logística" };
+    }
+    if (scianCode.startsWith("51")) {
+      return { code: "TECHNOLOGY", label: "Medios y Telecomunicaciones" };
+    }
+    if (scianCode.startsWith("93")) {
+      return { code: "GOVERNMENT", label: "Gobierno" };
+    }
+    if (scianCode.startsWith("52") || scianCode.startsWith("55")) {
+      return { code: "FINANCIAL_SERVICES", label: "Servicios Financieros" };
+    }
+  }
+
+  const checkTextMatch = (text: string): CanonicalIndustry | null => {
+    const norm = normalizeText(text);
+    if (!norm) return null;
+
+    if (
+      norm.includes("hotel") ||
+      norm.includes("hospedaje") ||
+      norm.includes("motel") ||
+      norm.includes("alojamiento")
+    ) {
+      return { code: "HOTELS_LODGING", label: "Hoteles y Hospedaje" };
+    }
+
+    if (
+      norm.includes("restaurante") ||
+      norm.includes("alimento") ||
+      norm.includes("comida") ||
+      norm.includes("bar") ||
+      norm.includes("cafeteria") ||
+      norm.includes("bebida")
+    ) {
+      return { code: "RESTAURANTS_FOOD", label: "Restaurantes y Alimentos" };
+    }
+
+    if (norm.includes("hospital") || norm.includes("clinica") || norm.includes("medico") || norm.includes("consultorio") || norm.includes("salud")) {
+      return { code: "HEALTHCARE", label: "Hospitales" };
+    }
+
+    if (norm.includes("manufactura") || norm.includes("fabrica") || norm.includes("produccion") || norm.includes("maquila") || norm.includes("industrial")) {
+      return { code: "MANUFACTURING", label: "Manufactura" };
+    }
+
+    if (norm.includes("construccion") || norm.includes("edificacion") || norm.includes("obra civil")) {
+      return { code: "CONSTRUCTION", label: "Construcción" };
+    }
+
+    if (norm.includes("educacion") || norm.includes("escuela") || norm.includes("colegio") || norm.includes("universidad")) {
+      return { code: "EDUCATION", label: "Educación" };
+    }
+
+    if (norm.includes("profesional") || norm.includes("cientifico") || norm.includes("tecnico") || norm.includes("consultoria") || norm.includes("despacho")) {
+      return { code: "PROFESSIONAL_SERVICES", label: "Servicios Profesionales" };
+    }
+
+    if (norm.includes("comercio al por menor") || norm.includes("minorista") || norm.includes("tienda")) {
+      return { code: "RETAIL", label: "Comercio Minorista" };
+    }
+
+    if (norm.includes("comercio al por mayor") || norm.includes("mayorista")) {
+      return { code: "WHOLESALE", label: "Comercio Mayorista" };
+    }
+
+    if (norm.includes("transporte") || norm.includes("almacenamiento") || norm.includes("logistica")) {
+      return { code: "TRANSPORT_LOGISTICS", label: "Logística" };
+    }
+
+    if (norm.includes("telecomunicacion") || norm.includes("television") || norm.includes("radio") || norm.includes("internet") || norm.includes("medios masivos")) {
+      return { code: "TECHNOLOGY", label: "Medios y Telecomunicaciones" };
+    }
+
+    if (norm.includes("gobierno") || norm.includes("administracion publica")) {
+      return { code: "GOVERNMENT", label: "Gobierno" };
+    }
+
+    if (norm.includes("financiero") || norm.includes("banco") || norm.includes("seguro") || norm.includes("fianza")) {
+      return { code: "FINANCIAL_SERVICES", label: "Servicios Financieros" };
+    }
+
+    if (norm.includes("servicio")) {
+      return { code: "GENERAL_SERVICES", label: "Servicios Generales" };
+    }
+
+    return null;
+  };
+
+  const fieldsToTest = [
+    company.actividad,
+    company.nombreActividad,
+    company.descripcionActividad,
+    company.claseActividad,
+    company.sector
+  ];
+
+  for (const f of fieldsToTest) {
+    if (f) {
+      const match = checkTextMatch(f);
+      if (match) return match;
+    }
+  }
+
+  return { code: "OTHER", label: "Otros Sectores" };
+}
+
+/**
+ * Traduce un sector del SCIAN a su categoría comercial normalizada.
+ * Si no se encuentra coincidencia, retorna una versión limpia/capitalizada del sector original.
+ * Conserva compatibilidad con firmas antiguas.
+ */
+export function resolveCommercialIndustry(scianSector: string): string {
+  if (!scianSector) return "Otros Sectores";
+  const canonical = resolveCanonicalIndustry({ sector: scianSector });
+  if (canonical.code === "OTHER") {
+    const clean = scianSector.trim();
+    return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+  }
+  return canonical.label;
+}
+
+/**
+ * Retorna todos los sectores comerciales únicos con sus valores canónicos (códigos) para filtros dropdown.
  */
 export function getCommercialSectorsDropdown(): { label: string; value: string }[] {
-  const list = INDUSTRY_MAPPINGS.map(m => ({ label: m.commercial, value: m.commercial }));
   return [
     { label: "Todos los sectores", value: "" },
-    ...list,
-    { label: "Servicios Generales", value: "Servicios Generales" },
-    { label: "Otros Sectores", value: "Otros Sectores" }
+    { label: "Hoteles y Hospedaje", value: "HOTELS_LODGING" },
+    { label: "Restaurantes y Alimentos", value: "RESTAURANTS_FOOD" },
+    { label: "Manufactura", value: "MANUFACTURING" },
+    { label: "Construcción", value: "CONSTRUCTION" },
+    { label: "Hospitales", value: "HEALTHCARE" },
+    { label: "Educación", value: "EDUCATION" },
+    { label: "Servicios Profesionales", value: "PROFESSIONAL_SERVICES" },
+    { label: "Comercio Minorista", value: "RETAIL" },
+    { label: "Comercio Mayorista", value: "WHOLESALE" },
+    { label: "Logística", value: "TRANSPORT_LOGISTICS" },
+    { label: "Medios y Telecomunicaciones", value: "TECHNOLOGY" },
+    { label: "Gobierno", value: "GOVERNMENT" },
+    { label: "Servicios Financieros", value: "FINANCIAL_SERVICES" },
+    { label: "Servicios Generales", value: "GENERAL_SERVICES" },
+    { label: "Otros Sectores", value: "OTHER" }
   ];
 }
 
 const industryResolverService = {
+  resolveCanonicalIndustry,
   resolveCommercialIndustry,
   getCommercialSectorsDropdown,
   INDUSTRY_MAPPINGS

@@ -4,6 +4,7 @@ import type {
   OpportunityScoreBreakdown,
   RecommendedSuite,
 } from "../types/inegi";
+import { resolveCanonicalIndustry } from "./industryResolverService";
 import { getNormalizedStateName, normalizeState } from "./marketQueryEngine";
 
 // Normalización de emails: Limpieza, minúsculas, validación de placeholders
@@ -392,6 +393,8 @@ export function normalizeRow(row: any): InegiCompany {
     status: "NEW",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    commercialIndustryCode: resolveCanonicalIndustry({ scian, actividad, sector }).code,
+    commercialIndustryLabel: resolveCanonicalIndustry({ scian, actividad, sector }).label,
   };
 }
 
@@ -627,6 +630,8 @@ export function normalizeRowWithMap(rowArray: any[], map: HeaderMap): InegiCompa
     status: "NEW",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    commercialIndustryCode: resolveCanonicalIndustry({ scian, actividad, sector }).code,
+    commercialIndustryLabel: resolveCanonicalIndustry({ scian, actividad, sector }).label,
   };
 }
 

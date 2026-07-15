@@ -389,6 +389,177 @@ function detectHeaderRowAndBuildMap(rows: any[][]): { headerRowIndex: number; he
   return { headerRowIndex, headerMap };
 }
 
+interface CanonicalIndustry {
+  code: string;
+  label: string;
+}
+
+function resolveCanonicalIndustry(company: {
+  scian?: string | null;
+  actividad?: string | null;
+  nombreActividad?: string | null;
+  descripcionActividad?: string | null;
+  claseActividad?: string | null;
+  sector?: string | null;
+}): CanonicalIndustry {
+  const getScianCode = (): string => {
+    if (company.scian) {
+      const match = String(company.scian).trim().match(/^\d+/);
+      if (match) return match[0];
+    }
+    const fields = [
+      company.actividad,
+      company.nombreActividad,
+      company.descripcionActividad,
+      company.claseActividad,
+      company.sector
+    ];
+    for (const f of fields) {
+      if (f) {
+        const match = String(f).trim().match(/^\d+/);
+        if (match) return match[0];
+      }
+    }
+    return "";
+  };
+
+  const scianCode = getScianCode();
+
+  if (scianCode) {
+    if (scianCode.startsWith("721")) {
+      return { code: "HOTELS_LODGING", label: "Hoteles y Hospedaje" };
+    }
+    if (scianCode.startsWith("722")) {
+      return { code: "RESTAURANTS_FOOD", label: "Restaurantes y Alimentos" };
+    }
+    if (scianCode.startsWith("31") || scianCode.startsWith("32") || scianCode.startsWith("33")) {
+      return { code: "MANUFACTURING", label: "Manufactura" };
+    }
+    if (scianCode.startsWith("23")) {
+      return { code: "CONSTRUCTION", label: "Construcción" };
+    }
+    if (scianCode.startsWith("62")) {
+      return { code: "HEALTHCARE", label: "Hospitales" };
+    }
+    if (scianCode.startsWith("61")) {
+      return { code: "EDUCATION", label: "Educación" };
+    }
+    if (scianCode.startsWith("54")) {
+      return { code: "PROFESSIONAL_SERVICES", label: "Servicios Profesionales" };
+    }
+    if (scianCode.startsWith("46")) {
+      return { code: "RETAIL", label: "Comercio Minorista" };
+    }
+    if (scianCode.startsWith("43")) {
+      return { code: "WHOLESALE", label: "Comercio Mayorista" };
+    }
+    if (scianCode.startsWith("48") || scianCode.startsWith("49")) {
+      return { code: "TRANSPORT_LOGISTICS", label: "Logística" };
+    }
+    if (scianCode.startsWith("51")) {
+      return { code: "TECHNOLOGY", label: "Medios y Telecomunicaciones" };
+    }
+    if (scianCode.startsWith("93")) {
+      return { code: "GOVERNMENT", label: "Gobierno" };
+    }
+    if (scianCode.startsWith("52") || scianCode.startsWith("55")) {
+      return { code: "FINANCIAL_SERVICES", label: "Servicios Financieros" };
+    }
+  }
+
+  const checkTextMatch = (text: string): CanonicalIndustry | null => {
+    const norm = (text || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (!norm) return null;
+
+    if (
+      norm.includes("hotel") ||
+      norm.includes("hospedaje") ||
+      norm.includes("motel") ||
+      norm.includes("alojamiento")
+    ) {
+      return { code: "HOTELS_LODGING", label: "Hoteles y Hospedaje" };
+    }
+
+    if (
+      norm.includes("restaurante") ||
+      norm.includes("alimento") ||
+      norm.includes("comida") ||
+      norm.includes("bar") ||
+      norm.includes("cafeteria") ||
+      norm.includes("bebida")
+    ) {
+      return { code: "RESTAURANTS_FOOD", label: "Restaurantes y Alimentos" };
+    }
+
+    if (norm.includes("hospital") || norm.includes("clinica") || norm.includes("medico") || norm.includes("consultorio") || norm.includes("salud")) {
+      return { code: "HEALTHCARE", label: "Hospitales" };
+    }
+
+    if (norm.includes("manufactura") || norm.includes("fabrica") || norm.includes("produccion") || norm.includes("maquila") || norm.includes("industrial")) {
+      return { code: "MANUFACTURING", label: "Manufactura" };
+    }
+
+    if (norm.includes("construccion") || norm.includes("edificacion") || norm.includes("obra civil")) {
+      return { code: "CONSTRUCTION", label: "Construcción" };
+    }
+
+    if (norm.includes("educacion") || norm.includes("escuela") || norm.includes("colegio") || norm.includes("universidad")) {
+      return { code: "EDUCATION", label: "Educación" };
+    }
+
+    if (norm.includes("profesional") || norm.includes("cientifico") || norm.includes("tecnico") || norm.includes("consultoria") || norm.includes("despacho")) {
+      return { code: "PROFESSIONAL_SERVICES", label: "Servicios Profesionales" };
+    }
+
+    if (norm.includes("comercio al por menor") || norm.includes("minorista") || norm.includes("tienda")) {
+      return { code: "RETAIL", label: "Comercio Minorista" };
+    }
+
+    if (norm.includes("comercio al por mayor") || norm.includes("mayorista")) {
+      return { code: "WHOLESALE", label: "Comercio Mayorista" };
+    }
+
+    if (norm.includes("transporte") || norm.includes("almacenamiento") || norm.includes("logistica")) {
+      return { code: "TRANSPORT_LOGISTICS", label: "Logística" };
+    }
+
+    if (norm.includes("telecomunicacion") || norm.includes("television") || norm.includes("radio") || norm.includes("internet") || norm.includes("medios masivos")) {
+      return { code: "TECHNOLOGY", label: "Medios y Telecomunicaciones" };
+    }
+
+    if (norm.includes("gobierno") || norm.includes("administracion publica")) {
+      return { code: "GOVERNMENT", label: "Gobierno" };
+    }
+
+    if (norm.includes("financiero") || norm.includes("banco") || norm.includes("seguro") || norm.includes("fianza")) {
+      return { code: "FINANCIAL_SERVICES", label: "Servicios Financieros" };
+    }
+
+    if (norm.includes("servicio")) {
+      return { code: "GENERAL_SERVICES", label: "Servicios Generales" };
+    }
+
+    return null;
+  };
+
+  const fieldsToTest = [
+    company.actividad,
+    company.nombreActividad,
+    company.descripcionActividad,
+    company.claseActividad,
+    company.sector
+  ];
+
+  for (const f of fieldsToTest) {
+    if (f) {
+      const match = checkTextMatch(f);
+      if (match) return match;
+    }
+  }
+
+  return { code: "OTHER", label: "Otros Sectores" };
+}
+
 function normalizeRowWithMap(rowArray: any[], map: HeaderMap): any {
   const getValue = (idx: number, fallback: string = ""): string => {
     if (idx === -1 || idx >= rowArray.length) return fallback;
@@ -453,6 +624,8 @@ function normalizeRowWithMap(rowArray: any[], map: HeaderMap): any {
     actividad
   );
 
+  const canonical = resolveCanonicalIndustry({ scian, actividad, sector });
+
   return {
     id,
     razonSocial,
@@ -482,6 +655,8 @@ function normalizeRowWithMap(rowArray: any[], map: HeaderMap): any {
     status: "NEW",
     sourceState,
     estadoNormalized,
+    commercialIndustryCode: canonical.code,
+    commercialIndustryLabel: canonical.label,
   };
 }
 
@@ -824,7 +999,11 @@ export { requestExecutiveDocument } from "./discovery/reports/requestExecutiveDo
 
 // --- Sales Advisors ---
 export { createSalesAdvisorUser } from "./advisors/createSalesAdvisorUser";
+export { provisionCommercialAdvisor } from "./advisors/provisionCommercialAdvisor";
 export { resolveAdvisorByCode } from "./advisors/resolveAdvisorByCode";
 
 // --- Prospects ---
 export { processProspectLifecycle } from "./prospects/processProspectLifecycle";
+export { replenishAdvisorPipeline } from "./prospects/replenishAdvisorPipeline";
+export { discardPipelineProspect } from "./prospects/discardPipelineProspect";
+export { reactivatePipelineProspect } from "./prospects/reactivatePipelineProspect";

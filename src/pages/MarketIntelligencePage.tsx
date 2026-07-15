@@ -15,6 +15,7 @@ import MarketFirestoreService, { type ImportHistoryEntry } from "../modules/mark
 import ErrorBoundary from "../modules/market-intelligence/components/ErrorBoundary";
 import DiscoveryLinkGenerator from "../modules/discovery/components/DiscoveryLinkGenerator";
 import MarketQueryEngine, { getCompanyState, getCompanyIndustry, getNormalizedStateName } from "../modules/market-intelligence/services/marketQueryEngine";
+import { resolveCanonicalIndustry } from "../modules/market-intelligence/services/industryResolverService";
 import type { CompanyStatus, InegiCompany } from "../modules/market-intelligence/types/inegi";
 import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability, getCurrentUserRole } from "../services/rbacService";
@@ -523,6 +524,26 @@ export default function MarketIntelligencePage() {
 
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [advisorId, setAdvisorId] = useState<string>("");
+
+  useEffect(() => {
+    if (!auth.currentUser) {
+      setAdvisorId("");
+      return;
+    }
+    const q = query(
+      collection(db, "platform_sales_advisors"),
+      where("uid", "==", auth.currentUser.uid)
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      if (!snap.empty) {
+        setAdvisorId(snap.docs[0].id);
+      } else {
+        setAdvisorId("");
+      }
+    });
+    return () => unsubscribe();
+  }, [auth.currentUser]);
 
   // Derivar estados disponibles de forma síncrona desde dbUniqueStates estable y filtro activo
   const availableStates = useMemo(() => {
@@ -545,9 +566,9 @@ export default function MarketIntelligencePage() {
     const stateFilteredCounts: Record<string, number> = {};
 
     rawDataset.forEach((c) => {
-      const ind = getCompanyIndustry(c) || "Otros Sectores";
-      allCounts[ind] = (allCounts[ind] || 0) + 1;
-      stateFilteredCounts[ind] = (stateFilteredCounts[ind] || 0) + 1;
+      const code = c.commercialIndustryCode || resolveCanonicalIndustry(c).code;
+      allCounts[code] = (allCounts[code] || 0) + 1;
+      stateFilteredCounts[code] = (stateFilteredCounts[code] || 0) + 1;
     });
 
     return {
@@ -873,6 +894,7 @@ export default function MarketIntelligencePage() {
   // Manejar el cambio de filtros manual
   function handleFilterChange(newFilters: FiltersState) {
     setActiveSegmentId(null);
+    setCurrentPage(1);
     if (newFilters.estado !== filters.estado) {
       console.log(`[Aura Filters] change estado: "${filters.estado}" -> "${newFilters.estado}"`);
       setFilters(newFilters);
@@ -888,12 +910,14 @@ export default function MarketIntelligencePage() {
   // Limpiar filtros a default
   function handleClearFilters() {
     setActiveSegmentId(null);
+    setCurrentPage(1);
     setFilters(DEFAULT_FILTERS);
   }
 
   // Selección de Segmentos Rápidos
   function handleSelectSegment(segmentId: string, segmentFilters: any) {
     setActiveSegmentId(segmentId);
+    setCurrentPage(1);
     setFilters({
       ...DEFAULT_FILTERS,
       ...segmentFilters,
@@ -1780,6 +1804,7 @@ export default function MarketIntelligencePage() {
           companies={activeMarketDataset}
           onSelectCompany={handleSelectCompany}
           stats={stats}
+          advisorId={advisorId}
         />
       </div>
     );

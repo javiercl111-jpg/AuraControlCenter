@@ -53,6 +53,10 @@ export interface InegiCompany {
   importCount?: number;
   source?: string;
   sourceVersion?: string;
+  commercialIndustryCode?: string;
+  commercialIndustryLabel?: string;
+  activeAssignmentId?: string;
+  assignedAdvisorId?: string;
 }
 
 export interface MarketSegment {

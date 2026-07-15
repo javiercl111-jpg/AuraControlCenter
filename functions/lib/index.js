@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processProspectLifecycle = exports.resolveAdvisorByCode = exports.createSalesAdvisorUser = exports.requestExecutiveDocument = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
+exports.reactivatePipelineProspect = exports.discardPipelineProspect = exports.replenishAdvisorPipeline = exports.processProspectLifecycle = exports.resolveAdvisorByCode = exports.provisionCommercialAdvisor = exports.createSalesAdvisorUser = exports.requestExecutiveDocument = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
@@ -318,6 +318,143 @@ function detectHeaderRowAndBuildMap(rows) {
     }
     return { headerRowIndex, headerMap };
 }
+function resolveCanonicalIndustry(company) {
+    const getScianCode = () => {
+        if (company.scian) {
+            const match = String(company.scian).trim().match(/^\d+/);
+            if (match)
+                return match[0];
+        }
+        const fields = [
+            company.actividad,
+            company.nombreActividad,
+            company.descripcionActividad,
+            company.claseActividad,
+            company.sector
+        ];
+        for (const f of fields) {
+            if (f) {
+                const match = String(f).trim().match(/^\d+/);
+                if (match)
+                    return match[0];
+            }
+        }
+        return "";
+    };
+    const scianCode = getScianCode();
+    if (scianCode) {
+        if (scianCode.startsWith("721")) {
+            return { code: "HOTELS_LODGING", label: "Hoteles y Hospedaje" };
+        }
+        if (scianCode.startsWith("722")) {
+            return { code: "RESTAURANTS_FOOD", label: "Restaurantes y Alimentos" };
+        }
+        if (scianCode.startsWith("31") || scianCode.startsWith("32") || scianCode.startsWith("33")) {
+            return { code: "MANUFACTURING", label: "Manufactura" };
+        }
+        if (scianCode.startsWith("23")) {
+            return { code: "CONSTRUCTION", label: "Construcción" };
+        }
+        if (scianCode.startsWith("62")) {
+            return { code: "HEALTHCARE", label: "Hospitales" };
+        }
+        if (scianCode.startsWith("61")) {
+            return { code: "EDUCATION", label: "Educación" };
+        }
+        if (scianCode.startsWith("54")) {
+            return { code: "PROFESSIONAL_SERVICES", label: "Servicios Profesionales" };
+        }
+        if (scianCode.startsWith("46")) {
+            return { code: "RETAIL", label: "Comercio Minorista" };
+        }
+        if (scianCode.startsWith("43")) {
+            return { code: "WHOLESALE", label: "Comercio Mayorista" };
+        }
+        if (scianCode.startsWith("48") || scianCode.startsWith("49")) {
+            return { code: "TRANSPORT_LOGISTICS", label: "Logística" };
+        }
+        if (scianCode.startsWith("51")) {
+            return { code: "TECHNOLOGY", label: "Medios y Telecomunicaciones" };
+        }
+        if (scianCode.startsWith("93")) {
+            return { code: "GOVERNMENT", label: "Gobierno" };
+        }
+        if (scianCode.startsWith("52") || scianCode.startsWith("55")) {
+            return { code: "FINANCIAL_SERVICES", label: "Servicios Financieros" };
+        }
+    }
+    const checkTextMatch = (text) => {
+        const norm = (text || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        if (!norm)
+            return null;
+        if (norm.includes("hotel") ||
+            norm.includes("hospedaje") ||
+            norm.includes("motel") ||
+            norm.includes("alojamiento")) {
+            return { code: "HOTELS_LODGING", label: "Hoteles y Hospedaje" };
+        }
+        if (norm.includes("restaurante") ||
+            norm.includes("alimento") ||
+            norm.includes("comida") ||
+            norm.includes("bar") ||
+            norm.includes("cafeteria") ||
+            norm.includes("bebida")) {
+            return { code: "RESTAURANTS_FOOD", label: "Restaurantes y Alimentos" };
+        }
+        if (norm.includes("hospital") || norm.includes("clinica") || norm.includes("medico") || norm.includes("consultorio") || norm.includes("salud")) {
+            return { code: "HEALTHCARE", label: "Hospitales" };
+        }
+        if (norm.includes("manufactura") || norm.includes("fabrica") || norm.includes("produccion") || norm.includes("maquila") || norm.includes("industrial")) {
+            return { code: "MANUFACTURING", label: "Manufactura" };
+        }
+        if (norm.includes("construccion") || norm.includes("edificacion") || norm.includes("obra civil")) {
+            return { code: "CONSTRUCTION", label: "Construcción" };
+        }
+        if (norm.includes("educacion") || norm.includes("escuela") || norm.includes("colegio") || norm.includes("universidad")) {
+            return { code: "EDUCATION", label: "Educación" };
+        }
+        if (norm.includes("profesional") || norm.includes("cientifico") || norm.includes("tecnico") || norm.includes("consultoria") || norm.includes("despacho")) {
+            return { code: "PROFESSIONAL_SERVICES", label: "Servicios Profesionales" };
+        }
+        if (norm.includes("comercio al por menor") || norm.includes("minorista") || norm.includes("tienda")) {
+            return { code: "RETAIL", label: "Comercio Minorista" };
+        }
+        if (norm.includes("comercio al por mayor") || norm.includes("mayorista")) {
+            return { code: "WHOLESALE", label: "Comercio Mayorista" };
+        }
+        if (norm.includes("transporte") || norm.includes("almacenamiento") || norm.includes("logistica")) {
+            return { code: "TRANSPORT_LOGISTICS", label: "Logística" };
+        }
+        if (norm.includes("telecomunicacion") || norm.includes("television") || norm.includes("radio") || norm.includes("internet") || norm.includes("medios masivos")) {
+            return { code: "TECHNOLOGY", label: "Medios y Telecomunicaciones" };
+        }
+        if (norm.includes("gobierno") || norm.includes("administracion publica")) {
+            return { code: "GOVERNMENT", label: "Gobierno" };
+        }
+        if (norm.includes("financiero") || norm.includes("banco") || norm.includes("seguro") || norm.includes("fianza")) {
+            return { code: "FINANCIAL_SERVICES", label: "Servicios Financieros" };
+        }
+        if (norm.includes("servicio")) {
+            return { code: "GENERAL_SERVICES", label: "Servicios Generales" };
+        }
+        return null;
+    };
+    const fieldsToTest = [
+        company.actividad,
+        company.nombreActividad,
+        company.descripcionActividad,
+        company.claseActividad,
+        company.sector
+    ];
+    for (const f of fieldsToTest) {
+        if (f) {
+            const match = checkTextMatch(f);
+            if (match)
+                return match;
+        }
+    }
+    return { code: "OTHER", label: "Otros Sectores" };
+}
 function normalizeRowWithMap(rowArray, map) {
     const getValue = (idx, fallback = "") => {
         if (idx === -1 || idx >= rowArray.length)
@@ -359,6 +496,7 @@ function normalizeRowWithMap(rowArray, map) {
     const recommendedSuites = determineRecommendedSuites(sector, tamano, rangoPersonal, opportunityScore);
     const id = generateDeterministicId(razonSocial, nombreComercial, municipio, scian);
     const advisor = generateCommercialAdvisorInfo(opportunityScore, tamano, sector, email, telefono, sitioWeb, actividad);
+    const canonical = resolveCanonicalIndustry({ scian, actividad, sector });
     return {
         id,
         razonSocial,
@@ -388,6 +526,8 @@ function normalizeRowWithMap(rowArray, map) {
         status: "NEW",
         sourceState,
         estadoNormalized,
+        commercialIndustryCode: canonical.code,
+        commercialIndustryLabel: canonical.label,
     };
 }
 async function updateStateMetadataAndList(stateName, totalRecords, jobId, fingerprint) {
@@ -704,9 +844,17 @@ Object.defineProperty(exports, "requestExecutiveDocument", { enumerable: true, g
 // --- Sales Advisors ---
 var createSalesAdvisorUser_1 = require("./advisors/createSalesAdvisorUser");
 Object.defineProperty(exports, "createSalesAdvisorUser", { enumerable: true, get: function () { return createSalesAdvisorUser_1.createSalesAdvisorUser; } });
+var provisionCommercialAdvisor_1 = require("./advisors/provisionCommercialAdvisor");
+Object.defineProperty(exports, "provisionCommercialAdvisor", { enumerable: true, get: function () { return provisionCommercialAdvisor_1.provisionCommercialAdvisor; } });
 var resolveAdvisorByCode_1 = require("./advisors/resolveAdvisorByCode");
 Object.defineProperty(exports, "resolveAdvisorByCode", { enumerable: true, get: function () { return resolveAdvisorByCode_1.resolveAdvisorByCode; } });
 // --- Prospects ---
 var processProspectLifecycle_1 = require("./prospects/processProspectLifecycle");
 Object.defineProperty(exports, "processProspectLifecycle", { enumerable: true, get: function () { return processProspectLifecycle_1.processProspectLifecycle; } });
+var replenishAdvisorPipeline_1 = require("./prospects/replenishAdvisorPipeline");
+Object.defineProperty(exports, "replenishAdvisorPipeline", { enumerable: true, get: function () { return replenishAdvisorPipeline_1.replenishAdvisorPipeline; } });
+var discardPipelineProspect_1 = require("./prospects/discardPipelineProspect");
+Object.defineProperty(exports, "discardPipelineProspect", { enumerable: true, get: function () { return discardPipelineProspect_1.discardPipelineProspect; } });
+var reactivatePipelineProspect_1 = require("./prospects/reactivatePipelineProspect");
+Object.defineProperty(exports, "reactivatePipelineProspect", { enumerable: true, get: function () { return reactivatePipelineProspect_1.reactivatePipelineProspect; } });
 //# sourceMappingURL=index.js.map

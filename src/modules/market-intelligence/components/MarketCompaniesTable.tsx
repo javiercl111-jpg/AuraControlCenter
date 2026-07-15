@@ -8,7 +8,38 @@ import {
   Phone,
 } from "lucide-react";
 import type { InegiCompany } from "../types/inegi";
-import { resolveCommercialIndustry } from "../services/industryResolverService";
+import { resolveCommercialIndustry, resolveCanonicalIndustry } from "../services/industryResolverService";
+
+function isValidEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const cleaned = email.trim().toLowerCase();
+  if (cleaned === "no disponible" || cleaned === "n/a" || cleaned === "no aplica" || cleaned === "") return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned);
+}
+
+function getCleanEmailHref(email: string | null | undefined): string {
+  if (!isValidEmail(email)) return "";
+  return `mailto:${email!.trim().toLowerCase()}`;
+}
+
+function getCleanPhoneHref(phone: string | null | undefined): string {
+  if (!phone) return "";
+  const cleaned = phone.trim().toLowerCase();
+  if (cleaned === "no disponible" || cleaned === "n/a" || cleaned === "") return "";
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return "";
+  return `tel:${digits}`;
+}
+
+function getCleanWebHref(web: string | null | undefined): string {
+  if (!web) return "";
+  const cleaned = web.trim();
+  if (cleaned.toLowerCase() === "no disponible" || cleaned.toLowerCase() === "n/a" || cleaned === "") return "";
+  if (/^https?:\/\//i.test(cleaned)) {
+    return cleaned;
+  }
+  return `https://${cleaned}`;
+}
 
 interface MarketCompaniesTableProps {
   companies: InegiCompany[];
@@ -173,29 +204,79 @@ export default function MarketCompaniesTable({
                     <span className="truncate">{company.municipio || "Sin municipio"}</span>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-800/60 pt-4">
-                    <div className="flex items-center gap-3">
-                      <Mail
-                        className={`h-4 w-4 ${
-                          company.email ? "text-cyan-400" : "text-slate-700"
-                        }`}
-                      />
-                      <Phone
-                        className={`h-4 w-4 ${
-                          company.telefono ? "text-cyan-400" : "text-slate-700"
-                        }`}
-                      />
-                      <Globe
-                        className={`h-4 w-4 ${
-                          company.sitioWeb &&
-                          company.sitioWeb !== "no disponible" &&
-                          company.sitioWeb !== "n/a"
-                            ? "text-cyan-400"
-                            : "text-slate-700"
-                        }`}
-                      />
+                  <div className="mt-4 border-t border-slate-800/60 pt-4 flex flex-col gap-2">
+                    {/* Correo */}
+                    {isValidEmail(company.email) ? (
+                      <a
+                        href={getCleanEmailHref(company.email)}
+                        aria-label={`Enviar correo a ${company.email}`}
+                        className="flex items-center gap-2 px-3 py-2 bg-slate-900/40 hover:bg-slate-850/60 border border-slate-800/80 hover:border-slate-700 rounded-xl text-xs text-cyan-400 hover:text-cyan-300 font-medium transition-all"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Mail className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{company.email}</span>
+                      </a>
+                    ) : (
+                      <div
+                        aria-disabled="true"
+                        className="flex items-center gap-2 px-3 py-2 bg-slate-950/20 border border-slate-900/60 rounded-xl text-xs text-slate-600 font-medium cursor-not-allowed"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Mail className="h-4 w-4 shrink-0 text-slate-800" />
+                        <span>Correo no disponible</span>
+                      </div>
+                    )}
+
+                    {/* Teléfono */}
+                    {getCleanPhoneHref(company.telefono) ? (
+                      <a
+                        href={getCleanPhoneHref(company.telefono)}
+                        aria-label={`Llamar al ${company.telefono}`}
+                        className="flex items-center gap-2 px-3 py-2 bg-slate-900/40 hover:bg-slate-850/60 border border-slate-800/80 hover:border-slate-700 rounded-xl text-xs text-cyan-400 hover:text-cyan-300 font-medium transition-all"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Phone className="h-4 w-4 shrink-0" />
+                        <span>{company.telefono}</span>
+                      </a>
+                    ) : (
+                      <div
+                        aria-disabled="true"
+                        className="flex items-center gap-2 px-3 py-2 bg-slate-950/20 border border-slate-900/60 rounded-xl text-xs text-slate-600 font-medium cursor-not-allowed"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Phone className="h-4 w-4 shrink-0 text-slate-800" />
+                        <span>Teléfono no disponible</span>
+                      </div>
+                    )}
+
+                    {/* Sitio Web */}
+                    {getCleanWebHref(company.sitioWeb) ? (
+                      <a
+                        href={getCleanWebHref(company.sitioWeb)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Visitar sitio web"
+                        className="flex items-center gap-2 px-3 py-2 bg-slate-900/40 hover:bg-slate-850/60 border border-slate-800/80 hover:border-slate-700 rounded-xl text-xs text-cyan-400 hover:text-cyan-300 font-medium transition-all"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Globe className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{company.sitioWeb}</span>
+                      </a>
+                    ) : (
+                      <div
+                        aria-disabled="true"
+                        className="flex items-center gap-2 px-3 py-2 bg-slate-950/20 border border-slate-900/60 rounded-xl text-xs text-slate-600 font-medium cursor-not-allowed"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Globe className="h-4 w-4 shrink-0 text-slate-800" />
+                        <span>Sitio web no disponible</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-800/40">
+                      <span className="text-[10px] text-slate-500 font-medium">Aura Opportunity Score</span>
+                      {renderScoreIndicator(company.opportunityScore)}
                     </div>
-                    {renderScoreIndicator(company.opportunityScore)}
                   </div>
                 </div>
 
@@ -245,7 +326,7 @@ export default function MarketCompaniesTable({
                     </td>
                     <td className="px-6 py-4">
                       <span className="line-clamp-2 text-xs text-slate-400 max-w-[220px]">
-                        {resolveCommercialIndustry(company.sector)}
+                        {company.commercialIndustryLabel || resolveCanonicalIndustry(company).label}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-slate-300 font-medium">
@@ -255,32 +336,74 @@ export default function MarketCompaniesTable({
                       {renderScoreIndicator(company.opportunityScore)}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex justify-center gap-3">
-                        <span title={company.email || "No disponible"}>
-                          <Mail
-                            className={`h-4 w-4 ${
-                              company.email ? "text-cyan-400" : "text-slate-700"
-                            }`}
-                          />
-                        </span>
-                        <span title={company.telefono || "No disponible"}>
-                          <Phone
-                            className={`h-4 w-4 ${
-                              company.telefono ? "text-cyan-400" : "text-slate-700"
-                            }`}
-                          />
-                        </span>
-                        <span title={company.sitioWeb || "No disponible"}>
-                          <Globe
-                            className={`h-4 w-4 ${
-                              company.sitioWeb &&
-                              company.sitioWeb !== "no disponible" &&
-                              company.sitioWeb !== "n/a"
-                                ? "text-cyan-400"
-                                : "text-slate-700"
-                            }`}
-                          />
-                        </span>
+                      <div className="flex justify-center gap-1.5">
+                        {/* Correo */}
+                        {isValidEmail(company.email) ? (
+                          <a
+                            href={getCleanEmailHref(company.email)}
+                            aria-label={`Enviar correo a ${company.email}`}
+                            title={`Correo: ${company.email}`}
+                            className="text-cyan-400 hover:text-cyan-300 transition-colors inline-flex items-center justify-center p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Mail className="h-4 w-4" />
+                          </a>
+                        ) : (
+                          <span
+                            aria-disabled="true"
+                            title="Correo no disponible"
+                            className="text-slate-700 inline-flex items-center justify-center p-2 rounded-lg cursor-not-allowed"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Mail className="h-4 w-4" />
+                          </span>
+                        )}
+
+                        {/* Teléfono */}
+                        {getCleanPhoneHref(company.telefono) ? (
+                          <a
+                            href={getCleanPhoneHref(company.telefono)}
+                            aria-label={`Llamar al ${company.telefono}`}
+                            title={`Teléfono: ${company.telefono}`}
+                            className="text-cyan-400 hover:text-cyan-300 transition-colors inline-flex items-center justify-center p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Phone className="h-4 w-4" />
+                          </a>
+                        ) : (
+                          <span
+                            aria-disabled="true"
+                            title="Teléfono no disponible"
+                            className="text-slate-700 inline-flex items-center justify-center p-2 rounded-lg cursor-not-allowed"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Phone className="h-4 w-4" />
+                          </span>
+                        )}
+
+                        {/* Sitio Web */}
+                        {getCleanWebHref(company.sitioWeb) ? (
+                          <a
+                            href={getCleanWebHref(company.sitioWeb)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Visitar sitio web de la empresa"
+                            title={`Sitio web: ${company.sitioWeb}`}
+                            className="text-cyan-400 hover:text-cyan-300 transition-colors inline-flex items-center justify-center p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Globe className="h-4 w-4" />
+                          </a>
+                        ) : (
+                          <span
+                            aria-disabled="true"
+                            title="Sitio web no disponible"
+                            className="text-slate-700 inline-flex items-center justify-center p-2 rounded-lg cursor-not-allowed"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Globe className="h-4 w-4" />
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">

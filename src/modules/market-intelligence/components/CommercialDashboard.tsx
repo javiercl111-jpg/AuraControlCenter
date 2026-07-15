@@ -5,8 +5,7 @@ import TopProspectsPanel from "./TopProspectsPanel";
 import StateOpportunityPanel from "./StateOpportunityPanel";
 import DailySalesGoalPanel from "./DailySalesGoalPanel";
 import ErrorBoundary from "./ErrorBoundary";
-
-
+import ActiveAdvisorPipeline from "./ActiveAdvisorPipeline";
 
 interface CommercialDashboardProps {
   companies: InegiCompany[];
@@ -17,12 +16,14 @@ interface CommercialDashboardProps {
     qualifiedCount: number;
     avgScore: number;
   };
+  advisorId?: string;
 }
 
 export default function CommercialDashboard({
   companies,
   onSelectCompany,
   stats,
+  advisorId,
 }: CommercialDashboardProps) {
   const report = CommercialAdvisorService.generateAdvisorReport(companies);
 
@@ -53,6 +54,16 @@ export default function CommercialDashboard({
           El motor de inteligencia local de Aura ha procesado la base DENUE local y ha encontrado nuevas oportunidades para acelerar tu prospección y prospección calificada.
         </p>
       </div>
+
+      {/* Active Advisor Pipeline */}
+      {advisorId && (
+        <ErrorBoundary fallbackTitle="Mi Pipeline Activo">
+          <ActiveAdvisorPipeline
+            advisorId={advisorId}
+            onSelectCompany={onSelectCompany}
+          />
+        </ErrorBoundary>
+      )}
 
       {/* 2. KPIs principales */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 font-sans">

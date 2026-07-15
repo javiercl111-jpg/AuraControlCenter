@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../config/firebase";
+import { getCurrentUserRole } from "../services/rbacService";
 
 import {
   getSalesAdvisors,
@@ -27,6 +28,8 @@ export default function SalesAdvisorsPage() {
 
   const [isLoading, setIsLoading] = useState(false);
 
+  const [isOwner, setIsOwner] = useState(false);
+
   async function loadAdvisors() {
     try {
       const data = await getSalesAdvisors();
@@ -39,6 +42,11 @@ export default function SalesAdvisorsPage() {
 
   useEffect(() => {
     loadAdvisors();
+    async function checkRole() {
+      const role = await getCurrentUserRole();
+      setIsOwner(role === "SUPER_ADMIN" || role === "FOUNDER" || (role as string) === "PLATFORM_OWNER");
+    }
+    checkRole();
   }, []);
 
   async function handleCreateAdvisor() {
@@ -53,8 +61,8 @@ export default function SalesAdvisorsPage() {
     setActivationLink("");
 
     try {
-      const createSalesAdvisorUser = httpsCallable(functions, "createSalesAdvisorUser");
-      const result = await createSalesAdvisorUser({
+      const provisionCommercialAdvisor = httpsCallable(functions, "provisionCommercialAdvisor");
+      const result = await provisionCommercialAdvisor({
         name,
         email,
         phone,
@@ -118,9 +126,9 @@ export default function SalesAdvisorsPage() {
       {success && (
         <div className="mb-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-emerald-300">
           {success}
-          {activationLink && (
+          {isOwner && activationLink && (
             <div className="mt-3 p-3 bg-slate-900 rounded-xl border border-slate-700">
-              <p className="text-sm font-bold text-amber-300 mb-2">SMTP no disponible. Enlace manual de activación:</p>
+              <p className="text-sm font-bold text-amber-300 mb-2">SMTP no disponible. Contingencia (Propietario): Enlace manual de activación:</p>
               <div className="flex items-center gap-2">
                 <input readOnly value={activationLink} className="flex-1 bg-black p-2 rounded text-xs text-slate-300" />
                 <button onClick={() => copyToClipboard(activationLink)} className="px-3 py-2 bg-slate-700 text-white rounded text-xs font-bold hover:bg-slate-600">Copiar</button>

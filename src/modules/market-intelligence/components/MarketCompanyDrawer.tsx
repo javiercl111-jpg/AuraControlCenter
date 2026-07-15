@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import type { CompanyStatus, InegiCompany } from "../types/inegi";
-import { resolveCommercialIndustry } from "../services/industryResolverService";
+import { resolveCanonicalIndustry } from "../services/industryResolverService";
 import { Link } from "react-router-dom";
 import AuraSalesAdvisorPanel from "./AuraSalesAdvisorPanel";
 
@@ -28,6 +28,37 @@ interface MarketCompanyDrawerProps {
   isProcessing: boolean;
   canUpdate: boolean;
   canConvert: boolean;
+}
+
+function isValidEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const cleaned = email.trim().toLowerCase();
+  if (cleaned === "no disponible" || cleaned === "n/a" || cleaned === "no aplica" || cleaned === "") return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned);
+}
+
+function getCleanEmailHref(email: string | null | undefined): string {
+  if (!isValidEmail(email)) return "";
+  return `mailto:${email!.trim().toLowerCase()}`;
+}
+
+function getCleanPhoneHref(phone: string | null | undefined): string {
+  if (!phone) return "";
+  const cleaned = phone.trim().toLowerCase();
+  if (cleaned === "no disponible" || cleaned === "n/a" || cleaned === "") return "";
+  const digits = cleaned.replace(/\D/g, "");
+  if (!digits) return "";
+  return `tel:${digits}`;
+}
+
+function getCleanWebHref(web: string | null | undefined): string {
+  if (!web) return "";
+  const cleaned = web.trim();
+  if (cleaned.toLowerCase() === "no disponible" || cleaned.toLowerCase() === "n/a" || cleaned === "") return "";
+  if (/^https?:\/\//i.test(cleaned)) {
+    return cleaned;
+  }
+  return `https://${cleaned}`;
 }
 
 export default function MarketCompanyDrawer({
@@ -222,7 +253,9 @@ export default function MarketCompanyDrawer({
             <div className="grid gap-4 text-xs sm:grid-cols-2">
               <div>
                 <span className="block text-slate-500">Sector Económico</span>
-                <span className="mt-1 block font-medium text-slate-300">{resolveCommercialIndustry(company.sector) || "N/A"}</span>
+                <span className="mt-1 block font-medium text-slate-300">
+                  {company.commercialIndustryLabel || resolveCanonicalIndustry(company).label}
+                </span>
               </div>
               <div>
                 <span className="block text-slate-500">Actividad Económica</span>
@@ -254,39 +287,49 @@ export default function MarketCompanyDrawer({
             <div className="border-t border-slate-800/60 pt-4 space-y-3">
               <div className="flex items-center gap-2.5 text-xs text-slate-300">
                 <MapPin className="h-4 w-4 text-cyan-400 shrink-0" />
-                <span>{company.direccion}, {company.municipio}, C.P. {company.cp}</span>
+                <span>{company.direccion || "No disponible"}, {company.municipio || "No disponible"}, C.P. {company.cp || "No disponible"}</span>
               </div>
-              {company.email && (
-                <div className="flex items-center gap-2.5 text-xs text-slate-300">
-                  <Mail className="h-4 w-4 text-cyan-400 shrink-0" />
-                  <a href={`mailto:${company.email}`} className="hover:underline text-cyan-300">
+
+              {/* Correo */}
+              <div className="flex items-center gap-2.5 text-xs text-slate-300">
+                <Mail className="h-4 w-4 text-cyan-400 shrink-0" />
+                {isValidEmail(company.email) ? (
+                  <a href={getCleanEmailHref(company.email)} className="hover:underline text-cyan-300">
                     {company.email}
                   </a>
-                </div>
-              )}
-              {company.telefono && (
-                <div className="flex items-center gap-2.5 text-xs text-slate-300">
-                  <Phone className="h-4 w-4 text-cyan-400 shrink-0" />
-                  <a href={`tel:${company.telefono}`} className="hover:underline text-cyan-300">
+                ) : (
+                  <span className="text-slate-500">No disponible</span>
+                )}
+              </div>
+
+              {/* Teléfono */}
+              <div className="flex items-center gap-2.5 text-xs text-slate-300">
+                <Phone className="h-4 w-4 text-cyan-400 shrink-0" />
+                {getCleanPhoneHref(company.telefono) ? (
+                  <a href={getCleanPhoneHref(company.telefono)} className="hover:underline text-cyan-300">
                     {company.telefono}
                   </a>
-                </div>
-              )}
-              {company.sitioWeb &&
-                company.sitioWeb !== "no disponible" &&
-                company.sitioWeb !== "n/a" && (
-                  <div className="flex items-center gap-2.5 text-xs text-slate-300">
-                    <Globe className="h-4 w-4 text-cyan-400 shrink-0" />
-                    <a
-                      href={company.sitioWeb.startsWith("http") ? company.sitioWeb : `https://${company.sitioWeb}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline text-cyan-300 truncate"
-                    >
-                      {company.sitioWeb}
-                    </a>
-                  </div>
+                ) : (
+                  <span className="text-slate-500">No disponible</span>
                 )}
+              </div>
+
+              {/* Sitio web */}
+              <div className="flex items-center gap-2.5 text-xs text-slate-300">
+                <Globe className="h-4 w-4 text-cyan-400 shrink-0" />
+                {getCleanWebHref(company.sitioWeb) ? (
+                  <a
+                    href={getCleanWebHref(company.sitioWeb)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline text-cyan-300 truncate"
+                  >
+                    {company.sitioWeb}
+                  </a>
+                ) : (
+                  <span className="text-slate-500">No disponible</span>
+                )}
+              </div>
             </div>
           </div>
 
