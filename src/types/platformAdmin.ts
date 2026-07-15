@@ -1,9 +1,12 @@
 export type PlatformAdminRole =
+  | "PLATFORM_OWNER"
+  | "PLATFORM_PARTNER"
   | "SUPER_ADMIN"
   | "FOUNDER"
   | "SALES_DIRECTOR"
   | "CONSULTANT"
   | "SALES_ADVISOR"
+  | "READ_ONLY"
   | "VIEWER"
   | "ADMIN"
   | "SUPPORT";

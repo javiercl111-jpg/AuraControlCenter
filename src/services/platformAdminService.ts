@@ -21,7 +21,11 @@ export async function getPlatformAdminByEmailOrUid(
         id: snapshot.id,
         email: data.email || "",
         displayName: data.displayName || "",
-        role: (data.role || data.roleCode || data.type || "VIEWER") as PlatformAdminRole,
+        role: (() => {
+          let r = (data.role || data.roleCode || data.type || "VIEWER") as string;
+          if (r === "PARTNER") r = "PLATFORM_PARTNER";
+          return r as PlatformAdminRole;
+        })(),
         isActive: Boolean(data.isActive) || data.status === "ACTIVE",
         advisorId: data.advisorId,
         createdAt: data.createdAt,
@@ -42,7 +46,11 @@ export async function getPlatformAdminByEmailOrUid(
     id: snapshot.id,
     email: data.email || "",
     displayName: data.displayName || "",
-    role: (data.role || data.roleCode || data.type || "VIEWER") as PlatformAdminRole,
+    role: (() => {
+      let r = (data.role || data.roleCode || data.type || "VIEWER") as string;
+      if (r === "PARTNER") r = "PLATFORM_PARTNER";
+      return r as PlatformAdminRole;
+    })(),
     isActive: Boolean(data.isActive) || data.status === "ACTIVE",
     advisorId: data.advisorId,
     createdAt: data.createdAt,

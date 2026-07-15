@@ -15,6 +15,8 @@ export interface AdvisorProfile {
   discoveryLink?: string;
 
   assignedStates: string[];
+  assignedStateCodes?: string[];
+  assignedStateLabels?: string[];
   assignedCities: string[];
   specialties: string[];
 
@@ -22,6 +24,8 @@ export interface AdvisorProfile {
   invitationStatus: InvitationStatus;
   advisorStatus: AdvisorStatus;
 
+  platformRole?: string;
+  commercialTier?: string;
   commissionPlanId?: string;
 
   // Legacy fields for UI compatibility, to be removed or mapped later

@@ -2,108 +2,98 @@ import { auth } from "../config/firebase";
 import { getPlatformAdminByEmailOrUid } from "./platformAdminService";
 import type { PlatformAdminRole } from "../types/platformAdmin";
 
-// Lista de todas las capacidades comerciales y operativas de Aura
 export type Capability =
+  | "dashboard.read"
   | "market.read"
   | "market.import"
   | "market.update"
   | "market.convert"
-  | "market.export" // Nueva capacidad, lista para UI futura
-  | "market.assign" // Nueva capacidad, lista para UI futura
-  | "organization.create"
-  | "timeline.create"
+  | "market.export"
+  | "market.assign"
   | "market.pipeline.read"
   | "market.pipeline.manage_own"
+  | "market.pipeline.manage_all"
+  | "crm.read"
+  | "crm.write"
   | "crm.leads.read_own"
   | "crm.leads.update_own"
-  | "notifications.read_own";
+  | "crm.leads.read_all"
+  | "crm.leads.update_all"
+  | "advisors.read"
+  | "advisors.manage"
+  | "discovery.read"
+  | "discovery.manage"
+  | "clients.read"
+  | "clients.write"
+  | "tenants.read"
+  | "subscriptions.read"
+  | "proposals.read"
+  | "proposals.write"
+  | "notifications.read_own"
+  | "reports.read"
+  | "settings.business.read"
+  | "settings.business.write"
+  // Permisos técnicos / destructivos (Solo OWNER y SUPER_ADMIN)
+  | "secrets.read"
+  | "secrets.write"
+  | "deployments.manage"
+  | "firebase.manage"
+  | "security.rules.manage"
+  | "platform.delete"
+  | "audit.delete"
+  | "billing.destructive"
+  | "service_credentials.rotate"
+  // Legacy / compatible capabilities
+  | "organization.create"
+  | "timeline.create";
 
-// Mapeo canónico de Roles de Seguridad a sus respectivas Capacidades
+const ALL_CAPABILITIES: Capability[] = [
+  "dashboard.read", "market.read", "market.import", "market.update", "market.convert", "market.export", "market.assign",
+  "market.pipeline.read", "market.pipeline.manage_own", "market.pipeline.manage_all",
+  "crm.read", "crm.write", "crm.leads.read_own", "crm.leads.update_own", "crm.leads.read_all", "crm.leads.update_all",
+  "advisors.read", "advisors.manage", "discovery.read", "discovery.manage", "clients.read", "clients.write",
+  "tenants.read", "subscriptions.read", "proposals.read", "proposals.write", "notifications.read_own", "reports.read",
+  "settings.business.read", "settings.business.write", "secrets.read", "secrets.write", "deployments.manage",
+  "firebase.manage", "security.rules.manage", "platform.delete", "audit.delete", "billing.destructive",
+  "service_credentials.rotate", "organization.create", "timeline.create"
+];
+
+const FUNCTIONAL_CAPABILITIES: Capability[] = [
+  "dashboard.read", "market.read", "market.import", "market.update", "market.convert", "market.export", "market.assign",
+  "market.pipeline.read", "market.pipeline.manage_all", "market.pipeline.manage_own",
+  "crm.read", "crm.write", "crm.leads.read_all", "crm.leads.update_all", "crm.leads.read_own", "crm.leads.update_own",
+  "advisors.read", "advisors.manage", "discovery.read", "discovery.manage", "clients.read", "clients.write",
+  "tenants.read", "subscriptions.read", "proposals.read", "proposals.write", "notifications.read_own", "reports.read",
+  "settings.business.read", "settings.business.write", "organization.create", "timeline.create"
+];
+
 const ROLE_CAPABILITIES: Record<PlatformAdminRole, Capability[]> = {
-  SUPER_ADMIN: [
-    "market.read",
-    "market.import",
-    "market.update",
-    "market.convert",
-    "market.export",
-    "market.assign",
-    "organization.create",
-    "timeline.create",
-    "market.pipeline.read",
-    "market.pipeline.manage_own",
-    "crm.leads.read_own",
-    "crm.leads.update_own",
-    "notifications.read_own",
-  ],
-  FOUNDER: [
-    "market.read",
-    "market.import",
-    "market.update",
-    "market.convert",
-    "market.export",
-    "market.assign",
-    "organization.create",
-    "timeline.create",
-    "market.pipeline.read",
-    "market.pipeline.manage_own",
-    "crm.leads.read_own",
-    "crm.leads.update_own",
-    "notifications.read_own",
-  ],
+  PLATFORM_OWNER: ALL_CAPABILITIES,
+  SUPER_ADMIN: ALL_CAPABILITIES,
+  FOUNDER: ALL_CAPABILITIES,
+  ADMIN: ALL_CAPABILITIES,
+  PLATFORM_PARTNER: FUNCTIONAL_CAPABILITIES,
   SALES_DIRECTOR: [
-    "market.read",
-    "market.import",
-    "market.update",
-    "market.convert",
-    "market.export",
-    "market.assign",
-    "organization.create",
-    "timeline.create",
-    "market.pipeline.read",
-    "market.pipeline.manage_own",
-    "crm.leads.read_own",
-    "crm.leads.update_own",
-    "notifications.read_own",
-  ],
-  CONSULTANT: [
-    "market.read",
-    "market.update",
-    "market.convert",
-    "market.assign",
-    "organization.create",
-    "timeline.create",
+    "dashboard.read", "market.read", "market.pipeline.read", "market.pipeline.manage_all",
+    "crm.read", "crm.leads.read_all", "crm.leads.update_all", "advisors.read", "advisors.manage",
+    "reports.read", "notifications.read_own"
   ],
   SALES_ADVISOR: [
-    "market.read",
-    "market.pipeline.read",
-    "market.pipeline.manage_own",
-    "crm.leads.read_own",
-    "crm.leads.update_own",
-    "notifications.read_own",
+    "dashboard.read", "market.read", "market.pipeline.read", "market.pipeline.manage_own",
+    "crm.leads.read_own", "crm.leads.update_own", "notifications.read_own"
+  ],
+  CONSULTANT: [
+    "dashboard.read", "market.read", "crm.read", "discovery.read", "clients.read", "proposals.read"
+  ],
+  READ_ONLY: [
+    "dashboard.read", "market.read", "market.pipeline.read", "crm.read", "advisors.read"
   ],
   VIEWER: [
-    "market.read",
-  ],
-  ADMIN: [
-    "market.read",
-    "market.import",
-    "market.update",
-    "market.convert",
-    "market.export",
-    "market.assign",
-    "organization.create",
-    "timeline.create",
-    "market.pipeline.read",
-    "market.pipeline.manage_own",
-    "crm.leads.read_own",
-    "crm.leads.update_own",
-    "notifications.read_own",
+    "dashboard.read", "market.read"
   ],
   SUPPORT: [
-    "market.read",
-    "market.update",
-    "market.assign",
-  ],
+    "dashboard.read", "market.read", "advisors.read"
+  ]
 };
 
 // Caché en memoria para evitar consultas duplicadas a Firestore (Costo Firestore Protegido)
@@ -172,11 +162,16 @@ export async function checkUserCapability(capability: Capability): Promise<boole
   return hasCapability(role, capability);
 }
 
+export async function can(capability: Capability): Promise<boolean> {
+  return checkUserCapability(capability);
+}
+
 const RbacService = {
   getCurrentUserRole,
   clearRbacCache,
   hasCapability,
   checkUserCapability,
+  can,
 };
 
 export default RbacService;

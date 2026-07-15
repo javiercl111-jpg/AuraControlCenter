@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { auth } from "../config/firebase";
-import { isGlobalAdmin } from "../services/platformAdminService";
+import { isGlobalAdmin, getPlatformAdminByEmailOrUid } from "../services/platformAdminService";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -26,8 +26,25 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         return;
       }
 
-      const allowed = await isGlobalAdmin(user.email, user.uid);
-      setStatus(allowed ? "allowed" : "denied");
+      try {
+        const allowed = await isGlobalAdmin(user.email, user.uid);
+        if (allowed) {
+          // Token claims check and automatic refresh if out of sync
+          const adminDoc = await getPlatformAdminByEmailOrUid(user.email, user.uid);
+          if (adminDoc) {
+            const tokenResult = await user.getIdTokenResult();
+            const tokenRole = tokenResult.claims.roleCode;
+            if (tokenRole && tokenRole !== adminDoc.role) {
+              console.info("[Auth] Custom claims role out of sync with database. Forcing token refresh...");
+              await user.getIdToken(true);
+            }
+          }
+        }
+        setStatus(allowed ? "allowed" : "denied");
+      } catch (err) {
+        console.error("[Auth] Error validating user platform claims:", err);
+        setStatus("denied");
+      }
     });
 
     return () => unsubscribe();

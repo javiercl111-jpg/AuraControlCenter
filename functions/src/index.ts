@@ -660,6 +660,43 @@ function normalizeRowWithMap(rowArray: any[], map: HeaderMap): any {
   };
 }
 
+const STATE_MAP: Record<string, { code: string; inegiCode: string; label: string; normalized: string }> = {
+  "aguascalientes": { code: "AGS", inegiCode: "01", label: "Aguascalientes", normalized: "aguascalientes" },
+  "baja california": { code: "BC", inegiCode: "02", label: "Baja California", normalized: "baja california" },
+  "baja california sur": { code: "BCS", inegiCode: "03", label: "Baja California Sur", normalized: "baja california sur" },
+  "campeche": { code: "CAMP", inegiCode: "04", label: "Campeche", normalized: "campeche" },
+  "coahuila": { code: "COAH", inegiCode: "05", label: "Coahuila", normalized: "coahuila" },
+  "colima": { code: "COL", inegiCode: "06", label: "Colima", normalized: "colima" },
+  "chiapas": { code: "CHIS", inegiCode: "07", label: "Chiapas", normalized: "chiapas" },
+  "chihuahua": { code: "CHIH", inegiCode: "08", label: "Chihuahua", normalized: "chihuahua" },
+  "ciudad de mexico": { code: "CDMX", inegiCode: "09", label: "Ciudad de México", normalized: "ciudad de mexico" },
+  "distrito federal": { code: "CDMX", inegiCode: "09", label: "Ciudad de México", normalized: "ciudad de mexico" },
+  "durango": { code: "DUR", inegiCode: "10", label: "Durango", normalized: "durango" },
+  "guanajuato": { code: "GTO", inegiCode: "11", label: "Guanajuato", normalized: "guanajuato" },
+  "guerrero": { code: "GRO", inegiCode: "12", label: "Guerrero", normalized: "guerrero" },
+  "hidalgo": { code: "HGO", inegiCode: "13", label: "Hidalgo", normalized: "hidalgo" },
+  "jalisco": { code: "JAL", inegiCode: "14", label: "Jalisco", normalized: "jalisco" },
+  "estado de mexico": { code: "MEX", inegiCode: "15", label: "Estado de México", normalized: "estado de mexico" },
+  "mexico": { code: "MEX", inegiCode: "15", label: "Estado de México", normalized: "estado de mexico" },
+  "michoacan": { code: "MICH", inegiCode: "16", label: "Michoacán", normalized: "michoacan" },
+  "morelos": { code: "MOR", inegiCode: "17", label: "Morelos", normalized: "morelos" },
+  "nayarit": { code: "NAY", inegiCode: "18", label: "Nayarit", normalized: "nayarit" },
+  "nuevo leon": { code: "NL", inegiCode: "19", label: "Nuevo León", normalized: "nuevo leon" },
+  "oaxaca": { code: "OAX", inegiCode: "20", label: "Oaxaca", normalized: "oaxaca" },
+  "puebla": { code: "PUE", inegiCode: "21", label: "Puebla", normalized: "puebla" },
+  "queretaro": { code: "QRO", inegiCode: "22", label: "Querétaro", normalized: "queretaro" },
+  "quintana roo": { code: "QR", inegiCode: "23", label: "Quintana Roo", normalized: "quintana roo" },
+  "san luis potosi": { code: "SLP", inegiCode: "24", label: "San Luis Potosí", normalized: "san luis potosi" },
+  "sinaloa": { code: "SIN", inegiCode: "25", label: "Sinaloa", normalized: "sinaloa" },
+  "sonora": { code: "SON", inegiCode: "26", label: "Sonora", normalized: "sonora" },
+  "tabasco": { code: "TAB", inegiCode: "27", label: "Tabasco", normalized: "tabasco" },
+  "tamaulipas": { code: "TAM", inegiCode: "28", label: "Tamaulipas", normalized: "tamaulipas" },
+  "tlaxcala": { code: "TLAX", inegiCode: "29", label: "Tlaxcala", normalized: "tlaxcala" },
+  "veracruz": { code: "VER", inegiCode: "30", label: "Veracruz", normalized: "veracruz" },
+  "yucatan": { code: "YUC", inegiCode: "31", label: "Yucatán", normalized: "yucatan" },
+  "zacatecas": { code: "ZAC", inegiCode: "32", label: "Zacatecas", normalized: "zacatecas" }
+};
+
 async function updateStateMetadataAndList(stateName: string, totalRecords: number, jobId: string, fingerprint: string) {
   if (!stateName || stateName === "No Especificado") return;
 
@@ -680,6 +717,24 @@ async function updateStateMetadataAndList(stateName: string, totalRecords: numbe
     completedAt: admin.firestore.FieldValue.serverTimestamp(),
     fingerprint: fingerprint || "",
   }, { merge: true });
+
+  const cleanState = stateName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const info = STATE_MAP[cleanState];
+  if (info) {
+    const platformMetaRef = db.collection("platform_market_state_metadata").doc(info.code);
+    await platformMetaRef.set({
+      stateCode: info.code,
+      inegiCode: info.inegiCode,
+      stateLabel: info.label,
+      normalizedState: info.normalized,
+      imported: true,
+      companyCount: totalRecords,
+      lastImportAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastImportJobId: jobId,
+      schemaVersion: "1.0",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
 
   const statesRef = db.collection("market_companies_metadata").doc("states");
   await db.runTransaction(async (transaction) => {
