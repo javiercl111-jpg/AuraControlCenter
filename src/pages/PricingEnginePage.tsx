@@ -524,7 +524,7 @@ export default function PricingEnginePage() {
       if (!user) return;
 
       try {
-        const globalAdmin = user.email ? await isGlobalAdmin(user.email) : false;
+        const globalAdmin = user.email ? await isGlobalAdmin(user.email, user.uid) : false;
         const curAdvisor = await getCurrentSalesAdvisor();
 
         if (curAdvisor && !globalAdmin) {

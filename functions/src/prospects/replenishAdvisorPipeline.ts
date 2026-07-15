@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { resolvePlatformPrincipal } from "../auth/resolvePlatformPrincipal";
 
 /**
  * Compare function for deterministically sorting pipeline priority in backend.
@@ -63,48 +64,52 @@ export const replenishAdvisorPipeline = onCall(
 
     const db = admin.firestore();
 
-    // 1. Resolve Advisor ID and Validate Permissions
-    let advisorId = inputAdvisorId;
-    const callerUid = request.auth.uid;
+    // 1. Resolve Advisor ID and Validate Permissions using helper
+    const caller = await resolvePlatformPrincipal(db, request.auth);
+    const callerUid = caller.id;
 
-    const callerDoc = await db.collection("platform_global_admins").doc(callerUid).get();
-    if (!callerDoc.exists) {
-      throw new HttpsError("permission-denied", "No tienes permisos de administrador.");
+    const allowedRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER", "PLATFORM_PARTNER", "PARTNER", "SALES_ADVISOR"];
+    if (!allowedRoles.includes(caller.role)) {
+      throw new HttpsError("permission-denied", "Rol insuficiente para reponer prospectos.");
     }
-    const callerData = callerDoc.data();
-    const allowedRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER"];
-    const isAdmin = allowedRoles.includes(callerData?.role);
 
-    // If advisorId is not specified, resolve from caller's auth context
+    const allowedAdminRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER", "PLATFORM_PARTNER", "PARTNER"];
+    const isAdmin = allowedAdminRoles.includes(caller.role);
+
+    // If advisorId is not specified, resolve from caller's advisorId
+    let advisorId = inputAdvisorId;
     if (!advisorId) {
-      const advisorQuery = await db.collection("platform_sales_advisors")
-        .where("uid", "==", callerUid)
-        .limit(1)
-        .get();
+      if (caller.advisorId) {
+        advisorId = caller.advisorId;
+      } else {
+        const advisorQuery = await db.collection("platform_sales_advisors")
+          .where("uid", "==", caller.id)
+          .limit(1)
+          .get();
+        if (!advisorQuery.empty) {
+          advisorId = advisorQuery.docs[0].id;
+        }
+      }
+    }
 
-      if (advisorQuery.empty) {
-        throw new HttpsError("permission-denied", "No se encontró un perfil de asesor comercial asociado.");
-      }
-      const advDoc = advisorQuery.docs[0];
-      const advData = advDoc.data();
-      if (advData?.advisorStatus === "INACTIVE" || advData?.advisorStatus === "SUSPENDED") {
-        throw new HttpsError("permission-denied", "Tu cuenta de asesor está inactiva o suspendida.");
-      }
-      advisorId = advDoc.id;
-    } else {
-      // If specifying another advisor, caller must be admin
-      if (!isAdmin && advisorId !== callerData?.advisorId) {
+    if (!advisorId) {
+      throw new HttpsError("failed-precondition", "No se encontró el perfil de asesor comercial del usuario.");
+    }
+
+    // Validate that the target advisor is ACTIVE
+    const advRef = db.collection("platform_sales_advisors").doc(advisorId);
+    const advDoc = await advRef.get();
+    if (!advDoc.exists) {
+      throw new HttpsError("not-found", "Asesor comercial no encontrado.");
+    }
+    const advData = advDoc.data();
+    const advStatus = advData?.advisorStatus || advData?.status || "ACTIVE";
+    if (advStatus === "INACTIVE" || advStatus === "SUSPENDED") {
+      throw new HttpsError("permission-denied", "El asesor se encuentra inactivo o suspendido.");
+    }
+      if (!isAdmin && advisorId !== caller.advisorId) {
         throw new HttpsError("permission-denied", "No tienes permisos para reponer el pipeline de otro asesor.");
       }
-      const advisorDoc = await db.collection("platform_sales_advisors").doc(advisorId).get();
-      if (!advisorDoc.exists) {
-        throw new HttpsError("not-found", "Asesor comercial no encontrado.");
-      }
-      const advData = advisorDoc.data()!;
-      if (advData.advisorStatus === "INACTIVE" || advData.advisorStatus === "SUSPENDED") {
-        throw new HttpsError("permission-denied", "El asesor comercial está inactivo o suspendido.");
-      }
-    }
 
     // Target size bounds validation (1 to 20, default 10)
     let targetSize = Number(inputTargetSize) || 10;

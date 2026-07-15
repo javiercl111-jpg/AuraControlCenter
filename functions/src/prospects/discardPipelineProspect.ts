@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { resolvePlatformPrincipal } from "../auth/resolvePlatformPrincipal";
 
 /**
  * Compare function for deterministically sorting pipeline priority in backend.
@@ -63,15 +64,27 @@ export const discardPipelineProspect = onCall(
     }
 
     const db = admin.firestore();
-    const callerUid = request.auth.uid;
+    const caller = await resolvePlatformPrincipal(db, request.auth);
+    const callerUid = caller.id;
 
-    const callerDoc = await db.collection("platform_global_admins").doc(callerUid).get();
-    if (!callerDoc.exists) {
-      throw new HttpsError("permission-denied", "No tienes permisos de administrador.");
+    const allowedRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER", "PLATFORM_PARTNER", "PARTNER", "SALES_ADVISOR"];
+    if (!allowedRoles.includes(caller.role)) {
+      throw new HttpsError("permission-denied", "Rol insuficiente para descartar prospectos.");
     }
-    const callerData = callerDoc.data();
-    const allowedRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER"];
-    const isAdmin = allowedRoles.includes(callerData?.role);
+
+    if (caller.role === "SALES_ADVISOR" && caller.advisorId) {
+      const advRef = db.collection("platform_sales_advisors").doc(caller.advisorId);
+      const advDoc = await advRef.get();
+      if (advDoc.exists) {
+        const advStatus = advDoc.data()?.advisorStatus || advDoc.data()?.status || "ACTIVE";
+        if (advStatus === "INACTIVE" || advStatus === "SUSPENDED") {
+          throw new HttpsError("permission-denied", "El asesor se encuentra inactivo o suspendido.");
+        }
+      }
+    }
+
+    const allowedAdminRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER", "PLATFORM_PARTNER", "PARTNER"];
+    const isAdmin = allowedAdminRoles.includes(caller.role);
 
     const assignmentRef = db.collection("commercial_pipeline_assignments").doc(assignmentId);
     const idempotencyRef = db.collection("idempotency_keys").doc(idempotencyKey);

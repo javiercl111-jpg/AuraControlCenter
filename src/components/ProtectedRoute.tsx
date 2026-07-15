@@ -34,7 +34,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           if (adminDoc) {
             const tokenResult = await user.getIdTokenResult();
             const tokenRole = tokenResult.claims.roleCode;
-            if (tokenRole && tokenRole !== adminDoc.role) {
+            if (tokenRole !== adminDoc.role) {
               console.info("[Auth] Custom claims role out of sync with database. Forcing token refresh...");
               await user.getIdToken(true);
             }

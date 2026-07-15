@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { resolvePlatformPrincipal } from "../auth/resolvePlatformPrincipal";
 
 /**
  * Transactionally reactivates a discarded market prospect, making it eligible for NEW assignments.
@@ -20,16 +21,12 @@ export const reactivatePipelineProspect = onCall(
     }
 
     const db = admin.firestore();
-    const callerUid = request.auth.uid;
+    // Validate admin permissions using helper
+    const caller = await resolvePlatformPrincipal(db, request.auth);
+    const callerUid = caller.id;
 
-    // Validate admin permissions
-    const callerDoc = await db.collection("platform_global_admins").doc(callerUid).get();
-    if (!callerDoc.exists) {
-      throw new HttpsError("permission-denied", "No tienes permisos de administrador.");
-    }
-    const callerData = callerDoc.data();
-    const allowedRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER"];
-    const isAdmin = allowedRoles.includes(callerData?.role);
+    const allowedAdminRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER", "PLATFORM_PARTNER", "PARTNER"];
+    const isAdmin = allowedAdminRoles.includes(caller.role);
 
     if (!isAdmin) {
       throw new HttpsError("permission-denied", "Solo los administradores autorizados pueden reactivar prospectos.");

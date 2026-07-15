@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { resolvePlatformPrincipal } from "../auth/resolvePlatformPrincipal";
 
 /**
  * Permite a administradores autorizados realizar acciones administrativas sobre el acceso de asesores:
@@ -24,18 +25,16 @@ export const manageAdvisorAccess = onCall(
     const db = admin.firestore();
     const auth = admin.auth();
 
-    // 1. Validate Caller Role
-    const callerDoc = await db.collection("platform_global_admins").doc(request.auth.uid).get();
-    if (!callerDoc.exists) {
-      throw new HttpsError("permission-denied", "No tienes permisos de administrador.");
-    }
-    const callerData = callerDoc.data();
-    const allowedRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER"];
-    if (!allowedRoles.includes(callerData?.role)) {
+    // 1. Validate Caller using resolvePlatformPrincipal helper
+    const caller = await resolvePlatformPrincipal(db, request.auth);
+
+    const allowedRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER", "PLATFORM_PARTNER", "PARTNER"];
+    if (!allowedRoles.includes(caller.role)) {
       throw new HttpsError("permission-denied", "Rol insuficiente para gestionar accesos de asesores.");
     }
 
-    const isOwner = callerData?.role === "SUPER_ADMIN" || callerData?.role === "FOUNDER" || callerData?.role === "PLATFORM_OWNER";
+    // Only Owner-level admins receive the contingency link
+    const isOwner = caller.role === "SUPER_ADMIN" || caller.role === "FOUNDER" || caller.role === "PLATFORM_OWNER";
 
     // 2. Fetch Advisor Profile
     const advisorDoc = await db.collection("platform_sales_advisors").doc(advisorId).get();

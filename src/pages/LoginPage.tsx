@@ -1,6 +1,6 @@
 import { FirebaseError } from "firebase/app";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../config/firebase";
@@ -9,10 +9,19 @@ import { isGlobalAdmin } from "../services/platformAdminService";
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("jcuellar@aura-hcm.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("remembered_email");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,7 +43,7 @@ export default function LoginPage() {
         return;
       }
 
-      const allowed = await isGlobalAdmin(userEmail);
+      const allowed = await isGlobalAdmin(userEmail, credential.user.uid);
 
       if (!allowed) {
         await auth.signOut();
@@ -42,6 +51,12 @@ export default function LoginPage() {
           "Esta cuenta no tiene permisos para acceder a Aura Control Center."
         );
         return;
+      }
+
+      if (rememberMe) {
+        localStorage.setItem("remembered_email", email.trim().toLowerCase());
+      } else {
+        localStorage.removeItem("remembered_email");
       }
 
       navigate("/", { replace: true });
@@ -117,6 +132,19 @@ export default function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none transition focus:border-cyan-300"
             />
+          </div>
+
+          <div className="flex items-center">
+            <input
+              id="rememberMe"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(event) => setRememberMe(event.target.checked)}
+              className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-cyan-400 focus:ring-cyan-400 focus:ring-offset-slate-950"
+            />
+            <label htmlFor="rememberMe" className="ml-2 block text-sm text-slate-300 cursor-pointer">
+              Recordarme
+            </label>
           </div>
 
           {error && (

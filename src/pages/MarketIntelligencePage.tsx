@@ -21,6 +21,8 @@ import PermissionDenied from "../components/PermissionDenied";
 import { checkUserCapability, getCurrentUserRole } from "../services/rbacService";
 import NationalZipImportService from "../modules/market-intelligence/services/nationalZipImportService";
 import datasetManager, { type DatasetMetadata } from "../modules/market-intelligence/services/datasetManager";
+import { MEXICO_STATES } from "../types/mexicoStates";
+import { getMexicoStatesWithMetadata } from "../services/mexicoStatesService";
 
 interface FiltersState {
   estado: string;
@@ -334,10 +336,9 @@ export default function MarketIntelligencePage() {
         const willExceedJobs = (todayLimits.totalJobs || 0) >= 3;
         const willExceedRecords = (todayLimits.totalRecords || 0) + estimatedRecords > 150000;
         const willExceedStorage = (todayLimits.totalStorageMb || 0) + fileSizeMb > 50;
-
         if (willExceedJobs || willExceedRecords || willExceedStorage) {
           const userRole = await getCurrentUserRole();
-          const isSuperAdmin = userRole === "SUPER_ADMIN";
+          const isSuperAdmin = userRole === "SUPER_ADMIN" || userRole === "PLATFORM_OWNER";
 
           if (isSuperAdmin) {
             const confirmForce = window.confirm(
@@ -346,13 +347,13 @@ export default function MarketIntelligencePage() {
               `- Jobs: ${todayLimits.totalJobs}/3\n` +
               `- Registros: ${todayLimits.totalRecords}/150,000\n` +
               `- Almacenamiento: ${Math.round(todayLimits.totalStorageMb)} MB / 50 MB\n\n` +
-              "¿Deseas FORZAR IMPORTACIÓN como SUPER_ADMIN?"
+              "¿Deseas FORZAR IMPORTACIÓN como administrador principal?"
             );
             if (!confirmForce) {
               setIsProcessing(false);
               return;
             }
-            console.log("[Aura daily limits] Override activado por SUPER_ADMIN.");
+            console.log("[Aura daily limits] Override activado por administrador principal.");
           } else {
             alert("Se alcanzó el límite diario de importaciones para proteger costos Firebase.");
             setIsProcessing(false);
@@ -526,6 +527,15 @@ export default function MarketIntelligencePage() {
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
   const [advisorId, setAdvisorId] = useState<string>("");
+  const [mexicoStates, setMexicoStates] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadStates() {
+      const states = await getMexicoStatesWithMetadata();
+      setMexicoStates(states);
+    }
+    loadStates();
+  }, [rawDataset]);
 
   useEffect(() => {
     if (!auth.currentUser) {
@@ -1277,6 +1287,27 @@ export default function MarketIntelligencePage() {
               completedAt: serverTimestamp(),
               fingerprint: fingerprint || "",
             }, { merge: true });
+
+            // FASE 8: platform_market_state_metadata
+            const stateOpt = MEXICO_STATES.find(
+              s => s.label.toLowerCase() === st.toLowerCase() || 
+                   s.normalizedValue.toLowerCase() === st.toLowerCase()
+            );
+            if (stateOpt) {
+              const stateMetaDocRef = doc(db, "platform_market_state_metadata", stateOpt.code);
+              await setDoc(stateMetaDocRef, {
+                stateCode: stateOpt.code,
+                inegiCode: stateOpt.inegiCode,
+                stateLabel: stateOpt.label,
+                normalizedState: stateOpt.normalizedValue,
+                imported: true,
+                companyCount: total,
+                lastImportAt: serverTimestamp(),
+                lastImportJobId: jobId,
+                schemaVersion: "1.0",
+                updatedAt: serverTimestamp(),
+              }, { merge: true });
+            }
           } catch (metaErr) {
             console.warn("Fallo al escribir metadatos para el estado:", st, metaErr);
           }
@@ -1860,6 +1891,7 @@ export default function MarketIntelligencePage() {
             onClearFilters={handleClearFilters}
             availableStates={availableStates}
             sectorCounts={industriesStats.stateFilteredCounts}
+            mexicoStates={mexicoStates}
           />
           <MarketCompaniesTable
             companies={companies}
