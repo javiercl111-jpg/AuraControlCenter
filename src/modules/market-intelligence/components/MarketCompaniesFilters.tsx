@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FilterX, Search, SlidersHorizontal, Check } from "lucide-react";
 import type { CompanyStatus } from "../types/inegi";
+import { MEXICO_STATES, type MexicoStateOption } from "../../../types/mexicoStates";
 
 interface FiltersState {
   estado: string;
@@ -23,6 +24,7 @@ interface MarketCompaniesFiltersProps {
   onClearFilters: () => void;
   availableStates: string[];
   sectorCounts: Record<string, number>;
+  mexicoStates?: MexicoStateOption[];
 }
 
 import { getCommercialSectorsDropdown } from "../services/industryResolverService";
@@ -60,7 +62,9 @@ export default function MarketCompaniesFilters({
   onClearFilters,
   availableStates,
   sectorCounts,
+  mexicoStates,
 }: MarketCompaniesFiltersProps) {
+  void availableStates;
   const [draftFilters, setDraftFilters] = useState<FiltersState>(filters);
   const [localSearch, setLocalSearch] = useState(filters.search || "");
 
@@ -98,6 +102,12 @@ export default function MarketCompaniesFilters({
   function handleApply() {
     onFilterChange(draftFilters);
   }
+
+  const selectedStateMeta = mexicoStates?.find(
+    (s) => s.label.toLowerCase() === draftFilters.estado.toLowerCase() ||
+           s.normalizedValue.toLowerCase() === draftFilters.estado.toLowerCase()
+  );
+  const showNoDataWarning = draftFilters.estado && selectedStateMeta && !selectedStateMeta.imported;
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6 backdrop-blur">
@@ -147,7 +157,7 @@ export default function MarketCompaniesFilters({
         {/* Estado */}
         <div>
           <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Estado (Piloto)
+            Estado (Catálogo)
           </label>
           <select
             value={draftFilters.estado}
@@ -155,17 +165,21 @@ export default function MarketCompaniesFilters({
             className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
           >
             <option value="">Todos los estados</option>
-            {availableStates
-              .filter((st) => st && st.trim() !== "" && st !== "No Especificado")
-              .map((st) => (
-                <option key={st} value={st}>
-                  {st}
+            {MEXICO_STATES.map((state) => {
+              const meta = mexicoStates?.find(s => s.code === state.code);
+              const imported = meta ? meta.imported : false;
+              return (
+                <option key={state.code} value={state.label}>
+                  {state.label} {imported ? "(Disponible)" : "(Sin datos)"}
                 </option>
-              ))}
-            {availableStates.some((st) => !st || st.trim() === "" || st === "No Especificado") && (
-              <option value="No Especificado">No Especificado</option>
-            )}
+              );
+            })}
           </select>
+          {showNoDataWarning && (
+            <p className="mt-1 text-[10px] text-amber-400 leading-tight">
+              ⚠️ Sin datos importados para este estado.
+            </p>
+          )}
         </div>
 
         {/* Estatus */}
