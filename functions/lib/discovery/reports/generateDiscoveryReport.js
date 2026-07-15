@@ -9,6 +9,20 @@ exports.generateDiscoveryReport = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
     }
     const { sessionId, prospectId, isInternalOnly } = request.data;
+    // Validation checks
+    const isString = typeof sessionId === "string";
+    const isNotEmpty = isString && sessionId.trim().length > 0;
+    const startsWithDossier = isString && sessionId.startsWith("dossier_");
+    const containsSpaces = isString && (sessionId.includes(" ") || sessionId.includes("\n") || sessionId.includes("\r"));
+    const isLiteralUndefined = sessionId === "undefined";
+    if (!isString || !isNotEmpty || !startsWithDossier || containsSpaces || isLiteralUndefined) {
+        throw new functions.https.HttpsError("invalid-argument", "INVALID_DISCOVERY_DOSSIER_ID");
+    }
+    console.info("[DISCOVERY_TRACE_REPORT]", {
+        receivedSessionId: sessionId,
+        expectedPrefix: startsWithDossier,
+        documentPath: `discovery_sessions/${sessionId}`
+    });
     if (!sessionId || !prospectId) {
         throw new functions.https.HttpsError("invalid-argument", "Missing sessionId or prospectId.");
     }
