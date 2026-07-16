@@ -49,25 +49,52 @@ service cloud.firestore {
       return isActiveAdmin() && getAdminRole() == role;
     }
 
+    // Check if user is platform owner or equivalent
+    function isPlatformOwner() {
+      return isActiveAdmin() && (getAdminRole() == 'PLATFORM_OWNER' || getAdminRole() == 'SUPER_ADMIN');
+    }
+
+    // Check if user is platform partner
+    function isPlatformPartner() {
+      return isActiveAdmin() && getAdminRole() == 'PLATFORM_PARTNER';
+    }
+
+    // Helper for market read capability
+    function hasMarketRead() {
+      return isActiveAdmin() && 
+        (getAdminRole() in ['PLATFORM_OWNER', 'PLATFORM_PARTNER', 'SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'SALES_ADVISOR', 'VIEWER', 'ADMIN', 'SUPPORT']);
+    }
+
+    // Helper for market import capability
+    function hasMarketImport() {
+      return isActiveAdmin() && 
+        (getAdminRole() in ['PLATFORM_OWNER', 'SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'ADMIN']);
+    }
+
+    // Helper for market update capability
+    function hasMarketUpdate() {
+      return isActiveAdmin() && 
+        (getAdminRole() in ['PLATFORM_OWNER', 'PLATFORM_PARTNER', 'SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'SALES_ADVISOR', 'ADMIN', 'SUPPORT']);
+    }
+
     // Capabilities checks matching rbacService
     function canReadMarket() {
-      return isActiveAdmin() && 
-        (getAdminRole() in ['SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'SALES_ADVISOR', 'VIEWER', 'ADMIN', 'SUPPORT']);
+      return hasMarketRead();
     }
 
+    // Capabilities checks matching rbacService for writing/importing
     function canImportMarket() {
-      return isActiveAdmin() && 
-        (getAdminRole() in ['SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'ADMIN']);
+      return hasMarketImport();
     }
 
+    // Capabilities checks matching rbacService for updating
     function canUpdateMarket() {
-      return isActiveAdmin() && 
-        (getAdminRole() in ['SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'SALES_ADVISOR', 'ADMIN', 'SUPPORT']);
+      return hasMarketUpdate();
     }
 
     function canCreateOrganization() {
       return isActiveAdmin() && 
-        (getAdminRole() in ['SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'ADMIN']);
+        (getAdminRole() in ['PLATFORM_OWNER', 'SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'ADMIN']);
     }
 
     // --- Aura Control Center Existing Collections Security ---
@@ -115,12 +142,18 @@ service cloud.firestore {
     // Platform sales advisors permissions
     match /platform_sales_advisors/{advisorId} {
       allow read: if true; // Public read for resolving commercialCode
-      allow write: if hasRole('SUPER_ADMIN') || hasRole('FOUNDER') || hasRole('SALES_DIRECTOR');
+      allow write: if hasRole('PLATFORM_OWNER') || hasRole('SUPER_ADMIN') || hasRole('FOUNDER') || hasRole('SALES_DIRECTOR');
     }
 
     // Platform global admins permissions
     match /platform_global_admins/{adminEmail} {
       allow read, write: if isAuthenticated();
+    }
+
+    // Platform Market State Metadata
+    match /platform_market_state_metadata/{stateCode} {
+      allow read: if hasMarketRead();
+      allow write: if hasMarketImport();
     }
 
     // --- Aura Market Intelligence & Consulting Collections Security ---

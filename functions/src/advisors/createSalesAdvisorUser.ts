@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { getAdvisorActivationUrl } from "../auth/activationConfig";
 
 /**
  * Creates or provisions a Sales Advisor user.
@@ -174,8 +175,9 @@ export const createSalesAdvisorUser = onCall(
     });
 
     // 6. Generate Activation Link
+    const activationUrl = getAdvisorActivationUrl();
     const actionCodeSettings = {
-      url: `https://controlcenter.auranexus.io/activate-advisor`,
+      url: activationUrl,
       handleCodeInApp: true,
     };
     

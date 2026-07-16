@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { resolvePlatformPrincipal } from "../auth/resolvePlatformPrincipal";
+import { getAdvisorActivationUrl } from "../auth/activationConfig";
 
 /**
  * Permite a administradores autorizados realizar acciones administrativas sobre el acceso de asesores:
@@ -90,8 +91,9 @@ export const manageAdvisorAccess = onCall(
         throw new HttpsError("failed-precondition", "El asesor no tiene un correo electrónico asociado.");
       }
 
+      const activationUrl = getAdvisorActivationUrl();
       const actionCodeSettings = {
-        url: `https://controlcenter.auranexus.io/activate-advisor`,
+        url: activationUrl,
         handleCodeInApp: true,
       };
 

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.provisionCommercialAdvisor = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const resolvePlatformPrincipal_1 = require("../auth/resolvePlatformPrincipal");
 /**
  * Creates or provisions a Sales Advisor user securely with compensation.
  */
@@ -12,24 +13,40 @@ exports.provisionCommercialAdvisor = (0, https_1.onCall)({
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Debes iniciar sesión para realizar esta acción.");
     }
-    const { name, email, phone, assignedStates, assignedCities, specialties, commissionPlanId, } = request.data;
+    const { name, email, phone, assignedStates, assignedCities, specialties, commissionPlanId: inputPlanId, } = request.data;
     if (!name || !email) {
         throw new https_1.HttpsError("invalid-argument", "Nombre y correo son obligatorios.");
     }
     const db = admin.firestore();
     const auth = admin.auth();
     const normalizedEmail = email.trim().toLowerCase();
-    // 1. Validate Caller Role (Security revision: ADMIN removed, advisors.manage capability capability mapping)
-    const callerDoc = await db.collection("platform_global_admins").doc(request.auth.uid).get();
-    if (!callerDoc.exists) {
-        throw new https_1.HttpsError("permission-denied", "No tienes permisos de administrador.");
+    // 1. Validate Caller using resolvePlatformPrincipal helper
+    const caller = await (0, resolvePlatformPrincipal_1.resolvePlatformPrincipal)(db, request.auth);
+    const targetRole = (request.data.platformRole || "SALES_ADVISOR").trim().toUpperCase();
+    const commercialTier = (request.data.commercialTier || "TIER_1").trim().toUpperCase();
+    const commissionPlanId = (inputPlanId || "").trim();
+    // - solo PLATFORM_OWNER puede crear otro PLATFORM_OWNER;
+    if (targetRole === "PLATFORM_OWNER" && caller.role !== "PLATFORM_OWNER") {
+        throw new https_1.HttpsError("permission-denied", "Solo un PLATFORM_OWNER puede asignar el rol de PLATFORM_OWNER.");
     }
-    const callerData = callerDoc.data();
-    const allowedRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER"];
-    if (!allowedRoles.includes(callerData?.role)) {
+    // - PLATFORM_OWNER, FOUNDER o SUPER_ADMIN pueden asignar PLATFORM_PARTNER;
+    const allowedForPartner = ["PLATFORM_OWNER", "FOUNDER", "SUPER_ADMIN"];
+    if (targetRole === "PLATFORM_PARTNER" && !allowedForPartner.includes(caller.role)) {
+        throw new https_1.HttpsError("permission-denied", "No tienes permisos suficientes para asignar el rol PLATFORM_PARTNER.");
+    }
+    // - SALES_DIRECTOR no puede asignar PLATFORM_PARTNER;
+    // - SALES_DIRECTOR solo puede crear perfiles comerciales autorizados inferiores.
+    if (caller.role === "SALES_DIRECTOR") {
+        const allowedRolesForSalesDir = ["SALES_ADVISOR", "CONSULTANT", "READ_ONLY", "VIEWER"];
+        if (!allowedRolesForSalesDir.includes(targetRole)) {
+            throw new https_1.HttpsError("permission-denied", "Un SALES_DIRECTOR solo puede crear asesores o perfiles comerciales inferiores.");
+        }
+    }
+    const allowedCreatorRoles = ["SUPER_ADMIN", "FOUNDER", "SALES_DIRECTOR", "PLATFORM_OWNER", "PLATFORM_PARTNER"];
+    if (!allowedCreatorRoles.includes(caller.role)) {
         throw new https_1.HttpsError("permission-denied", "Rol insuficiente para crear asesores.");
     }
-    const isOwner = callerData?.role === "SUPER_ADMIN" || callerData?.role === "FOUNDER" || callerData?.role === "PLATFORM_OWNER";
+    const isOwner = caller.role === "SUPER_ADMIN" || caller.role === "FOUNDER" || caller.role === "PLATFORM_OWNER";
     // 2. Check if Email already exists in platform_sales_advisors (No silent reassignments)
     const emailQuery = await db.collection("platform_sales_advisors")
         .where("email", "==", normalizedEmail)
@@ -135,9 +152,13 @@ exports.provisionCommercialAdvisor = (0, https_1.onCall)({
             commercialCode,
             discoveryLink: `https://controlcenter.auranexus.io/discover/advisor/${commercialCode}`,
             assignedStates: assignedStates || [],
+            assignedStateCodes: request.data.assignedStateCodes || [],
+            assignedStateLabels: request.data.assignedStateLabels || [],
             assignedCities: assignedCities || [],
             specialties: specialties || [],
+            commercialTier,
             commissionPlanId: commissionPlanId || "STANDARD_TIER_1",
+            platformRole: targetRole,
             authStatus: authPreExisting ? "NOT_CREATED" : "CREATED",
             invitationStatus: "PENDING",
             advisorStatus: "ACTIVE",
@@ -147,17 +168,17 @@ exports.provisionCommercialAdvisor = (0, https_1.onCall)({
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         firestoreDocCreated = true;
-        // 6. Give minimal role in platform_global_admins just in case they log in to control center
+        // 6. Give the target role in platform_global_admins
         await db.collection("platform_global_admins").doc(uid).set({
             email: normalizedEmail,
-            role: "SALES_ADVISOR",
+            role: targetRole,
             advisorId,
             isActive: true, // Allow login
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
         // 7. Update Custom Claims
         await auth.setCustomUserClaims(uid, {
-            roleCode: "SALES_ADVISOR",
+            roleCode: targetRole,
             advisorId: advisorId
         });
         // 8. Generate Activation Link

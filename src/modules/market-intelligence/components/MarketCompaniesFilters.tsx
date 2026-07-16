@@ -25,6 +25,7 @@ interface MarketCompaniesFiltersProps {
   availableStates: string[];
   sectorCounts: Record<string, number>;
   mexicoStates?: MexicoStateOption[];
+  metadataError?: string | null;
 }
 
 import { getCommercialSectorsDropdown } from "../services/industryResolverService";
@@ -63,6 +64,7 @@ export default function MarketCompaniesFilters({
   availableStates,
   sectorCounts,
   mexicoStates,
+  metadataError,
 }: MarketCompaniesFiltersProps) {
   void availableStates;
   const [draftFilters, setDraftFilters] = useState<FiltersState>(filters);
@@ -107,7 +109,7 @@ export default function MarketCompaniesFilters({
     (s) => s.label.toLowerCase() === draftFilters.estado.toLowerCase() ||
            s.normalizedValue.toLowerCase() === draftFilters.estado.toLowerCase()
   );
-  const showNoDataWarning = draftFilters.estado && selectedStateMeta && !selectedStateMeta.imported;
+  const showNoDataWarning = draftFilters.estado && selectedStateMeta && !selectedStateMeta.imported && !metadataError;
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6 backdrop-blur">
@@ -167,18 +169,26 @@ export default function MarketCompaniesFilters({
             <option value="">Todos los estados</option>
             {MEXICO_STATES.map((state) => {
               const meta = mexicoStates?.find(s => s.code === state.code);
-              const imported = meta ? meta.imported : false;
+              const imported = !metadataError && meta ? meta.imported : false;
               return (
                 <option key={state.code} value={state.label}>
-                  {state.label} {imported ? "(Disponible)" : "(Sin datos)"}
+                  {state.label} {metadataError ? "" : (imported ? "(Disponible)" : "(Sin datos)")}
                 </option>
               );
             })}
           </select>
-          {showNoDataWarning && (
-            <p className="mt-1 text-[10px] text-amber-400 leading-tight">
-              ⚠️ Sin datos importados para este estado.
+          {metadataError ? (
+            <p className="mt-1 text-[10px] text-red-400 leading-tight">
+              {metadataError === "permission-denied"
+                ? "⚠️ No tienes permisos para consultar los datos de mercado."
+                : "⚠️ No fue posible cargar los datos. Intenta nuevamente."}
             </p>
+          ) : (
+            showNoDataWarning && (
+              <p className="mt-1 text-[10px] text-amber-400 leading-tight">
+                ⚠️ No existen datos importados para este estado.
+              </p>
+            )
           )}
         </div>
 

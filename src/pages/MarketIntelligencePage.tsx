@@ -528,11 +528,25 @@ export default function MarketIntelligencePage() {
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
   const [advisorId, setAdvisorId] = useState<string>("");
   const [mexicoStates, setMexicoStates] = useState<any[]>([]);
+  const [metadataError, setMetadataError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadStates() {
-      const states = await getMexicoStatesWithMetadata();
-      setMexicoStates(states);
+      try {
+        setMetadataError(null);
+        const states = await getMexicoStatesWithMetadata();
+        setMexicoStates(states);
+      } catch (err: any) {
+        console.error("Error loading state metadata:", err);
+        const errCode = err.code || "";
+        const errMsg = err.message || "";
+        if (errCode === "permission-denied" || errMsg.includes("permission")) {
+          setMetadataError("permission-denied");
+        } else {
+          setMetadataError("loading-error");
+        }
+        setMexicoStates(MEXICO_STATES);
+      }
     }
     loadStates();
   }, [rawDataset]);
@@ -880,17 +894,14 @@ export default function MarketIntelligencePage() {
 
     } catch (err: any) {
       if (activeLoadRequestRef.current !== requestId) return;
-      console.error({
-        code: err.code || null,
-        message: err.message || null,
-        stack: err.stack || null,
-        operation: "loadDataset",
-        collection: "market_companies",
-        authUid: auth.currentUser?.uid || null,
-        authEmail: auth.currentUser?.email || null,
-        error: err
-      });
-      setError("Error al cargar los prospectos de mercado: " + err.message);
+      console.error("Error in loadDataset:", err);
+      const errCode = err.code || "";
+      const errMsg = err.message || "";
+      if (errCode === "permission-denied" || errMsg.includes("permission") || errMsg.includes("Missing or insufficient permissions")) {
+        setError("No tienes permisos para consultar los datos de mercado.");
+      } else {
+        setError("No fue posible cargar los datos. Intenta nuevamente.");
+      }
     } finally {
       if (activeLoadRequestRef.current === requestId) {
         setIsLoading(false);
@@ -1892,6 +1903,7 @@ export default function MarketIntelligencePage() {
             availableStates={availableStates}
             sectorCounts={industriesStats.stateFilteredCounts}
             mexicoStates={mexicoStates}
+            metadataError={metadataError}
           />
           <MarketCompaniesTable
             companies={companies}
