@@ -91,33 +91,32 @@ export const manageAdvisorAccess = onCall(
         throw new HttpsError("failed-precondition", "El asesor no tiene un correo electrónico asociado.");
       }
 
-      const activationUrl = getAdvisorActivationUrl();
-      const actionCodeSettings = {
-        url: activationUrl,
-        handleCodeInApp: true,
-      };
-
       let activationLink = "";
-      let invitationStatus = "LINK_GENERATED";
+      let invitationStatus = "PENDING";
 
-      try {
-        activationLink = await auth.generatePasswordResetLink(advisorEmail, actionCodeSettings);
-        invitationStatus = "SEND_FAILED"; // As SMTP is not configured, mark as SEND_FAILED
-
-        await db.collection("platform_sales_advisors").doc(advisorId).update({
-          invitationStatus,
-          lastSafeErrorCode: "SMTP_NOT_CONFIGURED",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } catch (err: any) {
-        throw new HttpsError("internal", "Error generando el enlace de activación: " + err.message);
+      if (isOwner) {
+        try {
+          const activationUrl = getAdvisorActivationUrl();
+          const actionCodeSettings = {
+            url: activationUrl,
+            handleCodeInApp: true,
+          };
+          activationLink = await auth.generatePasswordResetLink(advisorEmail, actionCodeSettings);
+        } catch (err: any) {
+          throw new HttpsError("internal", "Error generando el enlace de contingencia manual: " + err.message);
+        }
       }
+
+      await db.collection("platform_sales_advisors").doc(advisorId).update({
+        invitationStatus,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
       return {
         success: true,
         invitationStatus,
         activationLink: isOwner ? activationLink : null,
-        message: "Enlace generado con éxito."
+        message: "Operación completada con éxito."
       };
     }
 

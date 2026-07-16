@@ -150,6 +150,17 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    // Check if user has capability to manage platform settings (PLATFORM_OWNER or SUPER_ADMIN)
+    function canManagePlatformSettings() {
+      return isActiveAdmin() && (getAdminRole() == 'PLATFORM_OWNER' || getAdminRole() == 'SUPER_ADMIN');
+    }
+
+    // Platform Settings
+    match /platform_settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if canManagePlatformSettings();
+    }
+
     // Platform Market State Metadata
     match /platform_market_state_metadata/{stateCode} {
       allow read: if hasMarketRead();

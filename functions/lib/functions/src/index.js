@@ -21,6 +21,7 @@ const XLSX = require("xlsx");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
+const identityUtils_1 = require("./utils/identityUtils");
 admin.initializeApp();
 const db = admin.firestore();
 // ----------------- Normalization Helpers -----------------
@@ -111,18 +112,7 @@ function getNormalizedStateName(stateVal, filename) {
         return "Ciudad de México";
     return stateVal && cleanVal !== "no especificado" && cleanVal !== "null" ? stateVal : "No Especificado";
 }
-function generateDeterministicId(razonSocial, nombreComercial, municipio, scian) {
-    const cleanStr = (str) => (str || "")
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]/g, "")
-        .trim();
-    const partName = cleanStr(razonSocial) || cleanStr(nombreComercial) || "empresa";
-    const partMun = cleanStr(municipio) || "sinmunicipio";
-    const partScian = cleanStr(scian) || "sinscian";
-    return `inegi_${partName}_${partMun}_${partScian}`.slice(0, 100);
-}
+// Deterministic ID logic has been moved to utils/identityUtils.ts
 function calculateOpportunityScore(rawSourceScore, tamano, sector, emailValido, telefonoValido, sitioWeb) {
     let rawScore = Number(rawSourceScore) || 0;
     if (rawScore > 0 && rawScore <= 10) {
@@ -312,6 +302,7 @@ function detectHeaderRowAndBuildMap(rows) {
         longitudIdx: findIndex(["longitud", "lon", "lng"]),
         altaDenueIdx: findIndex(["alta denue", "fecha_alta"]),
         scoreIdx: findIndex(["score", "calificación", "calificacion"]),
+        cleeIdx: findIndex(["clee", "id", "identificador", "clave"]),
     };
     if (headerMap.razonSocialIdx === -1 && headerMap.nombreComercialIdx === -1) {
         throw new Error("No se pudo mapear las columnas requeridas del DENUE.");
@@ -494,7 +485,9 @@ function normalizeRowWithMap(rowArray, map) {
     const scoreBreakdown = calculateOpportunityScore(rawSourceScore, tamano, sector, email, telefono, sitioWeb);
     const opportunityScore = scoreBreakdown.total;
     const recommendedSuites = determineRecommendedSuites(sector, tamano, rangoPersonal, opportunityScore);
-    const id = generateDeterministicId(razonSocial, nombreComercial, municipio, scian);
+    const clee = getValue(map.cleeIdx);
+    const rowStringFallback = String(rowArray).substring(0, 100);
+    const id = (0, identityUtils_1.generateDeterministicId)(clee, razonSocial, nombreComercial, municipio, cp, scian, telefono, direccion, rowStringFallback);
     const advisor = generateCommercialAdvisorInfo(opportunityScore, tamano, sector, email, telefono, sitioWeb, actividad);
     const canonical = resolveCanonicalIndustry({ scian, actividad, sector });
     return {
@@ -657,10 +650,17 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
         if (!worksheet) {
             throw new Error(`No se pudo leer la hoja '${sheetName}' en el Excel.`);
         }
+        let validationErrors = [];
+        let missingRequiredFieldsCount = 0;
+        let rowsRead = 0;
+        let rowsAccepted = 0;
+        let rowsRejected = 0;
+        let idCollisions = 0;
+        let trueDuplicates = 0;
+        let documentsCreated = 0;
+        let documentsUpdated = 0;
         const rows2D = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        if (rows2D.length === 0) {
-            throw new Error(`La hoja '${sheetName}' está vacía.`);
-        }
+        rowsRead = rows2D.length;
         const { headerRowIndex, headerMap } = detectHeaderRowAndBuildMap(rows2D);
         const dataRows = rows2D.slice(headerRowIndex + 1);
         const totalRows = dataRows.length;
@@ -678,7 +678,6 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
         let resolvedStateCount = 0;
         const stateDistribution = {};
         const sectorDistribution = {};
-        const validationErrors = [];
         const nowStr = new Date().toISOString();
         const customState = (data.states && data.states.length > 0) ? data.states[0] : null;
         for (let i = 0; i < totalRows; i += 100) {
@@ -688,8 +687,32 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
                 if (!row || row.length === 0)
                     continue;
                 try {
-                    const company = normalizeRowWithMap(row, headerMap);
-                    company.estado = getNormalizedStateName(customState || company.estado, data.filename || "");
+                    const companyRaw = normalizeRowWithMap(row, headerMap);
+                    const latitud = headerMap.latitudIdx !== -1 && headerMap.latitudIdx < row.length ? parseFloat(row[headerMap.latitudIdx]) || null : null;
+                    const longitud = headerMap.longitudIdx !== -1 && headerMap.longitudIdx < row.length ? parseFloat(row[headerMap.longitudIdx]) || null : null;
+                    const altaDenue = headerMap.altaDenueIdx !== -1 && headerMap.altaDenueIdx < row.length ? String(row[headerMap.altaDenueIdx] || "").trim() : "";
+                    const clee = headerMap.cleeIdx !== -1 && headerMap.cleeIdx < row.length ? String(row[headerMap.cleeIdx] || "").trim() : "";
+                    const razonSocial = companyRaw.razonSocial;
+                    const nombreComercial = companyRaw.nombreComercial;
+                    const municipio = companyRaw.municipio;
+                    const cp = companyRaw.cp;
+                    const scian = companyRaw.scian;
+                    const rawEmail = companyRaw.email;
+                    const rawTelefono = companyRaw.telefono;
+                    const direccion = companyRaw.direccion;
+                    const email = normalizeEmail(rawEmail);
+                    const telefono = normalizePhone(rawTelefono);
+                    const rowStringFallback = JSON.stringify(row);
+                    const company = {
+                        ...companyRaw,
+                        id: (0, identityUtils_1.generateDeterministicId)(clee, razonSocial, nombreComercial, municipio, cp, scian, telefono, direccion, rowStringFallback),
+                        estado: getNormalizedStateName(customState || companyRaw.estado, data.filename || ""),
+                        latitud,
+                        longitud,
+                        altaDenue,
+                        email,
+                        telefono,
+                    };
                     if (company.estado === "No Especificado") {
                         const munNorm = normalizeState(company.municipio || "");
                         if (munNorm) {
@@ -700,9 +723,15 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
                                 company.estado = "Tabasco";
                             }
                             else {
-                                const nlMunicipios = ["monterrey", "sannicolas", "apodaca", "guadalupe", "santacatarina", "sanpedrogarza", "sanpedrogarcia", "garcia", "escobedo"];
-                                if (nlMunicipios.some(m => munNorm.includes(m))) {
+                                const munLower = munNorm.toLowerCase();
+                                if (munLower.includes("monterrey") || munLower.includes("sannicolas") || munLower.includes("apodaca") || munLower.includes("guadalupe") || munLower.includes("santacatarina") || munLower.includes("sanpedro") || munLower.includes("garcia") || munLower.includes("escobedo") || munLower.includes("juarez") || munLower.includes("cadereyta")) {
                                     company.estado = "Nuevo León";
+                                }
+                                else if (munLower.includes("guadalajara") || munLower.includes("zapopan") || munLower.includes("tlaquepaque") || munLower.includes("tonala") || munLower.includes("tlajomulco")) {
+                                    company.estado = "Jalisco";
+                                }
+                                else if (munLower.includes("miguelhidalgo") || munLower.includes("cuauhtemoc") || munLower.includes("benitojuarez") || munLower.includes("coyoacan")) {
+                                    company.estado = "Ciudad de México";
                                 }
                             }
                         }
@@ -739,18 +768,32 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
                     if (!company.fingerprint)
                         missingFields.push("fingerprint");
                     if (missingFields.length > 0 && validationErrors.length < 50) {
-                        validationErrors.push(`Fila con Razón Social: "${company.razonSocial || company.nombreComercial}" le faltan campos: ${missingFields.join(", ")}`);
+                        missingRequiredFieldsCount++;
+                        validationErrors.push(`Fila le faltan campos: ${missingFields.join(", ")}`);
                     }
                     if (company.razonSocial || company.nombreComercial) {
+                        rowsAccepted++;
                         companies.push(company);
+                    }
+                    else {
+                        rowsRejected++;
                     }
                 }
                 catch (e) {
+                    rowsRejected++;
                     failed++;
                 }
             }
             if (companies.length > 0) {
-                const docRefs = companies.map(c => db.collection("market_companies").doc(c.id));
+                const idSet = new Set();
+                for (const c of companies) {
+                    if (idSet.has(c.id)) {
+                        idCollisions++;
+                    }
+                    idSet.add(c.id);
+                }
+                const uniqueCompanies = Array.from(new Map(companies.map(item => [item.id, item])).values());
+                const docRefs = uniqueCompanies.map(c => db.collection("market_companies").doc(c.id));
                 const snapshots = await db.getAll(...docRefs);
                 const existingDocsMap = new Map();
                 snapshots.forEach(snap => {
@@ -759,12 +802,32 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
                     }
                 });
                 const batch = db.batch();
-                for (const company of companies) {
-                    const existing = existingDocsMap.get(company.id);
-                    const docRef = db.collection("market_companies").doc(company.id);
+                const cleanStrLocal = (str) => (str || "")
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[^a-z0-9]/g, "")
+                    .trim();
+                for (const company of uniqueCompanies) {
+                    let finalCompany = company;
+                    let existing = existingDocsMap.get(company.id);
+                    let docRef = db.collection("market_companies").doc(company.id);
+                    if (existing) {
+                        const isTrueDuplicate = cleanStrLocal(existing.razonSocial) === cleanStrLocal(company.razonSocial) &&
+                            cleanStrLocal(existing.nombreComercial) === cleanStrLocal(company.nombreComercial) &&
+                            cleanStrLocal(existing.direccion) === cleanStrLocal(company.direccion) &&
+                            cleanStrLocal(existing.municipio) === cleanStrLocal(company.municipio);
+                        if (!isTrueDuplicate) {
+                            // Conflict! Regenerate with hash tie-breaker
+                            const hashId = (0, identityUtils_1.generateDeterministicId)(company.clee, company.razonSocial, company.nombreComercial, company.municipio, company.cp, company.scian, company.telefono, company.direccion, "TIE_BREAKER:" + JSON.stringify(company));
+                            finalCompany = { ...company, id: hashId };
+                            docRef = db.collection("market_companies").doc(hashId);
+                            existing = undefined; // Force write as new document since ID changed
+                        }
+                    }
                     if (!existing) {
                         batch.set(docRef, {
-                            ...company,
+                            ...finalCompany,
                             firstImportedAt: nowStr,
                             lastImportAt: nowStr,
                             lastUpdatedAt: nowStr,
@@ -777,34 +840,35 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
                         added++;
                     }
                     else {
-                        const hasChanged = existing.razonSocial !== company.razonSocial ||
-                            existing.nombreComercial !== company.nombreComercial ||
-                            existing.sector !== company.sector ||
-                            existing.tamano !== company.tamano ||
-                            existing.rangoPersonal !== company.rangoPersonal ||
-                            existing.telefono !== company.telefono ||
-                            existing.email !== company.email ||
-                            existing.sitioWeb !== company.sitioWeb ||
-                            existing.direccion !== company.direccion ||
-                            existing.municipio !== company.municipio ||
-                            existing.estado !== company.estado ||
-                            existing.estadoNormalized !== company.estadoNormalized ||
-                            existing.sourceState !== company.sourceState ||
-                            existing.cp !== company.cp ||
-                            existing.scian !== company.scian ||
-                            existing.actividad !== company.actividad;
+                        trueDuplicates++;
+                        const hasChanged = existing.razonSocial !== finalCompany.razonSocial ||
+                            existing.nombreComercial !== finalCompany.nombreComercial ||
+                            existing.sector !== finalCompany.sector ||
+                            existing.tamano !== finalCompany.tamano ||
+                            existing.rangoPersonal !== finalCompany.rangoPersonal ||
+                            existing.telefono !== finalCompany.telefono ||
+                            existing.email !== finalCompany.email ||
+                            existing.sitioWeb !== finalCompany.sitioWeb ||
+                            existing.direccion !== finalCompany.direccion ||
+                            existing.municipio !== finalCompany.municipio ||
+                            existing.estado !== finalCompany.estado ||
+                            existing.estadoNormalized !== finalCompany.estadoNormalized ||
+                            existing.sourceState !== finalCompany.sourceState ||
+                            existing.cp !== finalCompany.cp ||
+                            existing.scian !== finalCompany.scian ||
+                            existing.actividad !== finalCompany.actividad;
                         if (!hasChanged) {
                             omitted++;
                         }
                         else {
                             batch.set(docRef, {
                                 ...existing,
-                                ...company,
+                                ...finalCompany,
                                 lastImportAt: nowStr,
                                 lastUpdatedAt: nowStr,
                                 importCount: (existing.importCount || 1) + 1,
                                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                            });
+                            }, { merge: true });
                             overwritten++;
                         }
                     }
@@ -842,7 +906,6 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
             fingerprint: data.fingerprint || "",
             user: data.createdBy || "",
         });
-        // 4. Metadata & Validation update
         const unresolvedPercentage = totalRows > 0 ? (unresolvedStateCount / totalRows) * 100 : 0;
         const validationStatus = unresolvedPercentage > 1.0 ? "needs_review" : "valid";
         if (validationStatus === "needs_review") {
@@ -863,6 +926,22 @@ exports.processMarketImportJob = (0, firestore_1.onDocumentCreated)({
             resolvedStateCount,
             stateDistribution,
             sectorDistribution,
+            total: totalRows,
+            processed,
+            added,
+            overwritten,
+            omitted,
+            failed,
+            metrics: {
+                rowsRead,
+                rowsAccepted,
+                rowsRejected,
+                idCollisions,
+                trueDuplicates,
+                documentsCreated,
+                documentsUpdated,
+                missingRequiredFieldsCount
+            },
             completedAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });

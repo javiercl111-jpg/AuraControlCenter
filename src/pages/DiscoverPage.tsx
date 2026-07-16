@@ -315,92 +315,97 @@ export default function DiscoverPage() {
 
     setIsAuraTyping(true);
 
-    // Build Engine Input
-    const engineInput = {
-      companyName: linkInfo.companyName,
-      industry: stateRef.current.industry,
-      context: {},
-      currentResponse: userText,
-      conversationHistory: stateRef.current.getHistory(),
-      hypotheses: stateRef.current.getHypotheses(),
-      confidenceLevel: stateRef.current.currentConfidence,
-      partialDossier: stateRef.current.dossier,
-      usefulResponsesCount: stateRef.current.usefulResponsesCount,
-      turnCount: stateRef.current.turnCount,
-      askedIntents: Array.from(stateRef.current.askedIntents),
-      askedQuestions: Array.from(stateRef.current.askedQuestions)
-    };
+    try {
+      // Build Engine Input
+      const engineInput = {
+        companyName: linkInfo.companyName,
+        industry: stateRef.current.industry,
+        context: {},
+        currentResponse: userText,
+        conversationHistory: stateRef.current.getHistory(),
+        hypotheses: stateRef.current.getHypotheses(),
+        confidenceLevel: stateRef.current.currentConfidence,
+        partialDossier: stateRef.current.dossier,
+        usefulResponsesCount: stateRef.current.usefulResponsesCount,
+        turnCount: stateRef.current.turnCount,
+        askedIntents: Array.from(stateRef.current.askedIntents),
+        askedQuestions: Array.from(stateRef.current.askedQuestions)
+      };
 
-    // Build Orchestrator Input
-    const input = {
-      engineInput,
-      conversationStateSnapshot: stateRef.current.getSnapshot(),
-      reflectionState: reflectionStateRef.current,
-      confidenceMatrix: confidenceMatrixRef.current
-    };
+      // Build Orchestrator Input
+      const input = {
+        engineInput,
+        conversationStateSnapshot: stateRef.current.getSnapshot(),
+        reflectionState: reflectionStateRef.current,
+        confidenceMatrix: confidenceMatrixRef.current
+      };
 
-    // Simulate Network/Processing Delay for realism
-    await new Promise(resolve => setTimeout(resolve, 1500));
+      // Simulate Network/Processing Delay for realism
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Process logic
-    const output = await orchestratorRef.current.processTurn(input);
+      // Process logic
+      const output = await orchestratorRef.current.processTurn(input);
 
-    // Apply Output to State
-    reflectionStateRef.current = output.updatedReflectionState;
-    confidenceMatrixRef.current = output.updatedConfidenceMatrix;
+      // Apply Output to State
+      reflectionStateRef.current = output.updatedReflectionState;
+      confidenceMatrixRef.current = output.updatedConfidenceMatrix;
 
-    stateRef.current.conversationPhase = output.updatedConversationPhase;
-    stateRef.current.pendingSummary = output.pendingSummary;
-    if (output.updatedFallbackCount !== undefined) {
-      stateRef.current.fallbackConsecutiveCount = output.updatedFallbackCount;
-    }
-
-    if (output.conversationOutput && (output.shouldAdvance || output.shouldPersistEvidence)) {
-      stateRef.current.updateConfidence(output.conversationOutput.updatedConfidence);
-      stateRef.current.updateDossier(output.conversationOutput.updatedDossier);
-      output.conversationOutput.newHypotheses.forEach(h => stateRef.current?.addHypothesis(h));
-      output.conversationOutput.discardedHypotheses.forEach(h => stateRef.current?.removeHypothesis(h));
-    }
-
-    // Update trackers only if advanced
-    if (output.shouldAdvance) {
-      stateRef.current.turnCount += 1;
-      stateRef.current.askedIntents.add(output.finalIntent);
-      stateRef.current.askedQuestions.add(output.finalMessage);
-      if (userText) {
-        stateRef.current.usefulResponsesCount += 1;
+      stateRef.current.conversationPhase = output.updatedConversationPhase;
+      stateRef.current.pendingSummary = output.pendingSummary;
+      if (output.updatedFallbackCount !== undefined) {
+        stateRef.current.fallbackConsecutiveCount = output.updatedFallbackCount;
       }
+
+      if (output.conversationOutput && (output.shouldAdvance || output.shouldPersistEvidence)) {
+        stateRef.current.updateConfidence(output.conversationOutput.updatedConfidence);
+        stateRef.current.updateDossier(output.conversationOutput.updatedDossier);
+        output.conversationOutput.newHypotheses.forEach(h => stateRef.current?.addHypothesis(h));
+        output.conversationOutput.discardedHypotheses.forEach(h => stateRef.current?.removeHypothesis(h));
+      }
+
+      // Update trackers only if advanced
+      if (output.shouldAdvance) {
+        stateRef.current.turnCount += 1;
+        stateRef.current.askedIntents.add(output.finalIntent);
+        stateRef.current.askedQuestions.add(output.finalMessage);
+        if (userText) {
+          stateRef.current.usefulResponsesCount += 1;
+        }
+      }
+
+      // Add Aura Message to State
+      stateRef.current.addMessage("aura", output.finalMessage);
+      setChatLog(prev => [...prev, { sender: "aura", text: output.finalMessage }]);
+
+      // Update Telemetry UI
+      setTelemetry({
+        intent: output.finalIntent,
+        reason: output.conversationOutput?.reason || output.reflectionOutput.internalReflection || "Clarification or Summary logic",
+        confidence: stateRef.current.currentConfidence,
+        hypotheses: stateRef.current.getHypotheses(),
+        internalSummary: output.conversationOutput?.internalSummary || output.reflectionOutput.internalReflection,
+        usefulResponses: stateRef.current.usefulResponsesCount,
+        turnCount: stateRef.current.turnCount,
+        askedIntents: Array.from(stateRef.current.askedIntents),
+        validationStatus: !output.reflectionOutput.isTooShort && !output.reflectionOutput.isAmbiguous && !output.reflectionOutput.hasContradiction,
+        reflectionAction: output.reflectionOutput.recommendedAction,
+        relevance: output.reflectionOutput.responseRelevance,
+        coherence: output.reflectionOutput.coherenceScore,
+        contradictions: output.reflectionOutput.contradictionDetails.length,
+        dimensions: output.reflectionOutput.dimensionsUpdated.length,
+        phase: output.updatedConversationPhase
+      });
+
+      // Check Completion
+      if (output.shouldComplete) {
+        handleComplete();
+      }
+    } catch (err) {
+      console.error("Error processing turn:", err);
+    } finally {
+      setIsAuraTyping(false);
     }
 
-    // Add Aura Message to State
-    stateRef.current.addMessage("aura", output.finalMessage);
-    setChatLog(prev => [...prev, { sender: "aura", text: output.finalMessage }]);
-
-    // Update Telemetry UI
-    setTelemetry({
-      intent: output.finalIntent,
-      reason: output.conversationOutput?.reason || output.reflectionOutput.internalReflection || "Clarification or Summary logic",
-      confidence: stateRef.current.currentConfidence,
-      hypotheses: stateRef.current.getHypotheses(),
-      internalSummary: output.conversationOutput?.internalSummary || output.reflectionOutput.internalReflection,
-      usefulResponses: stateRef.current.usefulResponsesCount,
-      turnCount: stateRef.current.turnCount,
-      askedIntents: Array.from(stateRef.current.askedIntents),
-      validationStatus: !output.reflectionOutput.isTooShort && !output.reflectionOutput.isAmbiguous && !output.reflectionOutput.hasContradiction,
-      reflectionAction: output.reflectionOutput.recommendedAction,
-      relevance: output.reflectionOutput.responseRelevance,
-      coherence: output.reflectionOutput.coherenceScore,
-      contradictions: output.reflectionOutput.contradictionDetails.length,
-      dimensions: output.reflectionOutput.dimensionsUpdated.length,
-      phase: output.updatedConversationPhase
-    });
-
-    setIsAuraTyping(false);
-
-    // Check Completion
-    if (output.shouldComplete) {
-      handleComplete();
-    }
   }
 
   function handleUserSubmit(e: React.FormEvent) {

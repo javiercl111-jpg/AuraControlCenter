@@ -11,7 +11,16 @@ import {
   getLeads,
   updateLeadStage,
 } from "../services/platformLeadService";
-import type { LeadStage, PlatformLead } from "../types/platformLead";
+import type { LeadStage, PlatformLead, LeadSource } from "../types/platformLead";
+
+const LEAD_SOURCES: { value: LeadSource; label: string }[] = [
+  { value: "INBOUND", label: "Inbound (Web/Organico)" },
+  { value: "OUTBOUND", label: "Outbound (Prospección)" },
+  { value: "REFERRAL", label: "Referido" },
+  { value: "EVENT", label: "Evento" },
+  { value: "PARTNER", label: "Partner" },
+  { value: "OTHER", label: "Otro" },
+];
 
 const LEAD_STAGES: { value: LeadStage; label: string }[] = [
   { value: "NEW_LEAD", label: "Nuevo" },
@@ -51,8 +60,8 @@ export default function CrmPage() {
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [source, setSource] = useState("");
-  const [estimatedValue, setEstimatedValue] = useState(0);
+  const [source, setSource] = useState<LeadSource>("INBOUND");
+  const [leadSourceDetail, setLeadSourceDetail] = useState("");
   const [nextFollowUpDate, setNextFollowUpDate] = useState("");
   const [notes, setNotes] = useState("");
   const [interestedModules, setInterestedModules] = useState<string[]>([
@@ -119,14 +128,17 @@ export default function CrmPage() {
     setSuccessMessage("");
 
     try {
+      const label = LEAD_SOURCES.find(s => s.value === source)?.label || source;
       await createLead({
         companyName: companyName.trim(),
         contactName: contactName.trim(),
         email: email.trim(),
         phone: phone.trim(),
-        source: source.trim(),
+        source: source,
+        leadSourceCode: source,
+        leadSourceLabel: label,
+        leadSourceDetail: source === "OTHER" ? leadSourceDetail.trim() : undefined,
         interestedModules,
-        estimatedValue: Number(estimatedValue) || 0,
         stage: "NEW_LEAD",
         notes: notes.trim(),
         nextFollowUpDate,
@@ -136,8 +148,8 @@ export default function CrmPage() {
       setContactName("");
       setEmail("");
       setPhone("");
-      setSource("");
-      setEstimatedValue(0);
+      setSource("INBOUND");
+      setLeadSourceDetail("");
       setNextFollowUpDate("");
       setNotes("");
       setInterestedModules(["AURA_HCM"]);
@@ -255,24 +267,26 @@ export default function CrmPage() {
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
           />
 
-          <input
+          <select
             value={source}
-            onChange={(event) => setSource(event.target.value)}
-            placeholder="Origen del lead"
+            onChange={(event) => setSource(event.target.value as LeadSource)}
             className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
-          />
+          >
+            {LEAD_SOURCES.map((src) => (
+              <option key={src.value} value={src.value}>
+                {src.label}
+              </option>
+            ))}
+          </select>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pl-1">Valor estimado</label>
+          {source === "OTHER" && (
             <input
-              type="number"
-              min={0}
-              value={estimatedValue}
-              onChange={(event) => setEstimatedValue(Number(event.target.value))}
-              placeholder="Valor estimado"
+              value={leadSourceDetail}
+              onChange={(event) => setLeadSourceDetail(event.target.value)}
+              placeholder="Detalle del Origen"
               className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-300"
             />
-          </div>
+          )}
 
           <input
             type="date"

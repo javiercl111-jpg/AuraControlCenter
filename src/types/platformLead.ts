@@ -7,15 +7,26 @@ export type LeadStage =
   | "WON"
   | "LOST";
 
+export type LeadSource =
+  | "INBOUND"
+  | "OUTBOUND"
+  | "REFERRAL"
+  | "EVENT"
+  | "PARTNER"
+  | "OTHER";
+
 export interface PlatformLead {
   id: string;
   companyName: string;
   contactName: string;
   email: string;
   phone: string;
-  source: string;
+  source?: LeadSource | string;
+  leadSourceCode?: LeadSource | string;
+  leadSourceLabel?: string;
+  leadSourceDetail?: string;
   interestedModules: string[];
-  estimatedValue: number;
+  estimatedValue?: number;
   stage?: LeadStage; // Legacy V1 stage
   currentStage?: string; // V2 stage
   lifecycleStatus?: string;

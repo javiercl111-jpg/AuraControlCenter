@@ -41,9 +41,17 @@ export default function SettingsPage() {
         billing: data.billing,
         commissions: data.commissions,
       });
-    } catch (err) {
-      console.error(err);
-      setError("No se pudo cargar la configuración.");
+    } catch (err: any) {
+      console.error("loadSettings error:", err);
+      const code = err?.code || "";
+      const msg = err?.message || "";
+      if (code === "permission-denied") {
+        setError("Acceso Denegado: Tu rol actual no tiene privilegios para ver la configuración global (permission-denied).");
+      } else if (code === "not-found" || msg.includes("not-found")) {
+        setError("No Encontrado: El documento de configuración global no existe en la base de datos (not-found).");
+      } else {
+        setError("Error de Carga: Fallo del sistema o SDK al intentar leer la configuración (load-error).");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -104,9 +112,14 @@ export default function SettingsPage() {
     try {
       await savePlatformSettings(settings);
       setSuccessMessage("Configuración guardada correctamente.");
-    } catch (err) {
-      console.error(err);
-      setError("No se pudo guardar la configuración.");
+    } catch (err: any) {
+      console.error("savePlatformSettings error:", err);
+      const code = err?.code || "";
+      if (code === "permission-denied") {
+        setError("Acceso Denegado: Tu rol actual no permite guardar la configuración global (permission-denied).");
+      } else {
+        setError("Error de Guardado: Fallo del sistema o SDK al guardar la configuración.");
+      }
     } finally {
       setIsSaving(false);
     }

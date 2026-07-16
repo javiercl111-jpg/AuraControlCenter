@@ -95,7 +95,7 @@ export class ReflectionEngine {
     else if (isIndustryQuestion && words.length <= 3 && text.length >= 4 && !/^([a-z])\1+$/.test(text) && !/asdf|qwer/.test(text)) {
       responseRelevance = 100;
       evidenceExtracted.push(`Mencionó giro/industria: ${text}`);
-      dimensionsUpdated.push("business_model");
+      dimensionsUpdated.push("operations", "sales");
       internalReflection = "User provided a short valid industry answer.";
     }
     // 1. Edge Case: Gibberish (e.g. "asdf")
@@ -162,18 +162,50 @@ export class ReflectionEngine {
     let hasEnoughEvidence = false;
     
     // Simulate dimension updates based on extracted evidence
+    const VALID_DIMENSIONS = new Set([
+      "people", "operations", "compliance", "digitalization", "technology", "sales", "finance", "maintenance"
+    ]);
+
+    const DIMENSION_ALIASES: Record<string, string> = {
+      "business_model": "operations",
+      "recursos_humanos": "people",
+      "rrhh": "people",
+      "human_resources": "people",
+      "administracion": "operations",
+      "ventas": "sales",
+      "finanzas": "finance",
+      "tecnologia": "technology",
+      "cumplimiento": "compliance",
+      "mantenimiento": "maintenance"
+    };
+
     const newMatrix = { ...currentState.matrix };
     dimensionsUpdated.forEach(dim => {
-      const key = dim as keyof ConfidenceMatrix;
-      newMatrix[key] = {
-        ...newMatrix[key],
-        score: Math.min(100, newMatrix[key].score + 25),
-        evidenceCount: newMatrix[key].evidenceCount + 1,
-        lastUpdatedAt: new Date()
-      };
+      const cleanDim = (dim || "").trim().toLowerCase();
+      let targetDim = cleanDim;
+      if (DIMENSION_ALIASES[cleanDim]) {
+        targetDim = DIMENSION_ALIASES[cleanDim];
+      }
+
+      if (VALID_DIMENSIONS.has(targetDim)) {
+        const key = targetDim as keyof ConfidenceMatrix;
+        newMatrix[key] = {
+          ...newMatrix[key],
+          score: Math.min(100, newMatrix[key].score + 25),
+          evidenceCount: newMatrix[key].evidenceCount + 1,
+          lastUpdatedAt: new Date()
+        };
+      } else {
+        console.warn(JSON.stringify({
+          event: "INVALID_DIMENSION_DETECTED",
+          dimension: dim,
+          resolvedDimension: targetDim,
+          message: "La dimensión no existe en ConfidenceMatrix y ha sido ignorada."
+        }));
+      }
     });
 
-    const totalEvidence = Object.values(newMatrix).reduce((acc, dim) => acc + dim.evidenceCount, 0);
+    const totalEvidence = Object.values(newMatrix).reduce((acc, dim) => acc + (dim?.evidenceCount || 0), 0);
     
     if (totalEvidence >= 5) {
       hasEnoughEvidence = true;

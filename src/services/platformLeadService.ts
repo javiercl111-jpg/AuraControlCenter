@@ -10,7 +10,7 @@ import {
   } from "firebase/firestore";
   
   import { db } from "../config/firebase";
-  import type { LeadStage, PlatformLead } from "../types/platformLead";
+  import type { LeadStage, PlatformLead, LeadSource } from "../types/platformLead";
   
   const COLLECTION_NAME = "platform_leads";
   
@@ -29,21 +29,22 @@ import {
     contactName: string;
     email: string;
     phone: string;
-    source: string;
+    source?: LeadSource | string;
+    leadSourceCode?: LeadSource | string;
+    leadSourceLabel?: string;
+    leadSourceDetail?: string;
     interestedModules: string[];
-    estimatedValue: number;
+    estimatedValue?: number;
     stage: LeadStage;
     notes: string;
     nextFollowUpDate?: string;
   }): Promise<void> {
-    await addDoc(collection(db, COLLECTION_NAME), {
+    const payload: any = {
       companyName: data.companyName,
       contactName: data.contactName,
       email: data.email,
       phone: data.phone,
-      source: data.source,
       interestedModules: data.interestedModules,
-      estimatedValue: data.estimatedValue,
       stage: data.stage,
       notes: data.notes,
       nextFollowUpDate: data.nextFollowUpDate || "",
@@ -52,7 +53,15 @@ import {
       convertedAt: "",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (data.source !== undefined) payload.source = data.source;
+    if (data.leadSourceCode !== undefined) payload.leadSourceCode = data.leadSourceCode;
+    if (data.leadSourceLabel !== undefined) payload.leadSourceLabel = data.leadSourceLabel;
+    if (data.leadSourceDetail !== undefined) payload.leadSourceDetail = data.leadSourceDetail;
+    if (data.estimatedValue !== undefined) payload.estimatedValue = data.estimatedValue;
+
+    await addDoc(collection(db, COLLECTION_NAME), payload);
   }
   
   export async function updateLeadStage(

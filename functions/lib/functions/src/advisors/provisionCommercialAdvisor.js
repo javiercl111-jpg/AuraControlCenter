@@ -182,27 +182,26 @@ exports.provisionCommercialAdvisor = (0, https_1.onCall)({
             roleCode: targetRole,
             advisorId: advisorId
         });
-        // 8. Generate Activation Link
-        const activationUrl = (0, activationConfig_1.getAdvisorActivationUrl)();
-        const actionCodeSettings = {
-            url: activationUrl,
-            handleCodeInApp: true,
-        };
+        // 8. Generate Activation Link (Contingency for Platform Owner only)
         let activationLink = "";
-        let invitationStatus = "LINK_GENERATED";
-        try {
-            activationLink = await auth.generatePasswordResetLink(normalizedEmail, actionCodeSettings);
-            // SMTP not configured yet, mark as SEND_FAILED so it requires admin manual copy
-            invitationStatus = "SEND_FAILED";
-            await db.collection("platform_sales_advisors").doc(advisorId).update({
-                invitationStatus,
-                lastSafeErrorCode: "SMTP_NOT_CONFIGURED",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
+        let invitationStatus = "PENDING";
+        if (isOwner) {
+            try {
+                const activationUrl = (0, activationConfig_1.getAdvisorActivationUrl)();
+                const actionCodeSettings = {
+                    url: activationUrl,
+                    handleCodeInApp: true,
+                };
+                activationLink = await auth.generatePasswordResetLink(normalizedEmail, actionCodeSettings);
+            }
+            catch (err) {
+                console.warn("Fallo al generar enlace de contingencia:", err.message);
+            }
         }
-        catch (err) {
-            throw new Error("Error generando el enlace de activación: " + err.message);
-        }
+        await db.collection("platform_sales_advisors").doc(advisorId).update({
+            invitationStatus,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         // 8b. Emit event for notifications (ADVISOR_PROVISIONED)
         try {
             const eventId = db.collection("platform_events").doc().id;
@@ -229,7 +228,7 @@ exports.provisionCommercialAdvisor = (0, https_1.onCall)({
             uid,
             commercialCode,
             invitationStatus,
-            activationLink: (isOwner && invitationStatus === "SEND_FAILED") ? activationLink : null,
+            activationLink: isOwner ? activationLink : null,
             message: "Asesor creado con éxito."
         };
     }

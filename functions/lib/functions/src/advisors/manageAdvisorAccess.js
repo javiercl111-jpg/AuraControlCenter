@@ -77,30 +77,30 @@ exports.manageAdvisorAccess = (0, https_1.onCall)({
         if (!advisorEmail) {
             throw new https_1.HttpsError("failed-precondition", "El asesor no tiene un correo electrónico asociado.");
         }
-        const activationUrl = (0, activationConfig_1.getAdvisorActivationUrl)();
-        const actionCodeSettings = {
-            url: activationUrl,
-            handleCodeInApp: true,
-        };
         let activationLink = "";
-        let invitationStatus = "LINK_GENERATED";
-        try {
-            activationLink = await auth.generatePasswordResetLink(advisorEmail, actionCodeSettings);
-            invitationStatus = "SEND_FAILED"; // As SMTP is not configured, mark as SEND_FAILED
-            await db.collection("platform_sales_advisors").doc(advisorId).update({
-                invitationStatus,
-                lastSafeErrorCode: "SMTP_NOT_CONFIGURED",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
+        let invitationStatus = "PENDING";
+        if (isOwner) {
+            try {
+                const activationUrl = (0, activationConfig_1.getAdvisorActivationUrl)();
+                const actionCodeSettings = {
+                    url: activationUrl,
+                    handleCodeInApp: true,
+                };
+                activationLink = await auth.generatePasswordResetLink(advisorEmail, actionCodeSettings);
+            }
+            catch (err) {
+                throw new https_1.HttpsError("internal", "Error generando el enlace de contingencia manual: " + err.message);
+            }
         }
-        catch (err) {
-            throw new https_1.HttpsError("internal", "Error generando el enlace de activación: " + err.message);
-        }
+        await db.collection("platform_sales_advisors").doc(advisorId).update({
+            invitationStatus,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         return {
             success: true,
             invitationStatus,
             activationLink: isOwner ? activationLink : null,
-            message: "Enlace generado con éxito."
+            message: "Operación completada con éxito."
         };
     }
     throw new https_1.HttpsError("invalid-argument", "Acción no soportada.");

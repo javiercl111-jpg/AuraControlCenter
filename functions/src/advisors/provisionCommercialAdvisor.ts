@@ -211,30 +211,27 @@ export const provisionCommercialAdvisor = onCall(
         advisorId: advisorId
       });
 
-      // 8. Generate Activation Link
-      const activationUrl = getAdvisorActivationUrl();
-      const actionCodeSettings = {
-        url: activationUrl,
-        handleCodeInApp: true,
-      };
-      
+      // 8. Generate Activation Link (Contingency for Platform Owner only)
       let activationLink = "";
-      let invitationStatus = "LINK_GENERATED";
+      let invitationStatus = "PENDING";
       
-      try {
-        activationLink = await auth.generatePasswordResetLink(normalizedEmail, actionCodeSettings);
-        
-        // SMTP not configured yet, mark as SEND_FAILED so it requires admin manual copy
-        invitationStatus = "SEND_FAILED";
-
-        await db.collection("platform_sales_advisors").doc(advisorId).update({
-          invitationStatus,
-          lastSafeErrorCode: "SMTP_NOT_CONFIGURED",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } catch (err: any) {
-        throw new Error("Error generando el enlace de activación: " + err.message);
+      if (isOwner) {
+        try {
+          const activationUrl = getAdvisorActivationUrl();
+          const actionCodeSettings = {
+            url: activationUrl,
+            handleCodeInApp: true,
+          };
+          activationLink = await auth.generatePasswordResetLink(normalizedEmail, actionCodeSettings);
+        } catch (err: any) {
+          console.warn("Fallo al generar enlace de contingencia:", err.message);
+        }
       }
+
+      await db.collection("platform_sales_advisors").doc(advisorId).update({
+        invitationStatus,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
       // 8b. Emit event for notifications (ADVISOR_PROVISIONED)
       try {
@@ -262,7 +259,7 @@ export const provisionCommercialAdvisor = onCall(
         uid,
         commercialCode,
         invitationStatus,
-        activationLink: (isOwner && invitationStatus === "SEND_FAILED") ? activationLink : null,
+        activationLink: isOwner ? activationLink : null,
         message: "Asesor creado con éxito."
       };
 

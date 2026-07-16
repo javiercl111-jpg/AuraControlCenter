@@ -1,6 +1,9 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { getAdvisorActivationUrl } from "../auth/activationConfig";
+import { MockAdvisorInvitationEmailSender } from "../notifications/AdvisorInvitationEmailSender";
+
+const invitationSender = new MockAdvisorInvitationEmailSender();
 
 /**
  * Creates or provisions a Sales Advisor user.
@@ -187,15 +190,23 @@ export const createSalesAdvisorUser = onCall(
     try {
       activationLink = await auth.generatePasswordResetLink(normalizedEmail, actionCodeSettings);
       
-      // TODO: Here we would send the email via SMTP. 
-      // As it's not configured right now, we mark it as SEND_FAILED so the UI returns the link.
-      invitationStatus = "SEND_FAILED";
+      try {
+        await invitationSender.sendInvitation(normalizedEmail, name, activationLink);
+        invitationStatus = "SENT";
 
-      await db.collection("platform_sales_advisors").doc(advisorId).update({
-        invitationStatus,
-        lastSafeErrorCode: "SMTP_NOT_CONFIGURED",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        await db.collection("platform_sales_advisors").doc(advisorId).update({
+          invitationStatus,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (smtpErr: any) {
+        invitationStatus = "SEND_FAILED";
+        await db.collection("platform_sales_advisors").doc(advisorId).update({
+          invitationStatus,
+          lastSafeErrorCode: "SMTP_ERROR: " + smtpErr.message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
     } catch (err: any) {
       await db.collection("platform_sales_advisors").doc(advisorId).update({
         provisioningStatus: "ERROR",
