@@ -1,4 +1,4 @@
-import { serverTimestamp } from "firebase/firestore";
+
 import type { DiscoverySession, SmartBusinessDossier, ExecutiveBriefingDraft, BusinessAssessmentDraft, RadiografiaEmpresarialDraft, SalesAdvisorContext } from "../types/discoveryTypes";
 import type { ConversationMessage } from "../../intelligence/engine/types/conversation.types";
 
@@ -124,7 +124,7 @@ export function buildDossierPayload(
     businessAssessmentDraft,
     radiografiaEmpresarialDraft,
     salesAdvisorContext,
-    createdAt: serverTimestamp(),
+    createdAt: new Date().toISOString(),
   };
 }
 

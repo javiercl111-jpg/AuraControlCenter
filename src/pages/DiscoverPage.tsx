@@ -476,7 +476,7 @@ export default function DiscoverPage() {
       }, 1500);
     } catch (err: any) {
       console.error("Error al guardar sesión de Discovery:", err);
-      alert("Error al guardar expediente: " + err.message);
+      alert("No fue posible finalizar el expediente en este momento. Tu conversación está guardada y puedes reintentar sin comenzar de nuevo.");
       hasHandledComplete.current = false;
       setIsAuraTyping(false);
       setReportStatus("ERROR");

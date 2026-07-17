@@ -14,6 +14,19 @@ exports.completeDiscoverySession = functions.https.onCall(async (request) => {
     if (!linkId || !sessionToken || !dossierPayload) {
         throw new functions.https.HttpsError("invalid-argument", "Missing required parameters.");
     }
+    // Validate the minimal dossier structure
+    const requiredFields = ["companyName", "contactName", "dossier", "conversationHistory", "conversationStateSnapshot"];
+    for (const field of requiredFields) {
+        if (dossierPayload[field] === undefined) {
+            throw new functions.https.HttpsError("invalid-argument", `Payload validation failed: missing ${field}`);
+        }
+    }
+    if (typeof dossierPayload.companyName !== "string" || !dossierPayload.companyName.trim()) {
+        throw new functions.https.HttpsError("invalid-argument", "companyName must be a valid string.");
+    }
+    if (!Array.isArray(dossierPayload.conversationHistory)) {
+        throw new functions.https.HttpsError("invalid-argument", "conversationHistory must be an array.");
+    }
     const db = admin.firestore();
     return await db.runTransaction(async (t) => {
         const linkRef = db.collection("market_discovery_links").doc(linkId);
@@ -50,6 +63,7 @@ exports.completeDiscoverySession = functions.https.onCall(async (request) => {
             id: dossierId,
             linkId,
             ...dossierPayload,
+            createdAt: dossierPayload.createdAt ? dossierPayload.createdAt : admin.firestore.FieldValue.serverTimestamp(),
             executiveBriefingDraft: finalExecutiveBriefing,
             radiografiaEmpresarialDraft: finalRadiografia,
             completedAt: admin.firestore.FieldValue.serverTimestamp()
