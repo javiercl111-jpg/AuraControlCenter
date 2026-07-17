@@ -1,5 +1,6 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import { getFunctions } from "firebase-admin/functions";
 import { generateTokenHash } from "./discoverySecurityService";
 
 import { ProspectResolutionEngine } from "../prospects/ProspectResolutionEngine";
@@ -53,7 +54,7 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
   const db = admin.firestore();
   
   try {
-  return await db.runTransaction(async (t) => {
+  const transactionResult = await db.runTransaction(async (t) => {
     console.log({ executionId, stage: "LOAD_SESSION", linkId });
     let linkSnap, linkData;
     try {
@@ -221,9 +222,45 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
       dossierId, 
       trustDecision,
       prospectId: resolutionResult.matchedProspectId,
-      resolutionStatus: resolutionResult.resolutionReason
+      resolutionStatus: resolutionResult.resolutionReason,
+      // Internal fields for notification
+      companyName: finalPayload.companyName || "Unknown",
+      prospectName: finalPayload.contactName || "Unknown",
+      advisorUid: linkData.advisorUid,
     };
   });
+  
+  // Transaction completed successfully. Now enqueue notification.
+  let returnPayload = {
+    dossierId: transactionResult.dossierId,
+    trustDecision: transactionResult.trustDecision,
+    prospectId: transactionResult.prospectId,
+    resolutionStatus: transactionResult.resolutionStatus
+  };
+
+  if (transactionResult.advisorUid && transactionResult.advisorUid !== "UNKNOWN") {
+    try {
+      console.log({ executionId, stage: "ENQUEUE_NOTIFICATION" });
+      const queue = getFunctions().taskQueue("emitDiscoveryCompletedNotification");
+      const notificationPayload = {
+        discoverySessionId: transactionResult.dossierId, 
+        dossierId: transactionResult.dossierId,
+        advisorUid: transactionResult.advisorUid,
+        tenantId: "aura_root",
+        companyName: transactionResult.companyName,
+        prospectName: transactionResult.prospectName,
+        correlationId: executionId,
+        idempotencyKey: `discovery.completed:${transactionResult.dossierId}`
+      };
+      // Enqueue with await inside try/catch so it doesn't fail the caller
+      await queue.enqueue(notificationPayload, { dispatchDeadlineSeconds: 15 });
+    } catch (enqueueErr) {
+      console.error({ executionId, stage: "FAILED_TO_ENQUEUE", error: enqueueErr });
+    }
+  }
+
+  return returnPayload;
+
   } catch (err: any) {
     if (!(err instanceof functions.https.HttpsError)) {
       console.error({ executionId, stage: "COMPLETE_TRANSACTION", name: err.name, message: err.message, stack: err.stack });

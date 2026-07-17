@@ -208,11 +208,24 @@ export class ProspectResolutionEngine {
       version: PROSPECT_RESOLUTION_VERSION
     };
 
-    // Execute Write Phase
+    // Final Read Phase before any Writes
+    let finalExistingSnap: admin.firestore.DocumentSnapshot | null = null;
     if (autoMergeAllowed && matchedProspectId) {
-      await this.executeMerge(matchedProspectId, payload, output, t, { normCompany, normEmail, normDomain, normPhone, normRfc });
+      finalExistingSnap = await t.get(this.db.collection("platform_leads").doc(matchedProspectId));
+    }
+
+    // Execute Write Phase (Strict separation of reads and writes)
+    const normsObj = { normCompany, normEmail, normDomain, normPhone, normRfc };
+    
+    if (autoMergeAllowed && matchedProspectId && finalExistingSnap) {
+      if (!finalExistingSnap.exists) {
+        console.warn(`staleIdentityIndexDetected: prospectId ${matchedProspectId} not found. Falling back to Create.`);
+        await this.executeCreate(payload, output, t, normsObj);
+      } else {
+        await this.executeMerge(matchedProspectId, finalExistingSnap, payload, output, t, normsObj);
+      }
     } else {
-      await this.executeCreate(payload, output, t, { normCompany, normEmail, normDomain, normPhone, normRfc });
+      await this.executeCreate(payload, output, t, normsObj);
     }
 
     return output;
@@ -306,20 +319,13 @@ export class ProspectResolutionEngine {
 
   private async executeMerge(
     prospectId: string, 
+    existingSnap: admin.firestore.DocumentSnapshot,
     payload: MergePayload, 
     output: ProspectResolutionOutput, 
     t: admin.firestore.Transaction,
     norms: any
   ) {
-    const prospectRef = this.db.collection("platform_leads").doc(prospectId);
-    const existingSnap = await t.get(prospectRef);
-
-    if (!existingSnap.exists) {
-      console.warn(`staleIdentityIndexDetected: prospectId ${prospectId} not found. Falling back to Create.`);
-      // Ignore the stale index and create a new prospect safely.
-      return await this.executeCreate(payload, output, t, norms);
-    }
-
+    const prospectRef = existingSnap.ref;
     const existing = existingSnap.data() as PlatformLeadV2;
 
     const updates: any = {

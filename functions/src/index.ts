@@ -1155,3 +1155,4 @@ export { processProspectLifecycle } from "./prospects/processProspectLifecycle";
 export { replenishAdvisorPipeline } from "./prospects/replenishAdvisorPipeline";
 export { discardPipelineProspect } from "./prospects/discardPipelineProspect";
 export { reactivatePipelineProspect } from "./prospects/reactivatePipelineProspect";
+export { emitDiscoveryCompletedNotification } from "./notifications/emitDiscoveryCompletedNotification";
