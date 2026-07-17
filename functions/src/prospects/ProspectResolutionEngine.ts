@@ -313,6 +313,13 @@ export class ProspectResolutionEngine {
   ) {
     const prospectRef = this.db.collection("platform_leads").doc(prospectId);
     const existingSnap = await t.get(prospectRef);
+
+    if (!existingSnap.exists) {
+      console.warn(`staleIdentityIndexDetected: prospectId ${prospectId} not found. Falling back to Create.`);
+      // Ignore the stale index and create a new prospect safely.
+      return await this.executeCreate(payload, output, t, norms);
+    }
+
     const existing = existingSnap.data() as PlatformLeadV2;
 
     const updates: any = {
