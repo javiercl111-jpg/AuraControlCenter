@@ -51,7 +51,7 @@ export class ConversationEngine {
       "si", "sí", "no", "nunca", "siempre", "queja", "frecuente", "problema", 
       "error", "pago", "nomina", "nómina", "tiempo", "dinero", "hospedaje", "logistica",
       "logística", "construccion", "construcción", "transporte", "consultoria", "consultoría",
-      "comercio", "manufactura"
+      "comercio", "manufactura", "administrativo", "administrativos", "administrativa", "administrativas", "digital", "digitales"
     ];
 
     return keywords.some(kw => text.includes(kw));

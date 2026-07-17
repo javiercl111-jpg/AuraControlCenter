@@ -116,20 +116,38 @@ export class ConversationOrchestrator {
       };
       
       conversationOutput = this.conversationEngine.processTurn(modifiedEngineInput);
-      finalMessage = conversationOutput.nextQuestion;
-      finalIntent = conversationOutput.nextIntent;
       
-      shouldAdvance = true;
-      shouldPersistEvidence = true;
-
-      // The Conversation Engine might also decide to Summarize/Close based on its internal limits
-      if (conversationOutput.nextIntent === "CLOSING") {
-        shouldComplete = true;
-        updatedConversationPhase = "COMPLETED";
+      if (!conversationOutput.isValidResponse) {
+        fallbackCount++;
         shouldAdvance = false;
+        shouldPersistEvidence = false;
+        
+        if (fallbackCount === 1) {
+          finalMessage = conversationOutput.nextQuestion;
+          finalIntent = conversationOutput.nextIntent;
+        } else if (fallbackCount === 2) {
+          finalMessage = "Parece que no logro procesar bien tu respuesta anterior. Intentémoslo de otra forma: ¿Qué procesos de tu área te generan más dolores de cabeza?";
+          finalIntent = "CLARIFY";
+        } else {
+          finalMessage = "He tenido dificultades continuas para comprender la información proporcionada. ¿Cómo te gustaría proceder?";
+          finalIntent = "FALLBACK_OPTIONS";
+        }
+      } else {
+        finalMessage = conversationOutput.nextQuestion;
+        finalIntent = conversationOutput.nextIntent;
+        shouldAdvance = true;
+        shouldPersistEvidence = true;
         fallbackCount = 0;
-      } else if (conversationOutput.nextIntent === "SUMMARIZE") {
-        return this.generateSummaryTransition(reflectionOutput, updatedReflectionState, fallbackCount);
+
+        // The Conversation Engine might also decide to Summarize/Close based on its internal limits
+        if (conversationOutput.nextIntent === "CLOSING") {
+          shouldComplete = true;
+          updatedConversationPhase = "COMPLETED";
+          shouldAdvance = false;
+          fallbackCount = 0;
+        } else if (conversationOutput.nextIntent === "SUMMARIZE") {
+          return this.generateSummaryTransition(reflectionOutput, updatedReflectionState, fallbackCount);
+        }
       }
     } 
     else if (recommendedAction === "SUMMARIZE") {

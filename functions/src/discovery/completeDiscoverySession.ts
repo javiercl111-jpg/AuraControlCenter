@@ -84,19 +84,10 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     };
     
-    const sessionRef = db.collection("discovery_sessions").doc(dossierId);
-    t.set(sessionRef, finalPayload);
-
-    if (linkId !== "demo") {
-      t.update(linkRef, {
-        status: "completed",
-        dossierId: dossierId,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-    }
-    
-    // Call Prospect Resolution Engine
+    // Call Prospect Resolution Engine BEFORE any writes
     const engine = new ProspectResolutionEngine();
+    
+    // Build payload for resolution
     
     // Build payload for resolution
     const mergePayload: MergePayload = {
@@ -118,10 +109,22 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
 
     const resolutionResult = await engine.resolveProspect(mergePayload, t);
     
-    // Update dossier to reference the prospect
+    // Perform WRITES after ALL reads
+    finalPayload.prospectId = resolutionResult.matchedProspectId || null;
+    
+    const sessionRef = db.collection("discovery_sessions").doc(dossierId);
+    t.set(sessionRef, finalPayload);
+
+    if (linkId !== "demo") {
+      t.update(linkRef, {
+        status: "completed",
+        dossierId: dossierId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    
+    // Emit DOSSIER_ATTACHED event
     if (resolutionResult.matchedProspectId) {
-       t.update(sessionRef, { prospectId: resolutionResult.matchedProspectId });
-       // Also emit DOSSIER_ATTACHED event
        const eventRef = db.collection("platform_events").doc();
        t.set(eventRef, {
           eventId: eventRef.id,
