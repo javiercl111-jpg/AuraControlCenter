@@ -79,7 +79,8 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
     const dossierId = `dossier_${linkId}_${Date.now()}`;
     console.log({ executionId, stage: "PREPARE_PAYLOAD", dossierId });
 
-    let finalPayload: any;
+    let validatedPayload: any;
+    let firestoreWritePayload: any;
     let trustDecision: string;
     try {
       trustDecision = linkData.trustScore?.decision || "ALLOW_FULL";
@@ -104,22 +105,23 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
         finalRadiografia = null;
       }
 
-      finalPayload = {
+      const { completedAt, ...dossierPayloadClean } = dossierPayload;
+
+      validatedPayload = {
         id: dossierId,
         linkId,
-        ...dossierPayload,
-        createdAt: dossierPayload.createdAt ? dossierPayload.createdAt : admin.firestore.FieldValue.serverTimestamp(),
+        ...dossierPayloadClean,
+        ...(dossierPayloadClean.createdAt ? { createdAt: dossierPayloadClean.createdAt } : {}),
         executiveBriefingDraft: finalExecutiveBriefing,
-        radiografiaEmpresarialDraft: finalRadiografia,
-        completedAt: admin.firestore.FieldValue.serverTimestamp()
+        radiografiaEmpresarialDraft: finalRadiografia
       };
       
       console.log({
         executionId,
         stage: "PREPARE_PAYLOAD_DEBUG",
-        keys: Object.keys(finalPayload),
-        hasDossier: !!finalPayload.dossier,
-        historyLen: Array.isArray(finalPayload.conversationHistory) ? finalPayload.conversationHistory.length : 0
+        keys: Object.keys(validatedPayload),
+        hasDossier: !!validatedPayload.dossier,
+        historyLen: Array.isArray(validatedPayload.conversationHistory) ? validatedPayload.conversationHistory.length : 0
       });
     } catch (error: any) {
       console.error({ executionId, stage: "PREPARE_PAYLOAD", name: error.name, message: error.message, stack: error.stack });
@@ -157,7 +159,7 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
     
     console.log({ executionId, stage: "WRITE_SESSION", prospectId: resolutionResult.matchedProspectId });
     try {
-      finalPayload.prospectId = resolutionResult.matchedProspectId || null;
+      validatedPayload.prospectId = resolutionResult.matchedProspectId || null;
       
       const validateFirestorePayload = (obj: any, path = "") => {
         if (obj === undefined) throw new Error(`Invalid value: undefined at path ${path}`);
@@ -177,15 +179,21 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
       };
 
       try {
-        validateFirestorePayload(finalPayload, "finalPayload");
+        validateFirestorePayload(validatedPayload, "validatedPayload");
       } catch (validationErr: any) {
         console.error({ executionId, stage: "VALIDATE_FIRESTORE_PAYLOAD", name: validationErr.name, message: validationErr.message });
         throw new functions.https.HttpsError("internal", `INVALID_FIRESTORE_PAYLOAD: ${validationErr.message}`);
       }
       
+      firestoreWritePayload = {
+        ...validatedPayload,
+        createdAt: validatedPayload.createdAt ? validatedPayload.createdAt : admin.firestore.FieldValue.serverTimestamp(),
+        completedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
       const sessionRef = db.collection("discovery_sessions").doc(dossierId);
       console.log({ executionId, stage: "WRITE_DOSSIER", docPath: sessionRef.path });
-      t.set(sessionRef, finalPayload);
+      t.set(sessionRef, firestoreWritePayload);
 
       if (linkId !== "demo") {
         const linkRef = db.collection("market_discovery_links").doc(linkId);
@@ -224,8 +232,8 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
       prospectId: resolutionResult.matchedProspectId,
       resolutionStatus: resolutionResult.resolutionReason,
       // Internal fields for notification
-      companyName: finalPayload.companyName || "Unknown",
-      prospectName: finalPayload.contactName || "Unknown",
+      companyName: firestoreWritePayload.companyName || "Unknown",
+      prospectName: firestoreWritePayload.contactName || "Unknown",
       advisorUid: linkData.advisorUid,
     };
   });
