@@ -4,9 +4,6 @@ import { GoogleAuth } from "google-auth-library";
 // Retries and backoff matching user requirements
 export const emitDiscoveryCompletedNotification = onTaskDispatched({
   serviceAccount: "aura-control-center-notifier@aura-control-center-debb3.iam.gserviceaccount.com",
-  invoker: [
-    "768266998149-compute@developer.gserviceaccount.com",
-  ],
   retryConfig: {
     maxAttempts: 3,
     minBackoffSeconds: 30,
