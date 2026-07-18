@@ -234,7 +234,8 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
       // Internal fields for notification
       companyName: firestoreWritePayload.companyName || "Unknown",
       prospectName: firestoreWritePayload.contactName || "Unknown",
-      advisorUid: linkData.advisorUid,
+      advisorUid: linkData.advisorUid || null,
+      advisorId: linkData.advisorId || null,
     };
   });
   
@@ -246,25 +247,74 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
     resolutionStatus: transactionResult.resolutionStatus
   };
 
-  if (transactionResult.advisorUid && transactionResult.advisorUid !== "UNKNOWN") {
-    try {
-      console.log({ executionId, stage: "ENQUEUE_NOTIFICATION" });
+  let notificationRecipientUid: string | null = null;
+  const prospectId = transactionResult.prospectId;
+
+  try {
+    // 1. linkData.advisorUid válido
+    if (transactionResult.advisorUid && transactionResult.advisorUid !== "UNKNOWN" && transactionResult.advisorUid.trim() !== "") {
+      notificationRecipientUid = transactionResult.advisorUid;
+    }
+
+    // 2. linkData.advisorId -> resolver UID canónico en platform_sales_advisors
+    if (!notificationRecipientUid) {
+      if (transactionResult.advisorId && transactionResult.advisorId !== "UNKNOWN" && transactionResult.advisorId.trim() !== "") {
+        const advDoc = await db.collection("platform_sales_advisors").doc(transactionResult.advisorId).get();
+        if (advDoc.exists) {
+          const uid = advDoc.data()?.uid;
+          if (uid && uid !== "UNKNOWN" && uid.trim() !== "") {
+            notificationRecipientUid = uid;
+          }
+        }
+      }
+    }
+
+    // 3. propietario canónico del prospecto resuelto, si existe
+    if (!notificationRecipientUid) {
+      if (prospectId) {
+        const prospectDoc = await db.collection("platform_leads").doc(prospectId).get();
+        if (prospectDoc.exists) {
+          const currentAdvisorId = prospectDoc.data()?.currentAdvisorId;
+          if (currentAdvisorId && currentAdvisorId !== "UNASSIGNED" && currentAdvisorId !== "UNKNOWN" && currentAdvisorId.trim() !== "") {
+            const advDoc = await db.collection("platform_sales_advisors").doc(currentAdvisorId).get();
+            if (advDoc.exists) {
+              const uid = advDoc.data()?.uid;
+              if (uid && uid !== "UNKNOWN" && uid.trim() !== "") {
+                notificationRecipientUid = uid;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Si no existe destinatario -> registrar stage: "NOTIFICATION_SKIPPED_NO_RECIPIENT"
+    if (!notificationRecipientUid) {
+      console.log({
+        executionId,
+        stage: "NOTIFICATION_SKIPPED_NO_RECIPIENT",
+        linkId,
+        dossierId: transactionResult.dossierId,
+        prospectId: prospectId || null
+      });
+    } else {
+      console.log({ executionId, stage: "ENQUEUE_NOTIFICATION", recipientUid: notificationRecipientUid });
       const queue = getFunctions().taskQueue("emitDiscoveryCompletedNotification");
       const notificationPayload = {
         discoverySessionId: transactionResult.dossierId, 
         dossierId: transactionResult.dossierId,
-        advisorUid: transactionResult.advisorUid,
+        advisorUid: notificationRecipientUid,
         tenantId: "aura_root",
         companyName: transactionResult.companyName,
         prospectName: transactionResult.prospectName,
         correlationId: executionId,
         idempotencyKey: `discovery.completed:${transactionResult.dossierId}`
       };
-      // Enqueue with await inside try/catch so it doesn't fail the caller
+
       await queue.enqueue(notificationPayload, { dispatchDeadlineSeconds: 15 });
-    } catch (enqueueErr) {
-      console.error({ executionId, stage: "FAILED_TO_ENQUEUE", error: enqueueErr });
     }
+  } catch (enqueueErr) {
+    console.error({ executionId, stage: "FAILED_TO_ENQUEUE", error: enqueueErr });
   }
 
   return returnPayload;

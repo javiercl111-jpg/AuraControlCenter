@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { generateOpaqueToken, generateTokenHash, computeTrustScore, getDiscoverySecurityConfig } from "./discoverySecurityService";
 import { generateIdempotencyHash, generateRequestHash } from "./idempotencyHelper";
 import { defineSecret } from "firebase-functions/params";
+import { resolvePlatformPrincipal } from "../auth/resolvePlatformPrincipal";
 
 const idempotencySecret = defineSecret("IDEMPOTENCY_SECRET");
 
@@ -225,6 +226,14 @@ export const createDiscoveryLead = onCall(
       }
 
       // 5. Proceed with Creation
+      let authCaller: any = null;
+      if (request.auth) {
+        authCaller = await resolvePlatformPrincipal(db, request.auth);
+      }
+
+      const allowedRoles = ["SALES_ADVISOR", "PLATFORM_PARTNER", "SALES_DIRECTOR", "PLATFORM_OWNER", "FOUNDER", "SUPER_ADMIN", "PARTNER"];
+      const isAuthorizedCaller = authCaller && allowedRoles.includes(authCaller.role);
+
       const trustScoreResult = await computeTrustScore(email, advisorContext, acquisitionSource);
 
       const oneTimeToken = generateOpaqueToken();
@@ -261,7 +270,21 @@ export const createDiscoveryLead = onCall(
         consents: consentsPayload
       };
 
-      if (advisorContext) {
+      if (isAuthorizedCaller) {
+        linkPayload.advisorUid = authCaller.uid || request.auth!.uid;
+        if (authCaller.advisorId) {
+          linkPayload.advisorId = authCaller.advisorId;
+          linkPayload.originalAdvisorId = authCaller.advisorId;
+          linkPayload.currentAdvisorId = authCaller.advisorId;
+        }
+        linkPayload.originalAdvisorUid = authCaller.uid || request.auth!.uid;
+        linkPayload.currentAdvisorUid = authCaller.uid || request.auth!.uid;
+        linkPayload.createdByUid = request.auth!.uid;
+        linkPayload.createdByRole = authCaller.role;
+        linkPayload.assignmentType = "ORIGIN";
+        linkPayload.attributedAt = admin.firestore.FieldValue.serverTimestamp();
+        linkPayload.attributionSource = "DISCOVERY_CRM_CREATE";
+      } else if (advisorContext) {
         linkPayload.assignmentType = "ORIGIN";
         linkPayload.originalAdvisorId = advisorContext.id;
         linkPayload.originalAdvisorUid = advisorContext.uid;
@@ -270,6 +293,8 @@ export const createDiscoveryLead = onCall(
         linkPayload.commercialCode = commercialCode;
         linkPayload.attributedAt = admin.firestore.FieldValue.serverTimestamp();
         linkPayload.attributionSource = "DISCOVERY_PRE_FORM";
+        linkPayload.advisorUid = advisorContext.uid;
+        linkPayload.advisorId = advisorContext.id;
       } else {
         linkPayload.assignmentType = "UNASSIGNED";
       }
