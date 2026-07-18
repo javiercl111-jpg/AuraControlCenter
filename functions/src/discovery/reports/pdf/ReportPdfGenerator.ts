@@ -294,7 +294,7 @@ export class ReportPdfGenerator {
 
     layout.yPos += 10;
     layout.drawText("Briefing Estratégico", ds.margin.left, ds.typography.sectionTitle);
-    layout.yPos += 10;
+    layout.yPos += 15;
 
     // Table-like structure for internal classified data
     const drawRow = (label: string, val: string | number) => {
@@ -308,8 +308,8 @@ export class ReportPdfGenerator {
       layout.yPos += 6;
     };
 
-    layout.drawText("Clasificación de Oportunidad", ds.margin.left, ds.typography.subsectionTitle);
-    layout.yPos += 8;
+    layout.drawText("Sales Context", ds.margin.left, ds.typography.subsectionTitle);
+    layout.yPos += 10;
 
     drawRow("ID de Prospecto", data.prospectId || "N/A");
     drawRow("Score de Oportunidad", data.opportunityScore || "N/A");
@@ -317,25 +317,25 @@ export class ReportPdfGenerator {
     drawRow("Probabilidad de Cierre", data.probabilityOfClosing || "N/A");
     
     layout.yPos += ds.spacing.lg;
-    layout.drawText("Next Best Action (Recomendada)", ds.margin.left, ds.typography.subsectionTitle);
-    layout.yPos += 8;
+    layout.drawText("Business Assessment", ds.margin.left, ds.typography.subsectionTitle);
+    layout.yPos += 10;
     const nbaLines = doc.splitTextToSize(data.nextBestAction || "N/A", ds.pageWidth - ds.margin.left - ds.margin.right);
     layout.drawText(nbaLines, ds.margin.left, ds.typography.bodyEmphasis);
     layout.yPos += nbaLines.length * (ds.typography.bodyEmphasis.fontSize * 0.352778 * ds.typography.bodyEmphasis.lineHeight) + ds.spacing.xl;
 
     if (data.keyFindings && data.keyFindings.length > 0) {
-      layout.ensureSpace(20, pageHeader);
-      layout.drawText("Señales Comerciales Extraídas", ds.margin.left, ds.typography.sectionTitle);
-      layout.yPos += 10;
+      layout.ensureSpace(30, pageHeader);
+      layout.drawText("Executive Summary", ds.margin.left, ds.typography.sectionTitle);
+      layout.yPos += 15;
       data.keyFindings.forEach((finding) => {
         AuraPdfComponents.drawCard(doc, layout, "Señal Detectada", finding, "finding", pageHeader);
       });
     }
 
     if (data.operationalRisks && data.operationalRisks.length > 0) {
-      layout.ensureSpace(20, pageHeader);
+      layout.ensureSpace(30, pageHeader);
       layout.drawText("Fricciones y Riesgos Comerciales", ds.margin.left, ds.typography.sectionTitle);
-      layout.yPos += 10;
+      layout.yPos += 15;
       data.operationalRisks.forEach((risk) => {
         AuraPdfComponents.drawCard(doc, layout, "Alerta", risk, "risk", pageHeader);
       });

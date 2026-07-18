@@ -4,6 +4,7 @@ import { generateTokenHash } from "../discoverySecurityService";
 import { DiscoveryReportGenerationService } from "./DiscoveryReportGenerationService";
 import { DiscoveryReportMetadata, ReportType } from "./types";
 import { LifecycleEventType } from "../../prospects/types";
+import { resolvePlatformPrincipal } from "../../auth/resolvePlatformPrincipal";
 
 export const requestExecutiveDocument = functions.https.onCall(async (request) => {
   if (request.app == undefined) {
@@ -98,19 +99,18 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
 
   } else if (request.auth) {
     // CRM flow
-    const uid = request.auth.uid;
-    const adminSnap = await db.collection("platform_global_admins").doc(uid).get();
-    const isGlobalAdmin = adminSnap.exists && (adminSnap.data()?.role === "FOUNDER" || adminSnap.data()?.role === "SUPER_ADMIN" || adminSnap.data()?.role === "SALES_DIRECTOR");
+    const caller = await resolvePlatformPrincipal(db, request.auth);
     
-    const advisorSnap = await db.collection("platform_sales_advisors").where("uid", "==", uid).limit(1).get();
-    const isAdvisor = !advisorSnap.empty;
+    const allowedAdminRoles = ["FOUNDER", "SUPER_ADMIN", "SALES_DIRECTOR", "PLATFORM_OWNER", "PLATFORM_PARTNER", "PARTNER"];
+    const isGlobalAdmin = allowedAdminRoles.includes(caller.role);
+    const isAdvisor = caller.role === "SALES_ADVISOR";
 
     if (isGlobalAdmin) {
       isAuthorized = true;
       allowedReportTypes = ["EXTERNAL_RADIOGRAFIA", "INTERNAL_BRIEFING"];
-      userContext = `ADMIN_${uid}`;
+      userContext = `ADMIN_${caller.id}`;
     } else if (isAdvisor) {
-      const advisorId = advisorSnap.docs[0].id;
+      const advisorId = caller.advisorId || caller.id;
       
       // Check if advisor owns the prospect
       const prospectSnap = await db.collection("platform_leads").doc(targetProspectId).get();
