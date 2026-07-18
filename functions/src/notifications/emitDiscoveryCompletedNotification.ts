@@ -4,7 +4,9 @@ import { GoogleAuth } from "google-auth-library";
 // Retries and backoff matching user requirements
 export const emitDiscoveryCompletedNotification = onTaskDispatched({
   serviceAccount: "aura-control-center-notifier@aura-control-center-debb3.iam.gserviceaccount.com",
-  invoker: "768266998149-compute@developer.gserviceaccount.com",
+  invoker: [
+    "768266998149-compute@developer.gserviceaccount.com",
+  ],
   retryConfig: {
     maxAttempts: 3,
     minBackoffSeconds: 30,
@@ -13,7 +15,7 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
   }
 }, async (request) => {
   const payload = request.data;
-  
+
   if (!payload || typeof payload !== 'object') {
     console.error("Invalid payload structure", payload);
     return; // Non-retryable
@@ -123,10 +125,10 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
     console.error("Error emitting discovery completed notification", error);
     // If it's an abort error (timeout) or 5xx, we throw to trigger Cloud Tasks retry mechanism
     if (error.name === 'AbortError' || (error.response && error.response.status >= 500)) {
-       throw error;
+      throw error;
     }
     if (error.code === 'ENOTFOUND' || error.code === 'ECONNRESET') {
-       throw error;
+      throw error;
     }
     // 4xx errors from gateway usually mean malformed payload or unauthorized. Retry won't fix it.
     // So we don't throw, we just log it and stop retrying.
