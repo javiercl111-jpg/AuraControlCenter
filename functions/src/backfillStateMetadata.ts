@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { MEXICO_STATES } from "../../src/types/mexicoStates";
+import { MEXICO_STATES } from "./types/mexicoStates";
 
 const PROJECT_ID = "aura-control-center-debb3";
 
