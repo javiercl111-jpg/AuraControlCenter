@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { DiscoverySession } from "../types/discoveryTypes";
-import DiscoverySessionService from "../services/discoverySessionService";
 import RadiografiaEmpresarialModal from "./RadiografiaEmpresarialModal";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../../../config/firebase";
@@ -37,6 +36,32 @@ export default function ExecutiveBriefingDrawer({
   const [isRadiografiaModalOpen, setIsRadiografiaModalOpen] = useState(false);
   const [downloadingDoc, setDownloadingDoc] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState("");
+  const [currentStage, setCurrentStage] = useState<string>("DISCOVERY_COMPLETED");
+  const [showDemoModal, setShowDemoModal] = useState(false);
+  const [demoDate, setDemoDate] = useState("");
+  const [demoTime, setDemoTime] = useState("");
+  const [demoNotes, setDemoNotes] = useState("");
+
+  useEffect(() => {
+    if (!isOpen || !session) return;
+    const fetchStage = async () => {
+      try {
+        const { collection, query, where, getDocs, limit } = await import("firebase/firestore");
+        const { db } = await import("../../../config/firebase");
+        const q = query(collection(db, "platform_leads"), where("smartBusinessDossierId", "==", session.id), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const lead = snap.docs[0].data();
+          if (lead.lifecycleStatus) {
+            setCurrentStage(lead.lifecycleStatus);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching lead stage:", err);
+      }
+    };
+    fetchStage();
+  }, [isOpen, session]);
 
   if (!isOpen || !session) return null;
 
@@ -60,13 +85,53 @@ export default function ExecutiveBriefingDrawer({
     }
   };
 
-  const handleMarkFollowUp = async () => {
+  const handleCommercialAction = async (action: "MARK_CONTACTED" | "SCHEDULE_DEMO") => {
+    if (action === "SCHEDULE_DEMO") {
+      if (!demoDate || !demoTime) {
+        alert("Seleccione fecha y hora.");
+        return;
+      }
+      const selected = new Date(`${demoDate}T${demoTime}`);
+      if (isNaN(selected.getTime()) || selected.getTime() < Date.now()) {
+        alert("Fecha de demo inválida o en el pasado.");
+        return;
+      }
+    }
+    
     setIsUpdating(true);
     try {
-      await DiscoverySessionService.updateDiscoverySessionStatus(session.id, "FOLLOW_UP_SCHEDULED");
-      alert("Sesión marcada para seguimiento exitosamente.");
+      const updateFn = httpsCallable(functions, "updateProspectCommercialStage");
+      const payload: any = {
+        dossierId: session.id,
+        action,
+      };
+      
+      if (action === "SCHEDULE_DEMO") {
+        payload.scheduledAt = new Date(`${demoDate}T${demoTime}`).toISOString();
+        payload.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        payload.notes = demoNotes;
+      }
+      
+      const res = await updateFn(payload);
+      const data = res.data as any;
+      if (data.success && data.lifecycleStatus) {
+        setCurrentStage(data.lifecycleStatus);
+        if (action === "SCHEDULE_DEMO") {
+          setShowDemoModal(false);
+          alert("Demo programada exitosamente.");
+        } else {
+          alert("Prospecto marcado como contactado.");
+        }
+      }
     } catch (err: any) {
-      alert("Error al actualizar la sesión: " + err.message);
+      console.error(err);
+      if (err.code === "functions/not-found") {
+         alert("Dossier no asociado a un prospecto, o prospecto no encontrado.");
+      } else if (err.code === "functions/permission-denied") {
+         alert("Acceso denegado. No tienes permisos sobre este prospecto.");
+      } else {
+         alert("Error al actualizar la sesión: " + err.message);
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -256,13 +321,24 @@ export default function ExecutiveBriefingDrawer({
                   <button onClick={handleCopyOpening} className="flex-1 rounded-xl bg-slate-800 py-2.5 text-xs font-semibold text-white hover:bg-slate-700 transition">
                     Copiar Apertura
                   </button>
-                  <button 
-                    onClick={handleMarkFollowUp} 
-                    disabled={isUpdating}
-                    className="flex-1 rounded-xl bg-amber-600 py-2.5 text-xs font-semibold text-white hover:bg-amber-500 transition disabled:opacity-50"
-                  >
-                    {isUpdating ? "Marcando..." : "Marcar Seguimiento"}
-                  </button>
+                  {["DISCOVERY_COMPLETED", "CONTACT_PENDING", "QUALIFIED", "NEW"].includes(currentStage) && (
+                    <button 
+                      onClick={() => handleCommercialAction("MARK_CONTACTED")}
+                      disabled={isUpdating}
+                      className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-xs font-semibold text-white hover:bg-emerald-500 transition disabled:opacity-50"
+                    >
+                      {isUpdating ? "Marcando..." : "Marcar como Contactado"}
+                    </button>
+                  )}
+                  {currentStage === "CONTACTED" && (
+                    <button 
+                      onClick={() => setShowDemoModal(true)}
+                      disabled={isUpdating}
+                      className="flex-1 rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white hover:bg-blue-500 transition disabled:opacity-50"
+                    >
+                      Programar Demo
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -281,26 +357,85 @@ export default function ExecutiveBriefingDrawer({
             </button>
             {showHistory && (
               <div className="mt-3 space-y-3 rounded-2xl bg-slate-950 p-4 border border-slate-800 h-64 overflow-y-auto">
-                {conversationHistory?.length ? conversationHistory.map((msg: any, idx: number) => (
-                  <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[85%] rounded-xl p-3 text-[11px] leading-relaxed ${
-                      msg.role === "user" ? "bg-cyan-900/50 text-cyan-100 rounded-tr-none" : "bg-slate-800 text-slate-300 rounded-tl-none"
-                    }`}>
-                      <strong className="block text-[9px] uppercase tracking-wider mb-1 opacity-50">
-                        {msg.role}
-                      </strong>
-                      {msg.content}
+                {(() => {
+                  const visibleHistory = conversationHistory?.filter(
+                    (msg: any) => ["user", "assistant", "aura"].includes(msg.role)
+                  ) || [];
+                  if (visibleHistory.length === 0) {
+                    return <p className="text-xs text-slate-500 text-center italic">Historial no disponible o sin mensajes públicos.</p>;
+                  }
+                  return visibleHistory.map((msg: any, idx: number) => (
+                    <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[85%] rounded-xl p-3 text-[11px] leading-relaxed ${
+                        msg.role === "user" ? "bg-cyan-900/50 text-cyan-100 rounded-tr-none" : "bg-slate-800 text-slate-300 rounded-tl-none"
+                      }`}>
+                        <strong className="block text-[9px] uppercase tracking-wider mb-1 opacity-50">
+                          {msg.role}
+                        </strong>
+                        {msg.content}
+                      </div>
                     </div>
-                  </div>
-                )) : (
-                  <p className="text-xs text-slate-500 text-center italic">No hay historial disponible.</p>
-                )}
+                  ));
+                })()}
               </div>
             )}
           </section>
 
         </div>
       </div>
+      
+      {showDemoModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-[400px] shadow-2xl">
+            <h3 className="text-sm font-bold text-white mb-4">Programar Demo</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Fecha</label>
+                <input 
+                  type="date" 
+                  value={demoDate} 
+                  onChange={(e) => setDemoDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Hora (Local)</label>
+                <input 
+                  type="time" 
+                  value={demoTime} 
+                  onChange={(e) => setDemoTime(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Notas (Opcional)</label>
+                <textarea 
+                  value={demoNotes} 
+                  onChange={(e) => setDemoNotes(e.target.value)}
+                  maxLength={1000}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white resize-none h-24"
+                  placeholder="Detalles sobre la demo..."
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => setShowDemoModal(false)}
+                  className="flex-1 rounded-xl bg-slate-800 py-2.5 text-xs font-semibold text-white hover:bg-slate-700 transition"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={() => handleCommercialAction("SCHEDULE_DEMO")}
+                  disabled={isUpdating}
+                  className="flex-1 rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white hover:bg-blue-500 transition disabled:opacity-50"
+                >
+                  {isUpdating ? "Guardando..." : "Confirmar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       <RadiografiaEmpresarialModal
         isOpen={isRadiografiaModalOpen}

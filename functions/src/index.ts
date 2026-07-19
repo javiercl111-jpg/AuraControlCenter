@@ -1152,6 +1152,7 @@ export { manageAdvisorAccess } from "./advisors/manageAdvisorAccess";
 
 // --- Prospects ---
 export { processProspectLifecycle } from "./prospects/processProspectLifecycle";
+export { updateProspectCommercialStage } from "./prospects/updateProspectCommercialStage";
 export { replenishAdvisorPipeline } from "./prospects/replenishAdvisorPipeline";
 export { discardPipelineProspect } from "./prospects/discardPipelineProspect";
 export { reactivatePipelineProspect } from "./prospects/reactivatePipelineProspect";

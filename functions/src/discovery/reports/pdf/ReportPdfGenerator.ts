@@ -15,10 +15,29 @@ export class ReportPdfGenerator {
   private static getAssets(): AuraDocumentAssets {
     let logoDataUrl: string | undefined;
     try {
-      const logoPath = path.join(__dirname, "../../../assets/branding/aura-logo-oficial-800.png");
-      if (fs.existsSync(logoPath)) {
-        const logoBuffer = fs.readFileSync(logoPath);
+      const possibleRelativePaths = [
+        "../../../assets/branding/aura-logo-oficial-800.png",
+        "../../../../src/assets/branding/aura-logo-oficial-800.png",
+        "../../../../../src/assets/branding/aura-logo-oficial-800.png",
+        "../../assets/branding/aura-logo-oficial-800.png",
+        "../../../../assets/branding/aura-logo-oficial-800.png",
+        "../assets/branding/aura-logo-oficial-800.png"
+      ];
+      
+      let resolvedPath: string | undefined;
+      for (const relPath of possibleRelativePaths) {
+        const fullPath = path.join(__dirname, relPath);
+        if (fs.existsSync(fullPath)) {
+          resolvedPath = fullPath;
+          break;
+        }
+      }
+
+      if (resolvedPath) {
+        const logoBuffer = fs.readFileSync(resolvedPath);
         logoDataUrl = `data:image/png;base64,${logoBuffer.toString("base64")}`;
+      } else {
+        console.warn("Could not find logo file in any of the expected paths");
       }
     } catch (e) {
       console.warn("Could not load logo in functions", e);
@@ -346,6 +365,14 @@ export class ReportPdfGenerator {
     for (let i = 2; i <= pageCount; i++) {
       doc.setPage(i);
       AuraPdfComponents.addFooter(doc, i - 1, pageCount - 1);
+
+      // Custom internal footer "USO INTERNO — CONFIDENCIAL"
+      doc.saveGraphicsState();
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6);
+      doc.setTextColor(ds.colors.danger[0], ds.colors.danger[1], ds.colors.danger[2]);
+      doc.text("USO INTERNO — CONFIDENCIAL", ds.margin.left, ds.pageHeight - 10);
+      doc.restoreGraphicsState();
     }
 
     validatePdfBounds(doc);

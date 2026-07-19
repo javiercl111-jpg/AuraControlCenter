@@ -259,8 +259,12 @@ export default function DiscoverPage() {
     }
   }
 
+  const isExchangingToken = useRef(false);
+
   async function handleStartFromLanding() {
     if (!linkId || !pendingAccessToken) return;
+    if (isExchangingToken.current) return;
+    isExchangingToken.current = true;
     setLoading(true);
     setError("");
     try {
@@ -277,11 +281,18 @@ export default function DiscoverPage() {
       });
       setPendingAccessToken(null);
       setScreen("welcome");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error exchanging token:", err);
-      setError("El enlace no es válido, ya fue utilizado o ha expirado.");
+      const safeCode = err?.details?.safeErrorCode || err?.message || "";
+      if (err?.code === "already-exists" || safeCode.includes("SESSION_ALREADY_CREATED_RECENTLY")) {
+        // Double invocation race condition at network level.
+        setError("La sesión se está iniciando. Por favor, recarga la página.");
+      } else {
+        setError("TOKEN_ALREADY_USED"); // Map to general token error
+      }
     } finally {
       setLoading(false);
+      isExchangingToken.current = false;
     }
   }
 
@@ -523,6 +534,21 @@ export default function DiscoverPage() {
     }
   }
 
+  function handleFinalize() {
+    if (linkInfo?.linkId) {
+      sessionStorage.removeItem(`discovery_session_token_${linkInfo.linkId}`);
+    }
+    if (linkId) {
+      sessionStorage.removeItem(`discovery_session_token_${linkId}`);
+    }
+    
+    window.close();
+    
+    setTimeout(() => {
+      window.location.replace("https://auranexus.io");
+    }, 150);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-950 text-white font-sans p-6">
@@ -538,8 +564,10 @@ export default function DiscoverPage() {
     let displayMessage = "Ocurrió un error inesperado. Inténtalo nuevamente.";
     let showRetry = false;
 
-    if (error === "TOKEN_EXPIRED" || error === "TOKEN_ALREADY_USED") {
-      displayMessage = "Este acceso ya no está disponible. Solicita uno nuevo desde Aura Nexus.";
+    if (error === "TOKEN_EXPIRED") {
+      displayMessage = "Este acceso ha caducado. Solicita uno nuevo desde Aura Nexus.";
+    } else if (error === "TOKEN_ALREADY_USED") {
+      displayMessage = "Este enlace ya fue utilizado en una sesión anterior. Por favor, solicita uno nuevo a tu asesor o desde Aura Nexus.";
     } else if (error === "APP_CHECK_REQUIRED" || error === "APP_CHECK_REJECTED") {
       displayMessage = "No fue posible validar este acceso de forma segura. Recarga la página.";
       showRetry = true;
@@ -1048,9 +1076,11 @@ export default function DiscoverPage() {
                   >
                     {downloadingReport ? "Preparando..." : "Descargar Radiografía"}
                   </button>
-                  <button className="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition">
-                    ✉️ Enviar a mi correo
-                  </button>
+                  {import.meta.env.VITE_DISCOVERY_EMAIL_DELIVERY_ENABLED === "true" && (
+                    <button className="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition">
+                      ✉️ Enviar a mi correo
+                    </button>
+                  )}
                 </div>
                 {downloadError && (
                   <p className="text-rose-400 text-[10px] text-center pt-2">{downloadError}</p>
@@ -1076,7 +1106,7 @@ export default function DiscoverPage() {
             </p>
 
             <button
-              onClick={() => navigate("/login")}
+              onClick={handleFinalize}
               className="w-full rounded-xl bg-slate-800 px-5 py-3 text-xs font-semibold text-white hover:bg-slate-700 transition active:scale-98"
             >
               Finalizar y volver a Aura Nexus

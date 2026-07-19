@@ -47,6 +47,7 @@ export const ProspectLifecycleStatus = {
   QUALIFIED: "QUALIFIED",
   CONTACT_PENDING: "CONTACT_PENDING",
   CONTACTED: "CONTACTED",
+  DEMO_SCHEDULED: "DEMO_SCHEDULED",
   DISCOVERY_SENT: "DISCOVERY_SENT",
   DISCOVERY_IN_PROGRESS: "DISCOVERY_IN_PROGRESS",
   DISCOVERY_COMPLETED: "DISCOVERY_COMPLETED",
@@ -80,6 +81,8 @@ export const LifecycleEventType = {
   
   PROSPECT_STATUS_CHANGED: "PROSPECT_STATUS_CHANGED",
   CONTACT_ATTEMPT_RECORDED: "CONTACT_ATTEMPT_RECORDED",
+  PROSPECT_CONTACTED: "PROSPECT_CONTACTED",
+  DEMO_SCHEDULED: "DEMO_SCHEDULED",
   FOLLOW_UP_SCHEDULED: "FOLLOW_UP_SCHEDULED",
   FOLLOW_UP_OVERDUE: "FOLLOW_UP_OVERDUE",
   NO_RESPONSE_ENTERED: "NO_RESPONSE_ENTERED",
@@ -202,6 +205,7 @@ export interface PlatformLeadV2 {
   statusChangeReason: string | null;
   
   lastContactAt: admin.firestore.Timestamp | admin.firestore.FieldValue | string | Date | null;
+  lastContactedByUid?: string | null;
   nextContactAt: admin.firestore.Timestamp | admin.firestore.FieldValue | string | Date | null;
   lastResponseAt: admin.firestore.Timestamp | admin.firestore.FieldValue | string | Date | null;
   contactAttemptsCount: number;
@@ -209,6 +213,12 @@ export interface PlatformLeadV2 {
   nurtureUntil: admin.firestore.Timestamp | admin.firestore.FieldValue | string | Date | null;
   archivedAt: admin.firestore.Timestamp | admin.firestore.FieldValue | string | Date | null;
   reactivatedAt: admin.firestore.Timestamp | admin.firestore.FieldValue | string | Date | null;
+  
+  // Demo 
+  demoScheduledAt?: admin.firestore.Timestamp | admin.firestore.FieldValue | string | Date | null;
+  demoTimezone?: string | null;
+  demoNotes?: string | null;
+  demoScheduledByUid?: string | null;
   
   // Dossier & Timeline
   smartBusinessDossierId?: string;
