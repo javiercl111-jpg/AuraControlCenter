@@ -206,6 +206,15 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
       }
       
       if (resolutionResult.matchedProspectId) {
+         // Update the matched lead with the dossier id
+         const leadRef = db.collection("platform_leads").doc(resolutionResult.matchedProspectId);
+         console.log({ executionId, stage: "UPDATE_LEAD", docPath: leadRef.path });
+         t.update(leadRef, {
+            smartBusinessDossierId: dossierId,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+         });
+         
+         // Record the attachment event
          const eventRef = db.collection("platform_events").doc();
          console.log({ executionId, stage: "WRITE_EVENT", docPath: eventRef.path });
          t.set(eventRef, {

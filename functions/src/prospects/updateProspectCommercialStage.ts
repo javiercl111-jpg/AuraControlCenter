@@ -20,23 +20,31 @@ export const updateProspectCommercialStage = functions.https.onCall(async (reque
     throw new functions.https.HttpsError("invalid-argument", "dossierId y action son requeridos.");
   }
   
-  // Buscar prospecto asociado al dossier
-  const leadQuery = await db.collection("platform_leads")
-    .where("smartBusinessDossierId", "==", data.dossierId)
-    .limit(2)
-    .get();
+  // 1. Leer discovery_sessions/{dossierId}
+  const sessionRef = db.collection("discovery_sessions").doc(data.dossierId);
+  const sessionSnap = await sessionRef.get();
+  if (!sessionSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Dossier no encontrado.");
+  }
+  
+  const sessionData = sessionSnap.data()!;
+  const prospectId = sessionData.prospectId;
+  
+  if (!prospectId) {
+    throw new functions.https.HttpsError("data-loss", "Sesión de Discovery no tiene un prospectId asociado (integridad comprometida).");
+  }
 
-  if (leadQuery.size === 0) {
+  // 3. Leer directamente platform_leads/{prospectId}
+  const leadRef = db.collection("platform_leads").doc(prospectId);
+  const leadSnap = await leadRef.get();
+
+  if (!leadSnap.exists) {
     throw new functions.https.HttpsError("not-found", "Prospecto no encontrado para el dossier especificado.");
   }
-  if (leadQuery.size > 1) {
-    throw new functions.https.HttpsError("failed-precondition", "Múltiples prospectos encontrados para el mismo dossier.");
-  }
 
-  const leadDoc = leadQuery.docs[0];
-  const prospect = leadDoc.data() as PlatformLeadV2;
+  const prospect = leadSnap.data() as PlatformLeadV2;
 
-  // RBAC Validación
+  // 5. RBAC Validación
   const allowedRoles = ["PLATFORM_OWNER", "PLATFORM_PARTNER", "SALES_DIRECTOR", "SUPER_ADMIN", "FOUNDER"];
   if (!allowedRoles.includes(caller.role)) {
     if (caller.role !== "SALES_ADVISOR" || (prospect.ownerUid !== caller.uid && prospect.currentAdvisorUid !== caller.uid)) {
@@ -46,14 +54,13 @@ export const updateProspectCommercialStage = functions.https.onCall(async (reque
   
   // Variables para la transacción
   const now = admin.firestore.FieldValue.serverTimestamp();
-  const leadRef = db.collection("platform_leads").doc(leadDoc.id);
   const updates: any = {};
   
   const currentStage = prospect.lifecycleStatus;
   let newStage = currentStage;
   let eventType: LifecycleEventType | null = null;
   // Identificador idempotente basado en estado, acción y dossier
-  const eventId = `commercial_event_${leadDoc.id}_${data.action}`;
+  const eventId = `commercial_event_${prospectId}_${data.action}`;
   
   if (data.action === "MARK_CONTACTED") {
     // Si ya está en una etapa igual o posterior, es idempotente.
@@ -120,12 +127,19 @@ export const updateProspectCommercialStage = functions.https.onCall(async (reque
         return;
     }
 
+    const currentData = currentSnap.data() as PlatformLeadV2;
+    
+    // Si falta smartBusinessDossierId, repararlo dentro de la transacción
+    if (!currentData.smartBusinessDossierId || currentData.smartBusinessDossierId !== data.dossierId) {
+       updates.smartBusinessDossierId = data.dossierId;
+    }
+
     t.update(leadRef, updates);
     
     const eventData = {
       eventId: eventId,
       type: eventType,
-      prospectId: leadDoc.id,
+      prospectId: prospectId,
       dossierId: data.dossierId,
       actorUid: caller.uid,
       actorRole: caller.role,

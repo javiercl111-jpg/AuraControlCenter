@@ -1,4 +1,4 @@
-
+import auraLogo from "../../../assets/branding/aura-logo-oficial-800.png";
 import type { DiscoverySession } from "../types/discoveryTypes";
 
 interface RadiografiaEmpresarialModalProps {
@@ -72,7 +72,7 @@ Quedo a tu entera disposición para profundizar en los hallazgos y explorar el r
           {/* Report Header */}
           <header className="border-b border-slate-800 pb-8 flex flex-col items-center text-center space-y-4">
             <div className="flex items-center gap-3">
-              <span className="text-4xl">🌌</span>
+              <img src={auraLogo} alt="Aura Logo" className="h-10 w-auto" />
               <div>
                 <h1 className="text-sm font-black uppercase tracking-[0.3em] text-cyan-400">
                   Aura Intelligence
