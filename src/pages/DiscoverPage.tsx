@@ -152,7 +152,7 @@ export default function DiscoverPage() {
   const [pendingAccessToken, setPendingAccessToken] = useState<string | null>(null);
 
   // Pre-form States
-  const [advisorContext, setAdvisorContext] = useState<unknown>(null);
+  const [advisorContext, setAdvisorContext] = useState<Record<string, unknown> & { name?: string } | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
