@@ -46,6 +46,95 @@ interface RequestExecutiveDocumentResponse {
   safeErrorCode?: string;
 }
 
+type DiscoveryErrorType =
+  | "SESSION_STARTING"
+  | "TOKEN_ALREADY_USED"
+  | "TOKEN_EXPIRED"
+  | "TOKEN_INVALID"
+  | "APP_CHECK_REQUIRED"
+  | "APP_CHECK_THROTTLED"
+  | "NETWORK_ERROR"
+  | "UNKNOWN";
+
+function mapDiscoveryError(err: unknown): DiscoveryErrorType {
+  if (!err) return "UNKNOWN";
+
+  const errorObj = err as Record<string, unknown>;
+  const fbCode = typeof errorObj.code === "string" ? errorObj.code : "";
+  const details = errorObj.details as Record<string, unknown> | undefined;
+  const safeCode = details && typeof details.safeErrorCode === "string" ? details.safeErrorCode : "";
+  const messageStr = typeof errorObj.message === "string" ? errorObj.message : "";
+
+  // SESSION_STARTING
+  if (
+    fbCode === "functions/already-exists" ||
+    fbCode === "already-exists" ||
+    safeCode.includes("SESSION_ALREADY_CREATED_RECENTLY") ||
+    messageStr.includes("SESSION_ALREADY_CREATED_RECENTLY")
+  ) {
+    return "SESSION_STARTING";
+  }
+
+  // APP_CHECK_THROTTLED
+  if (
+    fbCode === "functions/resource-exhausted" ||
+    messageStr.includes("throttled") ||
+    (messageStr.includes("403") && messageStr.includes("AppCheck"))
+  ) {
+    return "APP_CHECK_THROTTLED";
+  }
+
+  // APP_CHECK_REQUIRED
+  if (
+    fbCode === "functions/failed-precondition" ||
+    messageStr.includes("APP_CHECK") ||
+    messageStr.includes("AppCheck")
+  ) {
+    return "APP_CHECK_REQUIRED";
+  }
+
+  // TOKEN_ALREADY_USED
+  if (
+    safeCode === "TOKEN_ALREADY_USED" ||
+    messageStr.includes("used") ||
+    messageStr.includes("no longer pending")
+  ) {
+    return "TOKEN_ALREADY_USED";
+  }
+
+  // TOKEN_EXPIRED
+  if (
+    safeCode === "TOKEN_EXPIRED" ||
+    messageStr.includes("expired")
+  ) {
+    return "TOKEN_EXPIRED";
+  }
+
+  // TOKEN_INVALID
+  if (
+    fbCode === "functions/not-found" ||
+    fbCode === "functions/permission-denied" ||
+    safeCode === "LINK_NOT_FOUND" ||
+    safeCode === "TOKEN_INVALID" ||
+    messageStr.includes("not found") ||
+    messageStr.includes("Invalid token")
+  ) {
+    return "TOKEN_INVALID";
+  }
+
+  // NETWORK_ERROR
+  if (
+    fbCode === "unavailable" ||
+    fbCode === "functions/unavailable" ||
+    messageStr.includes("network") ||
+    messageStr.includes("connect")
+  ) {
+    return "NETWORK_ERROR";
+  }
+
+  return "UNKNOWN";
+}
+
 export default function DiscoverPage() {
   const showAuraThoughts = false; // Disabled by default for public experience
   const { linkId, commercialCode } = useParams<{ linkId?: string, commercialCode?: string }>();
@@ -63,7 +152,7 @@ export default function DiscoverPage() {
   const [pendingAccessToken, setPendingAccessToken] = useState<string | null>(null);
 
   // Pre-form States
-  const [advisorContext, setAdvisorContext] = useState<any>(null);
+  const [advisorContext, setAdvisorContext] = useState<unknown>(null);
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
@@ -124,7 +213,7 @@ export default function DiscoverPage() {
             setAdvisorContext(advisor);
           }
           setScreen("preform");
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error("Error resolving advisor:", err);
           setScreen("preform");
         } finally {
@@ -187,25 +276,9 @@ export default function DiscoverPage() {
           companyName: result.companyName,
           contactName: result.contactName
         });
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error al cargar enlace Discovery:", err);
-
-        const fbCode = err?.code || "";
-        const safeCode = err?.details?.safeErrorCode || "";
-        const messageStr = err?.message || "";
-
-        let mappedError = "UNKNOWN";
-        if (fbCode === "functions/failed-precondition" || messageStr.includes("APP_CHECK")) {
-          mappedError = "APP_CHECK_REQUIRED";
-        } else if (safeCode === "TOKEN_EXPIRED" || messageStr.includes("expired")) {
-          mappedError = "TOKEN_EXPIRED";
-        } else if (safeCode === "TOKEN_ALREADY_USED" || messageStr.includes("used")) {
-          mappedError = "TOKEN_ALREADY_USED";
-        } else if (fbCode === "functions/not-found" || safeCode === "LINK_NOT_FOUND") {
-          mappedError = "LINK_NOT_FOUND";
-        } else if (fbCode === "functions/permission-denied") {
-          mappedError = "CONTRACT_ERROR";
-        }
+        const mappedError = mapDiscoveryError(err);
 
         if (import.meta.env.DEV) {
           console.info("TOKEN_EXCHANGE_FAILED", {
@@ -281,15 +354,10 @@ export default function DiscoverPage() {
       });
       setPendingAccessToken(null);
       setScreen("welcome");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error exchanging token:", err);
-      const safeCode = err?.details?.safeErrorCode || err?.message || "";
-      if (err?.code === "already-exists" || safeCode.includes("SESSION_ALREADY_CREATED_RECENTLY")) {
-        // Double invocation race condition at network level.
-        setError("La sesión se está iniciando. Por favor, recarga la página.");
-      } else {
-        setError("TOKEN_ALREADY_USED"); // Map to general token error
-      }
+      const mappedError = mapDiscoveryError(err);
+      setError(mappedError);
     } finally {
       setLoading(false);
       isExchangingToken.current = false;
@@ -485,7 +553,7 @@ export default function DiscoverPage() {
         setScreen("completed");
         setIsAuraTyping(false);
       }, 1500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error al guardar sesión de Discovery:", err);
       alert("No fue posible finalizar el expediente en este momento. Tu conversación está guardada y puedes reintentar sin comenzar de nuevo.");
       hasHandledComplete.current = false;
@@ -526,7 +594,7 @@ export default function DiscoverPage() {
         setReportStatus("ERROR");
         setDownloadError("Ocurrió un error al preparar el documento.");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Download report error:", error);
       setDownloadError("No se pudo obtener el documento. Intente nuevamente más tarde.");
     } finally {
@@ -561,23 +629,36 @@ export default function DiscoverPage() {
   }
 
   if (error) {
-    let displayMessage = "Ocurrió un error inesperado. Inténtalo nuevamente.";
-    let showRetry = false;
+    let displayMessage: string;
+    let showRetry: boolean;
 
-    if (error === "TOKEN_EXPIRED") {
-      displayMessage = "Este acceso ha caducado. Solicita uno nuevo desde Aura Nexus.";
+    if (error === "SESSION_STARTING") {
+      displayMessage = "La sesión se está iniciando. Por favor, recarga la página.";
+      showRetry = true;
+    } else if (error === "APP_CHECK_REQUIRED") {
+      displayMessage = "No fue posible validar la seguridad de esta sesión. Actualiza la página e inténtalo nuevamente.";
+      showRetry = true;
+    } else if (error === "APP_CHECK_THROTTLED") {
+      displayMessage = "La validación de seguridad está temporalmente bloqueada después de varios intentos fallidos. Inténtalo más tarde.";
+      showRetry = true;
     } else if (error === "TOKEN_ALREADY_USED") {
-      displayMessage = "Este enlace ya fue utilizado en una sesión anterior. Por favor, solicita uno nuevo a tu asesor o desde Aura Nexus.";
-    } else if (error === "APP_CHECK_REQUIRED" || error === "APP_CHECK_REJECTED") {
-      displayMessage = "No fue posible validar este acceso de forma segura. Recarga la página.";
+      displayMessage = "Este enlace ya fue utilizado en una sesión anterior. Solicita uno nuevo a tu asesor.";
+      showRetry = false;
+    } else if (error === "TOKEN_EXPIRED") {
+      displayMessage = "Este enlace ha expirado. Solicita uno nuevo a tu asesor.";
+      showRetry = false;
+    } else if (error === "TOKEN_INVALID") {
+      displayMessage = "Este enlace no es válido. Verifica que hayas abierto la dirección completa.";
+      showRetry = false;
+    } else if (error === "NETWORK_ERROR") {
+      displayMessage = "No fue posible conectar con Aura. Revisa tu conexión e inténtalo nuevamente.";
       showRetry = true;
-    } else if (error === "TEMPORARILY_UNAVAILABLE") {
-      displayMessage = "Temporalmente no pudimos abrir el diagnóstico. Inténtalo nuevamente.";
+    } else if (error === "UNKNOWN") {
+      displayMessage = "No fue posible iniciar la sesión. Inténtalo nuevamente o solicita asistencia.";
       showRetry = true;
-    } else if (error === "LINK_NOT_FOUND") {
-      displayMessage = "Este acceso no es válido.";
-    } else if (error.includes("sesión de consultoría inteligente ya ha sido completada")) {
+    } else {
       displayMessage = error;
+      showRetry = false;
     }
 
     return (
