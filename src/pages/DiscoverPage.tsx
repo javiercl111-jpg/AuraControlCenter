@@ -84,15 +84,6 @@ function mapDiscoveryError(err: unknown): DiscoveryErrorType {
     return "APP_CHECK_THROTTLED";
   }
 
-  // APP_CHECK_REQUIRED
-  if (
-    fbCode === "functions/failed-precondition" ||
-    messageStr.includes("APP_CHECK") ||
-    messageStr.includes("AppCheck")
-  ) {
-    return "APP_CHECK_REQUIRED";
-  }
-
   // TOKEN_ALREADY_USED
   if (
     safeCode === "TOKEN_ALREADY_USED" ||
@@ -120,6 +111,15 @@ function mapDiscoveryError(err: unknown): DiscoveryErrorType {
     messageStr.includes("Invalid token")
   ) {
     return "TOKEN_INVALID";
+  }
+
+  // APP_CHECK_REQUIRED
+  if (
+    safeCode === "APP_CHECK_REQUIRED" ||
+    messageStr.includes("APP_CHECK") ||
+    messageStr.includes("AppCheck")
+  ) {
+    return "APP_CHECK_REQUIRED";
   }
 
   // NETWORK_ERROR
