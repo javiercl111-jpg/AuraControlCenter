@@ -10,6 +10,7 @@ export interface DiscoverySecurityConfig {
   tokenExpirationHours: number;
   maxSessionsPerEmail: number;
   maxSessionsPerIpHash: number;
+  maxLinksPerAdvisorPerDay: number;
 }
 
 let cachedConfig: DiscoverySecurityConfig | null = null;
@@ -32,6 +33,7 @@ export async function getDiscoverySecurityConfig(): Promise<DiscoverySecurityCon
     tokenExpirationHours: 72,
     maxSessionsPerEmail: 5,
     maxSessionsPerIpHash: 10,
+    maxLinksPerAdvisorPerDay: 50,
   };
 
   if (doc.exists) {

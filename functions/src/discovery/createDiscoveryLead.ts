@@ -50,7 +50,7 @@ export const createDiscoveryLead = onCall(
       let diagnosticDeliveryConsent = false;
       let followUpConsent = false;
       let marketingConsent = false;
-      let policyVersion = payload.policyVersion || "legacy-v1";
+      const policyVersion = payload.policyVersion || "legacy-v1";
 
       if (typeof payload.consent === "boolean" && payload.consent) {
         privacyConsent = true;
@@ -100,23 +100,49 @@ export const createDiscoveryLead = onCall(
 
       const config = await getDiscoverySecurityConfig();
 
-      // Rate limits check (Fixed: query by email only to avoid missing composite index)
-      const emailLimitCheck = await db.collection("market_discovery_links")
-        .where("email", "==", email)
-        .get();
+      let authCaller: any = null;
+      if (request.auth) {
+        authCaller = await resolvePlatformPrincipal(db, request.auth);
+      }
+      const allowedRoles = ["SALES_ADVISOR", "PLATFORM_PARTNER", "SALES_DIRECTOR", "PLATFORM_OWNER", "FOUNDER", "SUPER_ADMIN", "PARTNER"];
+      const isAuthorizedCaller = authCaller && allowedRoles.includes(authCaller.role);
 
+      // Rate limits check
       const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
       let recentCount = 0;
-      
-      emailLimitCheck.forEach(doc => {
-        const data = doc.data();
-        if (data.createdAt && data.createdAt.toDate() > cutoff) {
-          recentCount++;
-        }
-      });
 
-      if (recentCount >= config.maxSessionsPerEmail) {
-        throw new HttpsError("resource-exhausted", "RATE_LIMITED");
+      if (isAuthorizedCaller) {
+        const advisorUid = authCaller.uid || request.auth!.uid;
+        const advisorLimitCheck = await db.collection("market_discovery_links")
+          .where("createdByUid", "==", advisorUid)
+          .get();
+
+        advisorLimitCheck.forEach(doc => {
+          const data = doc.data();
+          if (data.createdAt && data.createdAt.toDate() > cutoff) {
+            recentCount++;
+          }
+        });
+
+        if (recentCount >= config.maxLinksPerAdvisorPerDay) {
+          throw new HttpsError("resource-exhausted", "RATE_LIMITED");
+        }
+      } else {
+        // Query by email only to avoid missing composite index
+        const emailLimitCheck = await db.collection("market_discovery_links")
+          .where("email", "==", email)
+          .get();
+
+        emailLimitCheck.forEach(doc => {
+          const data = doc.data();
+          if (data.createdAt && data.createdAt.toDate() > cutoff) {
+            recentCount++;
+          }
+        });
+
+        if (recentCount >= config.maxSessionsPerEmail) {
+          throw new HttpsError("resource-exhausted", "RATE_LIMITED");
+        }
       }
 
       // 4. Idempotency Transaction
@@ -226,13 +252,6 @@ export const createDiscoveryLead = onCall(
       }
 
       // 5. Proceed with Creation
-      let authCaller: any = null;
-      if (request.auth) {
-        authCaller = await resolvePlatformPrincipal(db, request.auth);
-      }
-
-      const allowedRoles = ["SALES_ADVISOR", "PLATFORM_PARTNER", "SALES_DIRECTOR", "PLATFORM_OWNER", "FOUNDER", "SUPER_ADMIN", "PARTNER"];
-      const isAuthorizedCaller = authCaller && allowedRoles.includes(authCaller.role);
 
       const trustScoreResult = await computeTrustScore(email, advisorContext, acquisitionSource);
 
