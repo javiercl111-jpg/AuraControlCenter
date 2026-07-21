@@ -1,5 +1,6 @@
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { GoogleAuth } from "google-auth-library";
+import { projectPlatformInbox, NotificationProjectionInput } from "./projectPlatformInbox";
 
 // Retries and backoff matching user requirements
 export const emitDiscoveryCompletedNotification = onTaskDispatched({
@@ -105,18 +106,38 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
 
     const resultData = response.data as any;
 
-    if (resultData && resultData.idempotentReplay) {
-      console.log(`Event previously processed (idempotent duplicate): ${notificationEvent.idempotencyKey}`);
-      return; // DUPLICATE_EVENT handled as idempotent success
-    }
-
     if (resultData && resultData.status === "FAILED") {
       // It reached the gateway but failed inside it
       console.error("Gateway returned FAILED status", resultData);
       throw new Error(`Gateway processing failed: ${resultData.error}`);
     }
 
-    console.log("Notification dispatched successfully:", resultData);
+    if (resultData && resultData.idempotentReplay) {
+      console.log(`Event previously processed (idempotent duplicate): ${notificationEvent.idempotencyKey}`);
+      // Fallthrough to projection logic for idempotency check
+    } else {
+      console.log("Notification dispatched successfully:", resultData);
+    }
+
+    const inboxCreated = resultData?.inboxCreated || 0;
+    if (inboxCreated >= 1 || resultData?.idempotentReplay) {
+      const projectionInput: NotificationProjectionInput = {
+        eventId: notificationEvent.eventId,
+        recipientUid: payload.advisorUid,
+        type: notificationEvent.eventType,
+        title: notificationEvent.title,
+        body: notificationEvent.body,
+        entityType: notificationEvent.entityType,
+        entityId: notificationEvent.entityId,
+        sourceModule: notificationEvent.sourceModule,
+        priority: notificationEvent.priority as "LOW" | "NORMAL" | "HIGH",
+        createdAt: Date.now(),
+        context: {
+          dossierId: payload.dossierId
+        }
+      };
+      await projectPlatformInbox(projectionInput);
+    }
 
   } catch (error: any) {
     console.error("Error emitting discovery completed notification", error);

@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.reactivatePipelineProspect = exports.discardPipelineProspect = exports.replenishAdvisorPipeline = exports.processProspectLifecycle = exports.manageAdvisorAccess = exports.resolveAdvisorByCode = exports.provisionCommercialAdvisor = exports.createSalesAdvisorUser = exports.requestExecutiveDocument = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
+exports.emitDiscoveryCompletedNotification = exports.reactivatePipelineProspect = exports.discardPipelineProspect = exports.replenishAdvisorPipeline = exports.processProspectLifecycle = exports.manageAdvisorAccess = exports.resolveAdvisorByCode = exports.provisionCommercialAdvisor = exports.createSalesAdvisorUser = exports.requestExecutiveDocument = exports.generateDiscoveryReport = exports.exchangeDiscoveryToken = exports.resolveDiscoverySession = exports.completeDiscoverySession = exports.createDiscoveryLead = exports.evaluateConversation = exports.processMarketImportJob = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
@@ -991,4 +991,6 @@ var discardPipelineProspect_1 = require("./prospects/discardPipelineProspect");
 Object.defineProperty(exports, "discardPipelineProspect", { enumerable: true, get: function () { return discardPipelineProspect_1.discardPipelineProspect; } });
 var reactivatePipelineProspect_1 = require("./prospects/reactivatePipelineProspect");
 Object.defineProperty(exports, "reactivatePipelineProspect", { enumerable: true, get: function () { return reactivatePipelineProspect_1.reactivatePipelineProspect; } });
+var emitDiscoveryCompletedNotification_1 = require("./notifications/emitDiscoveryCompletedNotification");
+Object.defineProperty(exports, "emitDiscoveryCompletedNotification", { enumerable: true, get: function () { return emitDiscoveryCompletedNotification_1.emitDiscoveryCompletedNotification; } });
 //# sourceMappingURL=index.js.map

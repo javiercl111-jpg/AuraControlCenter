@@ -225,5 +225,16 @@ service cloud.firestore {
     match /discovery_sessions/{sessionId} {
       allow read, write: if canReadMarket();
     }
+
+    // platform_inbox
+    match /platform_inbox/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create, update, delete: if false;
+
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update, delete: if false;
+      }
+    }
   }
 }

@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NotificationBell } from "../components/notifications/NotificationBell";
 
 import { auth } from "../config/firebase";
 import { getCurrentUserRole } from "../services/rbacService";
@@ -107,13 +108,16 @@ export default function AppLayout() {
           />
           <span className="text-sm font-bold tracking-wide text-white">Control Center</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300 hover:bg-cyan-400/20 transition active:scale-95"
-        >
-          {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300 hover:bg-cyan-400/20 transition active:scale-95"
+          >
+            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </header>
 
       {/* DRAWER SIDEBAR MÓVIL */}
@@ -238,6 +242,9 @@ export default function AppLayout() {
         </nav>
 
         <div className="border-t border-slate-800 pt-5">
+          <div className="flex items-center justify-end px-4 mb-4">
+            <NotificationBell />
+          </div>
           <button
             type="button"
             onClick={handleLogout}
