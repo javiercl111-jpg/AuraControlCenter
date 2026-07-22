@@ -88,6 +88,9 @@ export interface ReportViewModel {
     phone: string;
     commercialCode?: string;
   };
+  isPreliminary?: boolean;
+  diagnosisSource?: "LEGACY_FALLBACK" | "EXECUTIVE_INTELLIGENCE";
+  evidenceStatus?: "SUFFICIENT" | "INSUFFICIENT";
   
   // Basic diagnostic summary
   maturityScore?: number;

@@ -3,6 +3,7 @@ import { ReportPdfGenerator } from "./pdf/ReportPdfGenerator";
 import { BrandingEngine } from "./BrandingEngine";
 import { ReportViewModel, DiscoveryReportMetadata, ReportType, DeliveryLevel } from "./types";
 import { LifecycleEventType } from "../../prospects/types";
+import { buildDiscoveryReportViewModel } from "./DiscoveryReportViewModelBuilder";
 
 export class DiscoveryReportGenerationService {
   /**
@@ -28,8 +29,7 @@ export class DiscoveryReportGenerationService {
     }
 
     const sessionData = sessionDoc.data()!;
-    const prospectData = prospectDoc.data()!;
-    const dossier = sessionData.smartBusinessDossier || {};
+    const dossier = sessionData.dossier || {};
 
     const deliveryLevel = "ALLOW_FULL" as DeliveryLevel; // In real app from DiscoverySecurityLayer
     if (deliveryLevel === "BLOCK_ABUSE") {
@@ -105,26 +105,13 @@ export class DiscoveryReportGenerationService {
           const metadata = result.metadata;
           let pdfBuffer: Buffer;
 
-          const viewModel: ReportViewModel = {
+          const viewModel: ReportViewModel = buildDiscoveryReportViewModel({
             reportId,
-            status: "GENERATING",
             deliveryLevel,
             folio,
             generatedAt: metadata.generatedAt,
-            companyName: prospectData.companyName || "Empresa",
-            contactName: prospectData.contactName || "Contacto",
-            advisor: prospectData.currentAdvisorId !== "UNASSIGNED" ? {
-              displayName: "Asesor Asignado", 
-              title: "Senior Consultant",
-              email: "asesor@auranexus.io",
-              phone: "555-0000"
-            } : undefined,
-            overallStatus: dossier.overallStatus || "Evaluado",
-            maturityScore: dossier.maturityScore || 50,
-            keyFindings: dossier.keyFindings || ["Hallazgo 1", "Hallazgo 2"],
-            operationalRisks: deliveryLevel === "ALLOW_FULL" ? dossier.operationalRisks || [] : undefined,
-            opportunities: deliveryLevel === "ALLOW_FULL" ? dossier.opportunities || [] : undefined,
-          };
+            sessionData,
+          });
 
           if (reportType === "EXTERNAL_RADIOGRAFIA") {
             pdfBuffer = await ReportPdfGenerator.generateExternalRadiografia(viewModel, branding);
@@ -178,13 +165,14 @@ export class DiscoveryReportGenerationService {
             metadata: finalMetadata
           };
 
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("[DiscoveryReportGenerationService] Error generating report", error);
           await metadataRef.update({
             status: "ERROR",
             updatedAt: new Date().toISOString()
           });
-          throw new Error(`Failed to generate PDF: ${error.message}`);
+          const message = error instanceof Error ? error.message : "Unknown error";
+          throw new Error(`Failed to generate PDF: ${message}`, { cause: error });
         }
       }
       return result;
