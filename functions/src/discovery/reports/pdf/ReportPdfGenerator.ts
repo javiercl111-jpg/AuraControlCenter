@@ -67,6 +67,8 @@ export class ReportPdfGenerator {
   }
 
   private static addWatermark(doc: jsPDF, company: string, contact: string) {
+    void company;
+    void contact;
     doc.saveGraphicsState();
     doc.setTextColor(230, 235, 240);
     doc.setFontSize(8);
@@ -79,6 +81,7 @@ export class ReportPdfGenerator {
     data: ReportViewModel, 
     branding: ExecutiveBrandingProfile
   ): Promise<Buffer> {
+    void branding;
     const doc = new jsPDF("p", "mm", "a4");
     const ds = AuraDesignTokens;
     const layout = new AuraPdfLayout(doc);
@@ -111,7 +114,9 @@ export class ReportPdfGenerator {
     const letterBody = [
       `Gracias por permitir que Aura Intelligence analizara la información compartida durante esta primera conversación de consultoría empresarial.`,
       `El objetivo de este documento no es presentar una propuesta comercial. Nuestro propósito central es ayudarle a comprender con mayor claridad y perspectiva el estado operativo actual de su organización, identificar áreas latentes de evolución tecnológica y facilitar futuras conversaciones estratégicas en su mesa directiva.`,
-      `Las conclusiones y reflexiones aquí presentadas han sido estructuradas meticulosamente a partir de los datos proporcionados durante nuestra sesión de Discovery.`,
+      data.evidenceStatus === "INSUFFICIENT"
+        ? "La información disponible todavía no permite emitir conclusiones defendibles; este documento identifica explícitamente esa limitación."
+        : "Las observaciones preliminares aquí presentadas se basan en los datos proporcionados durante la sesión de Discovery.",
       `Esperamos que este análisis crítico le resulte de alto valor para la toma de decisiones ejecutivas en el corto y mediano plazo.`
     ];
 
@@ -137,7 +142,19 @@ export class ReportPdfGenerator {
     layout.drawText("Resumen Ejecutivo", ds.margin.left, ds.typography.sectionTitle);
     layout.yPos += 15;
 
-    const narrativeIntro = `A través de nuestra evaluación, hemos identificado patrones operativos en ${data.companyName} que sugieren un punto de inflexión. La infraestructura actual requiere una revisión profunda para sostener el crecimiento proyectado sin incurrir en deuda técnica o riesgos operativos críticos.`;
+    if (data.isPreliminary) {
+      layout.drawText(
+        "Resultado preliminar — diagnóstico legacy de respaldo.",
+        ds.margin.left,
+        ds.typography.bodyEmphasis,
+        { maxWidth: ds.pageWidth - ds.margin.left - ds.margin.right },
+      );
+      layout.yPos += ds.spacing.xl;
+    }
+
+    const narrativeIntro = data.evidenceStatus === "INSUFFICIENT"
+      ? "Evidencia insuficiente para sostener un diagnóstico de madurez o hallazgos específicos. Se requiere completar la conversación comercial antes de emitir conclusiones."
+      : `A través de nuestra evaluación, hemos identificado patrones operativos en ${data.companyName} que requieren validación consultiva antes de convertirse en un diagnóstico definitivo.`;
     const introLines = doc.splitTextToSize(narrativeIntro, ds.pageWidth - ds.margin.left - ds.margin.right);
     layout.drawText(introLines, ds.margin.left, ds.typography.body);
     layout.yPos += introLines.length * (ds.typography.body.fontSize * 0.352778 * ds.typography.body.lineHeight) + ds.spacing.xl;
@@ -255,7 +272,7 @@ export class ReportPdfGenerator {
     }
 
     // ADD FOOTERS TO ALL PAGES (Except cover)
-    const pageCount = (doc.internal as any).getNumberOfPages();
+    const pageCount = doc.getNumberOfPages();
     for (let i = 2; i <= pageCount; i++) {
       doc.setPage(i);
       AuraPdfComponents.addFooter(doc, i - 1, pageCount - 1);
@@ -270,6 +287,7 @@ export class ReportPdfGenerator {
     data: ReportViewModel & { prospectId?: string, opportunityScore?: number, probabilityOfClosing?: string, nextBestAction?: string, confidenceLevel?: string },
     branding: ExecutiveBrandingProfile
   ): Promise<Buffer> {
+    void branding;
     const doc = new jsPDF("p", "mm", "a4");
     const ds = AuraDesignTokens;
     const layout = new AuraPdfLayout(doc);
@@ -298,11 +316,9 @@ export class ReportPdfGenerator {
     );
     // Draw internal badge on cover
     doc.setFont("helvetica", "bold");
-    // @ts-ignore
     doc.setCharSpace(1);
     doc.setTextColor(ds.colors.danger[0], ds.colors.danger[1], ds.colors.danger[2]);
     doc.text("USO INTERNO - CONFIDENCIAL", ds.pageWidth / 2, 265, { align: "center" });
-    // @ts-ignore
     doc.setCharSpace(0);
 
     // PAGE 2
@@ -361,7 +377,7 @@ export class ReportPdfGenerator {
     }
 
     // ADD FOOTERS TO ALL PAGES (Except cover)
-    const pageCount = (doc.internal as any).getNumberOfPages();
+    const pageCount = doc.getNumberOfPages();
     for (let i = 2; i <= pageCount; i++) {
       doc.setPage(i);
       AuraPdfComponents.addFooter(doc, i - 1, pageCount - 1);

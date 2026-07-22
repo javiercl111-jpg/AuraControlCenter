@@ -29,7 +29,7 @@ Una falla de configuración, request, autenticación, red, timeout, servicio, di
 
 | Clave canónica | Parámetro Firebase | Default | Comportamiento |
 |---|---|---:|---|
-| `discovery.shadowEvaluation` | `DISCOVERY_SHADOW_EVALUATION` | `true` | Ejecuta o salta la evaluación shadow. |
+| `discovery.shadowEvaluation` | `DISCOVERY_SHADOW_EVALUATION` | `false` | Ejecuta o salta la evaluación shadow; requiere habilitación explícita. |
 | `discovery.primaryEvaluation` | `DISCOVERY_PRIMARY_EVALUATION` | `false` | Reservado. El resolver fuerza siempre `false`, incluso si la configuración solicita `true`. |
 
 No existe una ruta de ejecución primary en este sprint.

@@ -18,6 +18,8 @@ import {
 } from "../contracts";
 import {
   DiscoveryDiagnosisComparisonCategory,
+  DiscoveryComparisonStatus,
+  DiscoveryShadowAdapterStage,
   DiscoveryShadowStatus,
   buildExecutiveDiscoveryEvaluationInput,
   buildLegacyDiscoveryDiagnosis,
@@ -242,6 +244,8 @@ function createHarness(adapter: ExecutiveDiscoveryAdapter, persistFails = false)
       context: createContext(),
       correlationId: "shadow-correlation-001",
       flags: FLAGS_ON,
+      endpointConfigured: true,
+      authenticationMode: "DEVELOPMENT_BEARER" as const,
       adapter,
       persistence: {
         persist: async (record: DiscoveryShadowPersistenceRecord) => {
@@ -289,6 +293,11 @@ const tests: readonly TestCase[] = [
       strictEqual(harness.records[0].shadowStatus, DiscoveryShadowStatus.SUCCEEDED);
       strictEqual(harness.records[0].shadowExecution.durationMs, 125);
       strictEqual(harness.records[0].shadowMetadata.comparison?.differences.length, 0);
+      strictEqual(
+        harness.records[0].shadowMetadata.comparisonStatus,
+        DiscoveryComparisonStatus.COMPLETED,
+      );
+      strictEqual(harness.records[0].shadowExecution.persisted, true);
       strictEqual("legacyDiagnosis" in harness.records[0], false);
       strictEqual(harness.logs[0].status, DiscoveryShadowStatus.SUCCEEDED);
 
@@ -315,6 +324,120 @@ const tests: readonly TestCase[] = [
     },
   },
   {
+    name: "Endpoint ausente",
+    run: async () => {
+      const adapter = new StubAdapter(async (input) => createDiagnosis(input));
+      const harness = createHarness(adapter);
+      const outcome = await runDiscoveryShadowEvaluation({
+        ...harness.options,
+        endpointConfigured: false,
+      });
+
+      strictEqual(adapter.inputs.length, 0);
+      strictEqual(
+        outcome.safeErrorCode,
+        ExecutiveDiscoveryTransportErrorCode.ENDPOINT_NOT_CONFIGURED,
+      );
+      strictEqual(outcome.comparisonStatus, DiscoveryComparisonStatus.NOT_REQUESTED);
+      strictEqual(harness.records[0].shadowExecution.endpointConfigured, false);
+      strictEqual(
+        harness.records[0].shadowExecution.adapterStage,
+        DiscoveryShadowAdapterStage.CONFIGURATION,
+      );
+    },
+  },
+  {
+    name: "401 authentication",
+    run: async () => {
+      const adapter = new StubAdapter(async () => {
+        throw new ExecutiveDiscoveryTransportError({
+          code: ExecutiveDiscoveryTransportErrorCode.AUTHENTICATION_REQUIRED,
+          message: "Safe authentication failure.",
+          retryable: false,
+          httpStatus: 401,
+        });
+      });
+      const harness = createHarness(adapter);
+      const outcome = await runDiscoveryShadowEvaluation(harness.options);
+
+      strictEqual(
+        outcome.comparisonStatus,
+        DiscoveryComparisonStatus.FAILED_AUTHENTICATION,
+      );
+      strictEqual(harness.logs[0].httpStatus, 401);
+      strictEqual(
+        harness.logs[0].adapterStage,
+        DiscoveryShadowAdapterStage.AUTHENTICATION,
+      );
+    },
+  },
+  {
+    name: "403 authorization",
+    run: async () => {
+      const adapter = new StubAdapter(async () => {
+        throw new ExecutiveDiscoveryTransportError({
+          code: ExecutiveDiscoveryTransportErrorCode.ACCESS_FORBIDDEN,
+          message: "Safe authorization failure.",
+          retryable: false,
+          httpStatus: 403,
+        });
+      });
+      const harness = createHarness(adapter);
+      const outcome = await runDiscoveryShadowEvaluation(harness.options);
+
+      strictEqual(
+        outcome.comparisonStatus,
+        DiscoveryComparisonStatus.FAILED_AUTHORIZATION,
+      );
+      strictEqual(harness.logs[0].httpStatus, 403);
+    },
+  },
+  {
+    name: "500 transport",
+    run: async () => {
+      const adapter = new StubAdapter(async () => {
+        throw new ExecutiveDiscoveryTransportError({
+          code: ExecutiveDiscoveryTransportErrorCode.SERVICE_FAILURE,
+          message: "Safe service failure.",
+          retryable: true,
+          httpStatus: 500,
+        });
+      });
+      const harness = createHarness(adapter);
+      const outcome = await runDiscoveryShadowEvaluation(harness.options);
+
+      strictEqual(
+        outcome.comparisonStatus,
+        DiscoveryComparisonStatus.FAILED_TRANSPORT,
+      );
+      strictEqual(harness.logs[0].httpStatus, 500);
+    },
+  },
+  {
+    name: "Invalid response",
+    run: async () => {
+      const adapter = new StubAdapter(async () => {
+        throw new ExecutiveDiscoveryTransportError({
+          code: ExecutiveDiscoveryTransportErrorCode.INVALID_RESPONSE,
+          message: "Safe invalid response.",
+          retryable: false,
+          httpStatus: 200,
+        });
+      });
+      const harness = createHarness(adapter);
+      const outcome = await runDiscoveryShadowEvaluation(harness.options);
+
+      strictEqual(
+        outcome.comparisonStatus,
+        DiscoveryComparisonStatus.FAILED_INVALID_RESPONSE,
+      );
+      strictEqual(
+        harness.logs[0].adapterStage,
+        DiscoveryShadowAdapterStage.VALIDATION,
+      );
+    },
+  },
+  {
     name: "Timeout",
     run: async () => {
       const adapter = new StubAdapter(async () => {
@@ -331,8 +454,12 @@ const tests: readonly TestCase[] = [
       strictEqual(outcome.status, DiscoveryShadowStatus.FAILED);
       strictEqual(outcome.errorCode, ExecutiveDiscoveryTransportErrorCode.TIMEOUT);
       strictEqual(
+        outcome.comparisonStatus,
+        DiscoveryComparisonStatus.FAILED_TIMEOUT,
+      );
+      strictEqual(
         harness.records[0].shadowExecution.status === DiscoveryShadowStatus.FAILED
-          ? harness.records[0].shadowExecution.errorCode
+          ? harness.records[0].shadowExecution.safeErrorCode
           : undefined,
         ExecutiveDiscoveryTransportErrorCode.TIMEOUT,
       );
@@ -414,6 +541,10 @@ const tests: readonly TestCase[] = [
       strictEqual(outcome.status, DiscoveryShadowStatus.SKIPPED);
       strictEqual(adapter.inputs.length, 0);
       strictEqual(harness.records[0].shadowStatus, DiscoveryShadowStatus.SKIPPED);
+      strictEqual(
+        harness.records[0].shadowMetadata.comparisonStatus,
+        DiscoveryComparisonStatus.SKIPPED_DISABLED,
+      );
     },
   },
   {
@@ -440,7 +571,12 @@ const tests: readonly TestCase[] = [
       strictEqual(outcome.errorCode, "SHADOW_PERSISTENCE_FAILED");
       strictEqual(JSON.stringify(baseSession), legacyBefore);
       strictEqual(harness.records.length, 0);
-      strictEqual(harness.logs[0].errorCode, "SHADOW_PERSISTENCE_FAILED");
+      strictEqual(harness.logs[0].safeErrorCode, "SHADOW_PERSISTENCE_FAILED");
+      strictEqual(harness.logs[0].persisted, false);
+      strictEqual(
+        harness.logs[0].adapterStage,
+        DiscoveryShadowAdapterStage.PERSISTENCE,
+      );
     },
   },
 ];

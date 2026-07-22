@@ -11,7 +11,7 @@ export const DISCOVERY_PRIMARY_EVALUATION_FEATURE =
   "discovery.primaryEvaluation" as const;
 
 const shadowEvaluationParam = defineBoolean("DISCOVERY_SHADOW_EVALUATION", {
-  default: true,
+  default: false,
   description: "Evaluate completed Discovery sessions in shadow mode.",
 });
 

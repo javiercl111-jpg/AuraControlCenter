@@ -12,7 +12,10 @@ import {
   type ExecutiveDiscoveryEvidence,
 } from "../contracts/ExecutiveDiscoveryApiRequest";
 import type { ExecutiveDiagnosis } from "../contracts/ExecutiveDiagnosis";
-import { ExecutiveDiscoveryTransportError } from "../contracts/ExecutiveDiscoveryTransportError";
+import {
+  ExecutiveDiscoveryTransportError,
+  ExecutiveDiscoveryTransportErrorCode,
+} from "../contracts/ExecutiveDiscoveryTransportError";
 import {
   DISCOVERY_LEGACY_DIAGNOSIS_VERSION,
   compareDiscoveryDiagnoses,
@@ -32,23 +35,58 @@ export const DiscoveryShadowStatus = {
 export type DiscoveryShadowStatus =
   (typeof DiscoveryShadowStatus)[keyof typeof DiscoveryShadowStatus];
 
-interface ShadowExecutionSuccess {
+export const DiscoveryComparisonStatus = {
+  NOT_REQUESTED: "NOT_REQUESTED",
+  SKIPPED_DISABLED: "SKIPPED_DISABLED",
+  FAILED_TRANSPORT: "FAILED_TRANSPORT",
+  FAILED_AUTHENTICATION: "FAILED_AUTHENTICATION",
+  FAILED_AUTHORIZATION: "FAILED_AUTHORIZATION",
+  FAILED_TIMEOUT: "FAILED_TIMEOUT",
+  FAILED_INVALID_RESPONSE: "FAILED_INVALID_RESPONSE",
+  COMPLETED: "COMPLETED",
+} as const;
+
+export type DiscoveryComparisonStatus =
+  (typeof DiscoveryComparisonStatus)[keyof typeof DiscoveryComparisonStatus];
+
+export const DiscoveryShadowAdapterStage = {
+  NOT_STARTED: "NOT_STARTED",
+  CONFIGURATION: "CONFIGURATION",
+  AUTHENTICATION: "AUTHENTICATION",
+  TRANSPORT: "TRANSPORT",
+  VALIDATION: "VALIDATION",
+  COMPARISON: "COMPARISON",
+  COMPLETED: "COMPLETED",
+  PERSISTENCE: "PERSISTENCE",
+} as const;
+
+export type DiscoveryShadowAdapterStage =
+  (typeof DiscoveryShadowAdapterStage)[keyof typeof DiscoveryShadowAdapterStage];
+
+export type DiscoveryShadowAuthenticationMode = "DEVELOPMENT_BEARER";
+
+interface ShadowExecutionBase {
+  readonly correlationId: string;
+  readonly durationMs: number;
+  readonly adapterStage: DiscoveryShadowAdapterStage;
+  readonly endpointConfigured: boolean;
+  readonly authenticationMode: DiscoveryShadowAuthenticationMode;
+  readonly comparisonStatus: DiscoveryComparisonStatus;
+  readonly persisted: boolean;
+  readonly httpStatus?: number;
+}
+
+interface ShadowExecutionSuccess extends ShadowExecutionBase {
   readonly status: "SUCCEEDED";
-  readonly correlationId: string;
-  readonly durationMs: number;
 }
 
-interface ShadowExecutionFailure {
+interface ShadowExecutionFailure extends ShadowExecutionBase {
   readonly status: "FAILED";
-  readonly correlationId: string;
-  readonly durationMs: number;
-  readonly errorCode: string;
+  readonly safeErrorCode: string;
 }
 
-interface ShadowExecutionSkipped {
+interface ShadowExecutionSkipped extends ShadowExecutionBase {
   readonly status: "SKIPPED";
-  readonly correlationId: string;
-  readonly durationMs: number;
 }
 
 export type DiscoveryShadowExecution =
@@ -60,6 +98,7 @@ export interface DiscoveryShadowMetadata {
   readonly mode: "SHADOW";
   readonly legacyDiagnosisVersion: typeof DISCOVERY_LEGACY_DIAGNOSIS_VERSION;
   readonly comparison: DiscoveryDiagnosisComparison | null;
+  readonly comparisonStatus: DiscoveryComparisonStatus;
   readonly featureFlags: Readonly<DiscoveryEvaluationFeatureFlags>;
 }
 
@@ -72,6 +111,7 @@ export interface DiscoveryShadowPersistenceRecord {
   readonly adapterVersion: typeof EXECUTIVE_DISCOVERY_ADAPTER_VERSION;
   readonly capabilityVersion: typeof EXECUTIVE_DISCOVERY_CAPABILITY_VERSION;
   readonly shadowErrorCode?: string;
+  readonly shadowSafeErrorCode?: string;
 }
 
 export interface DiscoveryShadowEvaluationContext {
@@ -100,7 +140,13 @@ export interface DiscoveryShadowSafeLog {
   readonly status: DiscoveryShadowStatus;
   readonly capabilityVersion: typeof EXECUTIVE_DISCOVERY_CAPABILITY_VERSION;
   readonly adapterVersion: typeof EXECUTIVE_DISCOVERY_ADAPTER_VERSION;
-  readonly errorCode?: string;
+  readonly safeErrorCode?: string;
+  readonly adapterStage: DiscoveryShadowAdapterStage;
+  readonly httpStatus?: number;
+  readonly endpointConfigured: boolean;
+  readonly authenticationMode: DiscoveryShadowAuthenticationMode;
+  readonly comparisonStatus: DiscoveryComparisonStatus;
+  readonly persisted: boolean;
 }
 
 export interface DiscoveryShadowLogger {
@@ -115,6 +161,8 @@ export interface RunDiscoveryShadowEvaluationOptions {
   readonly context: DiscoveryShadowEvaluationContext;
   readonly correlationId: string;
   readonly flags: DiscoveryEvaluationFeatureFlags;
+  readonly endpointConfigured: boolean;
+  readonly authenticationMode: DiscoveryShadowAuthenticationMode;
   readonly adapter: ExecutiveDiscoveryAdapter;
   readonly persistence: DiscoveryShadowPersistence;
   readonly logger: DiscoveryShadowLogger;
@@ -124,6 +172,9 @@ export interface RunDiscoveryShadowEvaluationOptions {
 export interface DiscoveryShadowEvaluationOutcome {
   readonly status: DiscoveryShadowStatus;
   readonly errorCode?: string;
+  readonly safeErrorCode?: string;
+  readonly comparisonStatus: DiscoveryComparisonStatus;
+  readonly persisted: boolean;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -312,11 +363,13 @@ function safeErrorCode(error: unknown): string {
 function metadata(
   flags: DiscoveryEvaluationFeatureFlags,
   comparison: DiscoveryDiagnosisComparison | null,
+  comparisonStatus: DiscoveryComparisonStatus,
 ): DiscoveryShadowMetadata {
   return {
     mode: "SHADOW",
     legacyDiagnosisVersion: DISCOVERY_LEGACY_DIAGNOSIS_VERSION,
     comparison,
+    comparisonStatus,
     featureFlags: flags,
   };
 }
@@ -325,16 +378,91 @@ function safeLog(
   logger: DiscoveryShadowLogger,
   execution: DiscoveryShadowExecution,
 ): void {
-  logger.log({
-    correlationId: execution.correlationId,
-    durationMs: execution.durationMs,
-    status: execution.status,
-    capabilityVersion: EXECUTIVE_DISCOVERY_CAPABILITY_VERSION,
-    adapterVersion: EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
-    ...(execution.status === DiscoveryShadowStatus.FAILED
-      ? { errorCode: execution.errorCode }
-      : {}),
-  });
+  try {
+    logger.log({
+      correlationId: execution.correlationId,
+      durationMs: execution.durationMs,
+      status: execution.status,
+      capabilityVersion: EXECUTIVE_DISCOVERY_CAPABILITY_VERSION,
+      adapterVersion: EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
+      adapterStage: execution.adapterStage,
+      endpointConfigured: execution.endpointConfigured,
+      authenticationMode: execution.authenticationMode,
+      comparisonStatus: execution.comparisonStatus,
+      persisted: execution.persisted,
+      ...(execution.httpStatus === undefined
+        ? {}
+        : { httpStatus: execution.httpStatus }),
+      ...(execution.status === DiscoveryShadowStatus.FAILED
+        ? { safeErrorCode: execution.safeErrorCode }
+        : {}),
+    });
+  } catch {
+    return;
+  }
+}
+
+interface FailureClassification {
+  readonly adapterStage: DiscoveryShadowAdapterStage;
+  readonly comparisonStatus: DiscoveryComparisonStatus;
+  readonly httpStatus?: number;
+}
+
+function classifyFailure(
+  error: unknown,
+  currentStage: DiscoveryShadowAdapterStage,
+): FailureClassification {
+  if (!(error instanceof ExecutiveDiscoveryTransportError)) {
+    return {
+      adapterStage: currentStage,
+      comparisonStatus:
+        currentStage === DiscoveryShadowAdapterStage.COMPARISON
+          ? DiscoveryComparisonStatus.FAILED_INVALID_RESPONSE
+          : DiscoveryComparisonStatus.FAILED_TRANSPORT,
+    };
+  }
+
+  const withHttpStatus =
+    error.httpStatus === undefined ? {} : { httpStatus: error.httpStatus };
+  switch (error.code) {
+    case ExecutiveDiscoveryTransportErrorCode.ENDPOINT_NOT_CONFIGURED:
+      return {
+        adapterStage: DiscoveryShadowAdapterStage.CONFIGURATION,
+        comparisonStatus: DiscoveryComparisonStatus.NOT_REQUESTED,
+        ...withHttpStatus,
+      };
+    case ExecutiveDiscoveryTransportErrorCode.AUTHENTICATION_REQUIRED:
+      return {
+        adapterStage: DiscoveryShadowAdapterStage.AUTHENTICATION,
+        comparisonStatus: DiscoveryComparisonStatus.FAILED_AUTHENTICATION,
+        ...withHttpStatus,
+      };
+    case ExecutiveDiscoveryTransportErrorCode.ACCESS_FORBIDDEN:
+      return {
+        adapterStage: DiscoveryShadowAdapterStage.TRANSPORT,
+        comparisonStatus: DiscoveryComparisonStatus.FAILED_AUTHORIZATION,
+        ...withHttpStatus,
+      };
+    case ExecutiveDiscoveryTransportErrorCode.TIMEOUT:
+      return {
+        adapterStage: DiscoveryShadowAdapterStage.TRANSPORT,
+        comparisonStatus: DiscoveryComparisonStatus.FAILED_TIMEOUT,
+        ...withHttpStatus,
+      };
+    case ExecutiveDiscoveryTransportErrorCode.INVALID_RESPONSE:
+    case ExecutiveDiscoveryTransportErrorCode.INVALID_DIAGNOSIS:
+      return {
+        adapterStage: DiscoveryShadowAdapterStage.VALIDATION,
+        comparisonStatus: DiscoveryComparisonStatus.FAILED_INVALID_RESPONSE,
+        ...withHttpStatus,
+      };
+    default:
+      return {
+        adapterStage: DiscoveryShadowAdapterStage.TRANSPORT,
+        comparisonStatus: DiscoveryComparisonStatus.FAILED_TRANSPORT,
+        ...withHttpStatus,
+      };
+  }
 }
 
 async function persistWithoutBreakingLegacy(
@@ -348,17 +476,41 @@ async function persistWithoutBreakingLegacy(
     await persistence.persist(record);
     safeLog(logger, record.shadowExecution);
     return record.shadowExecution.status === DiscoveryShadowStatus.FAILED
-      ? { status: record.shadowExecution.status, errorCode: record.shadowExecution.errorCode }
-      : { status: record.shadowExecution.status };
+      ? {
+          status: record.shadowExecution.status,
+          errorCode: record.shadowExecution.safeErrorCode,
+          safeErrorCode: record.shadowExecution.safeErrorCode,
+          comparisonStatus: record.shadowExecution.comparisonStatus,
+          persisted: true,
+        }
+      : {
+          status: record.shadowExecution.status,
+          comparisonStatus: record.shadowExecution.comparisonStatus,
+          persisted: true,
+        };
   } catch {
     const execution: ShadowExecutionFailure = {
       status: DiscoveryShadowStatus.FAILED,
       correlationId: record.shadowExecution.correlationId,
       durationMs: durationMs(startedAt, clock.now()),
-      errorCode: "SHADOW_PERSISTENCE_FAILED",
+      safeErrorCode: "SHADOW_PERSISTENCE_FAILED",
+      adapterStage: DiscoveryShadowAdapterStage.PERSISTENCE,
+      endpointConfigured: record.shadowExecution.endpointConfigured,
+      authenticationMode: record.shadowExecution.authenticationMode,
+      comparisonStatus: record.shadowExecution.comparisonStatus,
+      persisted: false,
+      ...(record.shadowExecution.httpStatus === undefined
+        ? {}
+        : { httpStatus: record.shadowExecution.httpStatus }),
     };
     safeLog(logger, execution);
-    return { status: execution.status, errorCode: execution.errorCode };
+    return {
+      status: execution.status,
+      errorCode: execution.safeErrorCode,
+      safeErrorCode: execution.safeErrorCode,
+      comparisonStatus: execution.comparisonStatus,
+      persisted: false,
+    };
   }
 }
 
@@ -375,6 +527,11 @@ export async function runDiscoveryShadowEvaluation(
       status: DiscoveryShadowStatus.SKIPPED,
       correlationId: options.correlationId,
       durationMs: durationMs(startedAt, completedAt),
+      adapterStage: DiscoveryShadowAdapterStage.NOT_STARTED,
+      endpointConfigured: options.endpointConfigured,
+      authenticationMode: options.authenticationMode,
+      comparisonStatus: DiscoveryComparisonStatus.SKIPPED_DISABLED,
+      persisted: true,
     };
     return persistWithoutBreakingLegacy(
       options.persistence,
@@ -382,7 +539,11 @@ export async function runDiscoveryShadowEvaluation(
       {
         shadowStatus: execution.status,
         shadowDiagnosis: null,
-        shadowMetadata: metadata(options.flags, null),
+        shadowMetadata: metadata(
+          options.flags,
+          null,
+          DiscoveryComparisonStatus.SKIPPED_DISABLED,
+        ),
         shadowExecution: execution,
         shadowTimestamp: completedAt.toISOString(),
         adapterVersion: EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
@@ -393,13 +554,52 @@ export async function runDiscoveryShadowEvaluation(
     );
   }
 
+  if (!options.endpointConfigured) {
+    const completedAt = clock.now();
+    const execution: ShadowExecutionFailure = {
+      status: DiscoveryShadowStatus.FAILED,
+      correlationId: options.correlationId,
+      durationMs: durationMs(startedAt, completedAt),
+      safeErrorCode: ExecutiveDiscoveryTransportErrorCode.ENDPOINT_NOT_CONFIGURED,
+      adapterStage: DiscoveryShadowAdapterStage.CONFIGURATION,
+      endpointConfigured: false,
+      authenticationMode: options.authenticationMode,
+      comparisonStatus: DiscoveryComparisonStatus.NOT_REQUESTED,
+      persisted: true,
+    };
+    return persistWithoutBreakingLegacy(
+      options.persistence,
+      options.logger,
+      {
+        shadowStatus: execution.status,
+        shadowDiagnosis: null,
+        shadowMetadata: metadata(
+          options.flags,
+          null,
+          DiscoveryComparisonStatus.NOT_REQUESTED,
+        ),
+        shadowExecution: execution,
+        shadowTimestamp: completedAt.toISOString(),
+        adapterVersion: EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
+        capabilityVersion: EXECUTIVE_DISCOVERY_CAPABILITY_VERSION,
+        shadowErrorCode: execution.safeErrorCode,
+        shadowSafeErrorCode: execution.safeErrorCode,
+      },
+      startedAt,
+      clock,
+    );
+  }
+
   let record: DiscoveryShadowPersistenceRecord;
+  let currentStage: DiscoveryShadowAdapterStage =
+    DiscoveryShadowAdapterStage.TRANSPORT;
   try {
     const request = buildExecutiveDiscoveryEvaluationInput(
       options.context,
       options.correlationId,
     );
     const diagnosis = await options.adapter.evaluate(request);
+    currentStage = DiscoveryShadowAdapterStage.COMPARISON;
     const comparison = compareDiscoveryDiagnoses(
       options.context.legacyDiagnosis,
       diagnosis,
@@ -409,11 +609,20 @@ export async function runDiscoveryShadowEvaluation(
       status: DiscoveryShadowStatus.SUCCEEDED,
       correlationId: options.correlationId,
       durationMs: durationMs(startedAt, completedAt),
+      adapterStage: DiscoveryShadowAdapterStage.COMPLETED,
+      endpointConfigured: options.endpointConfigured,
+      authenticationMode: options.authenticationMode,
+      comparisonStatus: DiscoveryComparisonStatus.COMPLETED,
+      persisted: true,
     };
     record = {
       shadowStatus: execution.status,
       shadowDiagnosis: diagnosis,
-      shadowMetadata: metadata(options.flags, comparison),
+      shadowMetadata: metadata(
+        options.flags,
+        comparison,
+        DiscoveryComparisonStatus.COMPLETED,
+      ),
       shadowExecution: execution,
       shadowTimestamp: completedAt.toISOString(),
       adapterVersion: EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
@@ -422,21 +631,35 @@ export async function runDiscoveryShadowEvaluation(
   } catch (error: unknown) {
     const completedAt = clock.now();
     const errorCode = safeErrorCode(error);
+    const classification = classifyFailure(error, currentStage);
     const execution: ShadowExecutionFailure = {
       status: DiscoveryShadowStatus.FAILED,
       correlationId: options.correlationId,
       durationMs: durationMs(startedAt, completedAt),
-      errorCode,
+      safeErrorCode: errorCode,
+      adapterStage: classification.adapterStage,
+      endpointConfigured: options.endpointConfigured,
+      authenticationMode: options.authenticationMode,
+      comparisonStatus: classification.comparisonStatus,
+      persisted: true,
+      ...(classification.httpStatus === undefined
+        ? {}
+        : { httpStatus: classification.httpStatus }),
     };
     record = {
       shadowStatus: execution.status,
       shadowDiagnosis: null,
-      shadowMetadata: metadata(options.flags, null),
+      shadowMetadata: metadata(
+        options.flags,
+        null,
+        classification.comparisonStatus,
+      ),
       shadowExecution: execution,
       shadowTimestamp: completedAt.toISOString(),
       adapterVersion: EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
       capabilityVersion: EXECUTIVE_DISCOVERY_CAPABILITY_VERSION,
       shadowErrorCode: errorCode,
+      shadowSafeErrorCode: errorCode,
     };
   }
 
