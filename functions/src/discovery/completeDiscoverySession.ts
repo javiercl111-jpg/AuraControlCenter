@@ -5,8 +5,64 @@ import { generateTokenHash } from "./discoverySecurityService";
 
 import { ProspectResolutionEngine } from "../prospects/ProspectResolutionEngine";
 import { MergePayload, ProspectOrigin, AcquisitionSource } from "../prospects/types";
+import {
+  DefaultExecutiveDiscoveryAdapter,
+  EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
+} from "./executive-intelligence/adapter/DefaultExecutiveDiscoveryAdapter";
+import { DevelopmentExecutiveDiscoveryRequestSigner } from "./executive-intelligence/client/DevelopmentExecutiveDiscoveryRequestSigner";
+import { HttpExecutiveDiscoveryApiClient } from "./executive-intelligence/client/HttpExecutiveDiscoveryApiClient";
+import type { ExecutiveDiscoveryAdapter } from "./executive-intelligence/contracts/ExecutiveDiscoveryAdapter";
+import { EXECUTIVE_DISCOVERY_CAPABILITY_VERSION } from "./executive-intelligence/contracts/ExecutiveDiscoveryApiRequest";
+import {
+  buildLegacyDiscoveryDiagnosis,
+  executiveDiscoveryEndpointParam,
+  executiveDiscoveryServiceTokenParam,
+  executiveDiscoveryTimeoutMsParam,
+  resolveDiscoveryEvaluationFeatureFlags,
+  runDiscoveryShadowEvaluation,
+  type DiscoveryShadowPersistenceRecord,
+} from "./executive-intelligence/integration";
 
-export const completeDiscoverySession = functions.https.onCall(async (request) => {
+const SHADOW_CONTROLLED_FIELDS = [
+  "legacyDiagnosis",
+  "shadowDiagnosis",
+  "shadowMetadata",
+  "shadowExecution",
+  "shadowTimestamp",
+  "shadowStatus",
+  "shadowErrorCode",
+  "adapterVersion",
+  "capabilityVersion",
+] as const;
+
+function withoutShadowControlledFields(
+  payload: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const cleanPayload = { ...payload };
+  delete cleanPayload.completedAt;
+  for (const field of SHADOW_CONTROLLED_FIELDS) {
+    delete cleanPayload[field];
+  }
+  return cleanPayload;
+}
+
+const configuredShadowAdapter: ExecutiveDiscoveryAdapter = {
+  evaluate: async (input) => {
+    const signer = new DevelopmentExecutiveDiscoveryRequestSigner({
+      token: executiveDiscoveryServiceTokenParam.value(),
+    });
+    const apiClient = new HttpExecutiveDiscoveryApiClient({
+      endpoint: executiveDiscoveryEndpointParam.value(),
+      signer,
+      timeoutMs: executiveDiscoveryTimeoutMsParam.value(),
+    });
+    return new DefaultExecutiveDiscoveryAdapter({ apiClient }).evaluate(input);
+  },
+};
+
+export const completeDiscoverySession = functions.https.onCall(
+  { secrets: [executiveDiscoveryServiceTokenParam] },
+  async (request) => {
   if (request.app == undefined) {
     throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
   }
@@ -105,7 +161,7 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
         finalRadiografia = null;
       }
 
-      const { completedAt, ...dossierPayloadClean } = dossierPayload;
+      const dossierPayloadClean = withoutShadowControlledFields(dossierPayload);
 
       validatedPayload = {
         id: dossierId,
@@ -187,6 +243,7 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
       
       firestoreWritePayload = {
         ...validatedPayload,
+        legacyDiagnosis: buildLegacyDiscoveryDiagnosis(validatedPayload),
         createdAt: validatedPayload.createdAt ? validatedPayload.createdAt : admin.firestore.FieldValue.serverTimestamp(),
         completedAt: admin.firestore.FieldValue.serverTimestamp()
       };
@@ -245,6 +302,19 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
       prospectName: firestoreWritePayload.contactName || "Unknown",
       advisorUid: linkData.advisorUid || null,
       advisorId: linkData.advisorId || null,
+      shadowEvaluationContext: {
+        sessionId: dossierId,
+        linkId,
+        tenantId: linkData.tenantId,
+        organizationId: linkData.organizationId,
+        companyId: resolutionResult.matchedProspectId || linkData.companyId,
+        locale: linkData.locale,
+        trustDecision,
+        capturedAt: new Date().toISOString(),
+        session: validatedPayload,
+        consents: linkData.consents,
+        legacyDiagnosis: firestoreWritePayload.legacyDiagnosis,
+      },
     };
   });
   
@@ -326,6 +396,42 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
     console.error({ executionId, stage: "FAILED_TO_ENQUEUE", error: enqueueErr });
   }
 
+  const shadowCorrelationId = `shadow_${executionId}`;
+  try {
+    await runDiscoveryShadowEvaluation({
+      context: transactionResult.shadowEvaluationContext,
+      correlationId: shadowCorrelationId,
+      flags: resolveDiscoveryEvaluationFeatureFlags(),
+      adapter: configuredShadowAdapter,
+      persistence: {
+        persist: async (record: DiscoveryShadowPersistenceRecord) => {
+          await db
+            .collection("discovery_sessions")
+            .doc(transactionResult.dossierId)
+            .update({ ...record });
+        },
+      },
+      logger: {
+        log: (entry) => {
+          console.log({
+            stage: "DISCOVERY_SHADOW_EVALUATION",
+            ...entry,
+          });
+        },
+      },
+    });
+  } catch {
+    console.error({
+      stage: "DISCOVERY_SHADOW_EVALUATION",
+      correlationId: shadowCorrelationId,
+      durationMs: 0,
+      status: "FAILED",
+      capabilityVersion: EXECUTIVE_DISCOVERY_CAPABILITY_VERSION,
+      adapterVersion: EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
+      errorCode: "SHADOW_INTEGRATION_FAILED",
+    });
+  }
+
   return returnPayload;
 
   } catch (err: any) {
@@ -335,4 +441,4 @@ export const completeDiscoverySession = functions.https.onCall(async (request) =
     }
     throw err;
   }
-});
+  });

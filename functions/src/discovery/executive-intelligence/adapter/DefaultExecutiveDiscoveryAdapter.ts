@@ -22,6 +22,8 @@ import {
   isExecutiveDiscoveryApiRequest,
 } from "./validation";
 
+export const EXECUTIVE_DISCOVERY_ADAPTER_VERSION = "1.0.0" as const;
+
 export interface ExecutiveDiscoveryClock {
   readonly now: () => string;
 }
