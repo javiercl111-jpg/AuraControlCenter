@@ -63,7 +63,9 @@ export const DiscoveryShadowAdapterStage = {
 export type DiscoveryShadowAdapterStage =
   (typeof DiscoveryShadowAdapterStage)[keyof typeof DiscoveryShadowAdapterStage];
 
-export type DiscoveryShadowAuthenticationMode = "DEVELOPMENT_BEARER";
+export type DiscoveryShadowAuthenticationMode =
+  | "DEVELOPMENT_BEARER"
+  | "UNCONFIGURED";
 
 interface ShadowExecutionBase {
   readonly correlationId: string;
@@ -163,7 +165,7 @@ export interface RunDiscoveryShadowEvaluationOptions {
   readonly flags: DiscoveryEvaluationFeatureFlags;
   readonly endpointConfigured: boolean;
   readonly authenticationMode: DiscoveryShadowAuthenticationMode;
-  readonly adapter: ExecutiveDiscoveryAdapter;
+  readonly adapterFactory: () => ExecutiveDiscoveryAdapter;
   readonly persistence: DiscoveryShadowPersistence;
   readonly logger: DiscoveryShadowLogger;
   readonly clock?: DiscoveryShadowClock;
@@ -594,11 +596,12 @@ export async function runDiscoveryShadowEvaluation(
   let currentStage: DiscoveryShadowAdapterStage =
     DiscoveryShadowAdapterStage.TRANSPORT;
   try {
+    const adapter = options.adapterFactory();
     const request = buildExecutiveDiscoveryEvaluationInput(
       options.context,
       options.correlationId,
     );
-    const diagnosis = await options.adapter.evaluate(request);
+    const diagnosis = await adapter.evaluate(request);
     currentStage = DiscoveryShadowAdapterStage.COMPARISON;
     const comparison = compareDiscoveryDiagnoses(
       options.context.legacyDiagnosis,

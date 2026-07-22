@@ -83,7 +83,7 @@ No existe en el repositorio ni en la evidencia adjunta el historial de la sesió
 | `primaryEvaluation` | `false`, forzado en el resolver | no configurable a `true` efectivamente | permanece `false` |
 | EIS endpoint | cadena vacía | no hay endpoint versionado | no verificable; con valor ausente no puede alcanzar Aura Intelligence |
 | timeout | 10 000 ms | default de Functions | override remoto no verificable |
-| signer | Development Bearer | único signer conectado | no válido para producción |
+| signer | no configurado en `completeDiscoverySession` | no se construye signer/cliente/adapter remoto | requiere despliegue OIDC/IAM aprobado |
 | environment | proyecto Firebase `aura-control-center-debb3` | `.firebaserc` | alias separado Preview/Production no presente |
 | audience / issuer / subject | no aplican al signer de desarrollo | ausentes | no aprovisionados en este repo |
 | tenant / organization / company grants | no se configuran aquí | IDs salen del link/prospect con fallbacks controlados | grants remotos no verificables |
@@ -139,15 +139,16 @@ Los resultados exactos de ejecución se completan en el entregable final del spr
 
 1. Desplegar y validar el endpoint no productivo `evaluateExecutiveDiscoveryV1` en Aura Intelligence.
 2. Confirmar el contrato 1.0 y el Development Verifier allowlisted; no usarlo en producción.
-3. Aprovisionar el secret server-side sin exponerlo al frontend.
-4. Configurar `EXECUTIVE_DISCOVERY_ENDPOINT` y, si aplica, `EXECUTIVE_DISCOVERY_TIMEOUT_MS` en el entorno exacto.
-5. Verificar que tenant, organization y company del link tengan grants en Aura Intelligence.
-6. Mantener `DISCOVERY_PRIMARY_EVALUATION=false`.
-7. Activar `DISCOVERY_SHADOW_EVALUATION=true` solo en el entorno de prueba.
-8. Ejecutar una sesión con todos los campos comerciales esenciales y consentimientos.
-9. Confirmar `shadowStatus=SUCCEEDED`, `comparisonStatus=COMPLETED`, `persisted=true`, correlación y duración.
-10. Si falla, diagnosticar por `safeErrorCode`, etapa y HTTP status; no inspeccionar PII ni tokens.
-11. Desactivar de nuevo el flag al concluir la prueba.
+3. Aprovisionar identidad OIDC/IAM u otro mecanismo aprobado, sin exponer credenciales al frontend.
+4. Implementar y desplegar explícitamente el binding de seguridad aprobado; el hotfix actual no lo incluye.
+5. Configurar `EXECUTIVE_DISCOVERY_ENDPOINT` y, si aplica, `EXECUTIVE_DISCOVERY_TIMEOUT_MS` en el entorno exacto.
+6. Verificar que tenant, organization y company del link tengan grants mínimos en Aura Intelligence.
+7. Mantener `DISCOVERY_PRIMARY_EVALUATION=false`.
+8. Activar `DISCOVERY_SHADOW_EVALUATION=true` solo en el entorno de prueba.
+9. Ejecutar una sesión con todos los campos comerciales esenciales y consentimientos.
+10. Confirmar `shadowStatus=SUCCEEDED`, `comparisonStatus=COMPLETED`, `persisted=true`, correlación y duración.
+11. Si falla, diagnosticar por `safeErrorCode`, etapa y HTTP status; no inspeccionar PII ni tokens.
+12. Desactivar de nuevo el flag al concluir la prueba.
 
 ## Fuera de alcance y siguiente reanudación
 

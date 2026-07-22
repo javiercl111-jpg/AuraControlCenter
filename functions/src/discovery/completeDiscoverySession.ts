@@ -6,11 +6,8 @@ import { generateTokenHash } from "./discoverySecurityService";
 import { ProspectResolutionEngine } from "../prospects/ProspectResolutionEngine";
 import { MergePayload, ProspectOrigin, AcquisitionSource } from "../prospects/types";
 import {
-  DefaultExecutiveDiscoveryAdapter,
   EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
 } from "./executive-intelligence/adapter/DefaultExecutiveDiscoveryAdapter";
-import { DevelopmentExecutiveDiscoveryRequestSigner } from "./executive-intelligence/client/DevelopmentExecutiveDiscoveryRequestSigner";
-import { HttpExecutiveDiscoveryApiClient } from "./executive-intelligence/client/HttpExecutiveDiscoveryApiClient";
 import type { ExecutiveDiscoveryAdapter } from "./executive-intelligence/contracts/ExecutiveDiscoveryAdapter";
 import { EXECUTIVE_DISCOVERY_CAPABILITY_VERSION } from "./executive-intelligence/contracts/ExecutiveDiscoveryApiRequest";
 import {
@@ -20,8 +17,6 @@ import {
 import {
   buildLegacyDiscoveryDiagnosis,
   executiveDiscoveryEndpointParam,
-  executiveDiscoveryServiceTokenParam,
-  executiveDiscoveryTimeoutMsParam,
   resolveDiscoveryEvaluationFeatureFlags,
   runDiscoveryShadowEvaluation,
   type DiscoveryShadowPersistenceRecord,
@@ -52,40 +47,19 @@ function withoutShadowControlledFields(
   return cleanPayload;
 }
 
-const configuredShadowAdapter: ExecutiveDiscoveryAdapter = {
-  evaluate: async (input) => {
-    const endpoint = executiveDiscoveryEndpointParam.value().trim();
-    if (endpoint.length === 0) {
-      throw new ExecutiveDiscoveryTransportError({
-        code: ExecutiveDiscoveryTransportErrorCode.ENDPOINT_NOT_CONFIGURED,
-        message: "Executive Discovery endpoint is not configured.",
-        retryable: false,
-        correlationId: input.correlationId,
-      });
-    }
-    const serviceToken = executiveDiscoveryServiceTokenParam.value();
-    if (serviceToken.trim().length === 0) {
-      throw new ExecutiveDiscoveryTransportError({
-        code: ExecutiveDiscoveryTransportErrorCode.AUTHENTICATION_REQUIRED,
-        message: "Executive Discovery service authentication is unavailable.",
-        retryable: false,
-        correlationId: input.correlationId,
-      });
-    }
-    const signer = new DevelopmentExecutiveDiscoveryRequestSigner({
-      token: serviceToken,
-    });
-    const apiClient = new HttpExecutiveDiscoveryApiClient({
-      endpoint,
-      signer,
-      timeoutMs: executiveDiscoveryTimeoutMsParam.value(),
-    });
-    return new DefaultExecutiveDiscoveryAdapter({ apiClient }).evaluate(input);
-  },
-};
+/**
+ * Shadow authentication is intentionally unavailable in this deployment.
+ * Replacing this security gate requires a separate, approved OIDC/IAM rollout.
+ */
+function createSecurityGatedShadowAdapter(): ExecutiveDiscoveryAdapter {
+  throw new ExecutiveDiscoveryTransportError({
+    code: ExecutiveDiscoveryTransportErrorCode.AUTHENTICATION_REQUIRED,
+    message: "Executive Discovery service authentication is not configured.",
+    retryable: false,
+  });
+}
 
 export const completeDiscoverySession = functions.https.onCall(
-  { secrets: [executiveDiscoveryServiceTokenParam] },
   async (request) => {
   if (request.app == undefined) {
     throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
@@ -459,8 +433,8 @@ export const completeDiscoverySession = functions.https.onCall(
       correlationId: shadowCorrelationId,
       flags: shadowFlags,
       endpointConfigured,
-      authenticationMode: "DEVELOPMENT_BEARER",
-      adapter: configuredShadowAdapter,
+      authenticationMode: "UNCONFIGURED",
+      adapterFactory: createSecurityGatedShadowAdapter,
       persistence: {
         persist: async (record: DiscoveryShadowPersistenceRecord) => {
           await db
@@ -489,7 +463,7 @@ export const completeDiscoverySession = functions.https.onCall(
       safeErrorCode: "SHADOW_INTEGRATION_FAILED",
       adapterStage: "INTEGRATION",
       endpointConfigured,
-      authenticationMode: "DEVELOPMENT_BEARER",
+      authenticationMode: "UNCONFIGURED",
       comparisonStatus: "NOT_REQUESTED",
       persisted: false,
     });
