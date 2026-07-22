@@ -237,16 +237,23 @@ function sequenceClock(...timestamps: readonly string[]): DiscoveryShadowClock {
 function createHarness(adapter: ExecutiveDiscoveryAdapter, persistFails = false) {
   const records: DiscoveryShadowPersistenceRecord[] = [];
   const logs: DiscoveryShadowSafeLog[] = [];
+  let adapterFactoryCalls = 0;
   return {
     records,
     logs,
+    get adapterFactoryCalls() {
+      return adapterFactoryCalls;
+    },
     options: {
       context: createContext(),
       correlationId: "shadow-correlation-001",
       flags: FLAGS_ON,
       endpointConfigured: true,
       authenticationMode: "DEVELOPMENT_BEARER" as const,
-      adapter,
+      adapterFactory: () => {
+        adapterFactoryCalls += 1;
+        return adapter;
+      },
       persistence: {
         persist: async (record: DiscoveryShadowPersistenceRecord) => {
           if (persistFails) throw new Error("private persistence detail");
@@ -288,6 +295,7 @@ const tests: readonly TestCase[] = [
       const outcome = await runDiscoveryShadowEvaluation(harness.options);
 
       strictEqual(outcome.status, DiscoveryShadowStatus.SUCCEEDED);
+      strictEqual(harness.adapterFactoryCalls, 1);
       strictEqual(adapter.inputs.length, 1);
       strictEqual(harness.records.length, 1);
       strictEqual(harness.records[0].shadowStatus, DiscoveryShadowStatus.SUCCEEDED);
@@ -334,6 +342,7 @@ const tests: readonly TestCase[] = [
       });
 
       strictEqual(adapter.inputs.length, 0);
+      strictEqual(harness.adapterFactoryCalls, 0);
       strictEqual(
         outcome.safeErrorCode,
         ExecutiveDiscoveryTransportErrorCode.ENDPOINT_NOT_CONFIGURED,
@@ -344,6 +353,49 @@ const tests: readonly TestCase[] = [
         harness.records[0].shadowExecution.adapterStage,
         DiscoveryShadowAdapterStage.CONFIGURATION,
       );
+    },
+  },
+  {
+    name: "Credencial ausente no crea adapter ni llamada remota",
+    run: async () => {
+      const adapter = new StubAdapter(async (input) => createDiagnosis(input));
+      const harness = createHarness(adapter);
+      const credentialMarker = "private-service-token-never-log";
+      let securityFactoryCalls = 0;
+      const outcome = await runDiscoveryShadowEvaluation({
+        ...harness.options,
+        authenticationMode: "UNCONFIGURED",
+        adapterFactory: () => {
+          securityFactoryCalls += 1;
+          throw new ExecutiveDiscoveryTransportError({
+            code: ExecutiveDiscoveryTransportErrorCode.AUTHENTICATION_REQUIRED,
+            message: `Authentication unavailable: ${credentialMarker}`,
+            retryable: false,
+          });
+        },
+      });
+
+      strictEqual(securityFactoryCalls, 1);
+      strictEqual(adapter.inputs.length, 0);
+      strictEqual(outcome.status, DiscoveryShadowStatus.FAILED);
+      strictEqual(
+        outcome.comparisonStatus,
+        DiscoveryComparisonStatus.FAILED_AUTHENTICATION,
+      );
+      strictEqual(
+        harness.records[0].shadowExecution.adapterStage,
+        DiscoveryShadowAdapterStage.AUTHENTICATION,
+      );
+      strictEqual(
+        harness.records[0].shadowExecution.authenticationMode,
+        "UNCONFIGURED",
+      );
+      const safeOutput = JSON.stringify({
+        records: harness.records,
+        logs: harness.logs,
+      });
+      ok(!safeOutput.includes(credentialMarker));
+      ok(!safeOutput.includes("Authorization"));
     },
   },
   {
@@ -539,6 +591,7 @@ const tests: readonly TestCase[] = [
       });
 
       strictEqual(outcome.status, DiscoveryShadowStatus.SKIPPED);
+      strictEqual(harness.adapterFactoryCalls, 0);
       strictEqual(adapter.inputs.length, 0);
       strictEqual(harness.records[0].shadowStatus, DiscoveryShadowStatus.SKIPPED);
       strictEqual(

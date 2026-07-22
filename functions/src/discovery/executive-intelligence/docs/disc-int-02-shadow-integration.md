@@ -4,7 +4,7 @@
 
 `completeDiscoverySession` conserva el diagnóstico y la respuesta legacy como fuente oficial. Después de que la transacción legacy termina y se intenta encolar su notificación, el backend ejecuta una evaluación adicional mediante el Executive Intelligence Adapter. El resultado shadow nunca se usa para responder al usuario, actualizar UI, resolver prospectos, generar reportes o producir PDFs.
 
-La integración usa exclusivamente `DevelopmentExecutiveDiscoveryRequestSigner`. No habilita identidad OIDC ni tráfico productivo.
+El hotfix de despliegue mantiene la integración remota bloqueada por seguridad. No construye signer, cliente HTTP ni adapter real hasta que exista un despliegue explícito de identidad aprobada; no habilita tráfico productivo.
 
 ## Flujo
 
@@ -37,10 +37,10 @@ No existe una ruta de ejecución primary en este sprint.
 ## Configuración server-side
 
 - `EXECUTIVE_DISCOVERY_ENDPOINT`: endpoint no productivo de `evaluateExecutiveDiscoveryV1`.
-- `EXECUTIVE_DISCOVERY_TIMEOUT_MS`: timeout del cliente; default de 10 segundos.
-- `EXECUTIVE_DISCOVERY_SERVICE_TOKEN`: secret asociado a la Cloud Function y consumido por el signer de desarrollo.
+- `EXECUTIVE_DISCOVERY_TIMEOUT_MS`: timeout reservado para el cliente; default de 10 segundos.
+- `EXECUTIVE_DISCOVERY_SERVICE_TOKEN` no está declarado ni vinculado a `completeDiscoverySession` en este hotfix.
 
-Endpoint y token no se exponen mediante variables `VITE_*`, no llegan al frontend y nunca se registran.
+El endpoint no se expone mediante variables `VITE_*`. No se agregó token, API key, valor vacío sustituto ni credencial pública. Con shadow desactivado, la evaluación persiste `SKIPPED_DISABLED` sin crear el adapter. Si shadow se activa accidentalmente, endpoint ausente produce `ENDPOINT_NOT_CONFIGURED`; con endpoint presente, la compuerta de seguridad produce `AUTHENTICATION_REQUIRED` sin llamada remota y sin afectar la respuesta legacy.
 
 ## Construcción del request
 
@@ -127,4 +127,4 @@ También debe seguir pasando el runner contractual del adapter de DISC-INT-01.
 
 ## Próximo sprint
 
-El siguiente sprint debe sustituir el signer de desarrollo por identidad OIDC no productiva, aprovisionar issuer/audience/subject y grants exactos, ejecutar una prueba contractual extremo a extremo y observar tasas de éxito, timeout y diferencias shadow. Activar `discovery.primaryEvaluation` requiere otra decisión explícita; este código no permite hacerlo.
+Una futura activación de shadow requiere un despliegue de seguridad separado y explícito: identidad OIDC/IAM u otro mecanismo aprobado, endpoint configurado, issuer/audience/subject cuando aplique, grants mínimos exactos y prueba contractual extremo a extremo. Activar `discovery.primaryEvaluation` requiere otra decisión explícita; este código no permite hacerlo.

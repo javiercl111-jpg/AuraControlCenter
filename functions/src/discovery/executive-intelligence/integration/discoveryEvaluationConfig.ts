@@ -1,7 +1,6 @@
 import {
   defineBoolean,
   defineInt,
-  defineSecret,
   defineString,
 } from "firebase-functions/params";
 
@@ -34,13 +33,6 @@ export const executiveDiscoveryTimeoutMsParam = defineInt(
     default: 10_000,
     description: "Shadow evaluation timeout in milliseconds.",
   },
-);
-
-export const EXECUTIVE_DISCOVERY_SERVICE_TOKEN_SECRET =
-  "EXECUTIVE_DISCOVERY_SERVICE_TOKEN" as const;
-
-export const executiveDiscoveryServiceTokenParam = defineSecret(
-  EXECUTIVE_DISCOVERY_SERVICE_TOKEN_SECRET,
 );
 
 export interface DiscoveryEvaluationFeatureFlags {
