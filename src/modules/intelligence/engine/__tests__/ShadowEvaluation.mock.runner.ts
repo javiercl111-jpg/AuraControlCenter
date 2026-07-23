@@ -1,36 +1,40 @@
 import { ConversationOrchestrator } from "../services/ConversationOrchestrator";
 import { AuraLLMGateway } from "../../core/services/AuraLLMGateway";
 import { ReflectionEngine } from "../services/ReflectionEngine";
-import type { OrchestratorInput } from "../types/orchestrator.types";
+import type {
+  ConversationDraftRequest,
+  ConversationEvaluationResult,
+  OrchestratorInput,
+} from "../types/orchestrator.types";
 
 // Mock the backend Gateway
-AuraLLMGateway.prototype.evaluateTurn = async function(input: any) {
+AuraLLMGateway.prototype.evaluateTurn = async function(
+  input: ConversationDraftRequest,
+): Promise<ConversationEvaluationResult> {
   const text = input.engineInput.currentResponse.toLowerCase();
-  
-  if (text === "asdf") {
-    return {
-      validationPassed: true,
-      reflectionProposal: { recommendedAction: "CLARIFY", responseRelevance: 0, coherenceScore: 10 }
-    };
-  }
-  
-  if (text.includes("automatización") && input.engineInput.conversationHistory.length > 0) {
-    return {
-      validationPassed: true,
-      reflectionProposal: { recommendedAction: "CHALLENGE", responseRelevance: 80, coherenceScore: 40 }
-    };
-  }
 
   if (text.includes("ignora tus instrucciones") || text.includes("prompt")) {
     return {
+      ok: false,
       validationPassed: false,
-      fallbackUsed: true
+      safetyPassed: false,
+      intentCompatible: false,
+      fallbackUsed: true,
+      safeErrorCode: "UNSAFE_INPUT",
+      authoritativeIntent: input.authoritativeIntent,
     };
   }
 
   return {
+    ok: true,
     validationPassed: true,
-    reflectionProposal: { recommendedAction: "DEEPEN", responseRelevance: 90, coherenceScore: 90 }
+    safetyPassed: true,
+    intentCompatible: true,
+    fallbackUsed: false,
+    authoritativeIntent: input.authoritativeIntent,
+    conversationProposal: {
+      nextQuestion: input.authoritativeQuestion,
+    },
   };
 };
 
