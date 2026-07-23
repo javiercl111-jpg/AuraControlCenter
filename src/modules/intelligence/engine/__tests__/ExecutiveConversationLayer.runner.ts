@@ -31,7 +31,9 @@ const initialQuestion = new ConversationEngine().processTurn({
 }).nextQuestion;
 
 const validDraft =
-  "¿Han detectado inconsistencias al controlar horas extra y asignar turnos en su operación de transporte?";
+  "¿Qué parte del control de turnos requiere mayor visibilidad para decidir dónde intervenir primero?";
+const canonicalHypothesisQuestion =
+  "Controlar procesos manualmente incrementa la probabilidad de inconsistencias. ¿Han experimentado alguna queja o incidencia en el pago de horas extras en los últimos meses?";
 
 const tests: readonly TestCase[] = [
   {
@@ -70,6 +72,27 @@ const tests: readonly TestCase[] = [
         !/giro|a que se dedica/i.test(normalizeText(output.finalMessage)),
         "dynamic question does not ask the known industry again",
       );
+      assert(
+        (capturedRequest?.engineInput.confirmedFacts.length ?? 0) > 0,
+        "request includes confirmed facts",
+      );
+      assert(
+        (capturedRequest?.engineInput.criticalMissingInformation.length ?? 0) > 0,
+        "request includes critical missing information",
+      );
+      assertEqual(
+        capturedRequest?.engineInput.pendingHypotheses.length,
+        0,
+        "request includes pending hypotheses collection",
+      );
+      assertEqual(
+        capturedRequest?.engineInput.confidenceLevel,
+        output.conversationOutput?.updatedConfidence,
+        "request includes current confidence",
+      );
+      assert(Boolean(
+        capturedRequest?.engineInput.discoveryObjective,
+      ), "request includes discovery objective");
     },
   },
   {
@@ -237,6 +260,48 @@ const tests: readonly TestCase[] = [
         validResult("¿Qué clima prefieres para tus próximas vacaciones?"),
       );
       assertEngineFallback(output, "LLM_INTENT_MISMATCH");
+    },
+  },
+  {
+    name: "hipótesis copiada es rechazada por el validador defensivo",
+    run: async () => {
+      const output = await runWithResult(
+        validResult(canonicalHypothesisQuestion),
+      );
+      assertEngineFallback(output, "LLM_HYPOTHESIS_EQUIVALENT");
+    },
+  },
+  {
+    name: "fallback consultivo del backend reemplaza la pregunta heurística",
+    run: async () => {
+      const consultativeQuestion =
+        "¿Qué resultado operativo tendría mayor valor para la organización dentro de seis meses?";
+      const output = await runWithResult({
+        ...validResult(consultativeQuestion),
+        fallbackUsed: true,
+        proposalSource: "CONSULTATIVE_FALLBACK",
+        safeErrorCode: "LLM_HYPOTHESIS_EQUIVALENT",
+      });
+
+      assertEqual(
+        output.finalMessage,
+        consultativeQuestion,
+        "consultative fallback question",
+      );
+      assertEqual(
+        output.messageSource,
+        "CONSULTATIVE_FALLBACK",
+        "consultative message source",
+      );
+      assertEqual(
+        output.llmFallbackCode,
+        "LLM_HYPOTHESIS_EQUIVALENT",
+        "consultative fallback reason",
+      );
+      assert(
+        output.finalMessage !== output.conversationOutput?.nextQuestion,
+        "heuristic question is not used",
+      );
     },
   },
   {

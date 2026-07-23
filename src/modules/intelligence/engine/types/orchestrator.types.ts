@@ -50,7 +50,15 @@ export interface ConversationDraftRequest {
     | "industry"
     | "currentResponse"
     | "conversationHistory"
-  >;
+    | "partialDossier"
+    | "confidenceLevel"
+    | "askedQuestions"
+  > & {
+    confirmedFacts: string[];
+    pendingHypotheses: string[];
+    criticalMissingInformation: string[];
+    discoveryObjective: string;
+  };
   conversationPhase: "DISCOVERY";
   authoritativeIntent: DraftableConversationIntent;
   authoritativeQuestion: string;
@@ -66,6 +74,7 @@ export interface ConversationEvaluationResult {
   safetyPassed: boolean;
   intentCompatible: boolean;
   fallbackUsed: boolean;
+  proposalSource?: "LLM" | "CONSULTATIVE_FALLBACK";
   authoritativeIntent?: string;
   conversationProposal?: ConversationProposal;
   safeErrorCode?: string;
@@ -74,12 +83,16 @@ export interface ConversationEvaluationResult {
     model?: string;
     latencyMs?: number;
     promptVersion?: string;
+    personalityVersion?: string;
+    attempts?: number;
+    hypothesisSimilarity?: number;
   };
 }
 
 export type FinalMessageSource =
   | "CONVERSATION_ENGINE"
-  | "LLM_NEXT_QUESTION";
+  | "LLM_NEXT_QUESTION"
+  | "CONSULTATIVE_FALLBACK";
 
 export interface OrchestratorOutput {
   finalMessage: string;
