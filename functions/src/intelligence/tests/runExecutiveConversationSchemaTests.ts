@@ -1,4 +1,8 @@
 import {
+  createLLMFailureFallback,
+  EXECUTIVE_CONVERSATION_MODEL,
+} from "../evaluateConversation";
+import {
   containsUnsafeConversationInstruction,
   isIntentCompatible,
   isSafeConversationDraft,
@@ -14,6 +18,45 @@ const authoritativeQuestion =
   "Controlar procesos manualmente incrementa la probabilidad de inconsistencias. ¿Han experimentado alguna incidencia en los últimos meses?";
 
 const tests: readonly TestCase[] = [
+  {
+    name: "usa el modelo estable configurado para evaluateConversation",
+    run: () => {
+      assertEqual(EXECUTIVE_CONVERSATION_MODEL, "gemini-3.6-flash");
+    },
+  },
+  {
+    name: "modelo inexistente produce fallback seguro y sanitizado",
+    run: () => {
+      const providerMessage =
+        "This model models/gemini-2.5-pro is no longer available to new users.";
+      const fallback = createLLMFailureFallback(
+        {
+          status: 404,
+          statusText: "NOT_FOUND",
+          message: providerMessage,
+        },
+        "CONFIRM_HYPOTHESIS",
+      );
+
+      assertEqual(fallback.ok, false);
+      assertEqual(fallback.fallbackUsed, true);
+      assertEqual(fallback.safeErrorCode, "LLM_MODEL_UNAVAILABLE");
+      assertEqual(fallback.authoritativeIntent, "CONFIRM_HYPOTHESIS");
+      assert(!JSON.stringify(fallback).includes(providerMessage));
+    },
+  },
+  {
+    name: "error generico conserva fallback LLM_UNAVAILABLE",
+    run: () => {
+      const fallback = createLLMFailureFallback(
+        new Error("Provider request failed with internal details"),
+        "DISCOVER_PROBLEM",
+      );
+
+      assertEqual(fallback.safeErrorCode, "LLM_UNAVAILABLE");
+      assert(!JSON.stringify(fallback).includes("internal details"));
+    },
+  },
   {
     name: "acepta contrato mínimo nextQuestion",
     run: () => {
@@ -118,6 +161,14 @@ const tests: readonly TestCase[] = [
 function assert(condition: boolean): asserts condition {
   if (!condition) {
     throw new Error("Assertion failed");
+  }
+}
+
+function assertEqual<T>(actual: T, expected: T): void {
+  if (actual !== expected) {
+    throw new Error(
+      `Assertion failed: expected ${String(expected)}, received ${String(actual)}`,
+    );
   }
 }
 
