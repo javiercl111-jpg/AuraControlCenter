@@ -1,4 +1,5 @@
 import { Type, type Schema } from "@google/genai";
+import { isQuestionTooSimilar } from "./conversationSimilarity";
 
 export const MAX_CONVERSATION_QUESTION_LENGTH = 360;
 
@@ -94,40 +95,20 @@ export function isIntentCompatible(
   }
 
   const normalizedQuestion = normalizeForValidation(nextQuestion);
-  const normalizedAuthority = normalizeForValidation(authoritativeQuestion);
-  const authorityTerms = normalizedAuthority
-    .split(/[^a-z0-9]+/)
-    .filter((term) => term.length >= 5 && !INTENT_STOP_WORDS.has(term));
-  const sharesAuthorityTerm = authorityTerms.some((term) =>
-    normalizedQuestion.includes(term),
-  );
-  const hasBusinessDiscoverySignal = /\b(proceso|procesos|operacion|operaciones|equipo|prioridad|sistema|sistemas|administracion|cliente|clientes|venta|ventas|tiempo|dificultad|dificultades|problema|problemas|impacto|incidencia|incidencias|empresa|organizacion|inventario|nomina|crecimiento)\b/.test(
+  const isOpenQuestion =
+    /^(?:¿\s*)?(?:que|cual|cuales|como|cuando|donde|en que|de que|por que)\b/.test(
+      normalizedQuestion.trim(),
+    );
+  const hasBusinessDiscoverySignal = /\b(proceso|procesos|operacion|operaciones|equipo|prioridad|administracion|cliente|clientes|venta|ventas|tiempo|dificultad|dificultades|resultado|resultados|impacto|empresa|organizacion|inventario|nomina|crecimiento|cambio|cambios|decision|decisiones|situacion|hotel|huesped|produccion|planta|tienda|servicio|experiencia|modernizar|transformar|capacidad|control|visibilidad)\b/.test(
     normalizedQuestion,
   );
 
-  if (authoritativeIntent === "DISCOVER_PROBLEM") {
-    return sharesAuthorityTerm || hasBusinessDiscoverySignal;
-  }
-
-  const hasConfirmationSignal = /\b(han|tienen|ocurre|sucede|existe|consideran|experimentado|confirman|siguen|usan|cuentan)\b/.test(
-    normalizedQuestion,
+  return (
+    isOpenQuestion &&
+    hasBusinessDiscoverySignal &&
+    !isQuestionTooSimilar(nextQuestion, authoritativeQuestion)
   );
-  return hasConfirmationSignal && (sharesAuthorityTerm || hasBusinessDiscoverySignal);
 }
-
-const INTENT_STOP_WORDS = new Set([
-  "actual",
-  "actualmente",
-  "consideran",
-  "cual",
-  "cuando",
-  "empresa",
-  "estos",
-  "principal",
-  "puedes",
-  "quiero",
-  "tienen",
-]);
 
 function normalizeForValidation(text: string): string {
   return text

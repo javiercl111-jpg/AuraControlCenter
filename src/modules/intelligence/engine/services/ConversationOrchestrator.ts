@@ -253,6 +253,25 @@ export class ConversationOrchestrator {
         industry: input.engineInput.industry,
         currentResponse: input.engineInput.currentResponse,
         conversationHistory: input.engineInput.conversationHistory.slice(-8),
+        partialDossier:
+          heuristicOutput.conversationOutput?.updatedDossier ??
+          input.engineInput.partialDossier,
+        confidenceLevel:
+          heuristicOutput.conversationOutput?.updatedConfidence ??
+          input.engineInput.confidenceLevel,
+        askedQuestions: input.engineInput.askedQuestions.slice(-8),
+        confirmedFacts:
+          heuristicOutput.updatedReflectionState.extractedEvidenceTotal.slice(-6),
+        pendingHypotheses: Array.from(new Set([
+          ...input.engineInput.hypotheses,
+          ...(heuristicOutput.conversationOutput?.newHypotheses ?? []),
+        ])).slice(-5),
+        criticalMissingInformation: this.buildCriticalMissingInformation(
+          heuristicOutput,
+        ),
+        discoveryObjective: this.resolveDiscoveryObjective(
+          input.engineInput.context,
+        ),
       },
       conversationPhase: "DISCOVERY",
       authoritativeIntent: heuristicOutput.finalIntent,
@@ -291,8 +310,10 @@ export class ConversationOrchestrator {
     return {
       ...heuristicOutput,
       finalMessage: validation.nextQuestion,
-      messageSource: "LLM_NEXT_QUESTION",
-      llmFallbackCode: undefined,
+      messageSource: validation.proposalSource === "CONSULTATIVE_FALLBACK"
+        ? "CONSULTATIVE_FALLBACK"
+        : "LLM_NEXT_QUESTION",
+      llmFallbackCode: validation.fallbackCode,
     };
   }
 
@@ -301,14 +322,24 @@ export class ConversationOrchestrator {
     authoritativeIntent: DraftableConversationIntent,
     authoritativeQuestion: string,
   ):
-    | { accepted: true; nextQuestion: string }
+    | {
+        accepted: true;
+        nextQuestion: string;
+        proposalSource: "LLM" | "CONSULTATIVE_FALLBACK";
+        fallbackCode?: string;
+      }
     | { accepted: false; fallbackCode: string } {
     const resultRecord = this.asRecord(result);
     if (!resultRecord) {
       return { accepted: false, fallbackCode: "LLM_SCHEMA_INVALID" };
     }
 
-    if (resultRecord.fallbackUsed === true) {
+    const proposalSource = resultRecord.proposalSource;
+    const isConsultativeFallback =
+      resultRecord.fallbackUsed === true &&
+      proposalSource === "CONSULTATIVE_FALLBACK";
+
+    if (resultRecord.fallbackUsed === true && !isConsultativeFallback) {
       return {
         accepted: false,
         fallbackCode: this.readSafeErrorCode(resultRecord) ?? "LLM_FALLBACK",
@@ -360,48 +391,55 @@ export class ConversationOrchestrator {
       return { accepted: false, fallbackCode: "LLM_UNSAFE_INSTRUCTION" };
     }
 
+    if (this.isHypothesisEquivalent(nextQuestion, authoritativeQuestion)) {
+      return {
+        accepted: false,
+        fallbackCode: "LLM_HYPOTHESIS_EQUIVALENT",
+      };
+    }
+
     if (
       !this.isQuestionIntentCompatible(
         nextQuestion,
         authoritativeIntent,
-        authoritativeQuestion,
       )
     ) {
       return { accepted: false, fallbackCode: "LLM_INTENT_MISMATCH" };
     }
 
-    return { accepted: true, nextQuestion };
+    return {
+      accepted: true,
+      nextQuestion,
+      proposalSource: isConsultativeFallback ? "CONSULTATIVE_FALLBACK" : "LLM",
+      fallbackCode: isConsultativeFallback
+        ? this.readSafeErrorCode(resultRecord) ?? "CONSULTATIVE_FALLBACK"
+        : undefined,
+    };
   }
 
   private isQuestionIntentCompatible(
     nextQuestion: string,
     authoritativeIntent: DraftableConversationIntent,
-    authoritativeQuestion: string,
   ): boolean {
-    if (!nextQuestion.includes("?")) {
+    if (
+      !["DISCOVER_PROBLEM", "CONFIRM_HYPOTHESIS"].includes(
+        authoritativeIntent,
+      ) ||
+      !nextQuestion.includes("?")
+    ) {
       return false;
     }
 
     const normalizedQuestion = this.normalizeForValidation(nextQuestion);
-    const normalizedAuthority = this.normalizeForValidation(authoritativeQuestion);
-    const authorityTerms = normalizedAuthority
-      .split(/[^a-z0-9]+/)
-      .filter(term => term.length >= 5 && !this.isIntentStopWord(term));
-    const sharesAuthorityTerm = authorityTerms.some(term =>
-      normalizedQuestion.includes(term)
-    );
-    const hasBusinessDiscoverySignal = /\b(proceso|procesos|operacion|operaciones|equipo|prioridad|sistema|sistemas|administracion|cliente|clientes|venta|ventas|tiempo|dificultad|dificultades|problema|problemas|impacto|incidencia|incidencias|empresa|organizacion|inventario|nomina|crecimiento)\b/.test(
+    const isOpenQuestion =
+      /^(?:¿\s*)?(?:que|cual|cuales|como|cuando|donde|en que|de que|por que)\b/.test(
+        normalizedQuestion.trim(),
+      );
+    const hasBusinessDiscoverySignal = /\b(proceso|procesos|operacion|operaciones|equipo|prioridad|administracion|cliente|clientes|venta|ventas|tiempo|dificultad|dificultades|resultado|resultados|impacto|empresa|organizacion|inventario|nomina|crecimiento|cambio|cambios|decision|decisiones|situacion|hotel|huesped|produccion|planta|tienda|servicio|experiencia|modernizar|transformar|capacidad|control|visibilidad|informacion)\b/.test(
       normalizedQuestion,
     );
 
-    if (authoritativeIntent === "DISCOVER_PROBLEM") {
-      return sharesAuthorityTerm || hasBusinessDiscoverySignal;
-    }
-
-    const hasConfirmationSignal = /\b(han|tienen|ocurre|sucede|existe|consideran|experimentado|confirman|siguen|usan|cuentan)\b/.test(
-      normalizedQuestion,
-    );
-    return hasConfirmationSignal && (sharesAuthorityTerm || hasBusinessDiscoverySignal);
+    return isOpenQuestion && hasBusinessDiscoverySignal;
   }
 
   private containsUnsafeInstruction(text: string): boolean {
@@ -422,24 +460,105 @@ export class ConversationOrchestrator {
       .toLowerCase();
   }
 
-  private isIntentStopWord(term: string): boolean {
-    return new Set([
-      "actual",
-      "actualmente",
+  private isDraftableIntent(intent: string): intent is DraftableConversationIntent {
+    return intent === "DISCOVER_PROBLEM" || intent === "CONFIRM_HYPOTHESIS";
+  }
+
+  private isHypothesisEquivalent(
+    nextQuestion: string,
+    authoritativeQuestion: string,
+  ): boolean {
+    const proposed = this.similarityTokens(nextQuestion);
+    const canonical = this.similarityTokens(authoritativeQuestion);
+    const smallestSize = Math.min(proposed.size, canonical.size);
+
+    if (smallestSize === 0) {
+      return false;
+    }
+
+    let intersectionSize = 0;
+    for (const token of proposed) {
+      if (canonical.has(token)) {
+        intersectionSize += 1;
+      }
+    }
+
+    return intersectionSize / smallestSize > 0.8;
+  }
+
+  private similarityTokens(text: string): Set<string> {
+    const stopWords = new Set([
+      "alguna",
+      "algun",
+      "como",
       "consideran",
       "cual",
       "cuando",
+      "dentro",
       "empresa",
-      "estos",
-      "principal",
-      "puedes",
-      "quiero",
+      "esta",
+      "para",
+      "pueden",
+      "sobre",
       "tienen",
-    ]).has(term);
+    ]);
+
+    return new Set(
+      this.normalizeForValidation(text)
+        .split(/[^a-z0-9]+/)
+        .filter(token => token.length >= 3 && !stopWords.has(token)),
+    );
   }
 
-  private isDraftableIntent(intent: string): intent is DraftableConversationIntent {
-    return intent === "DISCOVER_PROBLEM" || intent === "CONFIRM_HYPOTHESIS";
+  private buildCriticalMissingInformation(
+    output: OrchestratorOutput,
+  ): string[] {
+    const dimensionLabels: Readonly<Record<string, string>> = {
+      people: "Personas",
+      operations: "Operaciones",
+      compliance: "Cumplimiento",
+      digitalization: "Digitalización",
+      technology: "Tecnología",
+      sales: "Ventas",
+      finance: "Finanzas",
+      maintenance: "Mantenimiento",
+    };
+    const matrixGaps = Object.entries(output.updatedConfidenceMatrix)
+      .map(([dimension, assessment]) => ({
+        dimension,
+        score: assessment.score,
+        missingEvidence: assessment.missingEvidence[0],
+      }))
+      .filter(item => item.score < 60)
+      .sort((first, second) => first.score - second.score)
+      .slice(0, 3)
+      .map(item =>
+        `${dimensionLabels[item.dimension] ?? item.dimension}: ` +
+        `${item.missingEvidence ?? "evidencia específica pendiente"}`
+      );
+
+    return Array.from(new Set([
+      ...output.reflectionOutput.omittedTopics,
+      ...matrixGaps,
+    ])).slice(0, 4);
+  }
+
+  private resolveDiscoveryObjective(
+    context: Readonly<Record<string, unknown>>,
+  ): string {
+    for (const key of [
+      "discoveryObjective",
+      "discoveryGoal",
+      "objective",
+      "goal",
+    ]) {
+      const value = context[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim().slice(0, 220);
+      }
+    }
+
+    return "Comprender la prioridad operativa, el cambio esperado y la evidencia necesaria para orientar el diagnóstico ejecutivo.";
   }
 
   private readSafeErrorCode(result: Record<string, unknown>): string | undefined {
