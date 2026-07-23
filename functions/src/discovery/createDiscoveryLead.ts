@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { generateOpaqueToken, generateTokenHash, computeTrustScore, getDiscoverySecurityConfig } from "./discoverySecurityService";
 import { generateIdempotencyHash, generateRequestHash } from "./idempotencyHelper";
 import { defineSecret } from "firebase-functions/params";
+import * as logger from "firebase-functions/logger";
 import { resolvePlatformPrincipal } from "../auth/resolvePlatformPrincipal";
 
 const idempotencySecret = defineSecret("IDEMPOTENCY_SECRET");
@@ -37,7 +38,7 @@ export const createDiscoveryLead = onCall(
       const city = (payload.city || "").substring(0, 50).trim();
       const employeeRange = (payload.employeeRange || "").substring(0, 50).trim();
       const commercialCode = (payload.commercialCode || "").substring(0, 20).toUpperCase().trim();
-      const idempotencyKey = payload.idempotencyKey;
+      const idempotencyKey = typeof payload.idempotencyKey === "string" ? payload.idempotencyKey.trim() : "";
 
       let origin = payload.origin === "WEBSITE" ? "WEBSITE" : "ADVISOR_SHARE";
       if (payload.origin === "AURA_NEXUS" || payload.origin === "WEBSITE") {
@@ -72,18 +73,36 @@ export const createDiscoveryLead = onCall(
         throw new HttpsError("invalid-argument", "INVALID_INPUT");
       }
 
-      if (!idempotencyKey || typeof idempotencyKey !== "string" || idempotencyKey.length > 100) {
+      if (!/^[A-Za-z0-9._:-]{16,100}$/.test(idempotencyKey)) {
         throw new HttpsError("invalid-argument", "INVALID_INPUT");
       }
 
       const idempotencyHash = generateIdempotencyHash(idempotencyKey, idempotencySecret.value());
-      const requestHash = generateRequestHash(payload);
+      const requestHash = generateRequestHash({
+        ...payload,
+        companyName,
+        contactName,
+        email,
+        phone,
+        jobTitle,
+        state,
+        city,
+        employeeRange,
+        commercialCode,
+        origin,
+        acquisitionSource,
+        privacyConsent,
+        diagnosticDeliveryConsent,
+        followUpConsent,
+        marketingConsent,
+        policyVersion,
+      });
 
       const db = admin.firestore();
       const idempotencyRef = db.collection("discovery_intake_idempotency").doc(idempotencyHash);
 
       // 3. Resolve Advisor
-      let advisorContext: any = null;
+      let advisorContext: admin.firestore.DocumentData | null = null;
       if (commercialCode) {
         const q = await db.collection("advisor_commercial_codes").doc(commercialCode).get();
         if (q.exists && q.data()?.status === "ACTIVE") {
@@ -100,53 +119,66 @@ export const createDiscoveryLead = onCall(
 
       const config = await getDiscoverySecurityConfig();
 
-      let authCaller: any = null;
+      let authCaller: Awaited<ReturnType<typeof resolvePlatformPrincipal>> | null = null;
       if (request.auth) {
         authCaller = await resolvePlatformPrincipal(db, request.auth);
       }
       const allowedRoles = ["SALES_ADVISOR", "PLATFORM_PARTNER", "SALES_DIRECTOR", "PLATFORM_OWNER", "FOUNDER", "SUPER_ADMIN", "PARTNER"];
-      const isAuthorizedCaller = authCaller && allowedRoles.includes(authCaller.role);
+      const isAuthorizedCaller = authCaller !== null && allowedRoles.includes(authCaller.role);
 
-      // Rate limits check
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      let recentCount = 0;
+      const existingIdempotencySnap = await idempotencyRef.get();
+      const existingIdempotencyData = existingIdempotencySnap.data();
+      const isKnownRetry =
+        existingIdempotencySnap.exists &&
+        existingIdempotencyData?.requestHash === requestHash &&
+        ["PROCESSING", "COMPLETED"].includes(existingIdempotencyData?.status);
 
-      if (isAuthorizedCaller) {
-        const advisorUid = authCaller.uid || request.auth!.uid;
-        const advisorLimitCheck = await db.collection("market_discovery_links")
-          .where("createdByUid", "==", advisorUid)
-          .get();
+      // A retry of an already accepted commercial attempt must not be rejected by
+      // a rate limit caused by the original successful creation.
+      if (!isKnownRetry) {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        let recentCount = 0;
 
-        advisorLimitCheck.forEach(doc => {
-          const data = doc.data();
-          if (data.createdAt && data.createdAt.toDate() > cutoff) {
-            recentCount++;
+        if (isAuthorizedCaller && authCaller) {
+          const advisorUid = authCaller.uid || request.auth!.uid;
+          const advisorLimitCheck = await db.collection("market_discovery_links")
+            .where("createdByUid", "==", advisorUid)
+            .get();
+
+          advisorLimitCheck.forEach(doc => {
+            const data = doc.data();
+            if (data.createdAt && data.createdAt.toDate() > cutoff) {
+              recentCount++;
+            }
+          });
+
+          if (recentCount >= config.maxLinksPerAdvisorPerDay) {
+            throw new HttpsError("resource-exhausted", "RATE_LIMITED");
           }
-        });
+        } else {
+          // Query by email only to avoid missing composite index
+          const emailLimitCheck = await db.collection("market_discovery_links")
+            .where("email", "==", email)
+            .get();
 
-        if (recentCount >= config.maxLinksPerAdvisorPerDay) {
-          throw new HttpsError("resource-exhausted", "RATE_LIMITED");
-        }
-      } else {
-        // Query by email only to avoid missing composite index
-        const emailLimitCheck = await db.collection("market_discovery_links")
-          .where("email", "==", email)
-          .get();
+          emailLimitCheck.forEach(doc => {
+            const data = doc.data();
+            if (data.createdAt && data.createdAt.toDate() > cutoff) {
+              recentCount++;
+            }
+          });
 
-        emailLimitCheck.forEach(doc => {
-          const data = doc.data();
-          if (data.createdAt && data.createdAt.toDate() > cutoff) {
-            recentCount++;
+          if (recentCount >= config.maxSessionsPerEmail) {
+            throw new HttpsError("resource-exhausted", "RATE_LIMITED");
           }
-        });
-
-        if (recentCount >= config.maxSessionsPerEmail) {
-          throw new HttpsError("resource-exhausted", "RATE_LIMITED");
         }
       }
 
       // 4. Idempotency Transaction
-      let transactionResult: any;
+      let transactionResult:
+        | { type: "CACHED"; idempData: admin.firestore.DocumentData }
+        | { type: "NEW"; processingAttemptId: string };
+      const processingAttemptId = generateOpaqueToken();
       try {
         transactionResult = await db.runTransaction(async (t) => {
           const idempSnap = await t.get(idempotencyRef);
@@ -179,25 +211,27 @@ export const createDiscoveryLead = onCall(
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             processingLeaseExpiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 60000)),
+            processingAttemptId,
             attemptCount: admin.firestore.FieldValue.increment(1)
           }, { merge: true });
 
-          return { type: "NEW" };
+          return { type: "NEW", processingAttemptId };
         });
-      } catch (e: any) {
-        if (e.message === "IDEMPOTENCY_CONFLICT") {
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "UNKNOWN";
+        if (errorMessage === "IDEMPOTENCY_CONFLICT") {
           throw new HttpsError("already-exists", "IDEMPOTENCY_CONFLICT");
         }
-        if (e.message === "PROCESSING") {
+        if (errorMessage === "PROCESSING") {
           return { status: "PROCESSING", retryAfterSeconds: 3 };
         }
-        if (e.message === "FAILED_FINAL") {
+        if (errorMessage === "FAILED_FINAL") {
           throw new HttpsError("internal", "Error procesando solicitud previamente.");
         }
-        throw e;
+        throw error;
       }
 
-      if (transactionResult.type === "CACHED" && transactionResult.idempData) {
+      if (transactionResult.type === "CACHED") {
         const linkSnap = await db.collection("market_discovery_links").doc(transactionResult.idempData.linkId).get();
         if (!linkSnap.exists) {
           throw new HttpsError("internal", "Link no encontrado.");
@@ -244,13 +278,6 @@ export const createDiscoveryLead = onCall(
         };
       }
 
-      if (transactionResult.type === "PROCESSING") {
-        return {
-          status: "PROCESSING",
-          retryAfterSeconds: 3
-        };
-      }
-
       // 5. Proceed with Creation
 
       const trustScoreResult = await computeTrustScore(email, advisorContext, acquisitionSource);
@@ -266,7 +293,7 @@ export const createDiscoveryLead = onCall(
         marketing: { value: marketingConsent, capturedAt: new Date().toISOString(), policyVersion, source: "AURA_NEXUS", origin },
       };
 
-      const linkPayload: any = {
+      const linkPayload: admin.firestore.DocumentData = {
         companyName,
         contactName,
         email,
@@ -289,7 +316,7 @@ export const createDiscoveryLead = onCall(
         consents: consentsPayload
       };
 
-      if (isAuthorizedCaller) {
+      if (isAuthorizedCaller && authCaller) {
         linkPayload.advisorUid = authCaller.uid || request.auth!.uid;
         if (authCaller.advisorId) {
           linkPayload.advisorId = authCaller.advisorId;
@@ -318,14 +345,31 @@ export const createDiscoveryLead = onCall(
         linkPayload.assignmentType = "UNASSIGNED";
       }
 
-      const docRef = await db.collection("market_discovery_links").add(linkPayload);
+      const docRef = db.collection("market_discovery_links").doc();
 
-      // Update Idempotency
-      await idempotencyRef.update({
-        status: "COMPLETED",
-        linkId: docRef.id,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)) // retain 30 days
+      // Persist the lead and complete its idempotency record atomically. A stale
+      // worker cannot create a second lead after another retry acquires the lease.
+      await db.runTransaction(async (transaction) => {
+        const idempSnap = await transaction.get(idempotencyRef);
+        const idempData = idempSnap.data();
+        if (
+          !idempSnap.exists ||
+          idempData?.status !== "PROCESSING" ||
+          idempData?.requestHash !== requestHash ||
+          idempData?.processingAttemptId !== transactionResult.processingAttemptId
+        ) {
+          throw new HttpsError("aborted", "IDEMPOTENCY_LEASE_LOST");
+        }
+
+        transaction.set(docRef, linkPayload);
+        transaction.update(idempotencyRef, {
+          status: "COMPLETED",
+          linkId: docRef.id,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+          processingLeaseExpiresAt: admin.firestore.FieldValue.delete(),
+          processingAttemptId: admin.firestore.FieldValue.delete(),
+        });
       });
 
       const discoveryUrl = `https://controlcenter.auranexus.io/discover/${docRef.id}#access=${oneTimeToken}`;
@@ -340,12 +384,14 @@ export const createDiscoveryLead = onCall(
         organizationProfile: "UNKNOWN",
         requiresManualReview: trustScoreResult.decision === "REQUIRE_MANUAL_REVIEW"
       };
-    } catch (error: any) {
-      const logger = require("firebase-functions/logger");
+    } catch (error: unknown) {
+      const errorDetails = error instanceof Error
+        ? { message: error.message, code: (error as Error & { code?: unknown }).code, stack: error.stack }
+        : { message: "UNKNOWN", code: undefined, stack: undefined };
       logger.error("Unhandled error in createDiscoveryLead", { 
-        message: error.message, 
-        code: error.code,
-        stack: error.stack 
+        message: errorDetails.message,
+        code: errorDetails.code,
+        stack: errorDetails.stack,
       });
       if (error instanceof HttpsError) {
         throw error;
