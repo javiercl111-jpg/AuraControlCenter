@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
 import DossierBuilderService from "../modules/discovery/services/dossierBuilderService";
 import ConversationOrchestrator from "../modules/intelligence/engine/services/ConversationOrchestrator";
@@ -7,7 +7,14 @@ import ConversationState from "../modules/intelligence/engine/domain/Conversatio
 import { ReflectionEngine } from "../modules/intelligence/engine/services/ReflectionEngine";
 import type { ReflectionState, ConfidenceMatrix } from "../modules/intelligence/engine/types/reflection.types";
 import type { ConversationPhase } from "../modules/intelligence/engine/types/orchestrator.types";
-import { resolveAdvisorByCode, createDiscoveryLink, exchangeDiscoveryToken, resolveDiscoverySession } from "../modules/discovery/services/discoveryLinkService";
+import {
+  createDiscoveryIdempotencyKey,
+  createDiscoveryLink,
+  exchangeDiscoveryToken,
+  getDiscoveryNavigationTarget,
+  resolveAdvisorByCode,
+  resolveDiscoverySession,
+} from "../modules/discovery/services/discoveryLinkService";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../config/firebase";
 
@@ -20,6 +27,8 @@ interface SessionLinkInfo {
 interface GenerateDiscoveryReportRequest {
   sessionId: string;
   prospectId: string;
+  linkId: string;
+  sessionToken: string;
   isInternalOnly?: boolean;
 }
 
@@ -31,6 +40,7 @@ interface GenerateDiscoveryReportResponse {
 
 interface RequestExecutiveDocumentRequest {
   reportId: string;
+  linkId: string;
   sessionToken: string;
 }
 
@@ -138,7 +148,6 @@ function mapDiscoveryError(err: unknown): DiscoveryErrorType {
 export default function DiscoverPage() {
   const showAuraThoughts = false; // Disabled by default for public experience
   const { linkId, commercialCode } = useParams<{ linkId?: string, commercialCode?: string }>();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [linkInfo, setLinkInfo] = useState<SessionLinkInfo | null>(null);
@@ -163,6 +172,7 @@ export default function DiscoverPage() {
   const [creatingLink, setCreatingLink] = useState(false);
   const [acquisitionSource, setAcquisitionSource] = useState("DIRECT");
   const [manualAdvisorCode, setManualAdvisorCode] = useState("");
+  const preformAttemptRef = useRef<{ signature: string; idempotencyKey: string } | null>(null);
 
   // Real-time Chat log
   const [chatLog, setChatLog] = useState<{ sender: "aura" | "user"; text: string }[]>([]);
@@ -283,7 +293,7 @@ export default function DiscoverPage() {
         if (import.meta.env.DEV) {
           console.info("TOKEN_EXCHANGE_FAILED", {
             pathnameMatched: true,
-            hasAccessParam: !!searchParams.get("access"),
+            hasAccessFragment: new URLSearchParams(window.location.hash.slice(1)).has("access"),
             hasSessionToken: !!sessionStorage.getItem(`discovery_session_token_${linkId}`),
             safeErrorCode: mappedError,
             appCheckConfigured: !!import.meta.env.VITE_RECAPTCHA_SITE_KEY
@@ -295,7 +305,7 @@ export default function DiscoverPage() {
       }
     }
     loadLink();
-  }, [linkId, commercialCode, searchParams]);
+  }, [linkId, commercialCode]);
 
   async function handlePreformSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -313,6 +323,28 @@ export default function DiscoverPage() {
         if (advisor) finalAdvisorContext = advisor;
       }
 
+      const attemptSignature = JSON.stringify({
+        companyName: companyName.trim(),
+        contactName: contactName.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
+        role: role.trim(),
+        location: location.trim(),
+        acquisitionSource,
+        commercialCode:
+          (typeof finalAdvisorContext?.commercialCode === "string"
+            ? finalAdvisorContext.commercialCode
+            : manualAdvisorCode
+          ).trim().toUpperCase(),
+      });
+
+      if (preformAttemptRef.current?.signature !== attemptSignature) {
+        preformAttemptRef.current = {
+          signature: attemptSignature,
+          idempotencyKey: createDiscoveryIdempotencyKey(),
+        };
+      }
+
       const newLink = await createDiscoveryLink({
         companyName,
         contactName,
@@ -321,10 +353,11 @@ export default function DiscoverPage() {
         role,
         location,
         consent,
-        acquisitionSource
-      }, finalAdvisorContext);
+        acquisitionSource,
+        idempotencyKey: preformAttemptRef.current.idempotencyKey,
+      }, finalAdvisorContext || undefined);
 
-      navigate(`/discover/${newLink.linkId}?access=${newLink.oneTimeToken}`, { replace: true });
+      navigate(getDiscoveryNavigationTarget(newLink), { replace: true });
     } catch (err) {
       console.error(err);
       alert("Error al iniciar sesión de descubrimiento.");
@@ -539,6 +572,8 @@ export default function DiscoverPage() {
         const res = await generateReportFn({
           sessionId,
           prospectId: prospectId || "UNKNOWN",
+          linkId: linkInfo.linkId,
+          sessionToken,
           isInternalOnly: false
         });
         console.log("Report generated:", res.data.reportId);
@@ -578,7 +613,7 @@ export default function DiscoverPage() {
         functions,
         "requestExecutiveDocument"
       );
-      const res = await requestDocFn({ reportId: generatedReportId, sessionToken });
+      const res = await requestDocFn({ reportId: generatedReportId, linkId: linkInfo.linkId, sessionToken });
 
       const data = res.data;
       if (data.status === "READY" && data.downloadUrl) {

@@ -9,7 +9,11 @@ exports.resolveDiscoverySession = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
     }
     const { linkId, sessionToken } = request.data;
-    if (!linkId || !sessionToken) {
+    if (typeof linkId !== "string" ||
+        linkId.length > 128 ||
+        linkId.includes("/") ||
+        typeof sessionToken !== "string" ||
+        !/^[a-f0-9]{64}$/i.test(sessionToken)) {
         throw new functions.https.HttpsError("invalid-argument", "Missing linkId or sessionToken.");
     }
     const db = admin.firestore();
@@ -21,6 +25,10 @@ exports.resolveDiscoverySession = functions.https.onCall(async (request) => {
     const sessionTokenHash = (0, discoverySecurityService_1.generateTokenHash)(sessionToken);
     if (linkData.sessionTokenHash !== sessionTokenHash) {
         throw new functions.https.HttpsError("permission-denied", "Invalid session token.");
+    }
+    const expiresAt = linkData.sessionTokenExpiresAt || linkData.expiresAt;
+    if (!expiresAt || typeof expiresAt.toMillis !== "function" || expiresAt.toMillis() <= Date.now()) {
+        throw new functions.https.HttpsError("permission-denied", "Session token expired.");
     }
     // Return non-sensitive data
     return {
