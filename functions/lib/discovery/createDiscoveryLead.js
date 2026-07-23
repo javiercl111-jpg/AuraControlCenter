@@ -6,6 +6,8 @@ const admin = require("firebase-admin");
 const discoverySecurityService_1 = require("./discoverySecurityService");
 const idempotencyHelper_1 = require("./idempotencyHelper");
 const params_1 = require("firebase-functions/params");
+const logger = require("firebase-functions/logger");
+const resolvePlatformPrincipal_1 = require("../auth/resolvePlatformPrincipal");
 const idempotencySecret = (0, params_1.defineSecret)("IDEMPOTENCY_SECRET");
 exports.createDiscoveryLead = (0, https_1.onCall)({
     region: "us-central1",
@@ -33,7 +35,7 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
         const city = (payload.city || "").substring(0, 50).trim();
         const employeeRange = (payload.employeeRange || "").substring(0, 50).trim();
         const commercialCode = (payload.commercialCode || "").substring(0, 20).toUpperCase().trim();
-        const idempotencyKey = payload.idempotencyKey;
+        const idempotencyKey = typeof payload.idempotencyKey === "string" ? payload.idempotencyKey.trim() : "";
         let origin = payload.origin === "WEBSITE" ? "WEBSITE" : "ADVISOR_SHARE";
         if (payload.origin === "AURA_NEXUS" || payload.origin === "WEBSITE") {
             origin = payload.origin;
@@ -44,7 +46,7 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
         let diagnosticDeliveryConsent = false;
         let followUpConsent = false;
         let marketingConsent = false;
-        let policyVersion = payload.policyVersion || "legacy-v1";
+        const policyVersion = payload.policyVersion || "legacy-v1";
         if (typeof payload.consent === "boolean" && payload.consent) {
             privacyConsent = true;
             diagnosticDeliveryConsent = true;
@@ -63,11 +65,29 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
         if (!privacyConsent || !diagnosticDeliveryConsent) {
             throw new https_1.HttpsError("invalid-argument", "INVALID_INPUT");
         }
-        if (!idempotencyKey || typeof idempotencyKey !== "string" || idempotencyKey.length > 100) {
+        if (!/^[A-Za-z0-9._:-]{16,100}$/.test(idempotencyKey)) {
             throw new https_1.HttpsError("invalid-argument", "INVALID_INPUT");
         }
         const idempotencyHash = (0, idempotencyHelper_1.generateIdempotencyHash)(idempotencyKey, idempotencySecret.value());
-        const requestHash = (0, idempotencyHelper_1.generateRequestHash)(payload);
+        const requestHash = (0, idempotencyHelper_1.generateRequestHash)({
+            ...payload,
+            companyName,
+            contactName,
+            email,
+            phone,
+            jobTitle,
+            state,
+            city,
+            employeeRange,
+            commercialCode,
+            origin,
+            acquisitionSource,
+            privacyConsent,
+            diagnosticDeliveryConsent,
+            followUpConsent,
+            marketingConsent,
+            policyVersion,
+        });
         const db = admin.firestore();
         const idempotencyRef = db.collection("discovery_intake_idempotency").doc(idempotencyHash);
         // 3. Resolve Advisor
@@ -86,23 +106,56 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
             }
         }
         const config = await (0, discoverySecurityService_1.getDiscoverySecurityConfig)();
-        // Rate limits check (Fixed: query by email only to avoid missing composite index)
-        const emailLimitCheck = await db.collection("market_discovery_links")
-            .where("email", "==", email)
-            .get();
-        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        let recentCount = 0;
-        emailLimitCheck.forEach(doc => {
-            const data = doc.data();
-            if (data.createdAt && data.createdAt.toDate() > cutoff) {
-                recentCount++;
+        let authCaller = null;
+        if (request.auth) {
+            authCaller = await (0, resolvePlatformPrincipal_1.resolvePlatformPrincipal)(db, request.auth);
+        }
+        const allowedRoles = ["SALES_ADVISOR", "PLATFORM_PARTNER", "SALES_DIRECTOR", "PLATFORM_OWNER", "FOUNDER", "SUPER_ADMIN", "PARTNER"];
+        const isAuthorizedCaller = authCaller !== null && allowedRoles.includes(authCaller.role);
+        const existingIdempotencySnap = await idempotencyRef.get();
+        const existingIdempotencyData = existingIdempotencySnap.data();
+        const isKnownRetry = existingIdempotencySnap.exists &&
+            existingIdempotencyData?.requestHash === requestHash &&
+            ["PROCESSING", "COMPLETED"].includes(existingIdempotencyData?.status);
+        // A retry of an already accepted commercial attempt must not be rejected by
+        // a rate limit caused by the original successful creation.
+        if (!isKnownRetry) {
+            const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            let recentCount = 0;
+            if (isAuthorizedCaller && authCaller) {
+                const advisorUid = authCaller.uid || request.auth.uid;
+                const advisorLimitCheck = await db.collection("market_discovery_links")
+                    .where("createdByUid", "==", advisorUid)
+                    .get();
+                advisorLimitCheck.forEach(doc => {
+                    const data = doc.data();
+                    if (data.createdAt && data.createdAt.toDate() > cutoff) {
+                        recentCount++;
+                    }
+                });
+                if (recentCount >= config.maxLinksPerAdvisorPerDay) {
+                    throw new https_1.HttpsError("resource-exhausted", "RATE_LIMITED");
+                }
             }
-        });
-        if (recentCount >= config.maxSessionsPerEmail) {
-            throw new https_1.HttpsError("resource-exhausted", "RATE_LIMITED");
+            else {
+                // Query by email only to avoid missing composite index
+                const emailLimitCheck = await db.collection("market_discovery_links")
+                    .where("email", "==", email)
+                    .get();
+                emailLimitCheck.forEach(doc => {
+                    const data = doc.data();
+                    if (data.createdAt && data.createdAt.toDate() > cutoff) {
+                        recentCount++;
+                    }
+                });
+                if (recentCount >= config.maxSessionsPerEmail) {
+                    throw new https_1.HttpsError("resource-exhausted", "RATE_LIMITED");
+                }
+            }
         }
         // 4. Idempotency Transaction
         let transactionResult;
+        const processingAttemptId = (0, discoverySecurityService_1.generateOpaqueToken)();
         try {
             transactionResult = await db.runTransaction(async (t) => {
                 const idempSnap = await t.get(idempotencyRef);
@@ -133,24 +186,26 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     processingLeaseExpiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 60000)),
+                    processingAttemptId,
                     attemptCount: admin.firestore.FieldValue.increment(1)
                 }, { merge: true });
-                return { type: "NEW" };
+                return { type: "NEW", processingAttemptId };
             });
         }
-        catch (e) {
-            if (e.message === "IDEMPOTENCY_CONFLICT") {
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "UNKNOWN";
+            if (errorMessage === "IDEMPOTENCY_CONFLICT") {
                 throw new https_1.HttpsError("already-exists", "IDEMPOTENCY_CONFLICT");
             }
-            if (e.message === "PROCESSING") {
+            if (errorMessage === "PROCESSING") {
                 return { status: "PROCESSING", retryAfterSeconds: 3 };
             }
-            if (e.message === "FAILED_FINAL") {
+            if (errorMessage === "FAILED_FINAL") {
                 throw new https_1.HttpsError("internal", "Error procesando solicitud previamente.");
             }
-            throw e;
+            throw error;
         }
-        if (transactionResult.type === "CACHED" && transactionResult.idempData) {
+        if (transactionResult.type === "CACHED") {
             const linkSnap = await db.collection("market_discovery_links").doc(transactionResult.idempData.linkId).get();
             if (!linkSnap.exists) {
                 throw new https_1.HttpsError("internal", "Link no encontrado.");
@@ -190,12 +245,6 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
                 requiresManualReview: linkData.trustScore?.decision === "REQUIRE_MANUAL_REVIEW"
             };
         }
-        if (transactionResult.type === "PROCESSING") {
-            return {
-                status: "PROCESSING",
-                retryAfterSeconds: 3
-            };
-        }
         // 5. Proceed with Creation
         const trustScoreResult = await (0, discoverySecurityService_1.computeTrustScore)(email, advisorContext, acquisitionSource);
         const oneTimeToken = (0, discoverySecurityService_1.generateOpaqueToken)();
@@ -229,7 +278,22 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
             trustScore: trustScoreResult,
             consents: consentsPayload
         };
-        if (advisorContext) {
+        if (isAuthorizedCaller && authCaller) {
+            linkPayload.advisorUid = authCaller.uid || request.auth.uid;
+            if (authCaller.advisorId) {
+                linkPayload.advisorId = authCaller.advisorId;
+                linkPayload.originalAdvisorId = authCaller.advisorId;
+                linkPayload.currentAdvisorId = authCaller.advisorId;
+            }
+            linkPayload.originalAdvisorUid = authCaller.uid || request.auth.uid;
+            linkPayload.currentAdvisorUid = authCaller.uid || request.auth.uid;
+            linkPayload.createdByUid = request.auth.uid;
+            linkPayload.createdByRole = authCaller.role;
+            linkPayload.assignmentType = "ORIGIN";
+            linkPayload.attributedAt = admin.firestore.FieldValue.serverTimestamp();
+            linkPayload.attributionSource = "DISCOVERY_CRM_CREATE";
+        }
+        else if (advisorContext) {
             linkPayload.assignmentType = "ORIGIN";
             linkPayload.originalAdvisorId = advisorContext.id;
             linkPayload.originalAdvisorUid = advisorContext.uid;
@@ -238,17 +302,33 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
             linkPayload.commercialCode = commercialCode;
             linkPayload.attributedAt = admin.firestore.FieldValue.serverTimestamp();
             linkPayload.attributionSource = "DISCOVERY_PRE_FORM";
+            linkPayload.advisorUid = advisorContext.uid;
+            linkPayload.advisorId = advisorContext.id;
         }
         else {
             linkPayload.assignmentType = "UNASSIGNED";
         }
-        const docRef = await db.collection("market_discovery_links").add(linkPayload);
-        // Update Idempotency
-        await idempotencyRef.update({
-            status: "COMPLETED",
-            linkId: docRef.id,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)) // retain 30 days
+        const docRef = db.collection("market_discovery_links").doc();
+        // Persist the lead and complete its idempotency record atomically. A stale
+        // worker cannot create a second lead after another retry acquires the lease.
+        await db.runTransaction(async (transaction) => {
+            const idempSnap = await transaction.get(idempotencyRef);
+            const idempData = idempSnap.data();
+            if (!idempSnap.exists ||
+                idempData?.status !== "PROCESSING" ||
+                idempData?.requestHash !== requestHash ||
+                idempData?.processingAttemptId !== transactionResult.processingAttemptId) {
+                throw new https_1.HttpsError("aborted", "IDEMPOTENCY_LEASE_LOST");
+            }
+            transaction.set(docRef, linkPayload);
+            transaction.update(idempotencyRef, {
+                status: "COMPLETED",
+                linkId: docRef.id,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+                processingLeaseExpiresAt: admin.firestore.FieldValue.delete(),
+                processingAttemptId: admin.firestore.FieldValue.delete(),
+            });
         });
         const discoveryUrl = `https://controlcenter.auranexus.io/discover/${docRef.id}#access=${oneTimeToken}`;
         return {
@@ -263,11 +343,13 @@ exports.createDiscoveryLead = (0, https_1.onCall)({
         };
     }
     catch (error) {
-        const logger = require("firebase-functions/logger");
+        const errorDetails = error instanceof Error
+            ? { message: error.message, code: error.code, stack: error.stack }
+            : { message: "UNKNOWN", code: undefined, stack: undefined };
         logger.error("Unhandled error in createDiscoveryLead", {
-            message: error.message,
-            code: error.code,
-            stack: error.stack
+            message: errorDetails.message,
+            code: errorDetails.code,
+            stack: errorDetails.stack,
         });
         if (error instanceof https_1.HttpsError) {
             throw error;

@@ -9,7 +9,13 @@ export const resolveDiscoverySession = functions.https.onCall(async (request) =>
 
   const { linkId, sessionToken } = request.data;
 
-  if (!linkId || !sessionToken) {
+  if (
+    typeof linkId !== "string" ||
+    linkId.length > 128 ||
+    linkId.includes("/") ||
+    typeof sessionToken !== "string" ||
+    !/^[a-f0-9]{64}$/i.test(sessionToken)
+  ) {
     throw new functions.https.HttpsError("invalid-argument", "Missing linkId or sessionToken.");
   }
 
@@ -20,11 +26,16 @@ export const resolveDiscoverySession = functions.https.onCall(async (request) =>
     throw new functions.https.HttpsError("not-found", "Session not found.");
   }
 
-  const linkData = linkSnap.data() as any;
+  const linkData = linkSnap.data()!;
   const sessionTokenHash = generateTokenHash(sessionToken);
 
   if (linkData.sessionTokenHash !== sessionTokenHash) {
     throw new functions.https.HttpsError("permission-denied", "Invalid session token.");
+  }
+
+  const expiresAt = linkData.sessionTokenExpiresAt || linkData.expiresAt;
+  if (!expiresAt || typeof expiresAt.toMillis !== "function" || expiresAt.toMillis() <= Date.now()) {
+    throw new functions.https.HttpsError("permission-denied", "Session token expired.");
   }
 
   // Return non-sensitive data
