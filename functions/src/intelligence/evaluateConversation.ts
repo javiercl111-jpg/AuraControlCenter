@@ -9,12 +9,12 @@ import {
   validateLLMOutput,
 } from "./llmSchemas";
 import {
-  AURA_LLM_MODEL,
   AURA_PERSONALITY_VERSION,
 } from "./AuraPersonalityPrompt";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const EXECUTIVE_CONVERSATION_MODE = "EXECUTIVE_CONVERSATION_LAYER";
+export const EXECUTIVE_CONVERSATION_MODEL = "gemini-3.6-flash" as const;
 const DRAFTABLE_INTENTS = new Set([
   "DISCOVER_PROBLEM",
   "CONFIRM_HYPOTHESIS",
@@ -114,7 +114,7 @@ Redacta únicamente la siguiente pregunta respetando el esquema requerido.
 `;
 
       const response = await ai.models.generateContent({
-        model: AURA_LLM_MODEL,
+        model: EXECUTIVE_CONVERSATION_MODEL,
         contents: prompt,
         config: {
           systemInstruction: EXECUTIVE_CONVERSATION_SYSTEM_PROMPT,
@@ -179,16 +179,15 @@ Redacta únicamente la siguiente pregunta respetando el esquema requerido.
         conversationProposal: { nextQuestion },
         telemetry: {
           provider: "Google",
-          model: AURA_LLM_MODEL,
+          model: EXECUTIVE_CONVERSATION_MODEL,
           latencyMs: Date.now() - startTime,
           promptVersion: AURA_PERSONALITY_VERSION,
         },
       };
     } catch (error: unknown) {
       console.error("Executive conversation drafting failed:", error);
-      return fallbackResponse(
-        readErrorMessage(error),
-        "LLM_UNAVAILABLE",
+      return createLLMFailureFallback(
+        error,
         data.authoritativeIntent,
       );
     }
@@ -259,6 +258,51 @@ function fallbackResponse(
   };
 }
 
+export function createLLMFailureFallback(
+  error: unknown,
+  authoritativeIntent?: string,
+) {
+  const modelUnavailable = isModelUnavailableError(error);
+  return fallbackResponse(
+    modelUnavailable
+      ? "Configured LLM model is unavailable"
+      : "LLM request failed",
+    modelUnavailable ? "LLM_MODEL_UNAVAILABLE" : "LLM_UNAVAILABLE",
+    authoritativeIntent,
+  );
+}
+
+function isModelUnavailableError(error: unknown): boolean {
+  const errorRecord = asRecord(error);
+  const message = readErrorMessage(error);
+  const normalizedMessage = message.toLowerCase();
+  const normalizedStatus = [
+    errorRecord?.status,
+    errorRecord?.statusText,
+    errorRecord?.code,
+  ]
+    .filter((value): value is string | number =>
+      typeof value === "string" || typeof value === "number"
+    )
+    .map((value) => String(value).toLowerCase())
+    .join(" ");
+  const mentionsModel = /\bmodels?\b/.test(normalizedMessage);
+  const hasUnavailableMessage =
+    /\bnot[_ ]found\b/.test(normalizedMessage) ||
+    normalizedMessage.includes("no longer available") ||
+    normalizedMessage.includes("not available") ||
+    normalizedMessage.includes("unsupported");
+  const hasNotFoundStatus =
+    /\b404\b/.test(normalizedStatus) ||
+    normalizedStatus.includes("not_found") ||
+    /\b404\b/.test(normalizedMessage) ||
+    normalizedMessage.includes("not_found");
+
+  return mentionsModel &&
+    hasUnavailableMessage &&
+    (hasNotFoundStatus || normalizedMessage.includes("no longer available"));
+}
+
 function readErrorMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "message" in error) {
     const message = (error as { message?: unknown }).message;
@@ -268,4 +312,10 @@ function readErrorMessage(error: unknown): string {
   }
 
   return "Unknown LLM error";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null
+    ? value as Record<string, unknown>
+    : undefined;
 }
