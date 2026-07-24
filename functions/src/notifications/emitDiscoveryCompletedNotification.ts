@@ -2,6 +2,64 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { GoogleAuth } from "google-auth-library";
 import { projectPlatformInbox, NotificationProjectionInput } from "./projectPlatformInbox";
 
+export interface MaintenanceDeliveryResult {
+  status?: string;
+  inboxCreated: number;
+  idempotentReplay: boolean;
+}
+
+export function extractMaintenanceDeliveryResult(responseData: unknown): MaintenanceDeliveryResult {
+  let parsed: unknown = responseData;
+
+  if (typeof responseData === "string") {
+    try {
+      parsed = JSON.parse(responseData);
+    } catch {
+      console.warn("MAINTENANCE_RESPONSE_INVALID_JSON", { responseData });
+      return { inboxCreated: 0, idempotentReplay: false };
+    }
+  }
+
+  if (parsed === null || typeof parsed !== "object") {
+    console.warn("MAINTENANCE_RESPONSE_NOT_AN_OBJECT", { type: typeof parsed });
+    return { inboxCreated: 0, idempotentReplay: false };
+  }
+
+  const obj = parsed as Record<string, unknown>;
+
+  const status = typeof obj.status === "string" ? obj.status : undefined;
+
+  let inboxCreated = 0;
+  if (typeof obj.inboxCreated === "number" && Number.isFinite(obj.inboxCreated)) {
+    inboxCreated = obj.inboxCreated;
+  } else if (typeof obj.inboxCreated === "string") {
+    const parsedNum = parseInt(obj.inboxCreated, 10);
+    if (!isNaN(parsedNum)) {
+      inboxCreated = parsedNum;
+    }
+  }
+
+  const idempotentReplay = Boolean(obj.idempotentReplay);
+
+  const hasExpectedContractKeys =
+    typeof obj.inboxCreated === "number" ||
+    typeof obj.inboxCreated === "string" ||
+    typeof obj.idempotentReplay === "boolean" ||
+    typeof obj.status === "string";
+
+  if (!hasExpectedContractKeys) {
+    console.warn("MAINTENANCE_RESPONSE_CONTRACT_MISMATCH", {
+      keys: Object.keys(obj)
+    });
+  }
+
+  return {
+    status,
+    inboxCreated,
+    idempotentReplay
+  };
+}
+
 // Retries and backoff matching user requirements
 export const emitDiscoveryCompletedNotification = onTaskDispatched({
   serviceAccount: "aura-control-center-notifier@aura-control-center-debb3.iam.gserviceaccount.com",
@@ -104,23 +162,31 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
 
     clearTimeout(timeoutId);
 
-    const resultData = response.data as any;
+    const deliveryResult = extractMaintenanceDeliveryResult(response.data);
 
-    if (resultData && resultData.status === "FAILED") {
+    console.log("MAINTENANCE_RESPONSE_PARSED", {
+      status: deliveryResult.status,
+      inboxCreated: deliveryResult.inboxCreated,
+      idempotentReplay: deliveryResult.idempotentReplay
+    });
+
+    if (deliveryResult.status === "FAILED") {
       // It reached the gateway but failed inside it
-      console.error("Gateway returned FAILED status", resultData);
-      throw new Error(`Gateway processing failed: ${resultData.error}`);
+      console.error("Gateway returned FAILED status", { status: deliveryResult.status });
+      throw new Error(`Gateway processing failed: ${deliveryResult.status}`);
     }
 
-    if (resultData && resultData.idempotentReplay) {
+    if (deliveryResult.idempotentReplay) {
       console.log(`Event previously processed (idempotent duplicate): ${notificationEvent.idempotencyKey}`);
       // Fallthrough to projection logic for idempotency check
     } else {
-      console.log("Notification dispatched successfully:", resultData);
+      console.log("Notification dispatched successfully:", {
+        status: deliveryResult.status,
+        inboxCreated: deliveryResult.inboxCreated
+      });
     }
 
-    const inboxCreated = resultData?.inboxCreated || 0;
-    if (inboxCreated >= 1 || resultData?.idempotentReplay) {
+    if (deliveryResult.inboxCreated >= 1 || deliveryResult.idempotentReplay) {
       const projectionInput: NotificationProjectionInput = {
         eventId: notificationEvent.eventId,
         recipientUid: payload.advisorUid,
@@ -137,6 +203,12 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
         }
       };
       await projectPlatformInbox(projectionInput);
+    } else {
+      console.log("PROJECTION_SKIPPED_NO_CANONICAL_DELIVERY", {
+        status: deliveryResult.status,
+        inboxCreated: deliveryResult.inboxCreated,
+        idempotentReplay: deliveryResult.idempotentReplay
+      });
     }
 
   } catch (error: any) {
