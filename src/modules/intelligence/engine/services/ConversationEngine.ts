@@ -1,5 +1,6 @@
 import type { EngineInput, EngineOutput } from "../types/conversation.types";
 import { AuraPersonality } from "./AuraPersonality";
+import { evaluateDiscoveryCompletionState } from "./discoveryCompletionShared";
 
 export class ConversationEngine {
   private personality: AuraPersonality;
@@ -61,8 +62,21 @@ export class ConversationEngine {
     const historyLength = input.conversationHistory.length;
     let currentConfidence = input.confidenceLevel;
     const currentResponse = input.currentResponse;
-    const turnCount = input.turnCount + 1; // Assuming we increment here
     const updatedDossier: any = { ...input.partialDossier };
+
+    // Heuristics based on responses
+    const text = currentResponse.toLowerCase();
+    if (text.includes("error") || text.includes("pago") || text.includes("nomina") || text.includes("nómina")) {
+      updatedDossier.priority = "Reducir errores en pre-nómina";
+    }
+    if (text.includes("excel") || text.includes("papel") || text.includes("manual")) {
+      updatedDossier.schedulingMethod = "Excel y papel";
+    }
+    if (text.includes("si") || text.includes("queja") || text.includes("frecuente")) {
+      updatedDossier.payrollIncidents = true;
+    } else if (text.includes("no") || text.includes("nunca")) {
+      updatedDossier.payrollIncidents = false;
+    }
     
     // 1. Validation
     if (historyLength > 0 && !this.isResponseValid(currentResponse, input)) {
@@ -79,18 +93,28 @@ export class ConversationEngine {
       };
     }
 
-    const usefulResponsesCount = input.usefulResponsesCount + (historyLength > 0 ? 1 : 0);
+    // 2. Deterministic Completion Check against shared completion state
+    const linkData = {
+      companyName: input.companyName || "Empresa Prospecto",
+      contactName: (input.context as any)?.contactName || "Contacto Destinatario",
+      email: (input.context as any)?.email || "contact@example.invalid",
+      consent: true,
+    };
 
-    // 2. Completion Check
-    if (
-      usefulResponsesCount >= 5 || 
-      turnCount >= 8 || 
-      (currentConfidence >= 85 && usefulResponsesCount >= 4)
-    ) {
+    const completionState = evaluateDiscoveryCompletionState({
+      dossierPayload: {
+        dossier: updatedDossier,
+        conversationHistory: input.conversationHistory,
+        businessAssessmentDraft: {},
+      },
+      linkData,
+    });
+
+    if (completionState.canComplete) {
       return {
         nextIntent: "CLOSING",
         nextQuestion: `Gracias. He comprendido bastante sobre ${input.companyName}. Estoy procesando tu Radiografía Empresarial Aura™ y el Executive Briefing™.`,
-        reason: "Completion criteria met.",
+        reason: "Completion criteria met: hard requirements and knowledge gaps satisfied.",
         newHypotheses: [],
         discardedHypotheses: [],
         updatedConfidence: 100,
@@ -108,7 +132,7 @@ export class ConversationEngine {
       hypothesesCount
     );
 
-    // 4. Simulated Reasoning Logic (V1 without LLM)
+    // 4. Targeted Question Selection for Active Knowledge Gap
     let nextIntent: EngineOutput["nextIntent"] = "DISCOVER_PROBLEM";
     let nextQuestion = "";
     let reason = "";
@@ -120,62 +144,58 @@ export class ConversationEngine {
 
     const availableQuestions = [
       {
+        gap: "ACTIVITY_OR_OFFERING",
         intent: "GREETING",
         q: "Gracias por tu tiempo. El objetivo de este diagnóstico es entender cómo opera tu organización para diseñar soluciones precisas que les aporten valor. No necesitas contar con información técnica; tendremos una charla sencilla sobre tu día a día. Para comenzar, me gustaría saber, ¿cuál es el giro de tu empresa y cuál consideras que es su reto administrativo u operativo más importante en este momento?",
         c: 20
       },
       {
+        gap: "PRIMARY_NEED",
         intent: "CONFIRM_HYPOTHESIS",
         q: `Controlar procesos manualmente incrementa la probabilidad de inconsistencias. ¿Han experimentado alguna queja o incidencia en el pago de horas extras en los últimos meses?`,
         c: 30
       },
       {
-        intent: "DISCOVER_PROBLEM",
-        q: `Para concluir el expediente, ¿cuál es tu principal prioridad organizativa para los próximos 3 meses?`,
-        c: 25
-      },
-      {
+        gap: "PRIMARY_NEED",
         intent: "DISCOVER_PROBLEM",
         q: `¿Qué proceso administrativo actual consideran que les consume más tiempo operativo a ti o a tu equipo?`,
         c: 20
       },
       {
+        gap: "OBJECTIVE",
+        intent: "DISCOVER_PROBLEM",
+        q: `Para comprender las metas del negocio, ¿cuál es tu principal prioridad organizativa para los próximos 3 meses?`,
+        c: 25
+      },
+      {
+        gap: "ORGANIZATIONAL_CONTEXT",
         intent: "DISCOVER_PROBLEM",
         q: `Hablando de crecimiento, ¿consideran que sus sistemas actuales están listos para soportar el doble de operaciones sin requerir más personal administrativo?`,
         c: 20
       }
     ];
 
-    // Find the first question that hasn't been asked yet
-    const nextQObj = availableQuestions.find(q => !askedQuestions.includes(q.q));
+    // Priority 1: Match question targeting nextRequiredGap that hasn't been asked
+    let nextQObj = availableQuestions.find(
+      q => q.gap === completionState.nextRequiredGap && !askedQuestions.includes(q.q)
+    );
+
+    // Priority 2: Any unasked question
+    if (!nextQObj) {
+      nextQObj = availableQuestions.find(q => !askedQuestions.includes(q.q));
+    }
 
     if (nextQObj) {
       nextIntent = nextQObj.intent as any;
       nextQuestion = nextQObj.q;
-      reason = "Asking next unasked question.";
+      reason = `Asking question for gap ${completionState.nextRequiredGap || "general"}.`;
       currentConfidence += nextQObj.c;
     } else {
-      // If we run out of predefined questions, just close
-      nextIntent = "CLOSING";
-      nextQuestion = `Gracias. He comprendido bastante sobre ${input.companyName}. Estoy procesando tu Radiografía Empresarial Aura™ y el Executive Briefing™.`;
-      reason = "Ran out of questions, closing.";
-      currentConfidence = 100;
-    }
-
-    // Heuristics based on responses (simulated AI)
-    const text = currentResponse.toLowerCase();
-    if (text.includes("error") || text.includes("pago") || text.includes("nomina") || text.includes("nómina")) {
-      updatedDossier.priority = "Reducir errores en pre-nómina";
-    }
-    if (text.includes("excel") || text.includes("papel") || text.includes("manual")) {
-      updatedDossier.schedulingMethod = "Excel y papel";
-      newHypotheses.push("Alta probabilidad de errores en pagos");
-    }
-    if (text.includes("si") || text.includes("queja") || text.includes("frecuente")) {
-      updatedDossier.payrollIncidents = true;
-    } else if (text.includes("no") || text.includes("nunca")) {
-      discardedHypotheses.push("Alta probabilidad de errores en pagos");
-      updatedDossier.payrollIncidents = false;
+      // Fallback: If unasked questions ran out but hard requirements/gaps still exist, re-ask with adaptive clarification
+      nextIntent = "DISCOVER_PROBLEM";
+      nextQuestion = `Para afinar el expediente de ${input.companyName}, ¿qué otro proceso o área administrativa requiere mayor atención en la operación diaria?`;
+      reason = "Asking adaptive clarification for remaining gap.";
+      currentConfidence += 10;
     }
 
     return {
