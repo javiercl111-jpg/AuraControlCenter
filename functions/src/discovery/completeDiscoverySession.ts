@@ -126,11 +126,13 @@ export const completeDiscoverySession = functions.https.onCall(
         dossierPayload,
         linkData,
       });
-      if (completion.missingRequiredFields.length > 0) {
+      if (!completion.valid) {
         console.warn({
           executionId,
           stage: "VALIDATE_COMPLETION",
-          questionsAskedCount: completion.questionsAskedCount,
+          hardMissingFields: completion.hardMissingFields,
+          evidenceGaps: completion.evidenceGaps,
+          conversationMetrics: completion.conversationMetrics,
           completionReason: completion.completionReason,
           missingRequiredFields: completion.missingRequiredFields,
           conversationDefinitionVersion: completion.conversationDefinitionVersion,
@@ -140,6 +142,23 @@ export const completeDiscoverySession = functions.https.onCall(
           "DISCOVERY_REQUIRED_FIELDS_MISSING",
           completion,
         );
+      }
+
+      console.log({
+        executionId,
+        stage: "DISCOVERY_COMPLETION_VALIDATED",
+        hardMissingCount: completion.hardMissingFields.length,
+        evidenceGapCount: completion.evidenceGaps.length,
+        userTurns: completion.conversationMetrics.userTurns,
+        substantiveUserTurns: completion.conversationMetrics.substantiveUserTurns,
+      });
+
+      if (completion.evidenceGaps.length > 0) {
+        console.log({
+          executionId,
+          stage: "DISCOVERY_COMPLETION_EVIDENCE_GAPS",
+          evidenceGaps: completion.evidenceGaps,
+        });
       }
     } catch (error: any) {
       console.error({ executionId, stage: "LOAD_SESSION", name: error.name, message: error.message, stack: error.stack });
@@ -192,6 +211,8 @@ export const completeDiscoverySession = functions.https.onCall(
         questionsAskedCount: completion.questionsAskedCount,
         completionReason: completion.completionReason,
         missingRequiredFields: completion.missingRequiredFields,
+        evidenceGaps: completion.evidenceGaps,
+        conversationMetrics: completion.conversationMetrics,
         conversationDefinitionVersion: completion.conversationDefinitionVersion,
         ...(dossierPayloadClean.createdAt ? { createdAt: dossierPayloadClean.createdAt } : {}),
         executiveBriefingDraft: finalExecutiveBriefing,
