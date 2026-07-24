@@ -66,6 +66,7 @@ export class AuraPdfComponents {
     fontStyle?: "normal" | "bold" | "italic";
     align?: "left" | "center" | "right";
     maxLines?: number;
+    textColor?: readonly [number, number, number];
   }): number {
     const {
       doc,
@@ -79,7 +80,8 @@ export class AuraPdfComponents {
       lineHeight = 1.4,
       fontStyle = "normal",
       align = "left",
-      maxLines = 999
+      maxLines = 999,
+      textColor
     } = options;
 
     const sanitizedText = text ? text.replace(/\s+/g, " ").trim() : "";
@@ -91,6 +93,9 @@ export class AuraPdfComponents {
     let totalHeight = 0;
 
     doc.setFont("helvetica", fontStyle);
+    if (textColor) {
+      doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+    }
 
     while (currentFontSize >= minimumFontSize) {
       doc.setFontSize(currentFontSize);
@@ -176,8 +181,13 @@ export class AuraPdfComponents {
     // Logo
     this.drawLogo(doc, assets, 70, 42);
 
+    // Explicitly set text color to white for cover page elements
+    const whiteColor: readonly [number, number, number] = [255, 255, 255];
+    doc.setTextColor(255, 255, 255);
+
     // Dynamic Title Layout
     let currentY = 112;
+    doc.setTextColor(255, 255, 255);
     const titleH = this.drawFittedTextBlock({
       doc,
       text: title,
@@ -187,12 +197,14 @@ export class AuraPdfComponents {
       initialFontSize: 28,
       minimumFontSize: 16,
       align: "center",
-      fontStyle: "bold"
+      fontStyle: "bold",
+      textColor: whiteColor
     });
     
     currentY += titleH + 4;
     
     // Subtitle
+    doc.setTextColor(255, 255, 255);
     const subtitleH = this.drawFittedTextBlock({
       doc,
       text: subtitle,
@@ -202,7 +214,8 @@ export class AuraPdfComponents {
       initialFontSize: 16,
       minimumFontSize: 11,
       align: "center",
-      fontStyle: "normal"
+      fontStyle: "normal",
+      textColor: whiteColor
     });
 
     currentY += subtitleH + 8;
@@ -213,6 +226,7 @@ export class AuraPdfComponents {
     currentY += 18;
 
     // Company
+    doc.setTextColor(255, 255, 255);
     const companyH = this.drawFittedTextBlock({
       doc,
       text: companyName,
@@ -222,13 +236,15 @@ export class AuraPdfComponents {
       initialFontSize: 20,
       minimumFontSize: 11,
       align: "center",
-      fontStyle: "bold"
+      fontStyle: "bold",
+      textColor: whiteColor
     });
 
     currentY += companyH + 8;
 
     // Contact
     if (contactName) {
+      doc.setTextColor(255, 255, 255);
       this.drawFittedTextBlock({
         doc,
         text: `Preparado para: ${contactName}`,
@@ -238,7 +254,8 @@ export class AuraPdfComponents {
         initialFontSize: 12,
         minimumFontSize: 9,
         align: "center",
-        fontStyle: "normal"
+        fontStyle: "normal",
+        textColor: whiteColor
       });
     }
   }
