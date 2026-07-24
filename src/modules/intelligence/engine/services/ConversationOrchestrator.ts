@@ -295,9 +295,19 @@ export class ConversationOrchestrator {
     );
 
     if (!validation.accepted) {
-      console.warn(`[EXECUTIVE_CONVERSATION] ${validation.fallbackCode}`);
+      if (validation.fallbackCode === "LLM_INTENT_MISMATCH") {
+        console.log({
+          stage: "DISCOVERY_INTENT_MISMATCH_RECOVERED",
+          authoritativeIntent: request.authoritativeIntent,
+          retryCount: heuristicOutput.updatedFallbackCount,
+          action: "RETAIN_AUTHORITATIVE_QUESTION",
+        });
+      } else {
+        console.warn(`[EXECUTIVE_CONVERSATION] ${validation.fallbackCode}`);
+      }
       return {
         ...heuristicOutput,
+        shouldComplete: false,
         llmFallbackCode: validation.fallbackCode,
       };
     }
