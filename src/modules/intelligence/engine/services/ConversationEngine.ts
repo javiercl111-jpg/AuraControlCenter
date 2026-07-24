@@ -62,7 +62,6 @@ export class ConversationEngine {
     const historyLength = input.conversationHistory.length;
     let currentConfidence = input.confidenceLevel;
     const currentResponse = input.currentResponse;
-    const turnCount = input.turnCount + 1;
     const updatedDossier: any = { ...input.partialDossier };
 
     // Heuristics based on responses
