@@ -18,6 +18,9 @@ export * from './graph/selectors/traversal';
 // Knowledge Coverage Engine (AI-01D)
 export * from './coverage';
 
+// Adaptive Question Planning Engine (AI-01E)
+export * from './planning';
+
 const EnterpriseModelModule = {
   version: '1.0.0',
 };
