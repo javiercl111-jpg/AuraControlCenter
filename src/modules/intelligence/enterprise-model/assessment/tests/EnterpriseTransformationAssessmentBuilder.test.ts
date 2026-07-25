@@ -60,7 +60,26 @@ describe('EnterpriseTransformationAssessmentBuilder', () => {
         findingId: 'f-1',
         statement: '',
         type: 'FINDING' as const,
-        chain: { chainId: '', claims: [], logicDescription: '' },
+        chain: {
+          chainId: 'c-1',
+          claims: [{
+            claimId: 'claim-1',
+            statement: 'Test claim',
+            sourceNodes: [],
+            sourceRelationships: [],
+            evidenceSupports: [{
+              supportId: 'sup-1',
+              evidenceRef: 'ev-1',
+              correlationType: 'DIRECT' as const,
+              weight: 1,
+              rationale: 'Direct support'
+            }],
+            confidence: { support: 1, directness: 1, consistency: 1, coverage: 1, causalConfidence: 1, aggregate: 1 },
+            status: 'SUPPORTED_FINDING' as const,
+            createdAt: '2026-07-25T10:00:00Z'
+          }],
+          logicDescription: 'Test logic'
+        },
         status: 'SUPPORTED_FINDING' as const,
         confidence: { support: 1, directness: 1, consistency: 1, coverage: 1, causalConfidence: 1, aggregate: 1 }
       }]
