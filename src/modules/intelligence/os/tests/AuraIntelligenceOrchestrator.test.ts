@@ -1,120 +1,93 @@
-// @ts-nocheck
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 import { AuraIntelligenceOrchestrator } from '../AuraIntelligenceOrchestrator';
-import { PipelineContextBuilder } from '../PipelineContextBuilder';
-import { AuraIntelligenceOSError } from '../errors';
 import type { AuraIntelligenceOSDependencies } from '../dependencyComposition';
-import type { PipelineExecutionContext } from '../types';
+import { PipelineExecutionContext } from '../PipelineExecutionContext';
 import type { PipelineAggregatedState } from '../contextTypes';
-import type { TurnExtractionResult } from '../../enterprise-model/extraction/domain/types';
+import {
+  createMinimalMentalModel,
+  createMinimalKnowledgeGraph,
+  createMinimalExtractionResult,
+  createMinimalCoverageReport,
+  createMinimalReadinessAssessment,
+  createMinimalPlanResult,
+  createMinimalReasoningReport,
+  createMinimalDossier,
+  createMinimalAssessment
+} from './fixtures';
+import type { PipelineClock, PipelineIdGenerator } from '../ports';
+import type { PlannerPolicy } from '../../enterprise-model/planning/domain/types';
+import type { ReasoningPolicy } from '../../enterprise-model/reasoning/policies/ReasoningPolicy';
+import type { DossierPolicy, DiagnosticNarrativeProvider } from '../../enterprise-model/dossier/domain/types';
+import type { AssessmentPolicy } from '../../enterprise-model/assessment/domain/types';
+import type { IQuestionRealizationProvider } from '../../enterprise-model/planning/services/QuestionRealizationProvider';
 
 describe('AuraIntelligenceOrchestrator', () => {
-  let mockClock: any;
-  let mockIdGenerator: any;
-  let mockExtractionApplier: any;
-  let mockCoverageDecisionEngine: any;
-  let mockCoverageCalculator: any;
-  let mockAdaptiveQuestionPlanner: any;
-  let mockExecutiveReasoningEngine: any;
-  let mockExecutiveDossierBuilder: any;
-  let mockAssessmentBuilder: any;
-  
+  let mockClock: PipelineClock;
+  let mockIdGenerator: PipelineIdGenerator;
+  let mockExtractionApplier: { applyExtraction: Mock };
+  let mockCoverageDecisionEngine: { evaluateDecisionReadiness: Mock };
+  let mockCoverageCalculator: { calculateOverallReport: Mock };
+  let mockAdaptiveQuestionPlanner: { planQuestionsFromGraph: Mock };
+  let mockExecutiveReasoningEngine: { execute: Mock };
+  let mockExecutiveDossierBuilder: { build: Mock };
+  let mockAssessmentBuilder: { build: Mock };
+
   let dependencies: AuraIntelligenceOSDependencies;
   let osContext: PipelineExecutionContext;
-  
+
   beforeEach(() => {
     mockClock = {
-      now: vi.fn().mockReturnValue(new Date('2026-01-01T10:00:00Z')),
+      now: vi.fn().mockReturnValue(new Date('2026-01-01T10:00:00Z').getTime()),
       toISOString: vi.fn().mockReturnValue('2026-01-01T10:00:00.000Z')
     };
 
     mockIdGenerator = {
-      generateExecutionId: vi.fn().mockReturnValue('exec-123'),
-      generateSessionId: vi.fn().mockReturnValue('sess-123')
+      generateExecutionId: vi.fn().mockReturnValue('exec-123')
     };
 
     mockExtractionApplier = {
       applyExtraction: vi.fn().mockReturnValue({
-        mentalModel: {} as any,
-        knowledgeGraph: {} as any,
-        extractionResult: {} as any
+        mentalModel: createMinimalMentalModel(),
+        knowledgeGraph: createMinimalKnowledgeGraph(),
+        extractionResult: createMinimalExtractionResult()
       })
     };
 
     mockCoverageDecisionEngine = {
-      evaluateDecisionReadiness: vi.fn().mockReturnValue({
-        isReady: true,
-        score: 85,
-        targetScenario: 'Test',
-        blockingGaps: [],
-        recommendedQuestions: []
-      })
+      evaluateDecisionReadiness: vi.fn().mockReturnValue(createMinimalReadinessAssessment())
     };
 
     mockCoverageCalculator = {
-      calculateOverallReport: vi.fn().mockReturnValue({
-        overallScore: 85,
-        domainBreakdown: {}
-      })
+      calculateOverallReport: vi.fn().mockReturnValue(createMinimalCoverageReport())
     };
 
     mockAdaptiveQuestionPlanner = {
-      planQuestionsFromGraph: vi.fn().mockResolvedValue({
-        status: 'READY',
-        selectedQuestions: [],
-        coverageScore: 85,
-        gapsAddressed: 0
-      })
+      planQuestionsFromGraph: vi.fn().mockResolvedValue(createMinimalPlanResult())
     };
 
     mockExecutiveReasoningEngine = {
-      execute: vi.fn().mockReturnValue({
-        evaluationContext: { targetScenario: 'Test' },
-        executiveSummary: { narrative: 'Test', bottomLine: 'Test' },
-        claims: [],
-        rootCauses: [],
-        gaps: [],
-        confidenceScore: 90
-      })
+      execute: vi.fn().mockReturnValue(createMinimalReasoningReport())
     };
 
     mockExecutiveDossierBuilder = {
-      build: vi.fn().mockReturnValue({
-        id: 'dos-1',
-        type: 'DIAGNOSTIC',
-        title: 'Test',
-        executiveSummary: 'Test',
-        maturityProfile: { currentLevel: 'INITIAL', score: 10 },
-        strengths: [],
-        weaknesses: [],
-        priorities: []
-      })
+      build: vi.fn().mockReturnValue(createMinimalDossier())
     };
 
     mockAssessmentBuilder = {
-      build: vi.fn().mockReturnValue({
-        id: 'asm-1',
-        timestamp: '2026-01-01',
-        version: '1',
-        readiness: { status: 'READY', score: 90, blockers: [] },
-        confidence: { score: 90, factors: [] },
-        evidenceMap: { totalEvidences: 0, criticalGaps: 0, mappedClaims: [] },
-        maturity: { level: 'INITIAL', nextLevel: 'MANAGED', gaps: [] },
-        priorities: [],
-        insights: []
-      })
+      build: vi.fn().mockReturnValue(createMinimalAssessment())
     };
 
     dependencies = {
       clock: mockClock,
       idGenerator: mockIdGenerator,
-      plannerPolicy: { maxQuestions: 5, minConfidence: 80, focusAreas: [] },
-      questionRealizationProvider: { realize: vi.fn() },
-      reasoningPolicy: { minConfidenceScore: 80, requireRootCause: false },
-      dossierPolicy: { requiredMaturityLevel: 'INITIAL', includeEvidence: true, prioritiesCount: 3 },
-      diagnosticNarrativeProvider: { generate: vi.fn() },
-      assessmentPolicy: { version: '1', strictMode: false },
-      
+      plannerPolicy: { maxQuestionsPerPlan: 5, minConfidenceThreshold: 80, jaccardThreshold: 0.8, allowClosedQuestions: false } as PlannerPolicy,
+      questionRealizationProvider: { realizeIntents: vi.fn() } as IQuestionRealizationProvider,
+      reasoningPolicy: { minimumSupportThreshold: 0.7, minimumCausalConfidence: 0.85, requireDirectEvidenceForRisks: true, allowInferenceForOpportunities: true, failClosedOnCoverageScore: 0.6, failClosedOnMissingEntities: true, contradictionDemotionWeight: 0.5, maxInferenceSteps: 2 } as ReasoningPolicy,
+      dossierPolicy: { getLevels: vi.fn(), evaluateScore: vi.fn() } as DossierPolicy,
+      diagnosticNarrativeProvider: { generateNarrative: vi.fn(), generateExecutiveSummary: vi.fn() } as DiagnosticNarrativeProvider,
+      assessmentPolicy: { version: '1', confidenceWeights: { support: 1, directness: 1, consistency: 1, coverage: 1, causalConfidence: 1 }, dimensionThresholds: { LEADERSHIP: 1, STRATEGY: 1, EXECUTION: 1, TECHNOLOGY: 1, CULTURE: 1, OPERATIONS: 1 }, globalConfidenceThreshold: 0.8, evaluateReadiness: vi.fn(), calculateConfidence: vi.fn(), determineAssessmentStatus: vi.fn() } as AssessmentPolicy,
+
       extractionApplier: mockExtractionApplier,
       coverageDecisionEngine: mockCoverageDecisionEngine,
       coverageCalculator: mockCoverageCalculator,
@@ -124,38 +97,31 @@ describe('AuraIntelligenceOrchestrator', () => {
       enterpriseTransformationAssessmentBuilder: mockAssessmentBuilder
     };
 
-    osContext = {
-      executionId: 'exec-123',
-      sessionId: 'sess-123',
-      createdAt: '2026-01-01T10:00:00.000Z',
-      clock: mockClock,
-      idGenerator: mockIdGenerator
-    };
+    osContext = new PipelineExecutionContext('exec-123', mockClock, { sessionId: 'sess-123', targetScenario: 'Test' });
   });
 
   it('Pipeline completo exitoso y orden exacto', async () => {
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    const inputState = {
+    const inputState: PipelineAggregatedState = {
       sessionId: 'sess-123',
       targetScenario: 'Test',
-      extractionResult: { evidence: [], knowledgeGaps: [], corrections: [], contradictions: [], nodeProposals: [] },
-      mentalModel: { entities: [] },
-      knowledgeGraph: { totalNodes: 0, totalRelationships: 0, nodes: [], relationships: [] }
-    } as unknown as PipelineAggregatedState;
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
+      knowledgeGraph: createMinimalKnowledgeGraph()
+    };
 
     const result = await orchestrator.executePipeline({ sessionId: 'sess-123', targetScenario: 'Test' }, inputState);
 
-    console.log(JSON.stringify(result.errors, null, 2)); expect(result.status).toBe('SUCCESS');
+    expect(result.status).toBe('SUCCESS');
     expect(result.errors).toHaveLength(0);
-    
-    // Order exacto de etapas: Extraction, Coverage, Planning, Reasoning, Dossier, Assessment
+
     expect(mockExtractionApplier.applyExtraction).toHaveBeenCalledTimes(1);
     expect(mockCoverageDecisionEngine.evaluateDecisionReadiness).toHaveBeenCalledTimes(1);
     expect(mockAdaptiveQuestionPlanner.planQuestionsFromGraph).toHaveBeenCalledTimes(1);
     expect(mockExecutiveReasoningEngine.execute).toHaveBeenCalledTimes(1);
     expect(mockExecutiveDossierBuilder.build).toHaveBeenCalledTimes(1);
     expect(mockAssessmentBuilder.build).toHaveBeenCalledTimes(1);
-    
+
     expect(result.stageResults['EVIDENCE_EXTRACTION']?.status).toBe('SUCCEEDED');
     expect(result.stageResults['MENTAL_MODEL']?.status).toBe('SUCCEEDED');
     expect(result.stageResults['KNOWLEDGE_GRAPH']?.status).toBe('SUCCEEDED');
@@ -167,18 +133,18 @@ describe('AuraIntelligenceOrchestrator', () => {
   });
 
   it('Fallo de Extraction salta etapas fundamentales', async () => {
-    mockExtractionApplier.applyExtraction.mockImplementation(() => {
+    mockExtractionApplier.applyExtraction = vi.fn().mockImplementation(() => {
       throw new Error('Extraction failed');
     });
 
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    const inputState = {
+    const inputState: PipelineAggregatedState = {
       sessionId: 'sess-123',
       targetScenario: 'Test',
-      extractionResult: { evidence: [], knowledgeGaps: [], corrections: [], contradictions: [], nodeProposals: [] },
-      mentalModel: { entities: [] },
-      knowledgeGraph: { totalNodes: 0, totalRelationships: 0, nodes: [], relationships: [] }
-    } as unknown as PipelineAggregatedState;
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
+      knowledgeGraph: createMinimalKnowledgeGraph()
+    };
 
     const result = await orchestrator.executePipeline({ sessionId: 'sess-123', targetScenario: 'Test' }, inputState);
 
@@ -187,39 +153,39 @@ describe('AuraIntelligenceOrchestrator', () => {
     expect(result.skippedStages).toContain('KNOWLEDGE_COVERAGE');
     expect(result.skippedStages).toContain('ADAPTIVE_PLANNING');
     expect(result.skippedStages).toContain('EXECUTIVE_REASONING');
-    
+
     expect(mockCoverageDecisionEngine.evaluateDecisionReadiness).not.toHaveBeenCalled();
     expect(mockAdaptiveQuestionPlanner.planQuestionsFromGraph).not.toHaveBeenCalled();
   });
 
   it('Fallo de Reasoning salta Dossier y Assessment', async () => {
-    mockExecutiveReasoningEngine.execute.mockImplementation(() => {
+    mockExecutiveReasoningEngine.execute = vi.fn().mockImplementation(() => {
       throw new Error('Reasoning failed');
     });
 
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    const inputState = {
+    const inputState: PipelineAggregatedState = {
       sessionId: 'sess-123',
       targetScenario: 'Test',
-      extractionResult: { evidence: [], knowledgeGaps: [], corrections: [], contradictions: [], nodeProposals: [] },
-      mentalModel: { entities: [] },
-      knowledgeGraph: { totalNodes: 0, totalRelationships: 0, nodes: [], relationships: [] }
-    } as unknown as PipelineAggregatedState;
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
+      knowledgeGraph: createMinimalKnowledgeGraph()
+    };
 
     const result = await orchestrator.executePipeline({ sessionId: 'sess-123', targetScenario: 'Test' }, inputState);
 
-    expect(result.status).toBe('PARTIAL_SUCCESS'); // Extraction and coverage succeeded
+    expect(result.status).toBe('PARTIAL_SUCCESS');
     expect(result.stageResults['EXECUTIVE_REASONING']?.status).toBe('FAILED');
     expect(result.skippedStages).toContain('EXECUTIVE_DOSSIER');
     expect(result.skippedStages).toContain('TRANSFORMATION_ASSESSMENT');
-    
+
     expect(mockExecutiveDossierBuilder.build).not.toHaveBeenCalled();
     expect(mockAssessmentBuilder.build).not.toHaveBeenCalled();
   });
 
   it('Cancelacion respeta el estado global', async () => {
-    dependencies.cancellationSignal = { checkCancellation: () => {}, aborted: true, reason: 'Test' } as any;
-    
+    dependencies.cancellationSignal = { aborted: true, reason: 'Test' };
+
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
     const result = await orchestrator.executePipeline({ sessionId: 'sess-123' }, undefined);
 
@@ -232,35 +198,34 @@ describe('AuraIntelligenceOrchestrator', () => {
     delete dependencies.adaptiveQuestionPlanner;
 
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    const inputState = {
+    const inputState: PipelineAggregatedState = {
       sessionId: 'sess-123',
       targetScenario: 'Test',
-      extractionResult: { evidence: [], knowledgeGaps: [], corrections: [], contradictions: [], nodeProposals: [] },
-      mentalModel: { entities: [] },
-      knowledgeGraph: { totalNodes: 0, totalRelationships: 0, nodes: [], relationships: [] }
-    } as unknown as PipelineAggregatedState;
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
+      knowledgeGraph: createMinimalKnowledgeGraph()
+    };
 
     const result = await orchestrator.executePipeline({ sessionId: 'sess-123' }, inputState);
     expect(result.status).toBe('PARTIAL_SUCCESS');
     expect(result.skippedStages).toContain('ADAPTIVE_PLANNING');
-    expect(result.stageResults['EXECUTIVE_REASONING']?.status).toBe('SUCCEEDED'); // continues
+    expect(result.stageResults['EXECUTIVE_REASONING']?.status).toBe('SUCCEEDED');
   });
 
   it('Mutacion no ocurre en el input original', async () => {
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    const inputState = {
+    const inputState: PipelineAggregatedState = {
       sessionId: 'sess-123',
       targetScenario: 'Test',
-      extractionResult: { evidence: [], knowledgeGaps: [], corrections: [], contradictions: [], nodeProposals: [] },
-      mentalModel: { entities: [] },
-      knowledgeGraph: { totalNodes: 0, totalRelationships: 0, nodes: [], relationships: [] }
-    } as unknown as PipelineAggregatedState;
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
+      knowledgeGraph: createMinimalKnowledgeGraph()
+    };
     const clonedInput = JSON.parse(JSON.stringify(inputState));
 
     const result = await orchestrator.executePipeline({ sessionId: 'sess-123', targetScenario: 'Test' }, inputState);
 
-    console.log(JSON.stringify(result.errors, null, 2)); expect(result.status).toBe('SUCCESS');
-    // Original state should not be mutated
+    expect(result.status).toBe('SUCCESS');
     expect(inputState).toEqual(clonedInput);
   });
 });
