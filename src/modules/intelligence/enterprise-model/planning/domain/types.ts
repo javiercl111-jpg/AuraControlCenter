@@ -142,6 +142,20 @@ export interface AdaptiveQuestionPlanResult {
   }>;
 }
 
+export interface QuestionHistoryItem {
+  questionId: string;
+  domainId: CoverageDomain;
+  questionText: string;
+  askedAt: string;
+  answeredAt?: string;
+  status: 'ASKED' | 'ANSWERED' | 'SKIPPED';
+}
+
+export interface QuestionHistory {
+  historyId: string;
+  items: QuestionHistoryItem[];
+}
+
 const PlanningTypesModule = {
   version: '1.0.0',
 };
