@@ -14,3 +14,12 @@ export * from './graph/policies/confidence';
 export * from './graph/services/operations';
 export * from './graph/selectors/selectors';
 export * from './graph/selectors/traversal';
+
+// Knowledge Coverage Engine (AI-01D)
+export * from './coverage';
+
+const EnterpriseModelModule = {
+  version: '1.0.0',
+};
+
+export default EnterpriseModelModule;
