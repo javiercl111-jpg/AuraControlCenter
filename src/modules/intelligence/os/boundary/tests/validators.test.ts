@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { validateGovernedRequest, detectCircularOrDangerousKeys, estimateSizeInBytes } from '../validators';
+import {
+  createSafeInternalPayload,
+  detectCircularOrDangerousKeys,
+  estimateSizeInBytes,
+  validateGovernedRequest,
+} from '../validators';
 import { GovernedBoundaryError } from '../errors';
 
 describe('Boundary Validators', () => {
@@ -95,6 +100,99 @@ describe('Boundary Validators', () => {
     const obj = { test: 'hello' };
     const bytes = estimateSizeInBytes(obj);
     expect(bytes).toBeGreaterThan(0);
+  });
+
+  it('creates a detached JSON-like payload copy', () => {
+    const original = {
+      industry: 'services',
+      nested: { employeeBand: '10_50' },
+      signals: [true, { priority: 'HIGH' }],
+    };
+
+    const copy = createSafeInternalPayload(original);
+    const typedCopy = copy as {
+      industry: string;
+      nested: { employeeBand: string };
+      signals: readonly [boolean, { priority: string }];
+    };
+
+    expect(copy).toEqual(original);
+    expect(copy).not.toBe(original);
+    expect(typedCopy.nested).not.toBe(original.nested);
+    expect(typedCopy.signals).not.toBe(original.signals);
+    expect(typedCopy.signals[1]).not.toBe(original.signals[1]);
+  });
+
+  it('does not preserve shared nested references in the internal copy', () => {
+    const shared = { incidentSignal: true };
+    const original = { first: shared, second: shared };
+    const copy = createSafeInternalPayload(original) as {
+      first: { incidentSignal: boolean };
+      second: { incidentSignal: boolean };
+    };
+
+    expect(copy.first).toEqual(shared);
+    expect(copy.second).toEqual(shared);
+    expect(copy.first).not.toBe(shared);
+    expect(copy.second).not.toBe(shared);
+    expect(copy.first).not.toBe(copy.second);
+  });
+
+  it('rejects functions at every payload level', () => {
+    expect(() => createSafeInternalPayload(() => 'not-json')).toThrow(GovernedBoundaryError);
+    expect(() => createSafeInternalPayload({ nested: { callback: () => 'not-json' } })).toThrow(
+      GovernedBoundaryError
+    );
+  });
+
+  it('rejects symbols and bigint values', () => {
+    expect(() => createSafeInternalPayload(Symbol('not-json'))).toThrow(GovernedBoundaryError);
+    expect(() => createSafeInternalPayload({ count: BigInt(1) })).toThrow(GovernedBoundaryError);
+  });
+
+  it('rejects class instances', () => {
+    class CustomPayload {
+      public readonly value = 'not-plain';
+    }
+
+    expect(() => createSafeInternalPayload(new CustomPayload())).toThrow(GovernedBoundaryError);
+  });
+
+  it('rejects __proto__, constructor and prototype keys', () => {
+    const protoPayload = JSON.parse('{"__proto__":{"polluted":true}}') as Record<string, unknown>;
+    const constructorPayload = JSON.parse('{"constructor":{"polluted":true}}') as Record<string, unknown>;
+    const prototypePayload = JSON.parse('{"prototype":{"polluted":true}}') as Record<string, unknown>;
+
+    expect(() => createSafeInternalPayload(protoPayload)).toThrow(GovernedBoundaryError);
+    expect(() => createSafeInternalPayload(constructorPayload)).toThrow(GovernedBoundaryError);
+    expect(() => createSafeInternalPayload(prototypePayload)).toThrow(GovernedBoundaryError);
+  });
+
+  it('rejects excessive nesting depth', () => {
+    const root: Record<string, unknown> = {};
+    let cursor = root;
+    for (let depth = 0; depth < 22; depth++) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+
+    expect(() => createSafeInternalPayload(root)).toThrow(GovernedBoundaryError);
+  });
+
+  it('rejects accessors without invoking them', () => {
+    let getterCalls = 0;
+    const payload: Record<string, unknown> = {};
+    Object.defineProperty(payload, 'secret', {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        return 'must-not-be-read';
+      },
+    });
+
+    expect(() => createSafeInternalPayload(payload)).toThrow(GovernedBoundaryError);
+    expect(getterCalls).toBe(0);
   });
 });
 

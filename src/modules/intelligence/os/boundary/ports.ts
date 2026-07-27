@@ -24,11 +24,19 @@ export interface BoundaryAuditPort {
   logEvent(eventName: string, eventData: Readonly<Record<string, unknown>>): Promise<void>;
 }
 
+export type InternalPayloadPrimitive = string | number | boolean | null;
+
+export type InternalPayloadValue =
+  | InternalPayloadPrimitive
+  | readonly InternalPayloadValue[]
+  | { readonly [key: string]: InternalPayloadValue };
+
 export interface InternalExecutionInput {
   readonly sessionId: string;
   readonly executionKey?: string;
   readonly targetScenario?: string;
   readonly objectiveIds?: readonly string[];
+  readonly payload: InternalPayloadValue;
   readonly metadata?: Record<string, unknown>;
 }
 
