@@ -1,8 +1,8 @@
 import type { ShadowClock, ShadowExecutionIdGenerator } from '../ports';
 import type { ShadowComparatorPort } from './ports';
-import type { 
-  ShadowComparisonRequest, 
-  ShadowComparisonResult, 
+import type {
+  ShadowComparisonRequest,
+  ShadowComparisonResult,
   ShadowDifference,
   ShadowDifferenceType,
   ShadowDifferenceSeverity,
@@ -35,12 +35,12 @@ export class ShadowComparator implements ShadowComparatorPort {
 
     try {
       this.validateInput(request);
-      
+
       const { legacyInput, osResult, policy } = request;
 
       // Derive OS Comparison Input from OS Result
       const osInput = this.deriveOSInput(osResult);
-      
+
       const differences: ShadowDifference[] = [];
       const comparableFields: string[] = [];
       const nonComparableFields: string[] = [];
@@ -72,7 +72,7 @@ export class ShadowComparator implements ShadowComparatorPort {
       comparableFields.push('status');
       const legacyStatus = legacyInput.completionStatus || (legacyInput.closed ? 'COMPLETED' : 'PENDING');
       const osStatus = osInput.pipelineStatus;
-      
+
       // Exact match is not always possible without domain mapping, but we compare strings
       if (legacyStatus !== osStatus) {
         addDiff('STATUS_MISMATCH', 'status', legacyStatus, osStatus, 'HIGH', 'Pipeline status mismatch');
@@ -81,11 +81,11 @@ export class ShadowComparator implements ShadowComparatorPort {
       // 2. Coverage Delta
       if (legacyInput.coverageScore !== undefined && osInput.coverageScore !== undefined) {
         comparableFields.push('coverageScore');
-        if (Number.isNaN(legacyInput.coverageScore) || Number.isNaN(osInput.coverageScore) || 
+        if (Number.isNaN(legacyInput.coverageScore) || Number.isNaN(osInput.coverageScore) ||
             !isFinite(legacyInput.coverageScore) || !isFinite(osInput.coverageScore)) {
           throw new ShadowComparisonError(ShadowComparisonErrorCodes.SHADOW_COMPARISON_INVALID_INPUT, 'Invalid coverage score', false);
         }
-        
+
         const delta = Math.abs(legacyInput.coverageScore - osInput.coverageScore);
         if (delta > policy.coverageDeltaThreshold) {
           addDiff('COVERAGE_DELTA', 'coverageScore', legacyInput.coverageScore, osInput.coverageScore, 'MEDIUM', 'Coverage score exceeds threshold', delta);
@@ -100,7 +100,7 @@ export class ShadowComparator implements ShadowComparatorPort {
 
       // 3. Duration Delta
       if (osInput.durationMs !== undefined) {
-        // Legacy doesn't always have duration, but if it did, we'd compare. 
+        // Legacy doesn't always have duration, but if it did, we'd compare.
         // For now, only OS has it explicitly in derivation.
         nonComparableFields.push('duration');
       }
@@ -180,10 +180,10 @@ export class ShadowComparator implements ShadowComparatorPort {
       // Metrics
       const statusMatch = !differences.some(d => d.type === 'STATUS_MISMATCH');
       const objectiveMatch = !differences.some(d => d.type === 'OBJECTIVE_MISMATCH');
-      
+
       const diffsByType: Partial<Record<ShadowDifferenceType, number>> = {};
       const diffsBySeverity: Partial<Record<ShadowDifferenceSeverity, number>> = {};
-      
+
       for (const d of differences) {
         diffsByType[d.type] = (diffsByType[d.type] || 0) + 1;
         diffsBySeverity[d.severity] = (diffsBySeverity[d.severity] || 0) + 1;
@@ -205,8 +205,8 @@ export class ShadowComparator implements ShadowComparatorPort {
 
       const legacySnapshot = this.createLegacySnapshot(legacyInput);
       const osSnapshot = this.createOSSnapshot(osInput);
-      
-      const sanitizedMetadata = policy.includeSafeMetadata 
+
+      const sanitizedMetadata = policy.includeSafeMetadata
         ? MetadataSanitizer.sanitize(legacyInput.safeMetadata)
         : undefined;
 
@@ -287,7 +287,7 @@ export class ShadowComparator implements ShadowComparatorPort {
         }
       }
     }
-    
+
     return input;
   }
 

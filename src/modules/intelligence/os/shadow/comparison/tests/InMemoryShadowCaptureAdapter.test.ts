@@ -68,7 +68,7 @@ describe('Aura Intelligence OS - AI-02F Shadow Capture Adapter', () => {
   it('2. Captura disabled', () => {
     policy.enabled = false;
     const adapter = new InMemoryShadowCaptureAdapter(mockClock, policy);
-    
+
     expect(() => adapter.capture(defaultRecord)).toThrowError(/Capture is disabled/);
     expect(adapter.getMetrics().rejectedCount).toBe(1);
   });
@@ -80,7 +80,7 @@ describe('Aura Intelligence OS - AI-02F Shadow Capture Adapter', () => {
 
     expect(adapter.getByExecutionKey('exec-1')?.comparisonResult.comparisonId).toBe('comp-1');
     expect(adapter.getByExecutionKey('exec-2')?.comparisonResult.comparisonId).toBe('comp-2');
-    
+
     const bySession = adapter.getBySessionKey('sess-1');
     expect(bySession.length).toBe(2);
     expect(bySession[0].comparisonResult.comparisonId).toBe('comp-2'); // newest first
@@ -89,10 +89,10 @@ describe('Aura Intelligence OS - AI-02F Shadow Capture Adapter', () => {
   it('5. Copia defensiva, 6. No mutacion', () => {
     const adapter = new InMemoryShadowCaptureAdapter(mockClock, policy);
     adapter.capture(defaultRecord);
-    
+
     const retrieved = adapter.getByExecutionKey('exec-1')!;
     retrieved.comparisonResult.differences.push({ type: 'NOT_COMPARABLE', field: 'f', severity: 'INFO', message: '' });
-    
+
     const retrieved2 = adapter.getByExecutionKey('exec-1')!;
     expect(retrieved2.comparisonResult.differences.length).toBe(1); // Original unchanged
   });
@@ -100,12 +100,12 @@ describe('Aura Intelligence OS - AI-02F Shadow Capture Adapter', () => {
   it('7. TTL, 8. Expiracion, 19. Clear expired', () => {
     const adapter = new InMemoryShadowCaptureAdapter(mockClock, policy);
     adapter.capture(defaultRecord);
-    
+
     expect(adapter.getByExecutionKey('exec-1')).toBeDefined();
-    
+
     // Advance time past TTL
     mockClock.now = vi.fn().mockReturnValue(1060001);
-    
+
     expect(adapter.getByExecutionKey('exec-1')).toBeUndefined();
     expect(adapter.getMetrics().expiredCount).toBe(1);
     expect(adapter.getMetrics().currentRecords).toBe(0);
@@ -115,11 +115,11 @@ describe('Aura Intelligence OS - AI-02F Shadow Capture Adapter', () => {
     policy.maxRecords = 2;
     policy.maxRecordsPerSession = 5; // prevent session limit interference
     const adapter = new InMemoryShadowCaptureAdapter(mockClock, policy);
-    
+
     adapter.capture({ ...defaultRecord, comparisonResult: { ...defaultResult, comparisonId: 'c1', executionKey: 'e1' }, capturedAtMs: 1 });
     adapter.capture({ ...defaultRecord, comparisonResult: { ...defaultResult, comparisonId: 'c2', executionKey: 'e2' }, capturedAtMs: 2 });
     adapter.capture({ ...defaultRecord, comparisonResult: { ...defaultResult, comparisonId: 'c3', executionKey: 'e3' }, capturedAtMs: 3 }); // Evicts c1
-    
+
     expect(adapter.getMetrics().currentRecords).toBe(2);
     expect(adapter.getMetrics().evictedCount).toBe(1);
     expect(adapter.getByExecutionKey('e1')).toBeUndefined();
@@ -130,11 +130,11 @@ describe('Aura Intelligence OS - AI-02F Shadow Capture Adapter', () => {
   it('10. maxRecordsPerSession', () => {
     policy.maxRecordsPerSession = 2;
     const adapter = new InMemoryShadowCaptureAdapter(mockClock, policy);
-    
+
     adapter.capture({ ...defaultRecord, comparisonResult: { ...defaultResult, comparisonId: 'c1', executionKey: 'e1' }, capturedAtMs: 1 });
     adapter.capture({ ...defaultRecord, comparisonResult: { ...defaultResult, comparisonId: 'c2', executionKey: 'e2' }, capturedAtMs: 2 });
     adapter.capture({ ...defaultRecord, comparisonResult: { ...defaultResult, comparisonId: 'c3', executionKey: 'e3' }, capturedAtMs: 3 }); // Evicts c1 from sess-1
-    
+
     expect(adapter.getBySessionKey('sess-1').length).toBe(2);
     expect(adapter.getByExecutionKey('e1')).toBeUndefined();
   });
@@ -144,11 +144,11 @@ describe('Aura Intelligence OS - AI-02F Shadow Capture Adapter', () => {
     policy.captureFailedComparisons = false;
     policy.captureNotComparable = false;
     const adapter = new InMemoryShadowCaptureAdapter(mockClock, policy);
-    
+
     adapter.capture({ ...defaultRecord, comparisonResult: { ...defaultResult, status: 'COMPLETED' } });
     adapter.capture({ ...defaultRecord, comparisonResult: { ...defaultResult, status: 'COMPLETED_WITH_DIFFERENCES' } });
     adapter.capture({ ...defaultRecord, comparisonResult: { ...defaultResult, status: 'NOT_COMPARABLE' } });
-    
+
     expect(adapter.getMetrics().rejectedCount).toBe(3);
     expect(adapter.getMetrics().currentRecords).toBe(0);
   });
@@ -156,11 +156,11 @@ describe('Aura Intelligence OS - AI-02F Shadow Capture Adapter', () => {
   it('16. maxDifferencesPerRecord', () => {
     policy.maxDifferencesPerRecord = 1;
     const adapter = new InMemoryShadowCaptureAdapter(mockClock, policy);
-    
+
     const diff = defaultResult.differences[0];
     const bigResult = { ...defaultResult, differences: [diff, diff, diff] };
     adapter.capture({ ...defaultRecord, comparisonResult: bigResult });
-    
+
     const retrieved = adapter.getByExecutionKey('exec-1')!;
     expect(retrieved.comparisonResult.differences.length).toBe(1);
   });

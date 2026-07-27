@@ -90,7 +90,7 @@ describe('Aura Intelligence OS - AI-02F Shadow Comparator', () => {
   it('1. Comparacion sin diferencias', () => {
     const comparator = new ShadowComparator(mockClock, mockIdGenerator);
     const result = comparator.compare({ legacyInput: defaultLegacyInput, osResult: defaultOSResult, policy });
-    
+
     expect(result.status).toBe('COMPLETED');
     expect(result.differences.length).toBe(0);
     expect(result.metrics.statusMatch).toBe(true);
@@ -101,9 +101,9 @@ describe('Aura Intelligence OS - AI-02F Shadow Comparator', () => {
     const comparator = new ShadowComparator(mockClock, mockIdGenerator);
     defaultLegacyInput.completionStatus = 'COMPLETED';
     defaultOSResult.pipelineResult!.status = 'FAILED';
-    
+
     const result = comparator.compare({ legacyInput: defaultLegacyInput, osResult: defaultOSResult, policy });
-    
+
     expect(result.status).toBe('COMPLETED_WITH_DIFFERENCES');
     const diff = result.differences.find(d => d.type === 'STATUS_MISMATCH');
     expect(diff).toBeDefined();
@@ -118,7 +118,7 @@ describe('Aura Intelligence OS - AI-02F Shadow Comparator', () => {
     if (stage && 'output' in stage && stage.output) {
       delete (stage.output as { score?: number }).score;
     }
-    
+
     const result = comparator.compare({ legacyInput: defaultLegacyInput, osResult: defaultOSResult, policy });
     expect(result.differences.some(d => d.type === 'MISSING_IN_LEGACY' && d.field === 'findingsCount')).toBe(true);
     expect(result.differences.some(d => d.type === 'MISSING_IN_OS' && d.field === 'coverageScore')).toBe(true);
@@ -161,14 +161,14 @@ describe('Aura Intelligence OS - AI-02F Shadow Comparator', () => {
     const comparator = new ShadowComparator(mockClock, mockIdGenerator);
     defaultLegacyInput.stageStatusMap!['EVIDENCE_EXTRACTION'] = 'SUCCEEDED';
     defaultOSResult.pipelineResult!.stageResults!['EVIDENCE_EXTRACTION']!.status = 'FAILED';
-    
+
     defaultLegacyInput.stageStatusMap!['KNOWLEDGE_COVERAGE'] = 'SUCCEEDED';
     delete defaultOSResult.pipelineResult!.stageResults!['KNOWLEDGE_COVERAGE'];
     defaultOSResult.pipelineResult!.skippedStages.push('KNOWLEDGE_COVERAGE');
 
     const result = comparator.compare({ legacyInput: defaultLegacyInput, osResult: defaultOSResult, policy });
     expect(result.differences.find(d => d.field === 'stageStatus.EVIDENCE_EXTRACTION')?.type).toBe('STAGE_MISMATCH');
-    
+
     const skippedDiff = result.differences.find(d => d.field === 'stageStatus.KNOWLEDGE_COVERAGE');
     expect(skippedDiff?.type).toBe('STAGE_MISMATCH');
     expect(skippedDiff?.osValue).toBe('SKIPPED');
@@ -181,7 +181,7 @@ describe('Aura Intelligence OS - AI-02F Shadow Comparator', () => {
     defaultLegacyInput.coverageScore = 10;
     defaultLegacyInput.findingsCount = 99;
     policy.maxDifferences = 2; // Should truncate
-    
+
     const result = comparator.compare({ legacyInput: defaultLegacyInput, osResult: defaultOSResult, policy });
     expect(result.differences.length).toBe(2);
   });
@@ -198,12 +198,12 @@ describe('Aura Intelligence OS - AI-02F Shadow Comparator', () => {
   it('28. Snapshot legacy seguro, 29. Snapshot OS seguro', () => {
     const comparator = new ShadowComparator(mockClock, mockIdGenerator);
     const result = comparator.compare({ legacyInput: defaultLegacyInput, osResult: defaultOSResult, policy });
-    
+
     expect(result.legacySnapshot).toBeDefined();
     expect(result.legacySnapshot?.sessionKey).toBe('sess-1');
     expect(result.osSnapshot).toBeDefined();
     expect(result.osSnapshot?.pipelineStatus).toBe('SUCCESS');
-    
+
     // Mutations to input should not affect snapshot (verified implicitly by simple spread in derivation)
   });
 

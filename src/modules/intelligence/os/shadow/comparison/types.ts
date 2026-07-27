@@ -82,13 +82,13 @@ export interface ShadowComparisonMetrics {
   objectiveMatch: boolean;
 }
 
-export type ShadowComparisonStatus = 
-  | 'COMPLETED' 
-  | 'COMPLETED_WITH_DIFFERENCES' 
-  | 'NOT_COMPARABLE' 
-  | 'INVALID_INPUT' 
-  | 'FAILED' 
-  | 'CANCELLED' 
+export type ShadowComparisonStatus =
+  | 'COMPLETED'
+  | 'COMPLETED_WITH_DIFFERENCES'
+  | 'NOT_COMPARABLE'
+  | 'INVALID_INPUT'
+  | 'FAILED'
+  | 'CANCELLED'
   | 'TIMED_OUT';
 
 export interface ShadowComparisonResult {
