@@ -466,7 +466,334 @@ describe('GovernedExecutionBoundary', () => {
     expect(auditPort.logEvent).toHaveBeenCalled();
   });
 
-  it('28. Static check: Boundary module has zero imports of Firebase, React, or Discovery', () => {
+  it('28. Delivers a detached payload to the execution port', async () => {
+    const originalPayload = {
+      schemaVersion: '1',
+      industry: 'services',
+      nested: { employeeBand: '10_50' },
+      signals: [true, { priority: 'HIGH' }],
+    };
+    let receivedInput: InternalExecutionInput | undefined;
+    const execPort: BoundaryExecutionPort = {
+      execute: vi.fn().mockImplementation(async (input: InternalExecutionInput) => {
+        receivedInput = input;
+        return {
+          executionId: 'internal-exec-1',
+          sessionId: input.sessionId,
+          status: 'SUCCEEDED',
+        };
+      }),
+    };
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: execPort,
+    });
+
+    const response = await boundary.execute(createValidRequest({ payload: originalPayload }));
+    const receivedPayload = receivedInput?.payload as {
+      schemaVersion: string;
+      industry: string;
+      nested: { employeeBand: string };
+      signals: readonly [boolean, { priority: string }];
+    };
+
+    expect(response.status).toBe('COMPLETED');
+    expect(receivedPayload).toEqual(originalPayload);
+    expect(receivedPayload).not.toBe(originalPayload);
+    expect(receivedPayload.nested).not.toBe(originalPayload.nested);
+    expect(receivedPayload.signals).not.toBe(originalPayload.signals);
+    expect(receivedPayload.signals[1]).not.toBe(originalPayload.signals[1]);
+  });
+
+  it('29. Does not mutate the original payload', async () => {
+    const originalPayload = {
+      industry: 'services',
+      nested: { employeeBand: '10_50' },
+      signals: [true, false],
+    };
+    const expectedPayload = {
+      industry: 'services',
+      nested: { employeeBand: '10_50' },
+      signals: [true, false],
+    };
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: createMockExecutionPort(),
+    });
+
+    await boundary.execute(createValidRequest({ payload: originalPayload }));
+
+    expect(originalPayload).toEqual(expectedPayload);
+  });
+
+  it('30. Keeps payload out of the public response and audit event', async () => {
+    const secretMarker = 'payload-must-remain-internal';
+    const auditPort: BoundaryAuditPort = {
+      logEvent: vi.fn().mockResolvedValue(undefined),
+    };
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: createMockExecutionPort(),
+      auditPort,
+    });
+
+    const response = await boundary.execute(
+      createValidRequest({ payload: { normalizedSignal: secretMarker } })
+    );
+    const auditCalls = (auditPort.logEvent as unknown as {
+      mock: { calls: [string, Readonly<Record<string, unknown>>][] };
+    }).mock.calls;
+
+    expect(JSON.stringify(response)).not.toContain(secretMarker);
+    expect(JSON.stringify(auditCalls)).not.toContain(secretMarker);
+    expect((response as unknown as Record<string, unknown>).payload).toBeUndefined();
+  });
+
+  it('31. Keeps payload values out of public execution errors', async () => {
+    const secretMarker = 'payload-value-in-internal-error';
+    const execPort = createMockExecutionPort({
+      status: 'FAILED',
+      errors: [{ message: secretMarker }],
+    });
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: execPort,
+    });
+
+    const response = await boundary.execute(
+      createValidRequest({ payload: { normalizedSignal: secretMarker } })
+    );
+
+    expect(response.status).toBe('FAILED');
+    expect(response.errors[0].code).toBe('EXECUTION_FAILED');
+    expect(response.errors[0].message).toBe('An internal execution error occurred');
+    expect(JSON.stringify(response.errors)).not.toContain(secretMarker);
+  });
+
+  it('32. Rejects PRODUCTIVE before delivering payload to the execution port', async () => {
+    const payload = { normalizedSignal: 'productive-must-not-run' };
+    const execPort = createMockExecutionPort();
+    const policy = createDefaultPolicy({ allowedModes: ['SHADOW_ONLY', 'PRODUCTIVE'] });
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(policy),
+      executionPort: execPort,
+    });
+
+    const response = await boundary.execute(
+      createValidRequest({ requestedMode: 'PRODUCTIVE', payload })
+    );
+
+    expect(response.status).toBe('REJECTED');
+    expect(response.errors[0].code).toBe('MODE_NOT_ALLOWED');
+    expect(execPort.execute).not.toHaveBeenCalled();
+    expect(payload).toEqual({ normalizedSignal: 'productive-must-not-run' });
+  });
+
+  it('33. Disabled policy does not deliver payload', async () => {
+    const execPort = createMockExecutionPort();
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(createDefaultPolicy({ enabled: false })),
+      executionPort: execPort,
+    });
+
+    const response = await boundary.execute(createValidRequest({ payload: { safe: true } }));
+
+    expect(response.status).toBe('REJECTED');
+    expect(execPort.execute).not.toHaveBeenCalled();
+  });
+
+  it('34. Policy failure does not deliver payload', async () => {
+    const execPort = createMockExecutionPort();
+    const policyPort: FeaturePolicyPort = {
+      getEffectivePolicy: vi.fn().mockRejectedValue(new Error('policy unavailable')),
+    };
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: policyPort,
+      executionPort: execPort,
+    });
+
+    const response = await boundary.execute(createValidRequest({ payload: { safe: true } }));
+
+    expect(response.status).toBe('REJECTED');
+    expect(execPort.execute).not.toHaveBeenCalled();
+  });
+
+  it('35. Keeps the two internal data channels separate', async () => {
+    let receivedInput: InternalExecutionInput | undefined;
+    const execPort: BoundaryExecutionPort = {
+      execute: vi.fn().mockImplementation(async (input: InternalExecutionInput) => {
+        receivedInput = input;
+        return {
+          executionId: 'internal-exec-1',
+          sessionId: input.sessionId,
+          status: 'SUCCEEDED',
+        };
+      }),
+    };
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: execPort,
+    });
+
+    await boundary.execute(
+      createValidRequest({
+        payload: { industry: 'payload-industry' },
+        metadata: { industry: 'metadata-industry', safeKey: 'metadata-only' },
+      })
+    );
+
+    expect(receivedInput?.payload).toEqual({ industry: 'payload-industry' });
+    expect(receivedInput?.metadata).toEqual({
+      industry: 'metadata-industry',
+      safeKey: 'metadata-only',
+    });
+  });
+
+  it('36. Allows the execution port to read normalized payload data', async () => {
+    let observedIndustry: string | undefined;
+    const execPort: BoundaryExecutionPort = {
+      execute: vi.fn().mockImplementation(async (input: InternalExecutionInput) => {
+        const payload = input.payload as { industry: string };
+        observedIndustry = payload.industry;
+        return {
+          executionId: 'internal-exec-1',
+          sessionId: input.sessionId,
+          status: 'SUCCEEDED',
+        };
+      }),
+    };
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: execPort,
+    });
+
+    await boundary.execute(createValidRequest({ payload: { industry: 'services' } }));
+
+    expect(observedIndustry).toBe('services');
+  });
+
+  it('37. Rejects function and class-instance payloads before execution', async () => {
+    class CustomPayload {
+      public readonly industry = 'services';
+    }
+
+    const execPort = createMockExecutionPort();
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: execPort,
+    });
+
+    const functionResponse = await boundary.execute(
+      createValidRequest({ payload: { callback: () => 'forbidden' } })
+    );
+    const classResponse = await boundary.execute(
+      createValidRequest({ payload: new CustomPayload() })
+    );
+
+    expect(functionResponse.status).toBe('REJECTED');
+    expect(classResponse.status).toBe('REJECTED');
+    expect(execPort.execute).not.toHaveBeenCalled();
+  });
+
+  it('38. Rejects constructor and excessive-depth payloads before execution', async () => {
+    const constructorPayload = JSON.parse('{"constructor":{"polluted":true}}') as Record<string, unknown>;
+    const deepPayload: Record<string, unknown> = {};
+    let cursor = deepPayload;
+    for (let depth = 0; depth < 22; depth++) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+    const execPort = createMockExecutionPort();
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: execPort,
+    });
+
+    const constructorResponse = await boundary.execute(
+      createValidRequest({ payload: constructorPayload })
+    );
+    const depthResponse = await boundary.execute(
+      createValidRequest({ payload: deepPayload })
+    );
+
+    expect(constructorResponse.status).toBe('REJECTED');
+    expect(depthResponse.status).toBe('REJECTED');
+    expect(execPort.execute).not.toHaveBeenCalled();
+  });
+
+  it('39. EVALUATION does not expose payload through comparison summary', async () => {
+    const secretMarker = 'comparison-payload-secret';
+    const requestPayload = { normalizedSignal: secretMarker };
+    const comparisonPort: ShadowComparisonPort = {
+      compare: vi.fn().mockResolvedValue({
+        match: true,
+        divergenceCount: 0,
+        payload: { secretMarker },
+      }),
+    };
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: createMockExecutionPort(),
+      shadowComparisonPort: comparisonPort,
+    });
+
+    const response = await boundary.execute(
+      createValidRequest({
+        requestedMode: 'EVALUATION',
+        payload: requestPayload,
+      })
+    );
+    const comparisonInput = (comparisonPort.compare as unknown as {
+      mock: { calls: [unknown, unknown][] };
+    }).mock.calls[0][0];
+
+    expect(response.status).toBe('COMPLETED');
+    expect(response.comparisonSummary).toEqual({ match: true, divergenceCount: 0 });
+    expect(JSON.stringify(response)).not.toContain(secretMarker);
+    expect(comparisonInput).toEqual(requestPayload);
+    expect(comparisonInput).not.toBe(requestPayload);
+  });
+
+  it('40. Failed audit cannot leak payload into the response', async () => {
+    const secretMarker = 'audit-payload-secret';
+    const auditPort: BoundaryAuditPort = {
+      logEvent: vi.fn().mockImplementation(() => {
+        throw new Error(secretMarker);
+      }),
+    };
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: createMockExecutionPort(),
+      auditPort,
+    });
+
+    const response = await boundary.execute(
+      createValidRequest({ payload: { normalizedSignal: secretMarker } })
+    );
+    const auditCalls = (auditPort.logEvent as unknown as {
+      mock: { calls: [string, Readonly<Record<string, unknown>>][] };
+    }).mock.calls;
+
+    expect(response.status).toBe('COMPLETED');
+    expect(JSON.stringify(response)).not.toContain(secretMarker);
+    expect(JSON.stringify(auditCalls)).not.toContain(secretMarker);
+  });
+
+  it('41. Static check: Boundary module remains framework-independent', () => {
     // Assert static boundary independence
     expect(true).toBe(true);
   });

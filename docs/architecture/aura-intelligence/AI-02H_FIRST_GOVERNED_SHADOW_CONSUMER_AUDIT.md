@@ -8,7 +8,7 @@ La llamada futura deberá delegarse mediante una tarea diferida y observada, con
 
 **Recomendación: GO WITH CONDITIONS para AI-02H1; NO-GO para AI-02H2.** No debe conectarse Discovery hasta resolver estas condiciones:
 
-1. El Boundary actual valida `payload`, pero no lo entrega a `BoundaryExecutionPort`; solo entrega `sessionId` y metadata sanitizada.
+1. AI-02G.1 resuelve la propagación explícita del `payload` validado hacia `BoundaryExecutionPort`; AI-02H1 aún debe consumir ese contrato sin side channels.
 2. `evaluateBoundaryPolicy()` calcula `effectiveTimeoutMs`, pero `GovernedExecutionBoundary` no lo aplica.
 3. `maxConcurrentExecutions`, `DUPLICATE_REQUEST` y `CONCURRENCY_LIMIT` están declarados en el Boundary, pero no son aplicados por él.
 4. No existe una composición productiva del OS ni un adaptador que transforme el DTO mínimo Discovery en `PipelineAggregatedState`.
@@ -153,7 +153,7 @@ Catálogo actual:
 
 | Gap | Evidencia | Impacto |
 |---|---|---|
-| Payload desconectado | `req.payload` no forma parte de `internalInput` en líneas 144-147 | El OS no puede consumir la evidencia real validada |
+| Payload desconectado | Resuelto en AI-02G.1: `InternalExecutionInput.payload` recibe una copia JSON-like defensiva después de autorización | Ya no bloquea el transporte; AI-02H1 aún debe demostrar suficiencia semántica |
 | Timeout no aplicado | `effectiveTimeoutMs` se calcula en policy, pero no se usa al ejecutar | `timeoutMs` no garantiza límite |
 | Concurrencia Boundary no aplicada | `maxConcurrentExecutions` solo está en el contrato de policy | La policy promete un control que el Boundary no ejecuta |
 | Deduplicación Boundary no aplicada | Existen errores públicos, pero no cache/guard en Boundary | Un retry puede ejecutar dos veces salvo composición con `ShadowExecutionGuard` |
@@ -185,12 +185,25 @@ Faltantes:
 - consumidor interno `discovery-completion`;
 - mapper DTO Discovery → `PipelineAggregatedState`;
 - `BoundaryExecutionPort` que componga Orchestrator + Shadow Guard;
-- resolución explícita del contrato para payload, execution key y timeout, sin closures ni metadata;
+- consumo del payload explícito de AI-02G.1 y resolución separada de execution key/timeout, sin closures ni metadata;
 - policy in-memory fija y disabled por defecto;
 - clock, deterministic ID/key factory y scheduler inyectables;
 - outcome sink in-memory acotado o no-op;
 - composition root de la primera integración;
 - prueba de exclusión mutua con el Shadow Discovery ya existente.
+
+### 3.10 AI-02G.1 Contract Resolution
+
+AI-02G.1 amplía `InternalExecutionInput` con `payload: InternalPayloadValue`. El Boundary conserva este orden:
+
+1. valida `GovernedExecutionRequest`;
+2. evalúa policy y rechaza `PRODUCTIVE`/estados disabled;
+3. crea una copia defensiva JSON-like del payload;
+4. entrega la copia a `BoundaryExecutionPort.execute()`.
+
+La copia acepta únicamente strings, números finitos, booleanos, `null`, arrays densos y plain objects. Rechaza ciclos/referencias repetidas, funciones, símbolos, `bigint`, instancias de clase, accessors, propiedades no enumerables, claves peligrosas y profundidad superior al límite del Boundary. No comparte objetos ni arrays con el request.
+
+El payload no se añade a `GovernedExecutionResponse`, eventos de auditoría, metadata, result/comparison summaries ni errores públicos. Esta resolución elimina exclusivamente el gap de transporte; no implementa AI-02H1, no demuestra todavía suficiencia del payload y no conecta Discovery.
 
 ## Existing Shadow Execution Conflict
 
@@ -847,7 +860,7 @@ Alcance: composition root interno, adapter de `BoundaryExecutionPort`, policy fi
 
 AI-02H1 no modifica `src/modules/discovery`, Functions, Firebase, UI, páginas, hooks, Vercel, configuración, `package.json` ni lockfiles.
 
-El Boundary actual no transporta el payload al `BoundaryExecutionPort`. AI-02H1 no puede ocultar ese gap mediante closure, metadata ni global. Si la prueba de contrato demuestra que se necesita modificar `src/modules/intelligence/os/boundary/ports.ts`, `GovernedExecutionBoundary.ts` o sus barrels, la implementación debe detenerse y presentar una decisión arquitectónica y un alcance nuevo; esos archivos **no forman parte** de la lista mínima aprobable.
+AI-02G.1 ya transporta una copia segura del payload al `BoundaryExecutionPort`. AI-02H1 debe usar ese campo explícito; siguen prohibidos closure, metadata, global o cache lateral. Cualquier cambio adicional a `src/modules/intelligence/os/boundary/ports.ts`, `GovernedExecutionBoundary.ts` o sus barrels exige otra decisión arquitectónica y no forma parte de AI-02H1.
 
 Cualquier barrel fuera de `discovery-completion/index.ts` que resulte necesario deberá documentarse con ruta, export exacto, razón y prueba antes de solicitar autorización. Esta auditoría no ejecuta esa modificación.
 

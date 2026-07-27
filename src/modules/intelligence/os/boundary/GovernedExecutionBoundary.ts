@@ -10,10 +10,15 @@ import type {
   BoundaryExecutionPort,
   ShadowComparisonPort,
   BoundaryAuditPort,
+  InternalPayloadValue,
 } from './ports';
 import { GovernedBoundaryError } from './errors';
 import { evaluateBoundaryPolicy } from './policies';
-import { validateGovernedRequest, estimateSizeInBytes } from './validators';
+import {
+  createSafeInternalPayload,
+  validateGovernedRequest,
+  estimateSizeInBytes,
+} from './validators';
 import {
   sanitizeMetadata,
   sanitizePublicError,
@@ -139,10 +144,28 @@ export class GovernedExecutionBoundary {
 
     // Prepare execution
     const cleanMeta = sanitizeMetadata(req.metadata);
+    let internalPayload: InternalPayloadValue;
+    try {
+      internalPayload = createSafeInternalPayload(req.payload);
+    } catch (err: unknown) {
+      const completedAt = this.clockPort.now();
+      return this.buildResponse({
+        requestId: req.requestId,
+        correlationId: req.correlationId,
+        mode: 'DISABLED',
+        status: 'REJECTED',
+        startedAt,
+        completedAt,
+        durationMs: this.calculateDuration(startedAt, completedAt),
+        errors: [sanitizePublicError(err)],
+        warnings: [],
+      });
+    }
 
     try {
       const internalInput = {
         sessionId: req.correlationId,
+        payload: internalPayload,
         metadata: cleanMeta,
       };
 
@@ -155,7 +178,7 @@ export class GovernedExecutionBoundary {
 
       if (req.requestedMode === 'EVALUATION' && this.shadowComparisonPort) {
         try {
-          const comp = await this.shadowComparisonPort.compare(req.payload, internalResult.rawData || internalResult);
+          const comp = await this.shadowComparisonPort.compare(internalPayload, internalResult.rawData || internalResult);
           comparisonSummary = sanitizeComparisonSummary(comp);
         } catch {
           // Failure in shadow comparison does not fail execution summary
@@ -174,7 +197,7 @@ export class GovernedExecutionBoundary {
       if (internalResult.errors && internalResult.errors.length > 0) {
         for (let i = 0; i < internalResult.errors.length; i++) {
           const e = internalResult.errors[i];
-          errors.push(sanitizePublicError(new GovernedBoundaryError('EXECUTION_FAILED', e.message, false)));
+          errors.push(sanitizePublicError(new Error(e.message)));
         }
       }
 
