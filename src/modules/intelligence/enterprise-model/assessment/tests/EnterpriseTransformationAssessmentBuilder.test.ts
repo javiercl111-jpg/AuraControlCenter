@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// @ts-expect-error Vitest ambient module types
 import { describe, it, expect } from 'vitest';
 import { EnterpriseTransformationAssessmentBuilder } from '../services/EnterpriseTransformationAssessmentBuilder';
 import { DefaultAssessmentPolicy } from '../policies/AssessmentPolicy';

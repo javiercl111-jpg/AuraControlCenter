@@ -1,4 +1,3 @@
-// @ts-expect-error Vitest ambient module types
 import { describe, it, expect } from 'vitest';
 import { PriorityRanker } from '../services/PriorityRanker';
 import { DefaultDossierExecutionContext } from '../utils/DossierContextImpl';
