@@ -12,7 +12,8 @@ import type {
   ShadowComparisonMetrics
 } from './types';
 import { MetadataSanitizer } from '../metadataSanitizer';
-import type { PipelineStageId, PipelineResult } from '../../types';
+import type { PipelineStageId, PipelineStageResult, SerializableAuraOSError, PipelineStatus } from '../../types';
+import type { ShadowExecutionResult, ShadowExecutionStatus } from '../types';
 import { ShadowComparisonError, ShadowComparisonErrorCodes } from './errors';
 
 export class ShadowComparator implements ShadowComparatorPort {
@@ -244,31 +245,39 @@ export class ShadowComparator implements ShadowComparatorPort {
     }
   }
 
-  private deriveOSInput(osResult: ShadowExecutionResult | PipelineResult): OSComparisonInput {
-    // If osResult is a ShadowExecutionResult, unwrap the pipelineResult
-    const pipelineResult = 'pipelineResult' in osResult ? osResult.pipelineResult! : osResult;
+  private deriveOSInput(osResult: ShadowExecutionResult): OSComparisonInput {
+    const pipelineResult = osResult.pipelineResult;
 
     const input: OSComparisonInput = {
-      pipelineStatus: pipelineResult.status || osResult.status,
-      durationMs: pipelineResult.durationMs,
-      skippedStages: pipelineResult.skippedStages || [],
+      pipelineStatus: pipelineResult?.status || this.mapShadowStatusToPipelineStatus(osResult.status),
+      durationMs: pipelineResult?.durationMs,
+      skippedStages: pipelineResult?.skippedStages || [],
       stageStatuses: {},
-      errors: pipelineResult.errors || []
+      errors: Array.isArray(pipelineResult?.errors)
+        ? pipelineResult!.errors.filter(this.isSerializableAuraOSError.bind(this)).map(e => ({ ...e }))
+        : []
     };
 
-    if (pipelineResult.stageResults) {
-      for (const [stageId, stageData] of Object.entries(pipelineResult.stageResults)) {
-        input.stageStatuses[stageId as keyof typeof input.stageStatuses] = stageData.status;
-        
+    if (pipelineResult?.stageResults) {
+      const resultsMap = pipelineResult.stageResults;
+      for (const key of Object.keys(resultsMap)) {
+        const stageId = key as PipelineStageId;
+        const stageData = resultsMap[stageId];
+
+        if (!this.isPipelineStageResult(stageData)) continue;
+
+        input.stageStatuses[stageId] = stageData.status;
+
+        const out = stageData.output as Record<string, unknown> | undefined;
         // Extract specific scalar metrics if present in stage output
-        if (stageId === 'KNOWLEDGE_COVERAGE' && stageData.output?.score !== undefined) {
-          input.coverageScore = stageData.output.score;
+        if (stageId === 'KNOWLEDGE_COVERAGE' && out && typeof out.score === 'number') {
+          input.coverageScore = out.score;
         }
-        if (stageId === 'EVIDENCE_EXTRACTION' && stageData.output?.findings) {
-          input.findingsCount = stageData.output.findings.length;
+        if (stageId === 'EVIDENCE_EXTRACTION' && out && Array.isArray(out.findings)) {
+          input.findingsCount = out.findings.length;
         }
-        if (stageId === 'ADAPTIVE_PLANNING' && stageData.output?.objective) {
-          input.planningObjective = stageData.output.objective;
+        if (stageId === 'ADAPTIVE_PLANNING' && out && typeof out.objective === 'string') {
+          input.planningObjective = out.objective;
         }
         if (stageId === 'EXECUTIVE_DOSSIER') {
           input.dossierStatus = stageData.status;
@@ -280,6 +289,29 @@ export class ShadowComparator implements ShadowComparatorPort {
     }
     
     return input;
+  }
+
+  private isPipelineStageResult(value: unknown): value is PipelineStageResult<unknown> {
+    return value !== null && typeof value === 'object' && 'stage' in value && 'status' in value;
+  }
+
+  private isSerializableAuraOSError(value: unknown): value is SerializableAuraOSError {
+    return value !== null && typeof value === 'object' && 'name' in value && 'message' in value && 'code' in value;
+  }
+
+  private mapShadowStatusToPipelineStatus(status: ShadowExecutionStatus): PipelineStatus {
+    switch (status) {
+      case 'SUCCEEDED': return 'SUCCESS';
+      case 'REJECTED': return 'CANCELLED';
+      case 'SKIPPED': return 'CANCELLED';
+      case 'WAITING':
+      case 'PENDING': return 'CREATED';
+      case 'RUNNING': return 'RUNNING';
+      case 'FAILED': return 'FAILED';
+      case 'CANCELLED': return 'CANCELLED';
+      case 'TIMED_OUT': return 'TIMED_OUT';
+      default: return 'FAILED';
+    }
   }
 
   private createLegacySnapshot(input: LegacyComparisonInput): Partial<LegacyComparisonInput> {
@@ -346,7 +378,7 @@ export class ShadowComparator implements ShadowComparatorPort {
       warnings: [],
       normalizedError: error instanceof ShadowComparisonError ? error.toJSON() : new ShadowComparisonError(
         ShadowComparisonErrorCodes.SHADOW_COMPARISON_INVALID_INPUT,
-        error.message || 'Unknown error',
+        error instanceof Error ? error.message : 'Unknown error',
         false
       ).toJSON()
     };
