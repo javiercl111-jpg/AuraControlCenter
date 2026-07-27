@@ -1,5 +1,5 @@
 import { AuraIntelligenceOSError, ErrorCodes } from './errors';
-import type { 
+import type {
   PipelineSessionId,
   PipelineExecutionKey,
   PipelineExecutionMetadata,
@@ -296,7 +296,7 @@ export class AuraIntelligenceOrchestrator {
   ): string[] {
     const trail: string[] = [];
     trail.push(`[PIPELINE] Execution started (Status: RUNNING)`);
-    
+
     for (const [stage, result] of Object.entries(stageResults)) {
       if (result) {
         trail.push(`[STAGE] ${stage} completed with status: ${result.status} in ${result.durationMs}ms`);
@@ -339,7 +339,7 @@ export class AuraIntelligenceOrchestrator {
           extractionResult: result.extractionResult
         };
       }, 'EVIDENCE_EXTRACTION', guardCtx);
-      
+
       status = 'SUCCEEDED';
       this.recordLogicalStageResult('EVIDENCE_EXTRACTION', 'SUCCEEDED', startedAtMs, startedAtString, results);
       this.recordLogicalStageResult('MENTAL_MODEL', 'SUCCEEDED', startedAtMs, startedAtString, results);
@@ -348,10 +348,10 @@ export class AuraIntelligenceOrchestrator {
     } catch (e) {
       const osError = this.normalizeError(e, ErrorCodes.STAGE_EXECUTION_FAILED, 'EVIDENCE_EXTRACTION');
       errors.push(osError);
-      
+
       if (osError.code === ErrorCodes.CANCELLED) status = 'CANCELLED';
       else if (osError.code === ErrorCodes.STAGE_TIMEOUT || osError.code === ErrorCodes.PIPELINE_TIMEOUT) status = 'TIMED_OUT';
-      
+
       this.recordLogicalStageResult('EVIDENCE_EXTRACTION', status, startedAtMs, startedAtString, results, errors);
       this.recordLogicalStageResult('MENTAL_MODEL', status, startedAtMs, startedAtString, results);
       this.recordLogicalStageResult('KNOWLEDGE_GRAPH', status, startedAtMs, startedAtString, results);
@@ -420,19 +420,19 @@ export class AuraIntelligenceOrchestrator {
           readinessAssessment: assessment
         };
       }, 'KNOWLEDGE_COVERAGE', guardCtx);
-      
+
       status = 'SUCCEEDED';
     } catch (e) {
       const osError = this.normalizeError(e, ErrorCodes.STAGE_EXECUTION_FAILED, 'KNOWLEDGE_COVERAGE');
       errors.push(osError);
-      
+
       if (osError.code === ErrorCodes.CANCELLED) status = 'CANCELLED';
       else if (osError.code === ErrorCodes.STAGE_TIMEOUT || osError.code === ErrorCodes.PIPELINE_TIMEOUT) status = 'TIMED_OUT';
     }
 
     this.recordLogicalStageResult('KNOWLEDGE_COVERAGE', status, startedAtMs, startedAtString, results, errors);
     const completedAt = this.dependencies.clock.toISOString();
-    
+
     return {
       stage: 'KNOWLEDGE_COVERAGE',
       status,
@@ -470,19 +470,19 @@ export class AuraIntelligenceOrchestrator {
           planningResult: planResult
         };
       }, 'ADAPTIVE_PLANNING', guardCtx);
-      
+
       status = 'SUCCEEDED';
     } catch (e) {
       const osError = this.normalizeError(e, ErrorCodes.STAGE_EXECUTION_FAILED, 'ADAPTIVE_PLANNING');
       errors.push(osError);
-      
+
       if (osError.code === ErrorCodes.CANCELLED) status = 'CANCELLED';
       else if (osError.code === ErrorCodes.STAGE_TIMEOUT || osError.code === ErrorCodes.PIPELINE_TIMEOUT) status = 'TIMED_OUT';
     }
 
     this.recordLogicalStageResult('ADAPTIVE_PLANNING', status, startedAtMs, startedAtString, results, errors);
     const completedAt = this.dependencies.clock.toISOString();
-    
+
     return {
       stage: 'ADAPTIVE_PLANNING',
       status,
@@ -520,19 +520,19 @@ export class AuraIntelligenceOrchestrator {
           reasoningReport: report
         };
       }, 'EXECUTIVE_REASONING', guardCtx);
-      
+
       status = 'SUCCEEDED';
     } catch (e) {
       const osError = this.normalizeError(e, ErrorCodes.STAGE_EXECUTION_FAILED, 'EXECUTIVE_REASONING');
       errors.push(osError);
-      
+
       if (osError.code === ErrorCodes.CANCELLED) status = 'CANCELLED';
       else if (osError.code === ErrorCodes.STAGE_TIMEOUT || osError.code === ErrorCodes.PIPELINE_TIMEOUT) status = 'TIMED_OUT';
     }
 
     this.recordLogicalStageResult('EXECUTIVE_REASONING', status, startedAtMs, startedAtString, results, errors);
     const completedAt = this.dependencies.clock.toISOString();
-    
+
     return {
       stage: 'EXECUTIVE_REASONING',
       status,
@@ -575,19 +575,19 @@ export class AuraIntelligenceOrchestrator {
           dossier
         };
       }, 'EXECUTIVE_DOSSIER', guardCtx);
-      
+
       status = 'SUCCEEDED';
     } catch (e) {
       const osError = this.normalizeError(e, ErrorCodes.STAGE_EXECUTION_FAILED, 'EXECUTIVE_DOSSIER');
       errors.push(osError);
-      
+
       if (osError.code === ErrorCodes.CANCELLED) status = 'CANCELLED';
       else if (osError.code === ErrorCodes.STAGE_TIMEOUT || osError.code === ErrorCodes.PIPELINE_TIMEOUT) status = 'TIMED_OUT';
     }
 
     this.recordLogicalStageResult('EXECUTIVE_DOSSIER', status, startedAtMs, startedAtString, results, errors);
     const completedAt = this.dependencies.clock.toISOString();
-    
+
     return {
       stage: 'EXECUTIVE_DOSSIER',
       status,
@@ -633,19 +633,19 @@ export class AuraIntelligenceOrchestrator {
           assessment
         };
       }, 'TRANSFORMATION_ASSESSMENT', guardCtx);
-      
+
       status = 'SUCCEEDED';
     } catch (e) {
       const osError = this.normalizeError(e, ErrorCodes.STAGE_EXECUTION_FAILED, 'TRANSFORMATION_ASSESSMENT');
       errors.push(osError);
-      
+
       if (osError.code === ErrorCodes.CANCELLED) status = 'CANCELLED';
       else if (osError.code === ErrorCodes.STAGE_TIMEOUT || osError.code === ErrorCodes.PIPELINE_TIMEOUT) status = 'TIMED_OUT';
     }
 
     this.recordLogicalStageResult('TRANSFORMATION_ASSESSMENT', status, startedAtMs, startedAtString, results, errors);
     const completedAt = this.dependencies.clock.toISOString();
-    
+
     return {
       stage: 'TRANSFORMATION_ASSESSMENT',
       status,
@@ -662,12 +662,12 @@ export class AuraIntelligenceOrchestrator {
     if (error instanceof AuraIntelligenceOSError) {
       return error.toJSON();
     }
-    
+
     const message = error instanceof Error ? error.message : String(error);
-    const code = (error && typeof error === 'object' && 'code' in error && typeof (error as {code: string}).code === 'string') 
-      ? (error as {code: string}).code 
+    const code = (error && typeof error === 'object' && 'code' in error && typeof (error as {code: string}).code === 'string')
+      ? (error as {code: string}).code
       : defaultCode;
-    
+
     const osError = new AuraIntelligenceOSError(code, message, false, stage, undefined, error);
     return osError.toJSON();
   }

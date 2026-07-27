@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 import { describe, it, expect } from 'vitest';
 import { PipelineExecutionContext } from '../PipelineExecutionContext';
 import { AuraIntelligenceOSError, ErrorCodes } from '../errors';
@@ -30,14 +28,13 @@ describe('Aura Intelligence OS - AI-02A Contracts & Execution State', () => {
       metadata: { key: 'value' }
     };
     const context = new PipelineExecutionContext('exec-2', mockClock, inputWithData);
-    
+
     expect(Object.isFrozen(context.initialInput)).toBe(true);
     expect(Object.isFrozen(context.initialInput.objectiveIds)).toBe(true);
     expect(Object.isFrozen(context.initialInput.metadata)).toBe(true);
 
     expect(() => {
-      // @ts-expect-error Testing immutability constraint
-      context.initialInput.sessionId = 'mutated';
+      Object.assign(context.initialInput, { sessionId: 'mutated' });
     }).toThrow();
   });
 
@@ -63,7 +60,7 @@ describe('Aura Intelligence OS - AI-02A Contracts & Execution State', () => {
       get aborted() { return aborted; }
     };
     const context = new PipelineExecutionContext('exec-1', mockClock, mockInput, signal);
-    
+
     expect(context.isCancelled()).toBe(false);
     aborted = true;
     expect(context.isCancelled()).toBe(true);
@@ -109,7 +106,7 @@ describe('AuraIntelligenceOSError', () => {
     );
 
     expect(error.stage).toBe('EVIDENCE_EXTRACTION');
-    
+
     const json = error.toJSON();
     expect(json.stage).toBe('EVIDENCE_EXTRACTION');
     expect(json.metadata?.attempt).toBe(1);

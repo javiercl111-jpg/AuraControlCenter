@@ -39,7 +39,7 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    
+
     mockClock = {
       now: vi.fn().mockImplementation(() => {
         // En fake timers, Date.now() equals the fake time si avanzamos timers
@@ -103,36 +103,36 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
       mentalModel: createMinimalMentalModel(),
       knowledgeGraph: createMinimalKnowledgeGraph()
     };
-    
+
     const resultPromise = orchestrator.executePipeline({ sessionId: 'sess-123', targetScenario: 'Test' }, inputState);
-    await vi.advanceTimersByTimeAsync(1); 
+    await vi.advanceTimersByTimeAsync(1);
     const result = await resultPromise;
 
     expect(result.status).toBe('SUCCESS');
   });
 
   it('Timeout global antes de completar', async () => {
-    // Stage timeout = 2000, Global = 5000. 
+    // Stage timeout = 2000, Global = 5000.
     // We will make planning stage take 6000ms. Since it's limited by min(2000, 5000) it will throw STAGE_TIMEOUT.
     // Wait, if we want PIPELINE_TIMEOUT to trigger, we need total elapsed time to hit 5000.
-    // So let's make extraction take 0ms, coverage take 0ms, and we'll change stageTimeout for Planning to 10000ms, 
+    // So let's make extraction take 0ms, coverage take 0ms, and we'll change stageTimeout for Planning to 10000ms,
     // so it hits the global timeout of 5000.
     dependencies.timeoutPolicy = { getExecutionTimeoutMs: () => 5000, getStageTimeoutMs: () => 10000 };
-    
+
     mockAdaptiveQuestionPlanner.planQuestionsFromGraph = vi.fn().mockImplementation(() => {
       return new Promise(resolve => setTimeout(resolve, 6000));
     });
 
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    const inputState: PipelineAggregatedState = { 
-      sessionId: 'sess-123', 
-      extractionResult: createMinimalExtractionResult(), 
-      mentalModel: createMinimalMentalModel(), 
+    const inputState: PipelineAggregatedState = {
+      sessionId: 'sess-123',
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
       knowledgeGraph: createMinimalKnowledgeGraph(),
       coverageReport: createMinimalCoverageReport(),
       readinessAssessment: createMinimalReadinessAssessment()
     }; // Skip early stages to hit planning directly
-    
+
     const resultPromise = orchestrator.executePipeline({ sessionId: 'sess-123' }, inputState);
     await vi.advanceTimersByTimeAsync(5500); // 5500 > 5000 (global timeout hits)
     const result = await resultPromise;
@@ -149,15 +149,15 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
     });
 
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    const inputState: PipelineAggregatedState = { 
-      sessionId: 'sess-123', 
-      extractionResult: createMinimalExtractionResult(), 
-      mentalModel: createMinimalMentalModel(), 
+    const inputState: PipelineAggregatedState = {
+      sessionId: 'sess-123',
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
       knowledgeGraph: createMinimalKnowledgeGraph(),
       coverageReport: createMinimalCoverageReport(),
       readinessAssessment: createMinimalReadinessAssessment()
     };
-    
+
     const resultPromise = orchestrator.executePipeline({ sessionId: 'sess-123' }, inputState);
     await vi.advanceTimersByTimeAsync(2500); // 2500 > 2000 (stage timeout hits)
     const result = await resultPromise;
@@ -169,32 +169,32 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
   });
 
   it('Resultado tardio ignorado sin modificar estado ni fallar', async () => {
-    let lateResolve: any;
+    let lateResolve!: (value: unknown) => void;
     mockAdaptiveQuestionPlanner.planQuestionsFromGraph = vi.fn().mockImplementation(() => {
       return new Promise(resolve => { lateResolve = resolve; });
     });
 
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    const inputState: PipelineAggregatedState = { 
-      sessionId: 'sess-123', 
-      extractionResult: createMinimalExtractionResult(), 
-      mentalModel: createMinimalMentalModel(), 
+    const inputState: PipelineAggregatedState = {
+      sessionId: 'sess-123',
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
       knowledgeGraph: createMinimalKnowledgeGraph(),
       coverageReport: createMinimalCoverageReport(),
       readinessAssessment: createMinimalReadinessAssessment()
     };
-    
+
     const resultPromise = orchestrator.executePipeline({ sessionId: 'sess-123' }, inputState);
     await vi.advanceTimersByTimeAsync(2500); // Stage timeout hits (2000)
     const result = await resultPromise;
-    expect(result.status).toBe('TIMED_OUT'); 
-    
+    expect(result.status).toBe('TIMED_OUT');
+
     // Now resolve late
     lateResolve(createMinimalPlanResult());
     await vi.advanceTimersByTimeAsync(1); // Flush microtasks
-    
+
     // Check audit sink
-    expect(mockAuditSink.log).toHaveBeenCalledWith('WARN', expect.stringContaining('Late resolution'), expect.any(Object));
+    expect(mockAuditSink.log).toHaveBeenCalledWith('WARN', expect.stringContaining('Late resolution'), expect.anything());
   });
 
   it('Cancelacion antes de iniciar', async () => {
@@ -206,20 +206,24 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
   });
 
   it('Cancelacion entre etapas (Extraction y Coverage)', async () => {
+    let aborted = false;
+    dependencies.cancellationSignal = {
+      get aborted() { return aborted; }
+    };
     mockExtractionApplier.applyExtraction = vi.fn().mockImplementation(() => {
       // simulate cancelling right after extraction by setting aborted true
-      (dependencies.cancellationSignal as any).aborted = true;
+      aborted = true;
       return { mentalModel: createMinimalMentalModel(), knowledgeGraph: createMinimalKnowledgeGraph(), extractionResult: createMinimalExtractionResult() };
     });
 
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
     const inputState: PipelineAggregatedState = { sessionId: 'sess-123', extractionResult: createMinimalExtractionResult(), mentalModel: createMinimalMentalModel(), knowledgeGraph: createMinimalKnowledgeGraph() };
-    
+
     const resultPromise = orchestrator.executePipeline({ sessionId: 'sess-123' }, inputState);
     await vi.advanceTimersByTimeAsync(1);
     const result = await resultPromise;
 
-    expect(result.status).toBe('CANCELLED'); 
+    expect(result.status).toBe('CANCELLED');
     expect(result.stageResults['EVIDENCE_EXTRACTION']?.status).toBe('CANCELLED');
     expect(result.skippedStages).toContain('KNOWLEDGE_COVERAGE');
   });
@@ -227,37 +231,37 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
   it('Fallo del audit sink no rompe pipeline', async () => {
     mockAuditSink.log = vi.fn().mockImplementation(() => { throw new Error('AuditSink down'); });
     mockAdaptiveQuestionPlanner.planQuestionsFromGraph = vi.fn().mockImplementation(() => Promise.reject(new Error('Engine Error')));
-    
+
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    const inputState: PipelineAggregatedState = { 
-      sessionId: 'sess-123', 
-      extractionResult: createMinimalExtractionResult(), 
-      mentalModel: createMinimalMentalModel(), 
+    const inputState: PipelineAggregatedState = {
+      sessionId: 'sess-123',
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
       knowledgeGraph: createMinimalKnowledgeGraph(),
       coverageReport: createMinimalCoverageReport(),
       readinessAssessment: createMinimalReadinessAssessment()
     };
-    
+
     const resultPromise = orchestrator.executePipeline({ sessionId: 'sess-123' }, inputState);
     await vi.advanceTimersByTimeAsync(1);
     const result = await resultPromise;
-    
+
     expect(result.status).toBe('PARTIAL_SUCCESS'); // Coverage passed, Planning failed normally -> PARTIAL_SUCCESS
   });
 
   it('Dos ejecuciones no comparten estado', async () => {
     const orchestrator1 = new AuraIntelligenceOrchestrator(osContext, dependencies);
     const orchestrator2 = new AuraIntelligenceOrchestrator(osContext, dependencies);
-    
+
     const input1: PipelineAggregatedState = { sessionId: '1', extractionResult: createMinimalExtractionResult(), mentalModel: createMinimalMentalModel(), knowledgeGraph: createMinimalKnowledgeGraph() };
     const input2: PipelineAggregatedState = { sessionId: '2' };
-    
+
     const p1 = orchestrator1.executePipeline({ sessionId: '1' }, input1);
     const p2 = orchestrator2.executePipeline({ sessionId: '2' }, input2);
-    
+
     await vi.advanceTimersByTimeAsync(1);
     const [res1, res2] = await Promise.all([p1, p2]);
-    
+
     expect(res1.sessionId).toBe('1');
     expect(res2.sessionId).toBe('2');
     expect(res1.stageResults['EVIDENCE_EXTRACTION']?.status).toBe('SUCCEEDED');
@@ -269,14 +273,30 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
     const inputState: PipelineAggregatedState = {
       sessionId: 'sess-123',
       objectiveIds: ['obj-1'],
-      evidence: [{ id: '1', content: 'test', confidence: 0.9 }] as any
+      evidence: [{
+        evidenceId: '1',
+        sessionId: 'sess-123',
+        turnId: 'turn-1',
+        source: 'test',
+        sourceType: 'DOCUMENT',
+        originalText: 'test',
+        normalizedStatement: 'test',
+        category: 'test',
+        entityRefs: [],
+        capturedAt: 0,
+        reliability: 0.9,
+        directness: 1,
+        polarity: 'POSITIVE',
+        extractorVersion: '1',
+        metadata: {}
+      }]
     };
     const clonedInput = JSON.parse(JSON.stringify(inputState));
-    
+
     const p = orchestrator.executePipeline({ sessionId: 'sess-123' }, inputState);
     await vi.advanceTimersByTimeAsync(1);
     await p;
-    
+
     expect(inputState).toEqual(clonedInput);
   });
 });

@@ -46,7 +46,7 @@ export async function executeWithGuards<T>(
   const effectiveTimeoutMs = stageTimeoutMs > 0 ? Math.min(stageTimeoutMs, timeRemainingMs) : timeRemainingMs;
 
   let isSettled = false;
-  let timerId: any;
+  let timerId: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<T>((_, reject) => {
     if (effectiveTimeoutMs !== Infinity) {
@@ -67,17 +67,17 @@ export async function executeWithGuards<T>(
       result = await operationFn();
     } catch (error) {
       if (isSettled) {
-        safeLog('WARN', `Late rejection in stage ${stage} after timeout or cancellation`, { 
-          executionId: ctx.executionId, 
-          stage, 
+        safeLog('WARN', `Late rejection in stage ${stage} after timeout or cancellation`, {
+          executionId: ctx.executionId,
+          stage,
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined
         });
-        return new Promise<T>(() => {}); 
+        throw error;
       }
       isSettled = true;
       if (timerId) clearTimeout(timerId);
-      
+
       if (ctx.cancellationSignal?.aborted) {
         throw new AuraIntelligenceOSError(ErrorCodes.CANCELLED, 'Execution cancelled during operation', false, stage, { reason: ctx.cancellationSignal?.reason ? String(ctx.cancellationSignal.reason) : undefined, originalError: error instanceof Error ? error.message : String(error) });
       }
@@ -86,19 +86,23 @@ export async function executeWithGuards<T>(
 
     if (isSettled) {
       safeLog('WARN', `Late resolution in stage ${stage} after timeout or cancellation`, { executionId: ctx.executionId, stage });
-      return result; 
+      return result;
     }
     isSettled = true;
     if (timerId) clearTimeout(timerId);
-    
+
     if (ctx.cancellationSignal?.aborted) {
       throw new AuraIntelligenceOSError(ErrorCodes.CANCELLED, 'Execution cancelled after resolution', false, stage, { reason: ctx.cancellationSignal?.reason ? String(ctx.cancellationSignal.reason) : undefined });
     }
-    
+
     return result;
   };
 
   const operationPromise = runOperation();
+
+  // Observer to prevent unhandled rejections on late failures
+  // This does not alter operationPromise type but ensures Node doesn't crash
+  operationPromise.catch(() => {});
 
   if (effectiveTimeoutMs !== Infinity) {
     return Promise.race([operationPromise, timeoutPromise]);
