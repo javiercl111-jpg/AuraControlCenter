@@ -6,3 +6,4 @@ export * from './contextTypes';
 export * from './dependencyComposition';
 export * from './PipelineContextBuilder';
 export * from './AuraIntelligenceOrchestrator';
+export * from './shadow';
