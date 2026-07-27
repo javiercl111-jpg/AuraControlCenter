@@ -1,9 +1,9 @@
 import type { ShadowClock } from '../ports';
 import type { ShadowCapturePort } from './ports';
-import type { 
-  CaptureRecord, 
-  CaptureAdapterPolicy, 
-  CaptureAdapterMetrics 
+import type {
+  CaptureRecord,
+  CaptureAdapterPolicy,
+  CaptureAdapterMetrics
 } from './types';
 import { ShadowComparisonError, ShadowComparisonErrorCodes } from './errors';
 
@@ -11,7 +11,7 @@ export class InMemoryShadowCaptureAdapter implements ShadowCapturePort {
   private records = new Map<string, CaptureRecord>();
   private executionKeyIndex = new Map<string, string>(); // executionKey -> comparisonId
   private sessionKeyIndex = new Map<string, Set<string>>(); // sessionKey -> Set<comparisonId>
-  
+
   private capturedCount = 0;
   private evictedCount = 0;
   private expiredCount = 0;
@@ -87,7 +87,7 @@ export class InMemoryShadowCaptureAdapter implements ShadowCapturePort {
         },
         legacySnapshot: comparisonResult.legacySnapshot ? { ...comparisonResult.legacySnapshot } : undefined,
         osSnapshot: comparisonResult.osSnapshot ? { ...comparisonResult.osSnapshot } : undefined,
-        sanitizedMetadata: this.policy.redactMetadata 
+        sanitizedMetadata: this.policy.redactMetadata
           ? (comparisonResult.sanitizedMetadata ? { ...comparisonResult.sanitizedMetadata } : undefined)
           : comparisonResult.sanitizedMetadata
       },
@@ -101,7 +101,7 @@ export class InMemoryShadowCaptureAdapter implements ShadowCapturePort {
 
     this.records.set(comparisonResult.comparisonId, safeRecord);
     this.executionKeyIndex.set(comparisonResult.executionKey, comparisonResult.comparisonId);
-    
+
     let set = this.sessionKeyIndex.get(comparisonResult.sessionKey);
     if (!set) {
       set = new Set();
@@ -124,7 +124,7 @@ export class InMemoryShadowCaptureAdapter implements ShadowCapturePort {
     this.clearExpired();
     const set = this.sessionKeyIndex.get(sessionKey);
     if (!set) return [];
-    
+
     const results: CaptureRecord[] = [];
     for (const id of set) {
       const record = this.records.get(id);
