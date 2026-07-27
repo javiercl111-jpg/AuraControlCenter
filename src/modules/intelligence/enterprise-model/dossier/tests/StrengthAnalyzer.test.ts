@@ -1,4 +1,3 @@
-// @ts-expect-error Vitest ambient module types
 import { describe, it, expect } from 'vitest';
 import { StrengthAnalyzer } from '../services/StrengthAnalyzer';
 import { MaturityEvaluator } from '../services/MaturityEvaluator';

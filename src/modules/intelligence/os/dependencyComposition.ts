@@ -1,8 +1,14 @@
-import type { PlannerPolicy } from '../enterprise-model/planning/domain/types';
+import type { TurnExtractionResult } from '../enterprise-model/extraction/domain/types';
+import type { EnterpriseMentalModel } from '../enterprise-model/domain/types';
+import type { EnterpriseKnowledgeGraph } from '../enterprise-model/graph/domain/types';
+import type { DecisionReadinessAssessment, OverallCoverageReport } from '../enterprise-model/coverage/domain/types';
+import type { PlannerPolicy, PlannerExecutionContext, AdaptiveQuestionPlanResult } from '../enterprise-model/planning/domain/types';
+import type { PlanFromGraphOptions } from '../enterprise-model/planning/services/AdaptiveQuestionPlanner';
 import type { IQuestionRealizationProvider } from '../enterprise-model/planning/services/QuestionRealizationProvider';
 import type { ReasoningPolicy } from '../enterprise-model/reasoning/policies/ReasoningPolicy';
-import type { DossierPolicy, DiagnosticNarrativeProvider } from '../enterprise-model/dossier/domain/types';
-import type { AssessmentPolicy } from '../enterprise-model/assessment/domain/types';
+import type { ExecutiveReasoningContext, ReasoningExecutionContext, ExecutiveReasoningReport } from '../enterprise-model/reasoning/domain/types';
+import type { DossierPolicy, DiagnosticNarrativeProvider, ExecutiveDossier, DossierExecutionContext } from '../enterprise-model/dossier/domain/types';
+import type { AssessmentPolicy, EnterpriseTransformationAssessment, TransformationConstraint, TransformationDependency } from '../enterprise-model/assessment/domain/types';
 import type { 
   PipelineIdGenerator, 
   PipelineClock, 
@@ -31,4 +37,61 @@ export interface AuraIntelligenceOSDependencies {
   diagnosticNarrativeProvider?: DiagnosticNarrativeProvider;
   
   assessmentPolicy?: AssessmentPolicy;
+
+  // Engine execution ports (Structural injection)
+  extractionApplier?: {
+    applyExtraction(
+      currentMentalModel: EnterpriseMentalModel,
+      currentGraph: EnterpriseKnowledgeGraph,
+      extractionResult: TurnExtractionResult
+    ): { mentalModel: EnterpriseMentalModel; knowledgeGraph: EnterpriseKnowledgeGraph; extractionResult: TurnExtractionResult };
+  };
+
+  coverageDecisionEngine?: {
+    evaluateDecisionReadiness(
+      graphOrReport: EnterpriseKnowledgeGraph | OverallCoverageReport,
+      targetScenario: string
+    ): DecisionReadinessAssessment;
+  };
+
+  coverageCalculator?: {
+    calculateOverallReport(
+      graph: EnterpriseKnowledgeGraph
+    ): OverallCoverageReport;
+  };
+
+  adaptiveQuestionPlanner?: {
+    planQuestionsFromGraph(
+      options: PlanFromGraphOptions,
+      ctx: PlannerExecutionContext
+    ): Promise<AdaptiveQuestionPlanResult>;
+  };
+
+  executiveReasoningEngine?: {
+    execute(
+      context: ExecutiveReasoningContext,
+      executionContext: ReasoningExecutionContext
+    ): ExecutiveReasoningReport;
+  };
+
+  executiveDossierBuilder?: {
+    build(
+      executionContext: DossierExecutionContext,
+      policy: DossierPolicy,
+      narrativeProvider: DiagnosticNarrativeProvider,
+      report: unknown
+    ): ExecutiveDossier;
+  };
+
+  enterpriseTransformationAssessmentBuilder?: {
+    build(
+      policy: AssessmentPolicy,
+      executionId: string,
+      timestamp: string,
+      dossier: ExecutiveDossier,
+      reasoning: ExecutiveReasoningReport,
+      constraints?: TransformationConstraint[],
+      dependencies?: TransformationDependency[]
+    ): EnterpriseTransformationAssessment;
+  };
 }
