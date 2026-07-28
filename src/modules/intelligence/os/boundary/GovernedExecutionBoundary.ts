@@ -1,29 +1,45 @@
 import type {
+  AuthoritativeBoundaryExecutionModeV1,
+  AuthoritativeBoundaryPolicyDecisionV1,
+  AuthoritativeBoundaryPolicyDenialReasonCodeV1,
+  BoundaryInvocationContextV1,
+  BoundaryPublicError,
+  BoundaryStatus,
   GovernedExecutionRequest,
   GovernedExecutionResponse,
-  BoundaryStatus,
-  BoundaryPublicError,
+} from './types';
+import {
+  AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION,
+  AUTHORITATIVE_EXECUTION_CONTEXT_VERSION,
+  BOUNDARY_RESERVED_AUTHORITY_FIELDS,
 } from './types';
 import type {
-  BoundaryClockPort,
-  FeaturePolicyPort,
-  BoundaryExecutionPort,
-  ShadowComparisonPort,
   BoundaryAuditPort,
-  InternalPayloadValue,
+  BoundaryClockPort,
+  BoundaryExecutionPort,
+  FeaturePolicyPort,
+  InternalExecutionInput,
+  ShadowComparisonPort,
 } from './ports';
-import { GovernedBoundaryError } from './errors';
-import { evaluateBoundaryPolicy } from './policies';
+import {
+  BoundaryContextContractError,
+  BoundaryPolicyContractError,
+  GovernedBoundaryError,
+  type BoundaryContextContractIssue,
+} from './errors';
 import {
   createSafeInternalPayload,
+  validateAuthoritativeBoundaryPolicyDecisionV1,
+  validateAuthoritativeBoundaryPolicyQueryV1,
+  validateAuthoritativeExecutionContextV1,
+  validateBoundaryInvocationContextV1,
   validateGovernedRequest,
-  estimateSizeInBytes,
 } from './validators';
 import {
+  sanitizeComparisonSummary,
   sanitizeMetadata,
   sanitizePublicError,
   sanitizeResultSummary,
-  sanitizeComparisonSummary,
 } from './sanitizers';
 
 export interface GovernedExecutionBoundaryConfig {
@@ -32,6 +48,24 @@ export interface GovernedExecutionBoundaryConfig {
   readonly executionPort: BoundaryExecutionPort;
   readonly shadowComparisonPort?: ShadowComparisonPort;
   readonly auditPort?: BoundaryAuditPort;
+}
+
+interface AuthorityConflict {
+  readonly field: string;
+  readonly issue: BoundaryContextContractIssue;
+}
+
+interface ExpectedPayloadAuthority {
+  readonly tenantId: string;
+  readonly actorId: string;
+  readonly actorType: string;
+  readonly consumerId: string;
+  readonly source: string;
+  readonly requestId: string;
+  readonly correlationId: string;
+  readonly requestedMode: string;
+  readonly executionMode?: string;
+  readonly authorizationPolicyVersion?: string;
 }
 
 export class GovernedExecutionBoundary {
@@ -49,241 +83,859 @@ export class GovernedExecutionBoundary {
     this.auditPort = config.auditPort;
   }
 
-  public async execute(rawRequest: unknown): Promise<GovernedExecutionResponse> {
-    const startedAt = this.clockPort.now();
-    const fallbackId = 'UNKNOWN_ID';
-    let validatedReq: GovernedExecutionRequest | undefined = undefined;
+  public async execute(
+    rawRequest: GovernedExecutionRequest,
+    invocationContext?: BoundaryInvocationContextV1
+  ): Promise<GovernedExecutionResponse>;
+  public async execute(
+    rawRequest: unknown,
+    invocationContext?: BoundaryInvocationContextV1
+  ): Promise<GovernedExecutionResponse>;
+  public async execute(
+    rawRequest: unknown,
+    invocationContext?: BoundaryInvocationContextV1
+  ): Promise<GovernedExecutionResponse> {
+    const receivedAt = this.clockPort.now();
+    let request: GovernedExecutionRequest;
 
     try {
-      validatedReq = validateGovernedRequest(rawRequest);
-    } catch (err: unknown) {
-      const completedAt = this.clockPort.now();
-      const pubError = sanitizePublicError(err);
-      return this.buildResponse({
-        requestId: this.extractString(rawRequest, 'requestId') || fallbackId,
-        correlationId: this.extractString(rawRequest, 'correlationId') || fallbackId,
+      request = validateGovernedRequest(rawRequest);
+    } catch (error: unknown) {
+      return this.buildErrorResponse({
+        requestId:
+          this.extractString(rawRequest, 'requestId') ?? 'UNKNOWN_ID',
+        correlationId:
+          this.extractString(rawRequest, 'correlationId') ??
+          'UNKNOWN_ID',
         mode: 'DISABLED',
         status: 'REJECTED',
-        startedAt,
-        completedAt,
-        durationMs: this.calculateDuration(startedAt, completedAt),
-        errors: [pubError],
-        warnings: [],
+        startedAt: receivedAt,
+        error,
       });
     }
 
-    const req = validatedReq;
+    const internalPayload = createSafeInternalPayload(request.payload);
+    const cleanMetadata = sanitizeMetadata(request.metadata);
+    const safeMetadata =
+      cleanMetadata === undefined
+        ? undefined
+        : Object.freeze({ ...cleanMetadata });
+    this.tryAuditLog('BOUNDARY_REQUEST_RECEIVED', {
+      requestId: request.requestId,
+      correlationId: request.correlationId,
+      requestedMode: request.requestedMode,
+    });
 
-    // Fail-Closed: Policy evaluation
-    let policyDecision;
+    let context: BoundaryInvocationContextV1 | undefined;
+    let effectiveMode:
+      | AuthoritativeBoundaryExecutionModeV1
+      | undefined;
+    let rejectionReason: string | undefined;
+    let deadlineExceeded = false;
+
     try {
-      if (!this.featurePolicyPort) {
-        throw new GovernedBoundaryError('BOUNDARY_DISABLED', 'FeaturePolicyPort is missing', false);
+      if (request.cancellationSignal?.aborted) {
+        throw new GovernedBoundaryError(
+          'CANCELLED',
+          'Request was cancelled before context validation',
+          false
+        );
       }
-      const policy = await this.featurePolicyPort.getEffectivePolicy(req.tenant.tenantId, req.source);
-      const payloadSize = estimateSizeInBytes(req.payload);
-      policyDecision = evaluateBoundaryPolicy(
-        policy,
-        req.requestedMode,
-        req.source,
-        req.timeoutMs,
-        payloadSize
+      if (this.hasTimedOut(receivedAt, request.timeoutMs)) {
+        deadlineExceeded = true;
+        throw new GovernedBoundaryError(
+          'TIMEOUT',
+          'Request timed out before policy evaluation',
+          false
+        );
+      }
+      if (invocationContext === undefined) {
+        throw new BoundaryContextContractError(
+          'BOUNDARY_CONTEXT_MISSING'
+        );
+      }
+
+      context =
+        validateBoundaryInvocationContextV1(invocationContext);
+      this.tryAuditLog('BOUNDARY_CONTEXT_VALIDATED', {
+        requestId: context.requestId,
+        correlationId: context.correlationId,
+        tenantId: context.tenantId,
+        actorType: context.actor.actorType,
+        consumerId: context.consumerId,
+        source: context.source,
+      });
+
+      const initiatedAt = this.clockPort.now();
+      const requestConflict = this.findRequestContextConflict(
+        request,
+        context
       );
-    } catch (err: unknown) {
-      const completedAt = this.clockPort.now();
-      const pubError = sanitizePublicError(err);
-      return this.buildResponse({
-        requestId: req.requestId,
-        correlationId: req.correlationId,
-        mode: 'DISABLED',
-        status: 'REJECTED',
-        startedAt,
-        completedAt,
-        durationMs: this.calculateDuration(startedAt, completedAt),
-        errors: [pubError],
-        warnings: [],
-      });
-    }
+      if (requestConflict) {
+        this.auditConflict(request, context, requestConflict);
+        throw new BoundaryContextContractError(
+          requestConflict.issue
+        );
+      }
 
-    if (!policyDecision.allowed || policyDecision.error) {
-      const completedAt = this.clockPort.now();
-      const pubError = sanitizePublicError(
-        policyDecision.error || new GovernedBoundaryError('BOUNDARY_DISABLED', 'Boundary access denied', false)
+      this.tryAuditLog('BOUNDARY_TENANT_BOUND', {
+        requestId: context.requestId,
+        correlationId: context.correlationId,
+        tenantId: context.tenantId,
+        consumerId: context.consumerId,
+        source: context.source,
+      });
+      this.tryAuditLog('BOUNDARY_ACTOR_BOUND', {
+        requestId: context.requestId,
+        correlationId: context.correlationId,
+        tenantId: context.tenantId,
+        actorType: context.actor.actorType,
+        consumerId: context.consumerId,
+        source: context.source,
+      });
+
+      const initialPayloadConflict =
+        this.findPayloadAuthorityConflict(internalPayload, {
+          tenantId: context.tenantId,
+          actorId: context.actor.actorId,
+          actorType: context.actor.actorType,
+          consumerId: context.consumerId,
+          source: context.source,
+          requestId: context.requestId,
+          correlationId: context.correlationId,
+          requestedMode: request.requestedMode,
+        });
+      if (initialPayloadConflict) {
+        this.auditConflict(
+          request,
+          context,
+          initialPayloadConflict
+        );
+        throw new BoundaryContextContractError(
+          initialPayloadConflict.issue
+        );
+      }
+
+      if (request.requestedMode === 'PRODUCTIVE') {
+        throw new BoundaryContextContractError(
+          'BOUNDARY_MODE_ESCALATION'
+        );
+      }
+      if (request.requestedMode === 'DISABLED') {
+        throw new GovernedBoundaryError(
+          'BOUNDARY_DISABLED',
+          'Requested mode is disabled',
+          false
+        );
+      }
+      if (
+        !this.featurePolicyPort?.evaluateAuthoritativePolicy
+      ) {
+        throw new GovernedBoundaryError(
+          'BOUNDARY_DISABLED',
+          'Authoritative boundary policy is unavailable',
+          false
+        );
+      }
+
+      const policyQuery =
+        validateAuthoritativeBoundaryPolicyQueryV1({
+          schemaVersion:
+            AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION,
+          tenantId: context.tenantId,
+          consumerId: context.consumerId,
+          source: context.source,
+          requestedMode: request.requestedMode,
+          actor: context.actor,
+        });
+      const rawPolicyDecision =
+        await this.featurePolicyPort.evaluateAuthoritativePolicy(
+          policyQuery
+        );
+
+      if (request.cancellationSignal?.aborted) {
+        throw new GovernedBoundaryError(
+          'CANCELLED',
+          'Request was cancelled after policy evaluation',
+          false
+        );
+      }
+
+      const policyDecision =
+        validateAuthoritativeBoundaryPolicyDecisionV1(
+          rawPolicyDecision
+        );
+      const policyConflictField =
+        this.findPolicyDecisionConflict(
+        policyDecision,
+        policyQuery
       );
-      return this.buildResponse({
-        requestId: req.requestId,
-        correlationId: req.correlationId,
-        mode: 'DISABLED',
-        status: 'REJECTED',
-        startedAt,
-        completedAt,
-        durationMs: this.calculateDuration(startedAt, completedAt),
-        errors: [pubError],
-        warnings: [],
-      });
-    }
+      if (policyConflictField) {
+        this.tryAuditLog('BOUNDARY_CONTEXT_CONFLICT', {
+          requestId: context.requestId,
+          correlationId: context.correlationId,
+          tenantId: context.tenantId,
+          actorType: context.actor.actorType,
+          consumerId: context.consumerId,
+          source: context.source,
+          requestedMode: request.requestedMode,
+          reasonCode: 'BOUNDARY_POLICY_CONTEXT_INVALID',
+          conflictField: policyConflictField,
+        });
+        throw new BoundaryPolicyContractError(
+          'BOUNDARY_POLICY_CONTEXT_INVALID'
+        );
+      }
 
-    // Check cancellation
-    if (req.cancellationSignal?.aborted) {
-      const completedAt = this.clockPort.now();
-      const pubError = sanitizePublicError(
-        new GovernedBoundaryError('CANCELLED', 'Request was cancelled before execution', false)
+      if (policyDecision.decision === 'DENIED') {
+        rejectionReason = policyDecision.reasonCode;
+        throw this.policyDenialError(policyDecision.reasonCode);
+      }
+
+      effectiveMode = policyDecision.effectiveExecutionMode;
+      if (effectiveMode !== request.requestedMode) {
+        this.auditConflict(request, context, {
+          field: 'executionMode',
+          issue: 'BOUNDARY_MODE_ESCALATION',
+        });
+        throw new BoundaryContextContractError(
+          'BOUNDARY_MODE_ESCALATION'
+        );
+      }
+
+      if (
+        request.timeoutMs !== undefined &&
+        request.timeoutMs > policyDecision.effectiveTimeoutMs
+      ) {
+        throw new GovernedBoundaryError(
+          'TIMEOUT',
+          'Requested timeout exceeds the authoritative policy limit',
+          false
+        );
+      }
+      const effectiveTimeoutMs = Math.min(
+        policyDecision.effectiveTimeoutMs,
+        request.timeoutMs ?? policyDecision.effectiveTimeoutMs
       );
-      return this.buildResponse({
-        requestId: req.requestId,
-        correlationId: req.correlationId,
-        mode: req.requestedMode,
-        status: 'CANCELLED',
-        startedAt,
-        completedAt,
-        durationMs: this.calculateDuration(startedAt, completedAt),
-        errors: [pubError],
-        warnings: [],
-      });
-    }
+      if (this.hasTimedOut(initiatedAt, effectiveTimeoutMs)) {
+        deadlineExceeded = true;
+        throw new GovernedBoundaryError(
+          'TIMEOUT',
+          'Request timed out before execution dispatch',
+          false
+        );
+      }
 
-    // Prepare execution
-    const cleanMeta = sanitizeMetadata(req.metadata);
-    let internalPayload: InternalPayloadValue;
-    try {
-      internalPayload = createSafeInternalPayload(req.payload);
-    } catch (err: unknown) {
-      const completedAt = this.clockPort.now();
-      return this.buildResponse({
-        requestId: req.requestId,
-        correlationId: req.correlationId,
-        mode: 'DISABLED',
-        status: 'REJECTED',
-        startedAt,
-        completedAt,
-        durationMs: this.calculateDuration(startedAt, completedAt),
-        errors: [sanitizePublicError(err)],
-        warnings: [],
-      });
-    }
+      const finalPayloadConflict =
+        this.findPayloadAuthorityConflict(internalPayload, {
+          tenantId: context.tenantId,
+          actorId: context.actor.actorId,
+          actorType: context.actor.actorType,
+          consumerId: context.consumerId,
+          source: context.source,
+          requestId: context.requestId,
+          correlationId: context.correlationId,
+          requestedMode: request.requestedMode,
+          executionMode: effectiveMode,
+          authorizationPolicyVersion:
+            policyDecision.authorizationPolicyVersion,
+        });
+      if (finalPayloadConflict) {
+        this.auditConflict(
+          request,
+          context,
+          finalPayloadConflict
+        );
+        throw new BoundaryContextContractError(
+          finalPayloadConflict.issue
+        );
+      }
 
-    try {
-      const internalInput = {
-        sessionId: req.correlationId,
+      const authoritativeContext =
+        validateAuthoritativeExecutionContextV1({
+          schemaVersion: AUTHORITATIVE_EXECUTION_CONTEXT_VERSION,
+          tenantId: context.tenantId,
+          actor: context.actor,
+          consumerId: context.consumerId,
+          source: context.source,
+          requestId: context.requestId,
+          correlationId: context.correlationId,
+          executionMode: effectiveMode,
+          initiatedAt,
+          authorizationPolicyVersion:
+            policyDecision.authorizationPolicyVersion,
+        });
+
+      this.tryAuditLog('BOUNDARY_MODE_RESOLVED', {
+        requestId: context.requestId,
+        correlationId: context.correlationId,
+        tenantId: context.tenantId,
+        actorType: context.actor.actorType,
+        consumerId: context.consumerId,
+        source: context.source,
+        requestedMode: request.requestedMode,
+        effectiveMode,
+        authorizationPolicyVersion:
+          authoritativeContext.authorizationPolicyVersion,
+      });
+
+      const internalInput: InternalExecutionInput = Object.freeze({
+        sessionId: context.correlationId,
         payload: internalPayload,
-        metadata: cleanMeta,
-      };
-
-      const internalResult = await this.executionPort.execute(internalInput, req.cancellationSignal);
-      const completedAt = this.clockPort.now();
-      const durationMs = this.calculateDuration(startedAt, completedAt);
-
-      const resultSummary = sanitizeResultSummary(internalResult);
-      let comparisonSummary: Record<string, unknown> | undefined = undefined;
-
-      if (req.requestedMode === 'EVALUATION' && this.shadowComparisonPort) {
-        try {
-          const comp = await this.shadowComparisonPort.compare(internalPayload, internalResult.rawData || internalResult);
-          comparisonSummary = sanitizeComparisonSummary(comp);
-        } catch {
-          // Failure in shadow comparison does not fail execution summary
-        }
-      }
-
-      const responseStatus: BoundaryStatus = internalResult.status === 'SUCCEEDED' || internalResult.status === 'SUCCESS' || internalResult.status === 'COMPLETED'
-        ? 'COMPLETED'
-        : internalResult.status === 'TIMED_OUT'
-        ? 'TIMED_OUT'
-        : internalResult.status === 'CANCELLED'
-        ? 'CANCELLED'
-        : 'FAILED';
-
-      const errors: BoundaryPublicError[] = [];
-      if (internalResult.errors && internalResult.errors.length > 0) {
-        for (let i = 0; i < internalResult.errors.length; i++) {
-          const e = internalResult.errors[i];
-          errors.push(sanitizePublicError(new Error(e.message)));
-        }
-      }
-
-      const response = this.buildResponse({
-        requestId: req.requestId,
-        correlationId: req.correlationId,
-        mode: req.requestedMode,
-        status: responseStatus,
-        startedAt,
-        completedAt,
-        durationMs,
-        resultSummary,
-        comparisonSummary,
-        warnings: internalResult.warnings ? internalResult.warnings.map(w => ({ code: 'WARN', message: w })) : [],
-        errors,
+        ...(safeMetadata !== undefined
+          ? { metadata: safeMetadata }
+          : {}),
+        authoritativeContext,
+      });
+      this.tryAuditLog('BOUNDARY_EXECUTION_DISPATCHED', {
+        requestId: context.requestId,
+        correlationId: context.correlationId,
+        tenantId: context.tenantId,
+        actorType: context.actor.actorType,
+        consumerId: context.consumerId,
+        source: context.source,
+        requestedMode: request.requestedMode,
+        effectiveMode,
+        authorizationPolicyVersion:
+          authoritativeContext.authorizationPolicyVersion,
       });
 
-      this.tryAuditLog('BOUNDARY_EXECUTION_COMPLETED', {
-        requestId: req.requestId,
-        tenantId: req.tenant.tenantId,
-        mode: req.requestedMode,
-        status: responseStatus,
-        executionId: fallbackId,
+      return await this.dispatch(
+        request,
+        context,
+        internalInput,
+        internalPayload,
+        effectiveMode,
+        receivedAt
+      );
+    } catch (error: unknown) {
+      const reasonCode =
+        rejectionReason ?? this.getInternalReasonCode(error);
+      this.tryAuditLog('BOUNDARY_INVOCATION_REJECTED', {
+        requestId: context?.requestId ?? request.requestId,
+        correlationId:
+          context?.correlationId ?? request.correlationId,
+        ...(context
+          ? {
+              tenantId: context.tenantId,
+              actorType: context.actor.actorType,
+              consumerId: context.consumerId,
+              source: context.source,
+            }
+          : {}),
+        requestedMode: request.requestedMode,
+        ...(effectiveMode ? { effectiveMode } : {}),
+        reasonCode,
       });
-
-      return response;
-    } catch (err: unknown) {
-      const completedAt = this.clockPort.now();
-      const pubError = sanitizePublicError(err);
-      return this.buildResponse({
-        requestId: req.requestId,
-        correlationId: req.correlationId,
-        mode: req.requestedMode,
-        status: 'FAILED',
-        startedAt,
-        completedAt,
-        durationMs: this.calculateDuration(startedAt, completedAt),
-        errors: [pubError],
-        warnings: [],
+      const publicError = sanitizePublicError(error);
+      const status: BoundaryStatus =
+        publicError.code === 'CANCELLED'
+          ? 'CANCELLED'
+          : deadlineExceeded
+            ? 'TIMED_OUT'
+            : 'REJECTED';
+      return this.buildErrorResponse({
+        requestId: context?.requestId ?? request.requestId,
+        correlationId:
+          context?.correlationId ?? request.correlationId,
+        mode: effectiveMode ?? 'DISABLED',
+        status,
+        startedAt: receivedAt,
+        error,
       });
     }
   }
 
-  private extractString(obj: unknown, key: string): string | undefined {
-    if (typeof obj === 'object' && obj !== null && key in obj) {
-      const val = (obj as Record<string, unknown>)[key];
-      if (typeof val === 'string') return val;
+  private async dispatch(
+    request: GovernedExecutionRequest,
+    context: BoundaryInvocationContextV1,
+    internalInput: InternalExecutionInput,
+    internalPayload: InternalExecutionInput['payload'],
+    effectiveMode: AuthoritativeBoundaryExecutionModeV1,
+    startedAt: string
+  ): Promise<GovernedExecutionResponse> {
+    try {
+      const internalResult = await this.executionPort.execute(
+        internalInput,
+        request.cancellationSignal
+      );
+      const completedAt = this.clockPort.now();
+      const resultSummary = sanitizeResultSummary(internalResult);
+      let comparisonSummary: Record<string, unknown> | undefined;
+
+      if (
+        effectiveMode === 'EVALUATION' &&
+        this.shadowComparisonPort
+      ) {
+        try {
+          const comparison =
+            await this.shadowComparisonPort.compare(
+              internalPayload,
+              internalResult.rawData ?? internalResult
+            );
+          comparisonSummary =
+            sanitizeComparisonSummary(comparison);
+        } catch {
+          // Comparison remains best-effort.
+        }
+      }
+
+      const responseStatus: BoundaryStatus =
+        internalResult.status === 'SUCCEEDED' ||
+        internalResult.status === 'SUCCESS' ||
+        internalResult.status === 'COMPLETED'
+          ? 'COMPLETED'
+          : internalResult.status === 'TIMED_OUT'
+            ? 'TIMED_OUT'
+            : internalResult.status === 'CANCELLED'
+              ? 'CANCELLED'
+              : 'FAILED';
+      const errors: BoundaryPublicError[] = [];
+      for (const error of internalResult.errors ?? []) {
+        errors.push(sanitizePublicError(new Error(error.message)));
+      }
+      const response = this.buildResponse({
+        requestId: context.requestId,
+        correlationId: context.correlationId,
+        mode: effectiveMode,
+        status: responseStatus,
+        startedAt,
+        completedAt,
+        durationMs: this.calculateDuration(
+          startedAt,
+          completedAt
+        ),
+        resultSummary,
+        comparisonSummary,
+        warnings: (internalResult.warnings ?? []).map((warning) => ({
+          code: 'WARN',
+          message: warning,
+        })),
+        errors,
+      });
+      this.tryAuditLog('BOUNDARY_EXECUTION_COMPLETED', {
+        requestId: context.requestId,
+        correlationId: context.correlationId,
+        tenantId: context.tenantId,
+        actorType: context.actor.actorType,
+        consumerId: context.consumerId,
+        source: context.source,
+        effectiveMode,
+        status: responseStatus,
+        executionId: internalResult.executionId,
+        authorizationPolicyVersion:
+          internalInput.authoritativeContext
+            ?.authorizationPolicyVersion,
+      });
+      return response;
+    } catch (error: unknown) {
+      const completedAt = this.clockPort.now();
+      this.tryAuditLog('BOUNDARY_EXECUTION_COMPLETED', {
+        requestId: context.requestId,
+        correlationId: context.correlationId,
+        tenantId: context.tenantId,
+        actorType: context.actor.actorType,
+        consumerId: context.consumerId,
+        source: context.source,
+        effectiveMode,
+        status: 'FAILED',
+        authorizationPolicyVersion:
+          internalInput.authoritativeContext
+            ?.authorizationPolicyVersion,
+      });
+      return this.buildResponse({
+        requestId: context.requestId,
+        correlationId: context.correlationId,
+        mode: effectiveMode,
+        status: 'FAILED',
+        startedAt,
+        completedAt,
+        durationMs: this.calculateDuration(
+          startedAt,
+          completedAt
+        ),
+        warnings: [],
+        errors: [sanitizePublicError(error)],
+      });
+    }
+  }
+
+  private findRequestContextConflict(
+    request: GovernedExecutionRequest,
+    context: BoundaryInvocationContextV1
+  ): AuthorityConflict | undefined {
+    if (request.requestId !== context.requestId) {
+      return {
+        field: 'requestId',
+        issue: 'BOUNDARY_REQUEST_CONTEXT_MISMATCH',
+      };
+    }
+    if (request.correlationId !== context.correlationId) {
+      return {
+        field: 'correlationId',
+        issue: 'BOUNDARY_REQUEST_CONTEXT_MISMATCH',
+      };
+    }
+    if (request.tenant.tenantId !== context.tenantId) {
+      return {
+        field: 'tenantId',
+        issue: 'BOUNDARY_TENANT_MISMATCH',
+      };
+    }
+    if (
+      request.actor.actorId !== context.actor.actorId ||
+      request.actor.actorType !== context.actor.actorType
+    ) {
+      return {
+        field:
+          request.actor.actorId !== context.actor.actorId
+            ? 'actorId'
+            : 'actorType',
+        issue: 'BOUNDARY_ACTOR_MISMATCH',
+      };
+    }
+    if (request.source !== context.source) {
+      return {
+        field: 'source',
+        issue: 'BOUNDARY_SOURCE_INVALID',
+      };
     }
     return undefined;
   }
 
-  private calculateDuration(startedAt: string, completedAt: string): number {
-    try {
-      const startMs = Date.parse(startedAt);
-      const endMs = Date.parse(completedAt);
-      if (!Number.isNaN(startMs) && !Number.isNaN(endMs)) {
-        return Math.max(0, endMs - startMs);
-      }
-    } catch {
-      // Fallback
+  /**
+   * Authority duplicates are recognized only at payload root, plus canonical
+   * root tenant/actor objects. Recursive scanning would collide with valid
+   * business fields, so nested business objects remain ordinary data.
+   */
+  private findPayloadAuthorityConflict(
+    payload: InternalExecutionInput['payload'],
+    expected: ExpectedPayloadAuthority
+  ): AuthorityConflict | undefined {
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      Array.isArray(payload)
+    ) {
+      return undefined;
     }
-    return 0;
+    const record = payload as Readonly<Record<string, unknown>>;
+    for (const field of BOUNDARY_RESERVED_AUTHORITY_FIELDS) {
+      if (
+        !Object.prototype.hasOwnProperty.call(record, field) ||
+        (
+          field === 'executionMode' &&
+          expected.executionMode === undefined
+        ) ||
+        (
+          field === 'authorizationPolicyVersion' &&
+          expected.authorizationPolicyVersion === undefined
+        )
+      ) {
+        continue;
+      }
+      if (
+        !this.payloadAuthorityValueMatches(
+          field,
+          record[field],
+          expected
+        )
+      ) {
+        return {
+          field,
+          issue: this.issueForAuthorityField(field),
+        };
+      }
+    }
+    return undefined;
   }
 
-  private tryAuditLog(eventName: string, data: Readonly<Record<string, unknown>>): void {
-    if (this.auditPort) {
-      try {
-        void this.auditPort.logEvent(eventName, data);
-      } catch {
-        // Non-blocking audit
-      }
+  private payloadAuthorityValueMatches(
+    field: string,
+    actual: unknown,
+    expected: ExpectedPayloadAuthority
+  ): boolean {
+    if (field === 'tenant') {
+      return this.hasExactPrimitiveShape(actual, {
+        tenantId: expected.tenantId,
+      });
     }
+    if (field === 'actor') {
+      return this.hasExactPrimitiveShape(actual, {
+        actorId: expected.actorId,
+        actorType: expected.actorType,
+      });
+    }
+    const expectedValues: Readonly<Record<string, unknown>> = {
+      tenantId: expected.tenantId,
+      actorId: expected.actorId,
+      actorType: expected.actorType,
+      consumerId: expected.consumerId,
+      source: expected.source,
+      requestId: expected.requestId,
+      correlationId: expected.correlationId,
+      requestedMode: expected.requestedMode,
+      executionMode: expected.executionMode,
+      authorizationPolicyVersion:
+        expected.authorizationPolicyVersion,
+    };
+    return actual === expectedValues[field];
+  }
+
+  private hasExactPrimitiveShape(
+    actual: unknown,
+    expected: Readonly<Record<string, string>>
+  ): boolean {
+    if (
+      typeof actual !== 'object' ||
+      actual === null ||
+      Array.isArray(actual) ||
+      Object.getPrototypeOf(actual) !== Object.prototype
+    ) {
+      return false;
+    }
+    const record = actual as Readonly<Record<string, unknown>>;
+    const keys = Object.keys(record);
+    const expectedKeys = Object.keys(expected);
+    return (
+      keys.length === expectedKeys.length &&
+      expectedKeys.every(
+        (key) =>
+          Object.prototype.hasOwnProperty.call(record, key) &&
+          record[key] === expected[key]
+      )
+    );
+  }
+
+  private issueForAuthorityField(
+    field: string
+  ): BoundaryContextContractIssue {
+    if (field === 'tenant' || field === 'tenantId') {
+      return 'BOUNDARY_TENANT_MISMATCH';
+    }
+    if (
+      field === 'actor' ||
+      field === 'actorId' ||
+      field === 'actorType'
+    ) {
+      return 'BOUNDARY_ACTOR_MISMATCH';
+    }
+    if (field === 'consumerId') {
+      return 'BOUNDARY_CONSUMER_UNAUTHORIZED';
+    }
+    if (field === 'source') {
+      return 'BOUNDARY_SOURCE_INVALID';
+    }
+    if (
+      field === 'requestedMode' ||
+      field === 'executionMode'
+    ) {
+      return 'BOUNDARY_MODE_ESCALATION';
+    }
+    if (field === 'authorizationPolicyVersion') {
+      return 'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID';
+    }
+    return 'BOUNDARY_REQUEST_CONTEXT_MISMATCH';
+  }
+
+  private findPolicyDecisionConflict(
+    decision: AuthoritativeBoundaryPolicyDecisionV1,
+    query: {
+      readonly tenantId: string;
+      readonly consumerId: string;
+      readonly source: string;
+      readonly requestedMode: string;
+      readonly actor: {
+        readonly actorId: string;
+        readonly actorType: string;
+      };
+    }
+  ): string | undefined {
+    if (decision.evaluatedTenantId !== query.tenantId) {
+      return 'tenantId';
+    }
+    if (decision.evaluatedConsumerId !== query.consumerId) {
+      return 'consumerId';
+    }
+    if (decision.evaluatedSource !== query.source) {
+      return 'source';
+    }
+    if (decision.requestedMode !== query.requestedMode) {
+      return 'requestedMode';
+    }
+    if (decision.evaluatedActor.actorId !== query.actor.actorId) {
+      return 'actorId';
+    }
+    if (
+      decision.evaluatedActor.actorType !== query.actor.actorType
+    ) {
+      return 'actorType';
+    }
+    return undefined;
+  }
+
+  private policyDenialError(
+    reasonCode: AuthoritativeBoundaryPolicyDenialReasonCodeV1
+  ): GovernedBoundaryError {
+    if (reasonCode === 'TENANT_NOT_ALLOWED') {
+      return new BoundaryContextContractError(
+        'BOUNDARY_TENANT_MISMATCH'
+      );
+    }
+    if (reasonCode === 'ACTOR_NOT_ALLOWED') {
+      return new BoundaryContextContractError(
+        'BOUNDARY_ACTOR_MISMATCH'
+      );
+    }
+    if (reasonCode === 'CONSUMER_NOT_ALLOWED') {
+      return new BoundaryContextContractError(
+        'BOUNDARY_CONSUMER_UNAUTHORIZED'
+      );
+    }
+    if (reasonCode === 'SOURCE_NOT_ALLOWED') {
+      return new BoundaryContextContractError(
+        'BOUNDARY_SOURCE_INVALID'
+      );
+    }
+    if (reasonCode === 'MODE_NOT_ALLOWED') {
+      return new BoundaryContextContractError(
+        'BOUNDARY_MODE_ESCALATION'
+      );
+    }
+    return new GovernedBoundaryError(
+      'BOUNDARY_DISABLED',
+      'Authoritative boundary policy denied execution',
+      false
+    );
+  }
+
+  private auditConflict(
+    request: GovernedExecutionRequest,
+    context: BoundaryInvocationContextV1,
+    conflict: AuthorityConflict
+  ): void {
+    this.tryAuditLog('BOUNDARY_CONTEXT_CONFLICT', {
+      requestId: context.requestId,
+      correlationId: context.correlationId,
+      tenantId: context.tenantId,
+      actorType: context.actor.actorType,
+      consumerId: context.consumerId,
+      source: context.source,
+      requestedMode: request.requestedMode,
+      reasonCode: conflict.issue,
+      conflictField: conflict.field,
+    });
+  }
+
+  private hasTimedOut(
+    startedAt: string,
+    timeoutMs: number | undefined
+  ): boolean {
+    if (timeoutMs === undefined) {
+      return false;
+    }
+    return (
+      this.calculateDuration(startedAt, this.clockPort.now()) >=
+      timeoutMs
+    );
+  }
+
+  private getInternalReasonCode(error: unknown): string {
+    if (error instanceof BoundaryContextContractError) {
+      return error.issue;
+    }
+    if (error instanceof BoundaryPolicyContractError) {
+      return error.issue;
+    }
+    if (error instanceof GovernedBoundaryError) {
+      return error.code;
+    }
+    return 'EXECUTION_FAILED';
+  }
+
+  private extractString(
+    object: unknown,
+    key: string
+  ): string | undefined {
+    try {
+      if (typeof object !== 'object' || object === null) {
+        return undefined;
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(object, key);
+      return descriptor &&
+        Object.prototype.hasOwnProperty.call(descriptor, 'value') &&
+        typeof descriptor.value === 'string'
+        ? descriptor.value
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private calculateDuration(
+    startedAt: string,
+    completedAt: string
+  ): number {
+    const startMs = Date.parse(startedAt);
+    const endMs = Date.parse(completedAt);
+    return Number.isFinite(startMs) && Number.isFinite(endMs)
+      ? Math.max(0, endMs - startMs)
+      : 0;
+  }
+
+  private tryAuditLog(
+    eventName: string,
+    data: Readonly<Record<string, unknown>>
+  ): void {
+    if (!this.auditPort) {
+      return;
+    }
+    try {
+      void Promise.resolve(
+        this.auditPort.logEvent(eventName, Object.freeze({ ...data }))
+      ).catch(() => undefined);
+    } catch {
+      // Audit remains best-effort.
+    }
+  }
+
+  private buildErrorResponse(params: {
+    readonly requestId: string;
+    readonly correlationId: string;
+    readonly mode: GovernedExecutionResponse['mode'];
+    readonly status: BoundaryStatus;
+    readonly startedAt: string;
+    readonly error: unknown;
+  }): GovernedExecutionResponse {
+    const completedAt = this.clockPort.now();
+    return this.buildResponse({
+      requestId: params.requestId,
+      correlationId: params.correlationId,
+      mode: params.mode,
+      status: params.status,
+      startedAt: params.startedAt,
+      completedAt,
+      durationMs: this.calculateDuration(
+        params.startedAt,
+        completedAt
+      ),
+      warnings: [],
+      errors: [sanitizePublicError(params.error)],
+    });
   }
 
   private buildResponse(params: {
-    requestId: string;
-    correlationId: string;
-    mode: GovernedExecutionResponse['mode'];
-    status: BoundaryStatus;
-    startedAt: string;
-    completedAt: string;
-    durationMs: number;
-    resultSummary?: Record<string, unknown>;
-    comparisonSummary?: Record<string, unknown>;
-    warnings: GovernedExecutionResponse['warnings'];
-    errors: GovernedExecutionResponse['errors'];
+    readonly requestId: string;
+    readonly correlationId: string;
+    readonly mode: GovernedExecutionResponse['mode'];
+    readonly status: BoundaryStatus;
+    readonly startedAt: string;
+    readonly completedAt: string;
+    readonly durationMs: number;
+    readonly resultSummary?: Record<string, unknown>;
+    readonly comparisonSummary?: Record<string, unknown>;
+    readonly warnings: GovernedExecutionResponse['warnings'];
+    readonly errors: GovernedExecutionResponse['errors'];
   }): GovernedExecutionResponse {
     return {
       requestId: params.requestId,
@@ -293,8 +945,12 @@ export class GovernedExecutionBoundary {
       startedAt: params.startedAt,
       completedAt: params.completedAt,
       durationMs: params.durationMs,
-      ...(params.resultSummary ? { resultSummary: params.resultSummary } : {}),
-      ...(params.comparisonSummary ? { comparisonSummary: params.comparisonSummary } : {}),
+      ...(params.resultSummary
+        ? { resultSummary: params.resultSummary }
+        : {}),
+      ...(params.comparisonSummary
+        ? { comparisonSummary: params.comparisonSummary }
+        : {}),
       warnings: params.warnings,
       errors: params.errors,
     };

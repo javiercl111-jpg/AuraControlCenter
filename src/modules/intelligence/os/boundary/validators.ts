@@ -630,7 +630,7 @@ export function createSafeInternalPayload(payload: unknown): InternalPayloadValu
       false
     );
   }
-  return result.value;
+  return deepFreezeBoundaryContract(result.value);
 }
 
 export function estimateSizeInBytes(obj: unknown): number {
@@ -661,8 +661,8 @@ export function validateGovernedRequest(request: unknown): GovernedExecutionRequ
     throw new GovernedBoundaryError('SOURCE_NOT_ALLOWED', 'source must be a non-empty string', false);
   }
 
-  const validModes = ['DISABLED', 'SHADOW_ONLY', 'EVALUATION', 'PRODUCTIVE'];
-  if (typeof req.requestedMode !== 'string' || !validModes.includes(req.requestedMode)) {
+  const requestedMode = req.requestedMode;
+  if (!isBoundaryExecutionMode(requestedMode)) {
     throw new GovernedBoundaryError('MODE_NOT_ALLOWED', 'requestedMode is invalid', false);
   }
 
@@ -704,7 +704,104 @@ export function validateGovernedRequest(request: unknown): GovernedExecutionRequ
     }
   }
 
-  return request as unknown as GovernedExecutionRequest;
+  if (
+    req.cancellationSignal !== undefined &&
+    (
+      typeof req.cancellationSignal !== 'object' ||
+      req.cancellationSignal === null ||
+      typeof (req.cancellationSignal as { aborted?: unknown })
+        .aborted !== 'boolean' ||
+      typeof (
+        req.cancellationSignal as {
+          addEventListener?: unknown;
+        }
+      ).addEventListener !== 'function' ||
+      typeof (
+        req.cancellationSignal as {
+          removeEventListener?: unknown;
+        }
+      ).removeEventListener !== 'function'
+    )
+  ) {
+    throw new GovernedBoundaryError(
+      'INVALID_REQUEST',
+      'cancellationSignal is invalid',
+      false
+    );
+  }
+
+  if (
+    tenant.companyId !== undefined &&
+    (
+      typeof tenant.companyId !== 'string' ||
+      tenant.companyId.trim() === ''
+    )
+  ) {
+    throw new GovernedBoundaryError(
+      'INVALID_TENANT_CONTEXT',
+      'companyId must be a non-empty string',
+      false
+    );
+  }
+
+  if (
+    actor.roles !== undefined &&
+    (
+      !Array.isArray(actor.roles) ||
+      actor.roles.some(
+        (role) => typeof role !== 'string' || role.trim() === ''
+      )
+    )
+  ) {
+    throw new GovernedBoundaryError(
+      'INVALID_ACTOR_CONTEXT',
+      'roles must contain non-empty strings',
+      false
+    );
+  }
+
+  const tenantSnapshot = deepFreezeBoundaryContract({
+    tenantId: tenant.tenantId,
+    ...(tenant.companyId !== undefined
+      ? { companyId: tenant.companyId }
+      : {}),
+  });
+  const actorSnapshot = deepFreezeBoundaryContract({
+    actorId: actor.actorId,
+    actorType: actor.actorType,
+    ...(actor.roles !== undefined
+      ? { roles: [...actor.roles] as string[] }
+      : {}),
+  });
+  const payloadSnapshot = createSafeInternalPayload(req.payload);
+  const metadataSnapshot =
+    req.metadata === undefined
+      ? undefined
+      : (createSafeInternalPayload(req.metadata) as Readonly<
+          Record<string, unknown>
+        >);
+
+  return Object.freeze({
+    requestId: req.requestId,
+    correlationId: req.correlationId,
+    tenant: tenantSnapshot,
+    actor: actorSnapshot,
+    source: req.source,
+    requestedMode,
+    payload: payloadSnapshot,
+    ...(metadataSnapshot !== undefined
+      ? { metadata: metadataSnapshot }
+      : {}),
+    ...(req.timeoutMs !== undefined
+      ? { timeoutMs: req.timeoutMs }
+      : {}),
+    ...(req.cancellationSignal !== undefined
+      ? {
+          cancellationSignal:
+            req.cancellationSignal as AbortSignal,
+        }
+      : {}),
+  });
 }
 
 export default validateGovernedRequest;

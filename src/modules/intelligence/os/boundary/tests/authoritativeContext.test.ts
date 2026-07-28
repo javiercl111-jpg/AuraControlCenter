@@ -497,9 +497,12 @@ describe('AI-02H0A authoritative boundary context contracts', () => {
     expect(contractSourceText).not.toMatch(new RegExp(token, 'i'));
   });
 
-  it('43. leaves GovernedExecutionBoundary runtime unaware of the new contexts', () => {
-    expect(boundaryRuntimeSourceText).not.toMatch(
-      /BoundaryInvocationContextV1|AuthoritativeExecutionContextV1|authoritativeContext/
+  it('43. lets GovernedExecutionBoundary enforce and propagate the new contexts', () => {
+    expect(boundaryRuntimeSourceText).toMatch(
+      /BoundaryInvocationContextV1/
+    );
+    expect(boundaryRuntimeSourceText).toMatch(
+      /authoritativeContext/
     );
   });
 
@@ -537,8 +540,8 @@ describe('AI-02H0A authoritative boundary context contracts', () => {
     };
 
     expect(input.authoritativeContext).toBeUndefined();
-    expect(boundaryRuntimeSourceText).not.toContain(
-      'authoritativeContext'
+    expect(boundaryRuntimeSourceText).toContain(
+      'sanitizeMetadata'
     );
   });
 
@@ -618,7 +621,10 @@ describe('AI-02H0A authoritative boundary context contracts', () => {
       payload: { fact: 'value' },
     };
 
-    expect(validateGovernedRequest(request)).toBe(request);
+    const validated = validateGovernedRequest(request);
+    expect(validated).not.toBe(request);
+    expect(validated).toEqual(request);
+    expect(Object.isFrozen(validated)).toBe(true);
   });
 
   it('52. does not convert absent authoritativeContext into a tenant fallback', () => {

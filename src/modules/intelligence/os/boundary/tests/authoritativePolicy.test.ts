@@ -641,8 +641,8 @@ describe('AI-02H0A.1 authoritative policy contracts', () => {
     expect(port.evaluateAuthoritativePolicy).toBeUndefined();
   });
 
-  it('50. leaves GovernedExecutionBoundary runtime unchanged', () => {
-    expect(boundaryRuntimeSourceText).not.toMatch(
+  it('50. lets GovernedExecutionBoundary consume authoritative policy', () => {
+    expect(boundaryRuntimeSourceText).toMatch(
       /AuthoritativeBoundaryPolicy|evaluateAuthoritativePolicy/
     );
   });
