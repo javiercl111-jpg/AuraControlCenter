@@ -127,7 +127,16 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
       .not.toBe(executionScenario.includedDomains);
     expect(mockCoverageDecisionEngine.evaluateDecisionReadiness).toHaveBeenCalledWith(
       expect.anything(),
-      'Test'
+      {
+        scenarioId: 'Test',
+        includedDomains: executionScenario.includedDomains,
+        excludedDomains: executionScenario.excludedDomains
+      }
+    );
+    expect(mockCoverageCalculator.calculateOverallReport).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      executionScenario.includedDomains
     );
     coverageContextSpy.mockRestore();
   });
@@ -161,8 +170,7 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
 
     const resultPromise = orchestrator.executePipeline({
       sessionId: 'sess-123',
-      executionScenario,
-      targetScenario: executionScenario.scenarioId
+      executionScenario
     });
     await vi.advanceTimersByTimeAsync(1);
     await resultPromise;
@@ -172,12 +180,64 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
         executionScenario: expect.objectContaining({
           scenarioId: 'PAYROLL_AUDIT'
         }),
-        targetScenario: 'PAYROLL_AUDIT'
+        targetScenario: undefined
       })
     );
     const propagatedState = coverageContextSpy.mock.calls[0][0];
     expect(propagatedState.executionScenario).not.toBe(executionScenario);
     expect(mockCoverageDecisionEngine.evaluateDecisionReadiness).not.toHaveBeenCalled();
+  });
+
+  it('Ejecuta Coverage nominal sin targetScenario y propaga el scope a Planning', async () => {
+    const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
+    const executionScenario = createMinimalExecutionScenario(
+      'ORGANIZATION_RESTRUCTURE'
+    );
+    const inputState: PipelineAggregatedState = {
+      sessionId: 'sess-123',
+      executionScenario,
+      extractionResult: createMinimalExtractionResult(),
+      mentalModel: createMinimalMentalModel(),
+      knowledgeGraph: createMinimalKnowledgeGraph()
+    };
+
+    const resultPromise = orchestrator.executePipeline(
+      { sessionId: 'sess-123' },
+      inputState
+    );
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await resultPromise;
+
+    expect(result.status).toBe('SUCCESS');
+    expect(mockCoverageCalculator.calculateOverallReport).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      executionScenario.includedDomains
+    );
+    expect(mockCoverageDecisionEngine.evaluateDecisionReadiness).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        scenarioId: 'ORGANIZATION_RESTRUCTURE',
+        includedDomains: executionScenario.includedDomains,
+        excludedDomains: executionScenario.excludedDomains
+      }
+    );
+    expect(mockAdaptiveQuestionPlanner.planQuestionsFromGraph).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetScenario: undefined,
+        coverageScenario: {
+          scenarioId: 'ORGANIZATION_RESTRUCTURE',
+          includedDomains: executionScenario.includedDomains,
+          excludedDomains: executionScenario.excludedDomains
+        }
+      }),
+      expect.anything()
+    );
+    expect(executionScenario.includedDomains).toEqual([
+      'organization',
+      'workforce_analytics',
+      'talent_performance'
+    ]);
   });
 
   it('Timeout global antes de completar', async () => {

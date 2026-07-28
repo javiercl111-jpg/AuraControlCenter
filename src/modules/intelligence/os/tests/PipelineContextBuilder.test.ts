@@ -41,7 +41,12 @@ describe('PipelineContextBuilder', () => {
       };
       const ctx = PipelineContextBuilder.buildCoverageContext(state);
       expect(ctx.graph).toBe(dummyGraph);
-      expect(ctx.targetScenario).toBe('M&A');
+      expect(ctx.targetScenario).toBeUndefined();
+      expect(ctx.coverageScenario).toEqual({
+        scenarioId: 'M&A',
+        includedDomains: executionScenario.includedDomains,
+        excludedDomains: executionScenario.excludedDomains
+      });
       expect(ctx.executionScenario).toEqual(executionScenario);
       expect(ctx.executionScenario).not.toBe(executionScenario);
     });
@@ -54,6 +59,7 @@ describe('PipelineContextBuilder', () => {
       });
 
       expect('executionScenario' in ctx).toBe(false);
+      expect(ctx.coverageScenario).toBe('M&A');
     });
 
     it('2 & 3. Error si targetScenario o knowledgeGraph eston ausentes', () => {
@@ -72,12 +78,60 @@ describe('PipelineContextBuilder', () => {
       })).toThrowError(/must match targetScenario/);
     });
 
-    it('27. executionScenario no sustituye targetScenario antes de integrar Coverage', () => {
+    it('27. executionScenario permite Coverage sin targetScenario legacy', () => {
+      const executionScenario = createMinimalExecutionScenario('PAYROLL_AUDIT');
+      const ctx = PipelineContextBuilder.buildCoverageContext({
+        sessionId: 'session-1',
+        knowledgeGraph: dummyGraph,
+        executionScenario
+      });
+
+      expect(ctx.targetScenario).toBeUndefined();
+      expect(ctx.coverageScenario).toEqual({
+        scenarioId: 'PAYROLL_AUDIT',
+        includedDomains: executionScenario.includedDomains,
+        excludedDomains: executionScenario.excludedDomains
+      });
+    });
+
+    it('29. Rechaza included y excluded domains superpuestos', () => {
+      const executionScenario = {
+        ...createMinimalExecutionScenario('PAYROLL_AUDIT'),
+        excludedDomains: ['payroll'] as const
+      };
+
       expect(() => PipelineContextBuilder.buildCoverageContext({
         sessionId: 'session-1',
         knowledgeGraph: dummyGraph,
-        executionScenario: createMinimalExecutionScenario('PAYROLL_AUDIT')
-      })).toThrowError(/targetScenario is required/);
+        executionScenario
+      })).toThrowError(
+        expect.objectContaining({
+          code: 'INVALID_CONTRACT',
+          metadata: expect.objectContaining({
+            coverageScopeIssue: 'OVERLAPPING_COVERAGE_DOMAINS'
+          })
+        })
+      );
+    });
+
+    it('30. Rechaza dominios nominales desconocidos', () => {
+      const executionScenario = {
+        ...createMinimalExecutionScenario('PAYROLL_AUDIT'),
+        includedDomains: ['unknown_domain'] as never
+      };
+
+      expect(() => PipelineContextBuilder.buildCoverageContext({
+        sessionId: 'session-1',
+        knowledgeGraph: dummyGraph,
+        executionScenario
+      })).toThrowError(
+        expect.objectContaining({
+          code: 'INVALID_CONTRACT',
+          metadata: expect.objectContaining({
+            coverageScopeIssue: 'UNKNOWN_COVERAGE_DOMAIN'
+          })
+        })
+      );
     });
   });
 
@@ -92,10 +146,15 @@ describe('PipelineContextBuilder', () => {
       };
       const ctx = PipelineContextBuilder.buildPlanningContext(state, dummyOSDependencies, createDummyOSContext());
       expect(ctx.options.graph).toBe(dummyGraph);
-      expect(ctx.options.targetScenario).toBe('M&A');
+      expect(ctx.options.targetScenario).toBeUndefined();
       expect(ctx.options.policy).toBe(dummyOSDependencies.plannerPolicy);
       expect(ctx.options.realizationProvider).toBe(dummyOSDependencies.questionRealizationProvider);
       expect(ctx.executionScenario).toEqual(executionScenario);
+      expect(ctx.options.coverageScenario).toEqual({
+        scenarioId: 'M&A',
+        includedDomains: executionScenario.includedDomains,
+        excludedDomains: executionScenario.excludedDomains
+      });
       expect('executionScenario' in ctx.options).toBe(false);
     });
 
