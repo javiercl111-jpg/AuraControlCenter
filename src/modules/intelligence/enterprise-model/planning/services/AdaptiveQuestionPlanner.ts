@@ -1,10 +1,12 @@
 import type { EnterpriseKnowledgeGraph } from '../../graph/domain/types';
 import type {
+  CoverageScenarioScope,
   OverallCoverageReport,
   DecisionReadinessAssessment,
 } from '../../coverage/domain/types';
 import { CoverageCalculator } from '../../coverage/services/CoverageCalculator';
 import { CoverageDecisionEngine } from '../../coverage/services/CoverageDecisionEngine';
+import { assertCoverageScenarioScopeValid } from '../../coverage/domain/validation';
 import { CoverageAdapter } from '../domain/adapters';
 import type {
   AdaptiveQuestionPlanResult,
@@ -25,6 +27,7 @@ import { QuestionPlanEvaluator } from './QuestionPlanEvaluator';
 export interface PlanFromGraphOptions {
   graph: EnterpriseKnowledgeGraph;
   targetScenario?: string;
+  coverageScenario?: CoverageScenarioScope;
   policy?: PlannerPolicy;
   realizationProvider?: IQuestionRealizationProvider;
   completedObjectiveIds?: string[];
@@ -44,9 +47,18 @@ export class AdaptiveQuestionPlanner {
     options: PlanFromGraphOptions,
     ctx: PlannerExecutionContext
   ): Promise<AdaptiveQuestionPlanResult> {
-    const report = CoverageCalculator.calculateOverallReport(options.graph);
-    const assessment = options.targetScenario
-      ? CoverageDecisionEngine.evaluateDecisionReadiness(options.graph, options.targetScenario)
+    if (options.coverageScenario) {
+      assertCoverageScenarioScopeValid(options.coverageScenario);
+    }
+
+    const report = CoverageCalculator.calculateOverallReport(
+      options.graph,
+      undefined,
+      options.coverageScenario?.includedDomains
+    );
+    const scenario = options.coverageScenario ?? options.targetScenario;
+    const assessment = scenario
+      ? CoverageDecisionEngine.evaluateDecisionReadiness(report, scenario)
       : undefined;
 
     return this.planQuestionsFromReport(

@@ -6,21 +6,13 @@ import type {
   DomainCoverageMetrics,
   OverallCoverageReport,
 } from '../domain/types';
+import { COVERAGE_DOMAINS } from '../domain/types';
 import {
   calculateCompletenessScore,
   categorizeGapSeverity,
 } from '../domain/validation';
 
-export const ALL_COVERAGE_DOMAINS: CoverageDomain[] = [
-  'organization',
-  'payroll',
-  'compensation',
-  'benefits',
-  'compliance',
-  'talent_performance',
-  'time_attendance',
-  'workforce_analytics',
-];
+export const ALL_COVERAGE_DOMAINS: CoverageDomain[] = [...COVERAGE_DOMAINS];
 
 export class CoverageCalculator {
   public static calculateDomainMetrics(
@@ -137,8 +129,13 @@ export class CoverageCalculator {
   public static calculateOverallReport(
     graph: EnterpriseKnowledgeGraph,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _model?: EnterpriseMentalModel
+    _model?: EnterpriseMentalModel,
+    requiredDomains?: readonly CoverageDomain[]
   ): OverallCoverageReport {
+    const evaluatedDomains = requiredDomains
+      ? [...requiredDomains]
+      : [...ALL_COVERAGE_DOMAINS];
+    const evaluatedDomainSet = new Set<CoverageDomain>(evaluatedDomains);
     const domainBreakdown: Record<CoverageDomain, DomainCoverageMetrics> = {} as Record<
       CoverageDomain,
       DomainCoverageMetrics
@@ -148,12 +145,19 @@ export class CoverageCalculator {
 
     ALL_COVERAGE_DOMAINS.forEach((domain) => {
       const metrics = this.calculateDomainMetrics(graph, domain);
-      domainBreakdown[domain] = metrics;
+      const isEvaluated = evaluatedDomainSet.has(domain);
+      domainBreakdown[domain] = isEvaluated
+        ? metrics
+        : { ...metrics, gaps: [] };
+    });
+
+    evaluatedDomains.forEach((domain) => {
+      const metrics = domainBreakdown[domain];
       totalScore += metrics.completenessScore;
       allGaps.push(...metrics.gaps);
     });
 
-    const overallScore = Math.round(totalScore / ALL_COVERAGE_DOMAINS.length);
+    const overallScore = Math.round(totalScore / evaluatedDomains.length);
     const criticalGaps = allGaps.filter(
       (g) => g.severity === 'critical' || g.severity === 'high'
     );

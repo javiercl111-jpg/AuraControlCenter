@@ -1,7 +1,12 @@
 import type { TurnExtractionResult } from '../enterprise-model/extraction/domain/types';
 import type { EnterpriseMentalModel } from '../enterprise-model/domain/types';
 import type { EnterpriseKnowledgeGraph } from '../enterprise-model/graph/domain/types';
-import type { DecisionReadinessAssessment, OverallCoverageReport } from '../enterprise-model/coverage/domain/types';
+import type {
+  CoverageDomain,
+  CoverageScenarioInput,
+  DecisionReadinessAssessment,
+  OverallCoverageReport
+} from '../enterprise-model/coverage/domain/types';
 import type { PlannerPolicy, PlannerExecutionContext, AdaptiveQuestionPlanResult } from '../enterprise-model/planning/domain/types';
 import type { PlanFromGraphOptions } from '../enterprise-model/planning/services/AdaptiveQuestionPlanner';
 import type { IQuestionRealizationProvider } from '../enterprise-model/planning/services/QuestionRealizationProvider';
@@ -50,13 +55,15 @@ export interface AuraIntelligenceOSDependencies {
   coverageDecisionEngine?: {
     evaluateDecisionReadiness(
       graphOrReport: EnterpriseKnowledgeGraph | OverallCoverageReport,
-      targetScenario: string
+      scenario: CoverageScenarioInput
     ): DecisionReadinessAssessment;
   };
 
   coverageCalculator?: {
     calculateOverallReport(
-      graph: EnterpriseKnowledgeGraph
+      graph: EnterpriseKnowledgeGraph,
+      model?: EnterpriseMentalModel,
+      requiredDomains?: readonly CoverageDomain[]
     ): OverallCoverageReport;
   };
 

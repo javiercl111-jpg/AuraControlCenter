@@ -2,22 +2,33 @@ import type { EnterpriseKnowledgeGraph } from '../../graph/domain/types';
 import type {
   CoverageDomain,
   CoverageGap,
+  CoverageScenarioInput,
+  CoverageScenarioScope,
   DecisionReadinessAssessment,
   OverallCoverageReport,
 } from '../domain/types';
+import { assertCoverageScenarioScopeValid } from '../domain/validation';
 import { CoverageCalculator } from './CoverageCalculator';
 
 export class CoverageDecisionEngine {
   public static evaluateDecisionReadiness(
     graphOrReport: EnterpriseKnowledgeGraph | OverallCoverageReport,
-    targetScenario: string
+    scenario: CoverageScenarioInput
   ): DecisionReadinessAssessment {
+    const targetScenario =
+      typeof scenario === 'string' ? scenario : scenario.scenarioId;
+    const requiredDomains =
+      typeof scenario === 'string'
+        ? this.resolveRequiredDomainsFromScenarioString(scenario)
+        : this.validateExplicitCoverageDomains(scenario);
     const report =
       'totalNodes' in graphOrReport
         ? graphOrReport
-        : CoverageCalculator.calculateOverallReport(graphOrReport);
-
-    const requiredDomains = this.getRequiredDomainsForScenario(targetScenario);
+        : CoverageCalculator.calculateOverallReport(
+            graphOrReport,
+            undefined,
+            typeof scenario === 'string' ? undefined : requiredDomains
+          );
     const blockingGaps: CoverageGap[] = [];
 
     requiredDomains.forEach((domain) => {
@@ -39,7 +50,11 @@ export class CoverageDecisionEngine {
       }
     });
 
-    const isReady = blockingGaps.length === 0 && report.overallScore >= 55;
+    const score =
+      typeof scenario === 'string'
+        ? report.overallScore
+        : this.calculateExplicitScopeScore(report, requiredDomains);
+    const isReady = blockingGaps.length === 0 && score >= 55;
 
     const recommendedQuestions = this.generateRecommendedQuestions(
       targetScenario,
@@ -48,14 +63,16 @@ export class CoverageDecisionEngine {
 
     return {
       isReady,
-      score: report.overallScore,
+      score,
       targetScenario,
       blockingGaps,
       recommendedQuestions,
     };
   }
 
-  private static getRequiredDomainsForScenario(scenario: string): CoverageDomain[] {
+  private static resolveRequiredDomainsFromScenarioString(
+    scenario: string
+  ): CoverageDomain[] {
     const s = scenario.toLowerCase();
     if (s.includes('payroll') || s.includes('nomina')) {
       return ['payroll', 'organization', 'compliance'];
@@ -70,6 +87,25 @@ export class CoverageDecisionEngine {
       return ['compliance', 'payroll', 'time_attendance'];
     }
     return ['organization', 'payroll'];
+  }
+
+  private static validateExplicitCoverageDomains(
+    scope: CoverageScenarioScope
+  ): CoverageDomain[] {
+    assertCoverageScenarioScopeValid(scope);
+    return [...scope.includedDomains];
+  }
+
+  private static calculateExplicitScopeScore(
+    report: OverallCoverageReport,
+    requiredDomains: readonly CoverageDomain[]
+  ): number {
+    const totalScore = requiredDomains.reduce(
+      (sum, domain) =>
+        sum + (report.domainBreakdown[domain]?.completenessScore ?? 0),
+      0
+    );
+    return Math.round(totalScore / requiredDomains.length);
   }
 
   private static generateRecommendedQuestions(

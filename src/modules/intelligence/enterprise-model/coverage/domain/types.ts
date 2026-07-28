@@ -1,12 +1,23 @@
-export type CoverageDomain = 
-  | 'organization'
-  | 'payroll'
-  | 'compensation'
-  | 'benefits'
-  | 'compliance'
-  | 'talent_performance'
-  | 'time_attendance'
-  | 'workforce_analytics';
+export const COVERAGE_DOMAINS = [
+  'organization',
+  'payroll',
+  'compensation',
+  'benefits',
+  'compliance',
+  'talent_performance',
+  'time_attendance',
+  'workforce_analytics',
+] as const;
+
+export type CoverageDomain = (typeof COVERAGE_DOMAINS)[number];
+
+export interface CoverageScenarioScope {
+  readonly scenarioId: string;
+  readonly includedDomains: readonly CoverageDomain[];
+  readonly excludedDomains: readonly CoverageDomain[];
+}
+
+export type CoverageScenarioInput = string | CoverageScenarioScope;
 
 export type CoverageGapType = 
   | 'missing_node_type'
