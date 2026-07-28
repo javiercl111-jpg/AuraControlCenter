@@ -8,8 +8,13 @@ import type {
   PipelineBootstrapPolicy,
   PipelineBootstrapState,
   PipelineBootstrapTargetScenario,
+  PipelineInitialDomainState,
+  PipelineInitialEvidence,
+  PipelineScenarioDescriptor,
 } from '../types';
 import type { PipelineBootstrapPort } from '../ports';
+import { createEmptyEnterpriseMentalModel } from '../../../enterprise-model/services/modelUpdater';
+import { createEmptyEnterpriseKnowledgeGraph } from '../../../enterprise-model/graph/services/operations';
 import {
   PIPELINE_BOOTSTRAP_SCENARIO_OBJECTIVE_KEYS,
   PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY,
@@ -17,8 +22,11 @@ import {
   PIPELINE_BOOTSTRAP_VERSIONING_MODE,
 } from '../types';
 import {
+  validateBootstrapAcceptedState,
   validatePipelineBootstrapInput,
   validatePipelineBootstrapTargetScenario,
+  validatePipelineInitialDomainState,
+  validatePipelineScenarioDescriptor,
 } from '../validators';
 
 function createPolicy(): PipelineBootstrapPolicy {
@@ -80,6 +88,83 @@ function createFact(): PipelineBootstrapFact {
   };
 }
 
+function createScenarioDescriptor(): PipelineScenarioDescriptor {
+  const registry = PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY.PAYROLL_AUDIT;
+  return {
+    scenarioId: 'PAYROLL_AUDIT',
+    scenarioVersion: '1',
+    objectiveKey: 'ASSESS_PAYROLL_AUDIT_READINESS',
+    requestedStages: [...registry.requiredStages],
+    allowedStages: [...registry.allowedStages],
+    requiredStages: [...registry.requiredStages],
+    stageDependencies: registry.stageDependencies,
+    includedDomains: [...registry.includedDomains],
+    excludedDomains: [...registry.excludedDomains],
+    source: 'AUTHORIZED_SYSTEM_CONFIGURATION',
+    explicitSelection: true,
+  };
+}
+
+function createInitialEvidence(): PipelineInitialEvidence {
+  return {
+    sourceFact: createFact(),
+    appliedEvidence: {
+      evidenceId: 'evidence-industry-1',
+      sessionId: 'correlation-1',
+      turnId: 'bootstrap-1',
+      source: 'governed-bootstrap-contract',
+      sourceType: 'INTEGRATION',
+      originalText: null,
+      normalizedStatement: 'BUSINESS_INDUSTRY=HOSPITALITY',
+      category: 'BUSINESS_INDUSTRY',
+      entityRefs: [],
+      capturedAt: 200,
+      reliability: 0.8,
+      directness: 1,
+      polarity: 'POSITIVE',
+      extractorVersion: '1',
+      metadata: {},
+    },
+  };
+}
+
+function createInitialDomainState(): PipelineInitialDomainState {
+  const initialEvidence = createInitialEvidence();
+  const mentalModel = createEmptyEnterpriseMentalModel();
+  mentalModel.evidences[initialEvidence.appliedEvidence.evidenceId] =
+    initialEvidence.appliedEvidence;
+
+  return {
+    mentalModel,
+    knowledgeGraph: createEmptyEnterpriseKnowledgeGraph(),
+    evidence: [initialEvidence],
+    scenario: createScenarioDescriptor(),
+    bootstrapId: 'bootstrap-1',
+    tenantId: 'tenant-1',
+    correlationId: 'correlation-1',
+    createdAt: 300,
+    schemaVersion: '1',
+  };
+}
+
+function createAcceptedState(): BootstrapAcceptedState {
+  return {
+    status: 'ACCEPTED',
+    bootstrapId: 'bootstrap-1',
+    tenantId: 'tenant-1',
+    correlationId: 'correlation-1',
+    initialDomainState: createInitialDomainState(),
+    provenanceSummary: {
+      factCount: 1,
+      sourceTypes: ['INTEGRATION'],
+      earliestObservedAt: 100,
+      latestObservedAt: 100,
+    },
+    bootstrapVersion: '1',
+    createdAt: 300,
+  };
+}
+
 function createInput(): PipelineBootstrapInput {
   return {
     bootstrapId: 'bootstrap-1',
@@ -113,28 +198,21 @@ describe('Pipeline bootstrap contract types', () => {
     }
   });
 
-  it('2. accepted state has no future stage results', () => {
-    const state: BootstrapAcceptedState = {
-      status: 'ACCEPTED',
-      bootstrapId: 'bootstrap-1',
-      tenantId: 'tenant-1',
-      correlationId: 'correlation-1',
-      targetScenario: createScenario(),
-      normalizedFacts: [createFact()],
-      provenanceSummary: {
-        factCount: 1,
-        sourceTypes: ['INTEGRATION'],
-        earliestObservedAt: 100,
-        latestObservedAt: 100,
-      },
-      bootstrapVersion: '1',
-      createdAt: 300,
-    };
+  it('2. accepted state has complete domain state and no future results', () => {
+    const state = createAcceptedState();
 
+    expect(state.initialDomainState.mentalModel).toBeDefined();
+    expect(state.initialDomainState.knowledgeGraph).toBeDefined();
+    expect(state.initialDomainState.evidence).toHaveLength(1);
+    expect(state.initialDomainState.scenario.scenarioId).toBe('PAYROLL_AUDIT');
     expect('coverageReport' in state).toBe(false);
+    expect('planningResult' in state).toBe(false);
     expect('reasoningReport' in state).toBe(false);
     expect('dossier' in state).toBe(false);
     expect('assessment' in state).toBe(false);
+    expect(validateBootstrapAcceptedState(state, createPolicy()).valid).toBe(
+      true
+    );
   });
 
   it('3. rejected state has no complete payload', () => {
@@ -157,6 +235,10 @@ describe('Pipeline bootstrap contract types', () => {
     expect('facts' in state).toBe(false);
     expect('targetScenario' in state).toBe(false);
     expect('policy' in state).toBe(false);
+    expect('initialDomainState' in state).toBe(false);
+    expect('mentalModel' in state).toBe(false);
+    expect('knowledgeGraph' in state).toBe(false);
+    expect('evidence' in state).toBe(false);
   });
 
   it('4. bootstrap port returns only the discriminated bootstrap state', () => {
@@ -322,6 +404,90 @@ describe('Pipeline bootstrap contract types', () => {
 
   it('80. declares bootstrap contracts as v1 only', () => {
     expect(PIPELINE_BOOTSTRAP_VERSIONING_MODE).toBe('V1_ONLY');
+  });
+
+  it('93. validates a complete initial domain state', () => {
+    const state = createInitialDomainState();
+    const result = validatePipelineInitialDomainState(state, createPolicy());
+
+    expect(result.valid).toBe(true);
+  });
+
+  it('94. scenario descriptor preserves its nominal objective key', () => {
+    const descriptor = createScenarioDescriptor();
+    const result = validatePipelineScenarioDescriptor(
+      descriptor,
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(true);
+    expect(descriptor.objectiveKey).toBe(
+      PIPELINE_BOOTSTRAP_SCENARIO_OBJECTIVE_KEYS.PAYROLL_AUDIT
+    );
+  });
+
+  it('95. scenario descriptor preserves registry stage dependencies', () => {
+    const descriptor = createScenarioDescriptor();
+
+    expect(descriptor.stageDependencies).toEqual(
+      PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY.PAYROLL_AUDIT.stageDependencies
+    );
+  });
+
+  it('96. scenario descriptor preserves allowed and required stages', () => {
+    const descriptor = createScenarioDescriptor();
+    const registry = PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY.PAYROLL_AUDIT;
+
+    expect(descriptor.allowedStages).toEqual(registry.allowedStages);
+    expect(descriptor.requiredStages).toEqual(registry.requiredStages);
+    expect(descriptor.requestedStages).toEqual(registry.requiredStages);
+  });
+
+  it('97. scenario descriptor remains nominal instead of heuristic text', () => {
+    const descriptor = createScenarioDescriptor();
+
+    expect(descriptor.scenarioId).toBe('PAYROLL_AUDIT');
+    expect('targetScenario' in descriptor).toBe(false);
+    expect('description' in descriptor).toBe(false);
+  });
+
+  it('98. initial evidence preserves the complete source fact', () => {
+    const evidence = createInitialEvidence();
+
+    expect(evidence.sourceFact).toEqual(createFact());
+    expect(evidence.appliedEvidence.sourceType).toBe(
+      evidence.sourceFact.provenance.sourceType
+    );
+    expect(evidence.appliedEvidence.capturedAt).toBe(
+      evidence.sourceFact.provenance.capturedAt
+    );
+  });
+
+  it('99. initial evidence is the accepted-state source of truth', () => {
+    const state = createAcceptedState();
+
+    expect('normalizedFacts' in state).toBe(false);
+    expect(state.initialDomainState.evidence[0]?.sourceFact.factId).toBe(
+      'fact-industry-1'
+    );
+  });
+
+  it('100. initial domain state excludes every future pipeline output', () => {
+    const state = createInitialDomainState();
+
+    expect('coverageReport' in state).toBe(false);
+    expect('readinessAssessment' in state).toBe(false);
+    expect('planningResult' in state).toBe(false);
+    expect('reasoningReport' in state).toBe(false);
+    expect('dossier' in state).toBe(false);
+    expect('assessment' in state).toBe(false);
+  });
+
+  it('101. accepted and initial domain state remain v1-only', () => {
+    const state = createAcceptedState();
+
+    expect(state.bootstrapVersion).toBe('1');
+    expect(state.initialDomainState.schemaVersion).toBe('1');
   });
 
   it('53. keeps the cancellation signal separate from the input', () => {
