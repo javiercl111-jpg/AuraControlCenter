@@ -8,3 +8,4 @@ export * from './PipelineContextBuilder';
 export * from './AuraIntelligenceOrchestrator';
 export * from './shadow';
 export * from './boundary';
+export * from './bootstrap';
