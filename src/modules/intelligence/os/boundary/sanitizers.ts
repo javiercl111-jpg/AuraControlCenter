@@ -1,4 +1,7 @@
-import type { BoundaryPublicError } from './types';
+import {
+  BOUNDARY_RESERVED_AUTHORITY_FIELDS,
+  type BoundaryPublicError,
+} from './types';
 import { GovernedBoundaryError } from './errors';
 
 const SENSITIVE_KEYS = new Set([
@@ -16,6 +19,9 @@ const SENSITIVE_KEYS = new Set([
   'reasoning',
   'headers',
 ]);
+const RESERVED_AUTHORITY_KEYS = new Set<string>(
+  BOUNDARY_RESERVED_AUTHORITY_FIELDS
+);
 
 export function sanitizeMetadata(
   metadata: Readonly<Record<string, unknown>> | undefined
@@ -31,7 +37,10 @@ export function sanitizeMetadata(
     const key = keys[i];
     const lowerKey = key.toLowerCase();
 
-    if (SENSITIVE_KEYS.has(lowerKey)) {
+    if (
+      SENSITIVE_KEYS.has(lowerKey) ||
+      RESERVED_AUTHORITY_KEYS.has(key)
+    ) {
       continue;
     }
 

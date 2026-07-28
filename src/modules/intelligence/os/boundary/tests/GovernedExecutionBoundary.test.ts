@@ -10,7 +10,14 @@ import type {
   InternalExecutionInput,
   InternalExecutionResult,
 } from '../ports';
-import type { GovernedExecutionRequest } from '../types';
+import {
+  AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION,
+  BOUNDARY_INVOCATION_CONTEXT_VERSION,
+  type AuthoritativeBoundaryPolicyDecisionV1,
+  type AuthoritativeBoundaryPolicyQueryV1,
+  type BoundaryInvocationContextV1,
+  type GovernedExecutionRequest,
+} from '../types';
 
 describe('GovernedExecutionBoundary', () => {
   const createMockClock = (time = '2026-07-27T12:00:00.000Z'): BoundaryClockPort => ({
@@ -29,9 +36,71 @@ describe('GovernedExecutionBoundary', () => {
     ...overrides,
   });
 
-  const createMockPolicyPort = (policy?: EffectiveBoundaryPolicy): FeaturePolicyPort => ({
-    getEffectivePolicy: vi.fn().mockResolvedValue(policy ?? createDefaultPolicy()),
-  });
+  const createPolicyDecision = (
+    query: AuthoritativeBoundaryPolicyQueryV1,
+    policy: EffectiveBoundaryPolicy
+  ): AuthoritativeBoundaryPolicyDecisionV1 => {
+    const base = {
+      schemaVersion:
+        AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION,
+      authorizationPolicyVersion: 'policy:v1:test',
+      evaluatedTenantId: query.tenantId,
+      evaluatedConsumerId: query.consumerId,
+      evaluatedSource: query.source,
+      evaluatedActor: query.actor,
+      requestedMode: query.requestedMode,
+    } as const;
+
+    if (policy.killSwitch || !policy.enabled) {
+      return {
+        ...base,
+        decision: 'DENIED',
+        reasonCode: 'POLICY_DISABLED',
+      };
+    }
+    if (!policy.allowedSources.includes(query.source)) {
+      return {
+        ...base,
+        decision: 'DENIED',
+        reasonCode: 'SOURCE_NOT_ALLOWED',
+      };
+    }
+    if (
+      query.requestedMode === 'PRODUCTIVE' ||
+      query.requestedMode === 'DISABLED' ||
+      !policy.allowedModes.includes(query.requestedMode)
+    ) {
+      return {
+        ...base,
+        decision: 'DENIED',
+        reasonCode: 'MODE_NOT_ALLOWED',
+      };
+    }
+    return {
+      ...base,
+      decision: 'ALLOWED',
+      reasonCode: 'POLICY_ALLOWED',
+      effectiveExecutionMode: query.requestedMode,
+      effectiveTimeoutMs: policy.maxTimeoutMs,
+    };
+  };
+
+  const createMockPolicyPort = (
+    policy?: EffectiveBoundaryPolicy
+  ): FeaturePolicyPort => {
+    const effectivePolicy = policy ?? createDefaultPolicy();
+    return {
+      getEffectivePolicy: vi
+        .fn()
+        .mockResolvedValue(effectivePolicy),
+      evaluateAuthoritativePolicy: vi
+        .fn()
+        .mockImplementation(
+          async (query: AuthoritativeBoundaryPolicyQueryV1) =>
+            createPolicyDecision(query, effectivePolicy)
+        ),
+    };
+  };
 
   const createMockExecutionPort = (result?: Partial<InternalExecutionResult>): BoundaryExecutionPort => ({
     execute: vi.fn().mockResolvedValue({
@@ -55,6 +124,57 @@ describe('GovernedExecutionBoundary', () => {
     ...overrides,
   });
 
+  const createInvocationContext = (
+    request: unknown = createValidRequest(),
+    overrides: Partial<BoundaryInvocationContextV1> = {}
+  ): BoundaryInvocationContextV1 => {
+    const record =
+      typeof request === 'object' && request !== null
+        ? (request as Record<string, unknown>)
+        : {};
+    const tenant =
+      typeof record.tenant === 'object' && record.tenant !== null
+        ? (record.tenant as Record<string, unknown>)
+        : {};
+    const actor =
+      typeof record.actor === 'object' && record.actor !== null
+        ? (record.actor as Record<string, unknown>)
+        : {};
+    const stringOr = (value: unknown, fallback: string): string =>
+      typeof value === 'string' && value.trim() !== ''
+        ? value
+        : fallback;
+    const actorType =
+      actor.actorType === 'USER' ||
+      actor.actorType === 'SERVICE' ||
+      actor.actorType === 'SYSTEM'
+        ? actor.actorType
+        : 'SERVICE';
+
+    return {
+      schemaVersion: BOUNDARY_INVOCATION_CONTEXT_VERSION,
+      tenantId: stringOr(tenant.tenantId, 'tenant-abc'),
+      actor: {
+        actorId: stringOr(actor.actorId, 'actor-xyz'),
+        actorType,
+      },
+      consumerId: 'consumer-1',
+      source: stringOr(record.source, 'authorized-source'),
+      requestId: stringOr(record.requestId, 'req-001'),
+      correlationId: stringOr(
+        record.correlationId,
+        'corr-001'
+      ),
+      ...overrides,
+    };
+  };
+
+  const executeBoundary = (
+    boundary: GovernedExecutionBoundary,
+    request: unknown
+  ): Promise<import('../types').GovernedExecutionResponse> =>
+    boundary.execute(request, createInvocationContext(request));
+
   it('1. Rejects request by default if requestedMode is DISABLED', async () => {
     const boundary = new GovernedExecutionBoundary({
       clockPort: createMockClock(),
@@ -62,7 +182,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest({ requestedMode: 'DISABLED' }));
+    const res = await executeBoundary(boundary, createValidRequest({ requestedMode: 'DISABLED' }));
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('BOUNDARY_DISABLED');
   });
@@ -73,7 +193,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest());
+    const res = await executeBoundary(boundary, createValidRequest());
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('BOUNDARY_DISABLED');
   });
@@ -81,6 +201,9 @@ describe('GovernedExecutionBoundary', () => {
   it('3. Fails closed if FeaturePolicyPort throws an error', async () => {
     const policyPort: FeaturePolicyPort = {
       getEffectivePolicy: vi.fn().mockRejectedValue(new Error('Policy service down')),
+      evaluateAuthoritativePolicy: vi
+        .fn()
+        .mockRejectedValue(new Error('Policy service down')),
     };
 
     const boundary = new GovernedExecutionBoundary({
@@ -90,7 +213,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest());
+    const res = await executeBoundary(boundary, createValidRequest());
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('EXECUTION_FAILED');
   });
@@ -104,7 +227,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest());
+    const res = await executeBoundary(boundary, createValidRequest());
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('BOUNDARY_DISABLED');
   });
@@ -118,7 +241,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const res = await boundary.execute(createValidRequest());
+    const res = await executeBoundary(boundary, createValidRequest());
     expect(res.status).toBe('COMPLETED');
     expect(res.mode).toBe('SHADOW_ONLY');
     expect(execPort.execute).toHaveBeenCalledTimes(1);
@@ -137,7 +260,7 @@ describe('GovernedExecutionBoundary', () => {
       shadowComparisonPort: comparisonPort,
     });
 
-    const res = await boundary.execute(createValidRequest({ requestedMode: 'EVALUATION' }));
+    const res = await executeBoundary(boundary, createValidRequest({ requestedMode: 'EVALUATION' }));
     expect(res.status).toBe('COMPLETED');
     expect(res.comparisonSummary).toEqual({ match: true, divergenceCount: 0 });
     expect(comparisonPort.compare).toHaveBeenCalledTimes(1);
@@ -156,12 +279,17 @@ describe('GovernedExecutionBoundary', () => {
       auditPort: auditPort,
     });
 
-    const res = await boundary.execute(createValidRequest({ requestedMode: 'PRODUCTIVE' }));
+    const res = await executeBoundary(boundary, createValidRequest({ requestedMode: 'PRODUCTIVE' }));
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('MODE_NOT_ALLOWED');
     expect(execPort.execute).not.toHaveBeenCalled();
     expect(compPort.compare).not.toHaveBeenCalled();
-    expect(auditPort.logEvent).not.toHaveBeenCalled();
+    expect(auditPort.logEvent).toHaveBeenCalledWith(
+      'BOUNDARY_INVOCATION_REJECTED',
+      expect.objectContaining({
+        reasonCode: 'BOUNDARY_MODE_ESCALATION',
+      })
+    );
   });
 
   it('8. Rejects mode not allowed by policy', async () => {
@@ -173,7 +301,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest({ requestedMode: 'EVALUATION' }));
+    const res = await executeBoundary(boundary, createValidRequest({ requestedMode: 'EVALUATION' }));
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('MODE_NOT_ALLOWED');
   });
@@ -186,7 +314,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(null);
+    const res = await executeBoundary(boundary, null);
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('INVALID_REQUEST');
   });
@@ -200,7 +328,7 @@ describe('GovernedExecutionBoundary', () => {
     });
 
     const req = createValidRequest({ requestId: '' });
-    const res = await boundary.execute(req);
+    const res = await executeBoundary(boundary, req);
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('INVALID_REQUEST');
   });
@@ -214,7 +342,7 @@ describe('GovernedExecutionBoundary', () => {
     });
 
     const req = createValidRequest({ correlationId: '' });
-    const res = await boundary.execute(req);
+    const res = await executeBoundary(boundary, req);
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('INVALID_REQUEST');
   });
@@ -228,7 +356,7 @@ describe('GovernedExecutionBoundary', () => {
     });
 
     const req = { ...createValidRequest(), tenant: undefined } as unknown as GovernedExecutionRequest;
-    const res = await boundary.execute(req);
+    const res = await executeBoundary(boundary, req);
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('INVALID_TENANT_CONTEXT');
   });
@@ -242,7 +370,7 @@ describe('GovernedExecutionBoundary', () => {
     });
 
     const req = createValidRequest({ tenant: { tenantId: '  ' } });
-    const res = await boundary.execute(req);
+    const res = await executeBoundary(boundary, req);
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('INVALID_TENANT_CONTEXT');
   });
@@ -256,7 +384,7 @@ describe('GovernedExecutionBoundary', () => {
     });
 
     const req = { ...createValidRequest(), actor: undefined } as unknown as GovernedExecutionRequest;
-    const res = await boundary.execute(req);
+    const res = await executeBoundary(boundary, req);
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('INVALID_ACTOR_CONTEXT');
   });
@@ -270,7 +398,7 @@ describe('GovernedExecutionBoundary', () => {
     });
 
     const req = createValidRequest({ actor: { actorId: 'act-1', actorType: '' } });
-    const res = await boundary.execute(req);
+    const res = await executeBoundary(boundary, req);
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('INVALID_ACTOR_CONTEXT');
   });
@@ -284,12 +412,12 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest({ source: 'unauthorized-source' }));
+    const res = await executeBoundary(boundary, createValidRequest({ source: 'unauthorized-source' }));
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('SOURCE_NOT_ALLOWED');
   });
 
-  it('17. Rejects payload exceeding size limit', async () => {
+  it('17. Keeps legacy payload-size policy out of the authoritative path', async () => {
     const policy = createDefaultPolicy({ maxPayloadBytes: 20 });
     const boundary = new GovernedExecutionBoundary({
       clockPort: createMockClock(),
@@ -299,9 +427,8 @@ describe('GovernedExecutionBoundary', () => {
     });
 
     const largePayload = { data: 'a'.repeat(500) };
-    const res = await boundary.execute(createValidRequest({ payload: largePayload }));
-    expect(res.status).toBe('REJECTED');
-    expect(res.errors[0].code).toBe('PAYLOAD_TOO_LARGE');
+    const res = await executeBoundary(boundary, createValidRequest({ payload: largePayload }));
+    expect(res.status).toBe('COMPLETED');
   });
 
   it('18. Rejects circular payload', async () => {
@@ -315,7 +442,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest({ payload: circular }));
+    const res = await executeBoundary(boundary, createValidRequest({ payload: circular }));
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('INVALID_REQUEST');
   });
@@ -333,7 +460,7 @@ describe('GovernedExecutionBoundary', () => {
       metadata: { authorization: 'secret', safeKey: 'value' },
     });
 
-    await boundary.execute(req);
+    await executeBoundary(boundary, req);
     const passedInput = (execPort.execute as unknown as { mock: { calls: [InternalExecutionInput][] } }).mock.calls[0][0];
     expect(passedInput.metadata?.authorization).toBeUndefined();
     expect(passedInput.metadata?.safeKey).toBe('value');
@@ -348,7 +475,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    await boundary.execute(createValidRequest({ metadata: originalMeta }));
+    await executeBoundary(boundary, createValidRequest({ metadata: originalMeta }));
     expect(originalMeta.authorization).toBe('secret');
   });
 
@@ -360,7 +487,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest({ timeoutMs: -100 }));
+    const res = await executeBoundary(boundary, createValidRequest({ timeoutMs: -100 }));
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('INVALID_REQUEST');
   });
@@ -374,7 +501,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest({ timeoutMs: 10000 }));
+    const res = await executeBoundary(boundary, createValidRequest({ timeoutMs: 10000 }));
     expect(res.status).toBe('REJECTED');
     expect(res.errors[0].code).toBe('TIMEOUT');
   });
@@ -390,7 +517,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest({ cancellationSignal: controller.signal }));
+    const res = await executeBoundary(boundary, createValidRequest({ cancellationSignal: controller.signal }));
     expect(res.status).toBe('CANCELLED');
     expect(res.errors[0].code).toBe('CANCELLED');
   });
@@ -408,7 +535,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const res = await boundary.execute(createValidRequest());
+    const res = await executeBoundary(boundary, createValidRequest());
     expect(res.status).toBe('FAILED');
     expect(res.errors[0].code).toBe('EXECUTION_FAILED');
   });
@@ -425,7 +552,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const res = await boundary.execute(createValidRequest());
+    const res = await executeBoundary(boundary, createValidRequest());
     expect(res.status).toBe('FAILED');
     expect(res.errors[0].code).toBe('EXECUTION_FAILED');
     expect(res.errors[0].message).toBe('An internal execution error occurred');
@@ -441,7 +568,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    const res = await boundary.execute(createValidRequest());
+    const res = await executeBoundary(boundary, createValidRequest());
     expect(res.startedAt).toBe('2026-07-27T10:00:00.000Z');
     expect(res.completedAt).toBe('2026-07-27T10:00:00.000Z');
   });
@@ -461,7 +588,7 @@ describe('GovernedExecutionBoundary', () => {
       auditPort,
     });
 
-    const res = await boundary.execute(createValidRequest());
+    const res = await executeBoundary(boundary, createValidRequest());
     expect(res.status).toBe('COMPLETED');
     expect(auditPort.logEvent).toHaveBeenCalled();
   });
@@ -490,7 +617,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const response = await boundary.execute(createValidRequest({ payload: originalPayload }));
+    const response = await executeBoundary(boundary, createValidRequest({ payload: originalPayload }));
     const receivedPayload = receivedInput?.payload as {
       schemaVersion: string;
       industry: string;
@@ -523,7 +650,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: createMockExecutionPort(),
     });
 
-    await boundary.execute(createValidRequest({ payload: originalPayload }));
+    await executeBoundary(boundary, createValidRequest({ payload: originalPayload }));
 
     expect(originalPayload).toEqual(expectedPayload);
   });
@@ -540,7 +667,7 @@ describe('GovernedExecutionBoundary', () => {
       auditPort,
     });
 
-    const response = await boundary.execute(
+    const response = await executeBoundary(boundary,
       createValidRequest({ payload: { normalizedSignal: secretMarker } })
     );
     const auditCalls = (auditPort.logEvent as unknown as {
@@ -564,7 +691,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const response = await boundary.execute(
+    const response = await executeBoundary(boundary,
       createValidRequest({ payload: { normalizedSignal: secretMarker } })
     );
 
@@ -584,7 +711,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const response = await boundary.execute(
+    const response = await executeBoundary(boundary,
       createValidRequest({ requestedMode: 'PRODUCTIVE', payload })
     );
 
@@ -602,7 +729,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const response = await boundary.execute(createValidRequest({ payload: { safe: true } }));
+    const response = await executeBoundary(boundary, createValidRequest({ payload: { safe: true } }));
 
     expect(response.status).toBe('REJECTED');
     expect(execPort.execute).not.toHaveBeenCalled();
@@ -612,6 +739,9 @@ describe('GovernedExecutionBoundary', () => {
     const execPort = createMockExecutionPort();
     const policyPort: FeaturePolicyPort = {
       getEffectivePolicy: vi.fn().mockRejectedValue(new Error('policy unavailable')),
+      evaluateAuthoritativePolicy: vi
+        .fn()
+        .mockRejectedValue(new Error('policy unavailable')),
     };
     const boundary = new GovernedExecutionBoundary({
       clockPort: createMockClock(),
@@ -619,7 +749,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const response = await boundary.execute(createValidRequest({ payload: { safe: true } }));
+    const response = await executeBoundary(boundary, createValidRequest({ payload: { safe: true } }));
 
     expect(response.status).toBe('REJECTED');
     expect(execPort.execute).not.toHaveBeenCalled();
@@ -643,7 +773,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    await boundary.execute(
+    await executeBoundary(boundary,
       createValidRequest({
         payload: { industry: 'payload-industry' },
         metadata: { industry: 'metadata-industry', safeKey: 'metadata-only' },
@@ -676,7 +806,7 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    await boundary.execute(createValidRequest({ payload: { industry: 'services' } }));
+    await executeBoundary(boundary, createValidRequest({ payload: { industry: 'services' } }));
 
     expect(observedIndustry).toBe('services');
   });
@@ -693,10 +823,10 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const functionResponse = await boundary.execute(
+    const functionResponse = await executeBoundary(boundary,
       createValidRequest({ payload: { callback: () => 'forbidden' } })
     );
-    const classResponse = await boundary.execute(
+    const classResponse = await executeBoundary(boundary,
       createValidRequest({ payload: new CustomPayload() })
     );
 
@@ -721,10 +851,10 @@ describe('GovernedExecutionBoundary', () => {
       executionPort: execPort,
     });
 
-    const constructorResponse = await boundary.execute(
+    const constructorResponse = await executeBoundary(boundary,
       createValidRequest({ payload: constructorPayload })
     );
-    const depthResponse = await boundary.execute(
+    const depthResponse = await executeBoundary(boundary,
       createValidRequest({ payload: deepPayload })
     );
 
@@ -750,7 +880,7 @@ describe('GovernedExecutionBoundary', () => {
       shadowComparisonPort: comparisonPort,
     });
 
-    const response = await boundary.execute(
+    const response = await executeBoundary(boundary,
       createValidRequest({
         requestedMode: 'EVALUATION',
         payload: requestPayload,
@@ -781,7 +911,7 @@ describe('GovernedExecutionBoundary', () => {
       auditPort,
     });
 
-    const response = await boundary.execute(
+    const response = await executeBoundary(boundary,
       createValidRequest({ payload: { normalizedSignal: secretMarker } })
     );
     const auditCalls = (auditPort.logEvent as unknown as {
