@@ -65,6 +65,7 @@ interface ExpectedPayloadAuthority {
   readonly correlationId: string;
   readonly requestedMode: string;
   readonly executionMode?: string;
+  readonly authoritativeDeadlineAt?: string;
   readonly authorizationPolicyVersion?: string;
 }
 
@@ -313,11 +314,16 @@ export class GovernedExecutionBoundary {
           false
         );
       }
-      const effectiveTimeoutMs = Math.min(
-        policyDecision.effectiveTimeoutMs,
-        request.timeoutMs ?? policyDecision.effectiveTimeoutMs
-      );
-      if (this.hasTimedOut(initiatedAt, effectiveTimeoutMs)) {
+      const authoritativeDeadlineAt =
+        this.calculateAuthoritativeDeadlineAt(
+          initiatedAt,
+          policyDecision.effectiveTimeoutMs
+        );
+      if (
+        this.hasAuthoritativeDeadlineExpired(
+          authoritativeDeadlineAt
+        )
+      ) {
         deadlineExceeded = true;
         throw new GovernedBoundaryError(
           'TIMEOUT',
@@ -337,6 +343,7 @@ export class GovernedExecutionBoundary {
           correlationId: context.correlationId,
           requestedMode: request.requestedMode,
           executionMode: effectiveMode,
+          authoritativeDeadlineAt,
           authorizationPolicyVersion:
             policyDecision.authorizationPolicyVersion,
         });
@@ -362,9 +369,23 @@ export class GovernedExecutionBoundary {
           correlationId: context.correlationId,
           executionMode: effectiveMode,
           initiatedAt,
+          authoritativeDeadlineAt,
           authorizationPolicyVersion:
             policyDecision.authorizationPolicyVersion,
         });
+
+      if (
+        this.hasAuthoritativeDeadlineExpired(
+          authoritativeContext.authoritativeDeadlineAt
+        )
+      ) {
+        deadlineExceeded = true;
+        throw new GovernedBoundaryError(
+          'TIMEOUT',
+          'Request timed out before execution dispatch',
+          false
+        );
+      }
 
       this.tryAuditLog('BOUNDARY_MODE_RESOLVED', {
         requestId: context.requestId,
@@ -399,6 +420,19 @@ export class GovernedExecutionBoundary {
         authorizationPolicyVersion:
           authoritativeContext.authorizationPolicyVersion,
       });
+
+      if (
+        this.hasAuthoritativeDeadlineExpired(
+          authoritativeContext.authoritativeDeadlineAt
+        )
+      ) {
+        deadlineExceeded = true;
+        throw new GovernedBoundaryError(
+          'TIMEOUT',
+          'Request timed out before execution dispatch',
+          false
+        );
+      }
 
       return await this.dispatch(
         request,
@@ -628,6 +662,10 @@ export class GovernedExecutionBoundary {
           expected.executionMode === undefined
         ) ||
         (
+          field === 'authoritativeDeadlineAt' &&
+          expected.authoritativeDeadlineAt === undefined
+        ) ||
+        (
           field === 'authorizationPolicyVersion' &&
           expected.authorizationPolicyVersion === undefined
         )
@@ -676,6 +714,8 @@ export class GovernedExecutionBoundary {
       correlationId: expected.correlationId,
       requestedMode: expected.requestedMode,
       executionMode: expected.executionMode,
+      authoritativeDeadlineAt:
+        expected.authoritativeDeadlineAt,
       authorizationPolicyVersion:
         expected.authorizationPolicyVersion,
     };
@@ -732,7 +772,10 @@ export class GovernedExecutionBoundary {
     ) {
       return 'BOUNDARY_MODE_ESCALATION';
     }
-    if (field === 'authorizationPolicyVersion') {
+    if (
+      field === 'authoritativeDeadlineAt' ||
+      field === 'authorizationPolicyVersion'
+    ) {
       return 'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID';
     }
     return 'BOUNDARY_REQUEST_CONTEXT_MISMATCH';
@@ -825,6 +868,97 @@ export class GovernedExecutionBoundary {
       reasonCode: conflict.issue,
       conflictField: conflict.field,
     });
+  }
+
+  private calculateAuthoritativeDeadlineAt(
+    initiatedAt: string,
+    effectiveTimeoutMs: number
+  ): string {
+    const initiatedAtMilliseconds =
+      this.parseCanonicalTimestamp(initiatedAt);
+    if (
+      initiatedAtMilliseconds === undefined ||
+      !Number.isSafeInteger(effectiveTimeoutMs) ||
+      effectiveTimeoutMs <= 0
+    ) {
+      throw new BoundaryContextContractError(
+        'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
+      );
+    }
+
+    const deadlineAtMilliseconds =
+      initiatedAtMilliseconds + effectiveTimeoutMs;
+    if (
+      !Number.isSafeInteger(deadlineAtMilliseconds) ||
+      deadlineAtMilliseconds < 0 ||
+      deadlineAtMilliseconds < initiatedAtMilliseconds
+    ) {
+      throw new BoundaryContextContractError(
+        'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
+      );
+    }
+
+    try {
+      const authoritativeDeadlineAt = new Date(
+        deadlineAtMilliseconds
+      ).toISOString();
+      if (
+        this.parseCanonicalTimestamp(
+          authoritativeDeadlineAt
+        ) !== deadlineAtMilliseconds
+      ) {
+        throw new BoundaryContextContractError(
+          'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
+        );
+      }
+      return authoritativeDeadlineAt;
+    } catch (error) {
+      if (error instanceof BoundaryContextContractError) {
+        throw error;
+      }
+      throw new BoundaryContextContractError(
+        'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
+      );
+    }
+  }
+
+  private hasAuthoritativeDeadlineExpired(
+    authoritativeDeadlineAt: string
+  ): boolean {
+    const deadlineAtMilliseconds = this.parseCanonicalTimestamp(
+      authoritativeDeadlineAt
+    );
+    const currentMilliseconds = this.parseCanonicalTimestamp(
+      this.clockPort.now()
+    );
+    if (
+      deadlineAtMilliseconds === undefined ||
+      currentMilliseconds === undefined
+    ) {
+      throw new BoundaryContextContractError(
+        'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
+      );
+    }
+    return currentMilliseconds >= deadlineAtMilliseconds;
+  }
+
+  private parseCanonicalTimestamp(
+    value: string
+  ): number | undefined {
+    const milliseconds = Date.parse(value);
+    if (
+      !Number.isSafeInteger(milliseconds) ||
+      milliseconds < 0
+    ) {
+      return undefined;
+    }
+    try {
+      return new Date(milliseconds).toISOString() === value
+        ? milliseconds
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private hasTimedOut(

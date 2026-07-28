@@ -46,6 +46,8 @@ export interface AuthoritativeExecutionContextV1 {
   readonly correlationId: string;
   readonly executionMode: AuthoritativeBoundaryExecutionModeV1;
   readonly initiatedAt: string;
+  /** Canonical ISO instant derived from initiatedAt plus policy timeout. */
+  readonly authoritativeDeadlineAt: string;
   readonly authorizationPolicyVersion: string;
 }
 
@@ -143,6 +145,7 @@ export const BOUNDARY_RESERVED_AUTHORITY_FIELDS = Object.freeze([
   'correlationId',
   'requestedMode',
   'executionMode',
+  'authoritativeDeadlineAt',
   'authorizationPolicyVersion',
 ] as const);
 

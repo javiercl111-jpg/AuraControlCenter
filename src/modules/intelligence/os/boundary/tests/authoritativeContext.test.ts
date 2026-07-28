@@ -49,6 +49,7 @@ function createAuthoritativeContext(
     schemaVersion: AUTHORITATIVE_EXECUTION_CONTEXT_VERSION,
     executionMode,
     initiatedAt: '2026-07-28T12:00:00.000Z',
+    authoritativeDeadlineAt: '2026-07-28T12:00:30.000Z',
     authorizationPolicyVersion: 'policy-v1',
   };
 }
@@ -558,6 +559,7 @@ describe('AI-02H0A authoritative boundary context contracts', () => {
       'correlationId',
       'requestedMode',
       'executionMode',
+      'authoritativeDeadlineAt',
       'authorizationPolicyVersion',
     ]);
     expect(Object.isFrozen(BOUNDARY_RESERVED_AUTHORITY_FIELDS)).toBe(

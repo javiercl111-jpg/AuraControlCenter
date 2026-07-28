@@ -217,6 +217,7 @@ describe('AI-02H0B authoritative boundary enforcement', () => {
       correlationId: 'correlation-1',
       executionMode: 'SHADOW_ONLY',
       initiatedAt: '2026-07-28T12:00:00.000Z',
+      authoritativeDeadlineAt: '2026-07-28T12:00:30.000Z',
       authorizationPolicyVersion: 'policy:v1:test',
     });
   });

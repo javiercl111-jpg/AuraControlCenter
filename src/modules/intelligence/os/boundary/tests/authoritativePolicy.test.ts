@@ -722,6 +722,7 @@ describe('AI-02H0A.1 authoritative policy contracts', () => {
       correlationId: 'correlation-1',
       executionMode: decision.effectiveExecutionMode,
       initiatedAt: '2026-07-28T12:00:00.000Z',
+      authoritativeDeadlineAt: '2026-07-28T12:00:30.000Z',
       authorizationPolicyVersion:
         decision.authorizationPolicyVersion,
     });
