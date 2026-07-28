@@ -26,6 +26,13 @@ export type BoundaryContextContractIssue =
   | 'BOUNDARY_CONSUMER_UNAUTHORIZED'
   | 'BOUNDARY_SOURCE_INVALID';
 
+export type BoundaryPolicyContractIssue =
+  | 'BOUNDARY_POLICY_QUERY_INVALID'
+  | 'BOUNDARY_POLICY_DECISION_INVALID'
+  | 'BOUNDARY_POLICY_VERSION_MISSING'
+  | 'BOUNDARY_POLICY_MODE_INVALID'
+  | 'BOUNDARY_POLICY_CONTEXT_INVALID';
+
 const BOUNDARY_CONTEXT_ISSUE_MESSAGES: Readonly<
   Record<BoundaryContextContractIssue, string>
 > = Object.freeze({
@@ -61,6 +68,31 @@ const BOUNDARY_CONTEXT_PUBLIC_CODES: Readonly<
   BOUNDARY_REQUEST_CONTEXT_MISMATCH: 'INVALID_REQUEST',
   BOUNDARY_CONSUMER_UNAUTHORIZED: 'SOURCE_NOT_ALLOWED',
   BOUNDARY_SOURCE_INVALID: 'SOURCE_NOT_ALLOWED',
+});
+
+const BOUNDARY_POLICY_ISSUE_MESSAGES: Readonly<
+  Record<BoundaryPolicyContractIssue, string>
+> = Object.freeze({
+  BOUNDARY_POLICY_QUERY_INVALID:
+    'Authoritative boundary policy query is invalid',
+  BOUNDARY_POLICY_DECISION_INVALID:
+    'Authoritative boundary policy decision is invalid',
+  BOUNDARY_POLICY_VERSION_MISSING:
+    'Authoritative boundary policy version is invalid',
+  BOUNDARY_POLICY_MODE_INVALID:
+    'Authoritative boundary policy mode is invalid',
+  BOUNDARY_POLICY_CONTEXT_INVALID:
+    'Authoritative boundary policy context is invalid',
+});
+
+const BOUNDARY_POLICY_PUBLIC_CODES: Readonly<
+  Record<BoundaryPolicyContractIssue, BoundaryPublicErrorCode>
+> = Object.freeze({
+  BOUNDARY_POLICY_QUERY_INVALID: 'INVALID_REQUEST',
+  BOUNDARY_POLICY_DECISION_INVALID: 'BOUNDARY_DISABLED',
+  BOUNDARY_POLICY_VERSION_MISSING: 'BOUNDARY_DISABLED',
+  BOUNDARY_POLICY_MODE_INVALID: 'MODE_NOT_ALLOWED',
+  BOUNDARY_POLICY_CONTEXT_INVALID: 'BOUNDARY_DISABLED',
 });
 
 export class GovernedBoundaryError extends Error {
@@ -101,6 +133,25 @@ export class BoundaryContextContractError
     Object.setPrototypeOf(
       this,
       BoundaryContextContractError.prototype
+    );
+  }
+}
+
+export class BoundaryPolicyContractError
+  extends GovernedBoundaryError {
+  public readonly issue: BoundaryPolicyContractIssue;
+
+  constructor(issue: BoundaryPolicyContractIssue) {
+    super(
+      BOUNDARY_POLICY_PUBLIC_CODES[issue],
+      BOUNDARY_POLICY_ISSUE_MESSAGES[issue],
+      false
+    );
+    this.name = 'BoundaryPolicyContractError';
+    this.issue = issue;
+    Object.setPrototypeOf(
+      this,
+      BoundaryPolicyContractError.prototype
     );
   }
 }

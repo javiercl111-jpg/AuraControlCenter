@@ -1,4 +1,6 @@
 import type {
+  AuthoritativeBoundaryPolicyDecisionV1,
+  AuthoritativeBoundaryPolicyQueryV1,
   AuthoritativeExecutionContextV1,
   BoundaryExecutionMode,
 } from './types';
@@ -21,6 +23,20 @@ export interface EffectiveBoundaryPolicy {
 
 export interface FeaturePolicyPort {
   getEffectivePolicy(tenantId: string, source: string): Promise<EffectiveBoundaryPolicy | undefined>;
+  /**
+   * Versioned authoritative contract for H0B. Optional only while legacy
+   * callers still use getEffectivePolicy().
+   */
+  evaluateAuthoritativePolicy?(
+    query: AuthoritativeBoundaryPolicyQueryV1
+  ): Promise<AuthoritativeBoundaryPolicyDecisionV1>;
+}
+
+export interface AuthoritativeFeaturePolicyPort
+  extends FeaturePolicyPort {
+  evaluateAuthoritativePolicy(
+    query: AuthoritativeBoundaryPolicyQueryV1
+  ): Promise<AuthoritativeBoundaryPolicyDecisionV1>;
 }
 
 export interface BoundaryAuditPort {
