@@ -1218,3 +1218,180 @@ El cambio mínimo para reanudarlo no es ampliar `PipelineAggregatedState` ni inv
 Permanece **NO-GO**. Esta auditoría no resuelve tenant canónico, entrega best-effort ni el conflicto con el Shadow server existente.
 
 La auditoría se detiene aquí. No autoriza implementación, commit, push, PR, conexión Discovery ni deploy.
+
+## 26. AI-02G.2A Contract Decisions
+
+Esta sección registra la resolución contractual final de AI-02G.2A después de
+la revisión semántica humana. No modifica las conclusiones históricas de la
+auditoría ni autoriza la implementación del bootstrapper.
+
+### 26.1 Versioning v1 only
+
+Los contratos bootstrap declaran explícitamente `V1_ONLY`:
+
+- `schemaVersion = '1'`;
+- `bootstrapVersion = '1'`;
+- `taxonomyVersion = '1'`;
+- `scenarioVersion = '1'`.
+
+No existe soporte multiversión, coexistencia ni migración en AI-02G.2A.
+Agregar categories, valores, scenarios o campos contractuales bajo la versión
+`1` es breaking. Una futura versión deberá tener un sprint y estrategia de
+compatibilidad propios.
+
+### 26.2 Taxonomy final
+
+| Category | Value type | Valores | Polarities | Múltiples facts | Conflicto |
+|---|---|---|---|---|---|
+| `BUSINESS_INDUSTRY` | `ENUM` | `HOSPITALITY`, `MANUFACTURING`, `RETAIL`, `PROFESSIONAL_SERVICES` | `AFFIRMED`, `NEGATED`, `UNCERTAIN` | No | `REJECT` |
+| `ORGANIZATION_EMPLOYEE_BAND` | `ENUM` | `UNKNOWN`, `1_9`, `10_50`, `51_250`, `251_PLUS` | `AFFIRMED`, `NEGATED`, `UNCERTAIN` | No | `REJECT` |
+| `OPERATIONS_SCHEDULING_MODE` | `ENUM` | `UNKNOWN`, `MANUAL`, `LOCAL_SYSTEM`, `CLOUD_SYSTEM`, `HYBRID` | `AFFIRMED`, `NEGATED`, `UNCERTAIN` | No | `REJECT` |
+| `OPERATIONS_INCIDENT_SIGNAL` | `ENUM` | `OBSERVED` | `AFFIRMED`, `UNCERTAIN` | Sí | `REJECT` |
+| `EXECUTIVE_NORMALIZED_PRIORITY` | `ENUM` | `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` | `AFFIRMED`, `NEGATED`, `UNCERTAIN` | No | `REJECT` |
+
+Ninguna category acepta string libre ni enum abierto. El literal taxonomy
+`UNKNOWN` representa un valor empresarial explícitamente desconocido y no es
+equivalente a reliability `UNKNOWN`.
+
+### 26.3 Incident signal
+
+La única señal positiva representable es:
+
+```text
+category = OPERATIONS_INCIDENT_SIGNAL
+valueType = ENUM
+value = OBSERVED
+polarity = AFFIRMED
+```
+
+`false` no es un valor permitido. La ausencia del fact significa únicamente
+“sin evidencia de incidente”; no significa “no hubo incidentes”.
+
+`UNCERTAIN` puede conservar una señal incierta solo con opt-in de policy y no
+representa confirmación positiva ni negativa. `NEGATED` no está permitido para
+incident. `NOT_OBSERVED_WITHIN_SCOPE` queda fuera hasta disponer de observation
+window, scope, source y evidencia explícita de observación negativa.
+
+### 26.4 Scenario registry
+
+No existe un `BusinessScenario` canónico cerrado anterior. AI-02G.2A define un
+registry v1 explícito y no usa heurísticas de substrings.
+
+| Scenario | Objective key | Included domains | Excluded domains |
+|---|---|---|---|
+| `PAYROLL_AUDIT` | `ASSESS_PAYROLL_AUDIT_READINESS` | payroll, organization, compliance | compensation, benefits, talent_performance, time_attendance, workforce_analytics |
+| `COMPENSATION_RESTRUCTURE` | `ASSESS_COMPENSATION_RESTRUCTURE_READINESS` | compensation, organization, payroll, benefits | compliance, talent_performance, time_attendance, workforce_analytics |
+| `ORGANIZATION_RESTRUCTURE` | `ASSESS_ORGANIZATION_RESTRUCTURE_READINESS` | organization, workforce_analytics, talent_performance | payroll, compensation, benefits, compliance, time_attendance |
+| `COMPLIANCE_AUDIT` | `ASSESS_COMPLIANCE_AUDIT_READINESS` | compliance, payroll, time_attendance | organization, compensation, benefits, talent_performance, workforce_analytics |
+
+Cada entrada declara además description, versión, allowed stages, required
+stages y el grafo de dependencias. `PipelineBootstrapTargetScenario` usa una
+unión discriminada que vincula cada `scenarioId` con su único `objectiveKey`.
+No acepta objective narrativo libre.
+
+Las fuentes permitidas siguen siendo `USER_SELECTION`, `ADMIN_SELECTION` y
+`AUTHORIZED_SYSTEM_CONFIGURATION`; `explicitSelection` debe ser `true`.
+
+### 26.5 Requested stage dependencies
+
+Cuando `requestedStages` está presente debe ser no vacío, único, estar
+allowlisted por el scenario, incluir sus required stages y cerrar estas
+dependencias:
+
+- `MENTAL_MODEL` requiere `EVIDENCE_EXTRACTION`;
+- `KNOWLEDGE_GRAPH` requiere `EVIDENCE_EXTRACTION` y `MENTAL_MODEL`;
+- `KNOWLEDGE_COVERAGE` requiere `EVIDENCE_EXTRACTION`, `MENTAL_MODEL` y
+  `KNOWLEDGE_GRAPH`;
+- `ADAPTIVE_PLANNING` requiere `KNOWLEDGE_COVERAGE`;
+- `EXECUTIVE_REASONING` requiere `KNOWLEDGE_COVERAGE`;
+- `EXECUTIVE_DOSSIER` requiere `EXECUTIVE_REASONING`;
+- `TRANSFORMATION_ASSESSMENT` requiere `EXECUTIVE_REASONING` y
+  `EXECUTIVE_DOSSIER`.
+
+Estas dependencias describen el contrato observado; no ejecutan stages.
+
+### 26.6 Provenance matrix
+
+`PipelineBootstrapProvenance` exige source, collection method, actor,
+directness, reliability, timestamps e IDs de control. Solo se aceptan las
+combinaciones registradas:
+
+| Source type | Collection methods | Actor types | Directness |
+|---|---|---|---|
+| `USER_STATEMENT` | `FORM_RESPONSE`, `CONVERSATION_RESPONSE`, `MANUAL_ENTRY` | `USER` | `DIRECT` |
+| `USER_CONFIRMATION` | `FORM_RESPONSE`, `CONVERSATION_RESPONSE`, `MANUAL_ENTRY` | `USER` | `DIRECT` |
+| `USER_CORRECTION` | `FORM_RESPONSE`, `CONVERSATION_RESPONSE`, `MANUAL_ENTRY` | `USER` | `DIRECT` |
+| `SYSTEM_OBSERVATION` | `SYSTEM_EVENT` | `SYSTEM` | `DIRECT`, `DERIVED` |
+| `DOCUMENT` | `FILE_IMPORT` | `USER`, `ADMIN`, `EXTERNAL_SYSTEM` | `DIRECT` |
+| `INTEGRATION` | `SYSTEM_EVENT`, `API_IMPORT` | `SYSTEM`, `EXTERNAL_SYSTEM` | `DIRECT`, `DERIVED` |
+| `DERIVED_INFERENCE` | `SYSTEM_EVENT` | `SYSTEM` | `INFERRED` |
+
+Cualquier combinación no registrada se rechaza. `INFERRED` continúa
+requiriendo `DERIVED_INFERENCE`, opt-in y `inferenceRuleId` allowlisted.
+
+### 26.7 Reliability, directness, polarity y unknowns
+
+- Reliability: `CONFIRMED`, `HIGH`, `MEDIUM`, `LOW`, `UNKNOWN`.
+  `UNKNOWN` requiere `allowUnknownReliability = true`.
+- Directness: `DIRECT`, `DERIVED`, `INFERRED`.
+- Polarity: `AFFIRMED`, `NEGATED`, `UNCERTAIN`.
+  `UNCERTAIN` requiere `allowUncertainPolarity = true`.
+
+Reliability `UNKNOWN` es una calificación epistémica de provenance. Los valores
+taxonomy llamados `UNKNOWN` son sentinels empresariales cerrados. No son
+intercambiables. `UNCERTAIN` conserva incertidumbre y no debe convertirse en
+confirmación positiva ni negativa.
+
+Las escalas permanecen nominales. Su mapping numérico queda diferido a
+AI-02G.2B.
+
+### 26.8 Conflict policy
+
+La única policy aceptada es `REJECT`. Para categories múltiples, identidad y
+conflicto consideran `category + value + polarity`. Dos facts con la misma
+category/value y distinta polarity producen `UNRESOLVED_FACT_CONFLICT`.
+
+No se implementa selección por reliability, recencia o confirmación.
+`KEEP_HIGHEST_RELIABILITY`, `KEEP_LATEST_CONFIRMED` y `REQUIRE_REVIEW` no son
+policies utilizables en este sprint.
+
+### 26.9 Bootstrap input, state y port
+
+`PipelineBootstrapInput` separa control, scenario, facts, execution context y
+policy. Exige al menos un fact, versiones v1, consistencia tenant/correlation y
+límites finitos positivos.
+
+`PipelineBootstrapState` continúa siendo `ACCEPTED | REJECTED`. No contiene
+Mental Model, Knowledge Graph, coverage, reasoning, dossier ni assessment.
+
+`PipelineBootstrapPort.bootstrap(input, signal?)` retorna únicamente
+`Promise<PipelineBootstrapState>`. No persiste, no ejecuta el Orchestrator y no
+conoce consumidores.
+
+### 26.10 Ownership
+
+- taxonomy owner: **Aura Intelligence OS**;
+- scenario registry owner: **Aura Intelligence OS**;
+- provenance vocabulary y matrix owner: **Aura Intelligence OS**;
+- canonical `EvidenceSourceType` base owner: **Enterprise Model**;
+- inference rules owner: **Evidence/Reasoning Governance**;
+- versioning y backward compatibility owner: **Aura Intelligence OS
+  Architecture Governance**.
+
+Discovery puede producir evidencia y solicitar scenarios mediante contratos
+aprobados. Discovery no posee ni redefine taxonomy, scenarios, provenance,
+inference rules o versioning.
+
+### 26.11 Decisiones diferidas a AI-02G.2B
+
+- mapping de facts a evidence de dominio;
+- mapping nominal a escalas numéricas;
+- factories de Mental Model y Knowledge Graph;
+- evidence IDs y clock inyectados;
+- transformation hacia el estado requerido por el Orchestrator;
+- composition root y adapters productivos;
+- ejecución real;
+- integración con consumidores.
+
+AI-02H1 permanece bloqueado. Esta resolución solo autoriza contratos,
+invariantes, validadores, documentación, exports y pruebas de AI-02G.2A.
