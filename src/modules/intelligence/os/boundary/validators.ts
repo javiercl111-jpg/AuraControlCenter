@@ -1,19 +1,27 @@
 import {
   AUTHORITATIVE_BOUNDARY_EXECUTION_MODES_V1,
+  AUTHORITATIVE_BOUNDARY_POLICY_REASON_CODES_V1,
+  AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION,
   AUTHORITATIVE_EXECUTION_CONTEXT_VERSION,
   BOUNDARY_ACTOR_TYPES_V1,
   BOUNDARY_INVOCATION_CONTEXT_VERSION,
   type AuthoritativeExecutionContextV1,
   type AuthoritativeBoundaryExecutionModeV1,
+  type AuthoritativeBoundaryPolicyDecisionV1,
+  type AuthoritativeBoundaryPolicyQueryV1,
+  type AuthoritativeBoundaryPolicyReasonCodeV1,
   type BoundaryActorReferenceV1,
   type BoundaryActorTypeV1,
+  type BoundaryExecutionMode,
   type BoundaryInvocationContextV1,
 } from './types';
 import type { InternalPayloadValue } from './ports';
 import {
   BoundaryContextContractError,
+  BoundaryPolicyContractError,
   GovernedBoundaryError,
   type BoundaryContextContractIssue,
+  type BoundaryPolicyContractIssue,
   type BoundaryPublicErrorCode,
 } from './errors';
 import type { GovernedExecutionRequest } from './types';
@@ -21,11 +29,13 @@ import type { GovernedExecutionRequest } from './types';
 export const MAX_BOUNDARY_PAYLOAD_DEPTH = 20;
 export const MAX_BOUNDARY_AUTHORITY_IDENTIFIER_LENGTH = 180;
 export const MAX_BOUNDARY_POLICY_VERSION_LENGTH = 64;
+export const MAX_AUTHORITATIVE_BOUNDARY_POLICY_TIMEOUT_MS =
+  2_147_483_647;
 
 const SAFE_AUTHORITY_IDENTIFIER_PATTERN =
   /^[A-Za-z0-9][A-Za-z0-9._:/|-]{0,179}$/;
 const SAFE_POLICY_VERSION_PATTERN =
-  /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+  /^[A-Za-z0-9][A-Za-z0-9._:/|-]{0,63}$/;
 
 const ACTOR_REFERENCE_KEYS = ['actorType', 'actorId'] as const;
 const INVOCATION_CONTEXT_KEYS = [
@@ -42,6 +52,30 @@ const AUTHORITATIVE_CONTEXT_KEYS = [
   'executionMode',
   'initiatedAt',
   'authorizationPolicyVersion',
+] as const;
+const AUTHORITATIVE_POLICY_QUERY_KEYS = [
+  'schemaVersion',
+  'tenantId',
+  'consumerId',
+  'source',
+  'requestedMode',
+  'actor',
+] as const;
+const AUTHORITATIVE_POLICY_DECISION_KEYS = [
+  'schemaVersion',
+  'authorizationPolicyVersion',
+  'evaluatedTenantId',
+  'evaluatedConsumerId',
+  'evaluatedSource',
+  'evaluatedActor',
+  'requestedMode',
+  'decision',
+  'reasonCode',
+] as const;
+const AUTHORITATIVE_POLICY_ALLOWED_DECISION_KEYS = [
+  ...AUTHORITATIVE_POLICY_DECISION_KEYS,
+  'effectiveExecutionMode',
+  'effectiveTimeoutMs',
 ] as const;
 
 type ClosedRecord = Readonly<Record<string, unknown>>;
@@ -134,6 +168,28 @@ function isAuthoritativeBoundaryExecutionModeV1(
     typeof value === 'string' &&
     AUTHORITATIVE_BOUNDARY_EXECUTION_MODES_V1.some(
       (mode) => mode === value
+    )
+  );
+}
+
+function isBoundaryExecutionMode(
+  value: unknown
+): value is BoundaryExecutionMode {
+  return (
+    value === 'DISABLED' ||
+    value === 'SHADOW_ONLY' ||
+    value === 'EVALUATION' ||
+    value === 'PRODUCTIVE'
+  );
+}
+
+function isAuthoritativeBoundaryPolicyReasonCodeV1(
+  value: unknown
+): value is AuthoritativeBoundaryPolicyReasonCodeV1 {
+  return (
+    typeof value === 'string' &&
+    AUTHORITATIVE_BOUNDARY_POLICY_REASON_CODES_V1.some(
+      (reasonCode) => reasonCode === value
     )
   );
 }
@@ -267,6 +323,161 @@ export function validateAuthoritativeExecutionContextV1(
     executionMode: record.executionMode,
     initiatedAt: record.initiatedAt,
     authorizationPolicyVersion: record.authorizationPolicyVersion,
+  });
+}
+
+function policyContractError(
+  issue: BoundaryPolicyContractIssue
+): never {
+  throw new BoundaryPolicyContractError(issue);
+}
+
+function clonePolicyActor(
+  value: unknown,
+  issue: BoundaryPolicyContractIssue
+): BoundaryActorReferenceV1 {
+  try {
+    return validateBoundaryActorReferenceV1(value);
+  } catch {
+    return policyContractError(issue);
+  }
+}
+
+export function validateAuthoritativeBoundaryPolicyQueryV1(
+  value: unknown
+): AuthoritativeBoundaryPolicyQueryV1 {
+  const record = getClosedPlainRecord(
+    value,
+    AUTHORITATIVE_POLICY_QUERY_KEYS
+  );
+  if (
+    !record ||
+    record.schemaVersion !==
+      AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION ||
+    !isSafeAuthorityIdentifier(record.tenantId) ||
+    !isSafeAuthorityIdentifier(record.consumerId) ||
+    !isSafeAuthorityIdentifier(record.source) ||
+    !isBoundaryExecutionMode(record.requestedMode)
+  ) {
+    policyContractError('BOUNDARY_POLICY_QUERY_INVALID');
+  }
+  return deepFreezeBoundaryContract({
+    schemaVersion: AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION,
+    tenantId: record.tenantId,
+    consumerId: record.consumerId,
+    source: record.source,
+    requestedMode: record.requestedMode,
+    actor: clonePolicyActor(
+      record.actor,
+      'BOUNDARY_POLICY_QUERY_INVALID'
+    ),
+  });
+}
+
+function validateAuthoritativePolicyDecisionBase(
+  record: ClosedRecord
+): {
+  readonly authorizationPolicyVersion: string;
+  readonly evaluatedTenantId: string;
+  readonly evaluatedConsumerId: string;
+  readonly evaluatedSource: string;
+  readonly evaluatedActor: BoundaryActorReferenceV1;
+  readonly requestedMode: BoundaryExecutionMode;
+} {
+  if (
+    record.schemaVersion !==
+      AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION ||
+    !isSafeAuthorityIdentifier(record.evaluatedTenantId) ||
+    !isSafeAuthorityIdentifier(record.evaluatedConsumerId) ||
+    !isSafeAuthorityIdentifier(record.evaluatedSource) ||
+    !isBoundaryExecutionMode(record.requestedMode)
+  ) {
+    policyContractError('BOUNDARY_POLICY_CONTEXT_INVALID');
+  }
+  if (!isSafePolicyVersion(record.authorizationPolicyVersion)) {
+    policyContractError('BOUNDARY_POLICY_VERSION_MISSING');
+  }
+  return {
+    authorizationPolicyVersion:
+      record.authorizationPolicyVersion,
+    evaluatedTenantId: record.evaluatedTenantId,
+    evaluatedConsumerId: record.evaluatedConsumerId,
+    evaluatedSource: record.evaluatedSource,
+    evaluatedActor: clonePolicyActor(
+      record.evaluatedActor,
+      'BOUNDARY_POLICY_CONTEXT_INVALID'
+    ),
+    requestedMode: record.requestedMode,
+  };
+}
+
+export function validateAuthoritativeBoundaryPolicyDecisionV1(
+  value: unknown
+): AuthoritativeBoundaryPolicyDecisionV1 {
+  const allowedRecord = getClosedPlainRecord(
+    value,
+    AUTHORITATIVE_POLICY_ALLOWED_DECISION_KEYS
+  );
+  if (allowedRecord) {
+    const base = validateAuthoritativePolicyDecisionBase(
+      allowedRecord
+    );
+    if (
+      allowedRecord.decision !== 'ALLOWED' ||
+      allowedRecord.reasonCode !== 'POLICY_ALLOWED'
+    ) {
+      policyContractError('BOUNDARY_POLICY_DECISION_INVALID');
+    }
+    if (
+      !isAuthoritativeBoundaryExecutionModeV1(
+        allowedRecord.effectiveExecutionMode
+      )
+    ) {
+      policyContractError('BOUNDARY_POLICY_MODE_INVALID');
+    }
+    if (
+      typeof allowedRecord.effectiveTimeoutMs !== 'number' ||
+      !Number.isInteger(allowedRecord.effectiveTimeoutMs) ||
+      allowedRecord.effectiveTimeoutMs <= 0 ||
+      allowedRecord.effectiveTimeoutMs >
+        MAX_AUTHORITATIVE_BOUNDARY_POLICY_TIMEOUT_MS
+    ) {
+      policyContractError('BOUNDARY_POLICY_DECISION_INVALID');
+    }
+    return deepFreezeBoundaryContract({
+      schemaVersion:
+        AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION,
+      ...base,
+      decision: 'ALLOWED',
+      reasonCode: 'POLICY_ALLOWED',
+      effectiveExecutionMode:
+        allowedRecord.effectiveExecutionMode,
+      effectiveTimeoutMs: allowedRecord.effectiveTimeoutMs,
+    });
+  }
+
+  const deniedRecord = getClosedPlainRecord(
+    value,
+    AUTHORITATIVE_POLICY_DECISION_KEYS
+  );
+  if (!deniedRecord) {
+    policyContractError('BOUNDARY_POLICY_DECISION_INVALID');
+  }
+  const base = validateAuthoritativePolicyDecisionBase(deniedRecord);
+  if (
+    deniedRecord.decision !== 'DENIED' ||
+    !isAuthoritativeBoundaryPolicyReasonCodeV1(
+      deniedRecord.reasonCode
+    ) ||
+    deniedRecord.reasonCode === 'POLICY_ALLOWED'
+  ) {
+    policyContractError('BOUNDARY_POLICY_DECISION_INVALID');
+  }
+  return deepFreezeBoundaryContract({
+    schemaVersion: AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION,
+    ...base,
+    decision: 'DENIED',
+    reasonCode: deniedRecord.reasonCode,
   });
 }
 
