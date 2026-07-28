@@ -1,4 +1,7 @@
-import type { BoundaryExecutionMode } from './types';
+import type {
+  AuthoritativeExecutionContextV1,
+  BoundaryExecutionMode,
+} from './types';
 
 export interface BoundaryClockPort {
   now(): string;
@@ -38,6 +41,11 @@ export interface InternalExecutionInput {
   readonly objectiveIds?: readonly string[];
   readonly payload: InternalPayloadValue;
   readonly metadata?: Record<string, unknown>;
+  /**
+   * Transitional additive contract for H0B. Absence conveys no authority and
+   * must never be replaced from payload or metadata.
+   */
+  readonly authoritativeContext?: AuthoritativeExecutionContextV1;
 }
 
 export interface InternalExecutionResult {
