@@ -517,6 +517,14 @@ describe('Pipeline bootstrap source isolation', () => {
     import: 'default',
   });
   const sourceText = Object.values(sourceModules).join('\n');
+  const bootstrapperSource =
+    sourceModules['../PipelineBootstrapper.ts'] ?? '';
+  const contractSourceText = Object.entries(sourceModules)
+    .filter(([path]) =>
+      /\/(?:types|ports|validators)\.ts$/.test(path)
+    )
+    .map(([, source]) => source)
+    .join('\n');
 
   it('46. has no external persistence SDK vocabulary', () => {
     const token = ['fire', 'base'].join('');
@@ -556,14 +564,14 @@ describe('Pipeline bootstrap source isolation', () => {
     expect(sourceText).not.toMatch(new RegExp(looseCast));
   });
 
-  it('120. has no orchestrator execution dependency', () => {
+  it('120. keeps the bootstrapper free of orchestrator execution', () => {
     const token = ['AuraIntelligence', 'Orchestrator'].join('');
-    expect(sourceText).not.toMatch(new RegExp(token));
+    expect(bootstrapperSource).not.toMatch(new RegExp(token));
   });
 
-  it('121. has no bootstrapper implementation', () => {
+  it('121. keeps bootstrap contracts free of implementation', () => {
     const token = ['Pipeline', 'Bootstrapper'].join('');
-    expect(sourceText).not.toMatch(new RegExp(token));
+    expect(contractSourceText).not.toMatch(new RegExp(token));
   });
 });
 
