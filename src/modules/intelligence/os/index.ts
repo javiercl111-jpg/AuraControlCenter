@@ -2,6 +2,7 @@ export * from './types';
 export * from './ports';
 export * from './errors';
 export * from './scenarioContract';
+export * from './checkpoint';
 export * from './PipelineExecutionContext';
 export * from './contextTypes';
 export * from './dependencyComposition';
