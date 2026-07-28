@@ -20,11 +20,19 @@ import {
   assertExecutionScenarioCompatibility,
   clonePipelineExecutionScenario
 } from './scenarioContract';
+import type { PrecomputedPipelineCheckpoint } from './checkpoint';
+import {
+  CheckpointAdmissionError,
+  validateCheckpointForAdmission
+} from './checkpoint';
 
 export interface OrchestrationInput {
   sessionId: PipelineSessionId;
   executionKey?: PipelineExecutionKey;
+  tenantId?: string;
+  correlationId?: string;
   executionScenario?: PipelineExecutionScenario;
+  precomputedCheckpoint?: PrecomputedPipelineCheckpoint;
   targetScenario?: string;
   objectiveIds?: readonly string[];
   metadata?: PipelineExecutionMetadata;
@@ -71,6 +79,132 @@ export class AuraIntelligenceOrchestrator {
     };
   }
 
+  private safeAudit(
+    event: string,
+    metadata?: Readonly<Record<string, string>>
+  ): void {
+    const isWarning =
+      event.includes('REJECTED') ||
+      event.includes('MISMATCH') ||
+      event.includes('CONFLICT') ||
+      event.includes('UNSATISFIED');
+    try {
+      this.dependencies.auditSink?.log(
+        isWarning ? 'WARN' : 'INFO',
+        event,
+        metadata ? { ...metadata } : undefined
+      );
+    } catch {
+      // Audit failures never alter pipeline execution.
+    }
+  }
+
+  private assertCheckpointGuard(globalStartedAtMs: number): void {
+    if (this.dependencies.cancellationSignal?.aborted) {
+      throw new AuraIntelligenceOSError(
+        ErrorCodes.CANCELLED,
+        'Execution cancelled before checkpoint admission',
+        false
+      );
+    }
+
+    const timeoutMs =
+      this.dependencies.timeoutPolicy?.getExecutionTimeoutMs() ?? 0;
+    if (
+      timeoutMs > 0 &&
+      this.dependencies.clock.now() - globalStartedAtMs >= timeoutMs
+    ) {
+      throw new AuraIntelligenceOSError(
+        ErrorCodes.PIPELINE_TIMEOUT,
+        'Global timeout exceeded before checkpoint admission',
+        false
+      );
+    }
+  }
+
+  private isStageConfigured(stage: PipelineStageId): boolean {
+    switch (stage) {
+      case 'EVIDENCE_EXTRACTION':
+      case 'MENTAL_MODEL':
+      case 'KNOWLEDGE_GRAPH':
+        return Boolean(this.dependencies.extractionApplier);
+      case 'KNOWLEDGE_COVERAGE':
+        return Boolean(
+          this.dependencies.coverageDecisionEngine &&
+          this.dependencies.coverageCalculator
+        );
+      case 'ADAPTIVE_PLANNING':
+        return Boolean(
+          this.dependencies.adaptiveQuestionPlanner &&
+          this.dependencies.plannerPolicy &&
+          this.dependencies.questionRealizationProvider
+        );
+      case 'EXECUTIVE_REASONING':
+        return Boolean(
+          this.dependencies.executiveReasoningEngine &&
+          this.dependencies.reasoningPolicy
+        );
+      case 'EXECUTIVE_DOSSIER':
+        return Boolean(
+          this.dependencies.executiveDossierBuilder &&
+          this.dependencies.dossierPolicy &&
+          this.dependencies.diagnosticNarrativeProvider
+        );
+      case 'TRANSFORMATION_ASSESSMENT':
+        return Boolean(
+          this.dependencies.enterpriseTransformationAssessmentBuilder &&
+          this.dependencies.assessmentPolicy
+        );
+    }
+  }
+
+  private shouldExecuteCheckpointStage(
+    stage: PipelineStageId,
+    scenario: PipelineExecutionScenario,
+    results: Partial<Record<PipelineStageId, PipelineStageResult<unknown>>>,
+    skippedStages: PipelineStageId[]
+  ): boolean {
+    if (!scenario.allowedStages.includes(stage)) {
+      skippedStages.push(stage);
+      return false;
+    }
+
+    const dependencies = scenario.stageDependencies[stage];
+    if (
+      !Array.isArray(dependencies) ||
+      dependencies.some(
+        (dependency: PipelineStageId) =>
+          results[dependency]?.status !== 'SUCCEEDED'
+      )
+    ) {
+      skippedStages.push(stage);
+      return false;
+    }
+    return true;
+  }
+
+  private recordPrecomputedStageResult(
+    checkpoint: PrecomputedPipelineCheckpoint,
+    stage: PipelineStageId,
+    results: Partial<Record<PipelineStageId, PipelineStageResult<unknown>>>
+  ): void {
+    results[stage] = {
+      stage,
+      status: 'SUCCEEDED',
+      executionOrigin: 'PRECOMPUTED',
+      admissionReference: {
+        checkpointId: checkpoint.checkpointId,
+        stageId: stage
+      },
+      startedAt: checkpoint.completedAt,
+      completedAt: checkpoint.completedAt,
+      durationMs: 0,
+      errors: [],
+      warnings: []
+    };
+    this.safeAudit('CHECKPOINT_STAGE_ADMITTED_PRECOMPUTED', { stage });
+  }
+
   public async executePipeline(
     input: OrchestrationInput,
     initialState?: PipelineAggregatedState
@@ -110,10 +244,73 @@ export class AuraIntelligenceOrchestrator {
       );
 
       let pipelineAborted = false;
+      let checkpointActive = false;
+
+      if (input.precomputedCheckpoint) {
+        this.assertCheckpointGuard(globalStartedAtMs);
+        this.safeAudit('CHECKPOINT_RECEIVED');
+
+        try {
+          const effectiveScenario =
+            currentState.executionScenario ?? input.executionScenario;
+          if (
+            currentState.executionScenario &&
+            input.executionScenario &&
+            (
+              currentState.executionScenario.scenarioId !==
+                input.executionScenario.scenarioId ||
+              currentState.executionScenario.scenarioVersion !==
+                input.executionScenario.scenarioVersion
+            )
+          ) {
+            throw new CheckpointAdmissionError(
+              'CHECKPOINT_CONTEXT_MISMATCH'
+            );
+          }
+
+          const admissionPlan = validateCheckpointForAdmission({
+            checkpoint: input.precomputedCheckpoint,
+            tenantId: input.tenantId,
+            correlationId: input.correlationId,
+            executionScenario: effectiveScenario,
+            state: currentState,
+            authorizer: this.dependencies.checkpointProducerAuthorizer,
+            isStageConfigured: (stage) => this.isStageConfigured(stage),
+            audit: (event, metadata) => this.safeAudit(event, metadata)
+          });
+
+          this.assertCheckpointGuard(globalStartedAtMs);
+          for (const admission of admissionPlan.checkpoint.admissions) {
+            this.recordPrecomputedStageResult(
+              admissionPlan.checkpoint,
+              admission.stageId,
+              stageResults
+            );
+          }
+          checkpointActive = true;
+        } catch (error) {
+          this.safeAudit('CHECKPOINT_REJECTED', {
+            reason:
+              error instanceof CheckpointAdmissionError
+                ? error.issue
+                : error instanceof AuraIntelligenceOSError
+                  ? error.code
+                  : 'CHECKPOINT_CONTRACT_INVALID'
+          });
+          throw error;
+        }
+      }
 
       // 1. EVIDENCE_EXTRACTION + MENTAL_MODEL + KNOWLEDGE_GRAPH
       let extractionFailed = false;
-      if (!this.checkCancelled('EVIDENCE_EXTRACTION', skippedStages, globalStartedAtMs)) {
+      if (
+        !checkpointActive &&
+        !this.checkCancelled(
+          'EVIDENCE_EXTRACTION',
+          skippedStages,
+          globalStartedAtMs
+        )
+      ) {
         if (!this.dependencies.extractionApplier) {
           skippedStages.push('EVIDENCE_EXTRACTION', 'MENTAL_MODEL', 'KNOWLEDGE_GRAPH');
         } else {
@@ -135,7 +332,23 @@ export class AuraIntelligenceOrchestrator {
       }
 
       // 4. KNOWLEDGE_COVERAGE
-      if (!this.checkCancelled('KNOWLEDGE_COVERAGE', skippedStages, globalStartedAtMs) && !skippedStages.includes('KNOWLEDGE_COVERAGE')) {
+      if (
+        (
+          !checkpointActive ||
+          this.shouldExecuteCheckpointStage(
+            'KNOWLEDGE_COVERAGE',
+            currentState.executionScenario!,
+            stageResults,
+            skippedStages
+          )
+        ) &&
+        !this.checkCancelled(
+          'KNOWLEDGE_COVERAGE',
+          skippedStages,
+          globalStartedAtMs
+        ) &&
+        !skippedStages.includes('KNOWLEDGE_COVERAGE')
+      ) {
         if (!this.dependencies.coverageDecisionEngine) {
           skippedStages.push('KNOWLEDGE_COVERAGE');
         } else {
@@ -155,7 +368,23 @@ export class AuraIntelligenceOrchestrator {
       }
 
       // 5. ADAPTIVE_PLANNING
-      if (!this.checkCancelled('ADAPTIVE_PLANNING', skippedStages, globalStartedAtMs) && !skippedStages.includes('ADAPTIVE_PLANNING')) {
+      if (
+        (
+          !checkpointActive ||
+          this.shouldExecuteCheckpointStage(
+            'ADAPTIVE_PLANNING',
+            currentState.executionScenario!,
+            stageResults,
+            skippedStages
+          )
+        ) &&
+        !this.checkCancelled(
+          'ADAPTIVE_PLANNING',
+          skippedStages,
+          globalStartedAtMs
+        ) &&
+        !skippedStages.includes('ADAPTIVE_PLANNING')
+      ) {
         if (!this.dependencies.adaptiveQuestionPlanner) {
           skippedStages.push('ADAPTIVE_PLANNING');
         } else {
@@ -176,7 +405,23 @@ export class AuraIntelligenceOrchestrator {
 
       // 6. EXECUTIVE_REASONING
       let reasoningFailed = false;
-      if (!this.checkCancelled('EXECUTIVE_REASONING', skippedStages, globalStartedAtMs) && !skippedStages.includes('EXECUTIVE_REASONING')) {
+      if (
+        (
+          !checkpointActive ||
+          this.shouldExecuteCheckpointStage(
+            'EXECUTIVE_REASONING',
+            currentState.executionScenario!,
+            stageResults,
+            skippedStages
+          )
+        ) &&
+        !this.checkCancelled(
+          'EXECUTIVE_REASONING',
+          skippedStages,
+          globalStartedAtMs
+        ) &&
+        !skippedStages.includes('EXECUTIVE_REASONING')
+      ) {
         if (!this.dependencies.executiveReasoningEngine) {
           skippedStages.push('EXECUTIVE_REASONING');
           reasoningFailed = true;
@@ -199,7 +444,23 @@ export class AuraIntelligenceOrchestrator {
 
       // 7. EXECUTIVE_DOSSIER
       let dossierFailed = false;
-      if (!this.checkCancelled('EXECUTIVE_DOSSIER', skippedStages, globalStartedAtMs) && !skippedStages.includes('EXECUTIVE_DOSSIER')) {
+      if (
+        (
+          !checkpointActive ||
+          this.shouldExecuteCheckpointStage(
+            'EXECUTIVE_DOSSIER',
+            currentState.executionScenario!,
+            stageResults,
+            skippedStages
+          )
+        ) &&
+        !this.checkCancelled(
+          'EXECUTIVE_DOSSIER',
+          skippedStages,
+          globalStartedAtMs
+        ) &&
+        !skippedStages.includes('EXECUTIVE_DOSSIER')
+      ) {
         if (!this.dependencies.executiveDossierBuilder) {
           skippedStages.push('EXECUTIVE_DOSSIER');
           dossierFailed = true;
@@ -221,7 +482,23 @@ export class AuraIntelligenceOrchestrator {
       }
 
       // 8. TRANSFORMATION_ASSESSMENT
-      if (!this.checkCancelled('TRANSFORMATION_ASSESSMENT', skippedStages, globalStartedAtMs) && !skippedStages.includes('TRANSFORMATION_ASSESSMENT')) {
+      if (
+        (
+          !checkpointActive ||
+          this.shouldExecuteCheckpointStage(
+            'TRANSFORMATION_ASSESSMENT',
+            currentState.executionScenario!,
+            stageResults,
+            skippedStages
+          )
+        ) &&
+        !this.checkCancelled(
+          'TRANSFORMATION_ASSESSMENT',
+          skippedStages,
+          globalStartedAtMs
+        ) &&
+        !skippedStages.includes('TRANSFORMATION_ASSESSMENT')
+      ) {
         if (!this.dependencies.enterpriseTransformationAssessmentBuilder) {
           skippedStages.push('TRANSFORMATION_ASSESSMENT');
         } else {
@@ -271,25 +548,62 @@ export class AuraIntelligenceOrchestrator {
     const completedAt = this.dependencies.clock.toISOString();
     const durationMs = this.dependencies.clock.now() - globalStartedAtMs;
 
-    let status: PipelineStatus = 'SUCCESS';
+    let status: PipelineStatus;
     const results = Object.values(stageResults);
+    const effectiveErrors = [...globalErrors];
     const hasCancelled = this.dependencies.cancellationSignal?.aborted || results.some(r => r?.status === 'CANCELLED');
     const hasTimedOut = results.some(r => r?.status === 'TIMED_OUT');
     const globalTimeoutMs = this.dependencies.timeoutPolicy?.getExecutionTimeoutMs() ?? 0;
     const globalTimedOut = globalTimeoutMs > 0 && durationMs >= globalTimeoutMs;
+    const hasPrecomputedAdmissions = results.some(
+      (result) => result?.executionOrigin === 'PRECOMPUTED'
+    );
+    let requiredStagesSatisfied = true;
 
-    if (hasCancelled || globalErrors.some(e => e.code === ErrorCodes.CANCELLED)) {
+    if (
+      hasPrecomputedAdmissions &&
+      state.executionScenario &&
+      !hasCancelled &&
+      !hasTimedOut &&
+      !globalTimedOut
+    ) {
+      for (const requiredStage of state.executionScenario.requiredStages) {
+        if (stageResults[requiredStage]?.status !== 'SUCCEEDED') {
+          requiredStagesSatisfied = false;
+          const error = new CheckpointAdmissionError(
+            'CHECKPOINT_REQUIRED_STAGE_UNSATISFIED',
+            requiredStage
+          );
+          effectiveErrors.push(error.toJSON());
+          this.safeAudit('CHECKPOINT_REQUIRED_STAGE_UNSATISFIED', {
+            stage: requiredStage
+          });
+        }
+      }
+    }
+
+    if (hasCancelled || effectiveErrors.some(e => e.code === ErrorCodes.CANCELLED)) {
       status = 'CANCELLED';
-    } else if (hasTimedOut || globalTimedOut || globalErrors.some(e => e.code === ErrorCodes.PIPELINE_TIMEOUT)) {
+    } else if (hasTimedOut || globalTimedOut || effectiveErrors.some(e => e.code === ErrorCodes.PIPELINE_TIMEOUT)) {
       status = 'TIMED_OUT';
-    } else if (globalErrors.length > 0) {
+    } else if (effectiveErrors.length > 0) {
       status = 'FAILED';
     } else {
       const allSucceeded = results.every(r => r?.status === 'SUCCEEDED');
       const anySucceeded = results.some(r => r?.status === 'SUCCEEDED');
       const anyFailed = results.some(r => r?.status === 'FAILED');
+      const anyNonSuccessfulResult = results.some(
+        (result) => result?.status !== 'SUCCEEDED'
+      );
 
-      if (allSucceeded && skippedStages.length === 0 && !anyFailed) {
+      if (
+        hasPrecomputedAdmissions &&
+        state.executionScenario &&
+        requiredStagesSatisfied &&
+        !anyNonSuccessfulResult
+      ) {
+        status = 'SUCCESS';
+      } else if (allSucceeded && skippedStages.length === 0 && !anyFailed) {
         status = 'SUCCESS';
       } else if (anySucceeded && !anyFailed) {
         status = 'PARTIAL_SUCCESS';
@@ -310,9 +624,9 @@ export class AuraIntelligenceOrchestrator {
       completedAt,
       durationMs,
       stageResults,
-      partialFailures,
+      partialFailures: partialFailures || effectiveErrors.length > 0,
       skippedStages: Array.from(new Set(skippedStages)),
-      errors: globalErrors,
+      errors: effectiveErrors,
       warnings,
       auditTrail: this.buildAuditTrail(stageResults, skippedStages, status)
     };

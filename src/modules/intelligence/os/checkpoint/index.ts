@@ -47,3 +47,22 @@ export type {
   CheckpointValidationIssueCode,
   CheckpointValidationResult,
 } from './validators';
+
+export {
+  CheckpointAdmissionError,
+  PRECOMPUTED_ADMISSIBLE_STAGE_IDS,
+  PRECOMPUTED_EVIDENCE_SCHEMA_VERSION,
+  PRECOMPUTED_STAGE_ARTIFACT_SCHEMA_VERSIONS,
+  calculateCheckpointStageFingerprints,
+  validateCheckpointForAdmission,
+} from './admission';
+
+export type {
+  CheckpointAdmissionAudit,
+  CheckpointAdmissionIssueCode,
+  CheckpointStageFingerprintContext,
+  CheckpointStageFingerprints,
+  PrecomputedAdmissibleStageId,
+  ValidateCheckpointAdmissionOptions,
+  ValidatedCheckpointAdmissionPlan,
+} from './admission';

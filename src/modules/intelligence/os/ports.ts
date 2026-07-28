@@ -20,3 +20,15 @@ export interface PipelineCancellationSignal {
   readonly aborted: boolean;
   readonly reason?: unknown;
 }
+
+export interface CheckpointProducerAuthorizationRequest {
+  readonly producerId: string;
+  readonly producerVersion: string;
+  readonly tenantId: string;
+  readonly scenarioId: string;
+  readonly checkpointVersion: string;
+}
+
+export interface CheckpointProducerAuthorizerPort {
+  isAuthorized(request: CheckpointProducerAuthorizationRequest): boolean;
+}
