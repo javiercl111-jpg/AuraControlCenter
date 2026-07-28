@@ -10,6 +10,7 @@ import {
   assertExecutionScenarioCompatibility,
   cloneAndFreezePipelineExecutionScenario
 } from './scenarioContract';
+import { freezePrecomputedPipelineCheckpoint } from './checkpoint/integrity';
 
 export class PipelineExecutionContext {
   public readonly executionId: PipelineExecutionId;
@@ -49,6 +50,13 @@ export class PipelineExecutionContext {
         ? {
             executionScenario: cloneAndFreezePipelineExecutionScenario(
               input.executionScenario
+            )
+          }
+        : {}),
+      ...(input.precomputedCheckpoint
+        ? {
+            precomputedCheckpoint: freezePrecomputedPipelineCheckpoint(
+              input.precomputedCheckpoint
             )
           }
         : {}),

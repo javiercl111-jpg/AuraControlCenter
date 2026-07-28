@@ -64,7 +64,7 @@ describe('AI-02C.3B checkpoint architecture boundaries', () => {
     expect(source).not.toMatch(/checkpoint|PRECOMPUTED|StageAdmission/i);
   });
 
-  it('47. Orchestrator does not consume checkpoint contracts yet', () => {
+  it('47. Orchestrator consumes checkpoint contracts explicitly in AI-02C.3C', () => {
     const source = readFileSync(
       resolve(
         process.cwd(),
@@ -72,9 +72,9 @@ describe('AI-02C.3B checkpoint architecture boundaries', () => {
       ),
       'utf8'
     );
-    expect(source).not.toMatch(
-      /PrecomputedPipelineCheckpoint|PipelineStageAdmission|executionOrigin/
-    );
+    expect(source).toMatch(/PrecomputedPipelineCheckpoint/);
+    expect(source).toMatch(/validateCheckpointForAdmission/);
+    expect(source).toMatch(/executionOrigin:\s*'PRECOMPUTED'/);
   });
 
   it('48. PipelineContextBuilder remains checkpoint-independent', () => {

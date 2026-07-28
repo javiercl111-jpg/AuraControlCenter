@@ -1,4 +1,5 @@
 import type { CoverageDomain } from '../enterprise-model/coverage/domain/types';
+import type { PrecomputedPipelineCheckpoint } from './checkpoint/types';
 
 export const OS_CONTRACT_VERSION = '1';
 export const OS_PIPELINE_VERSION = '1';
@@ -131,7 +132,10 @@ export interface PipelineResult {
 export interface PipelineInput {
   sessionId: PipelineSessionId;
   executionKey?: PipelineExecutionKey;
+  tenantId?: string;
+  correlationId?: string;
   executionScenario?: PipelineExecutionScenario;
+  precomputedCheckpoint?: PrecomputedPipelineCheckpoint;
   targetScenario?: string;
   objectiveIds?: readonly string[];
   metadata?: PipelineExecutionMetadata;

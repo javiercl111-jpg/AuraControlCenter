@@ -19,7 +19,8 @@ import type {
   PipelineClock, 
   PipelineAuditSink, 
   PipelineTimeoutPolicy, 
-  PipelineCancellationSignal 
+  PipelineCancellationSignal,
+  CheckpointProducerAuthorizerPort
 } from './ports';
 
 export interface AuraIntelligenceOSDependencies {
@@ -31,6 +32,7 @@ export interface AuraIntelligenceOSDependencies {
   auditSink?: PipelineAuditSink;
   timeoutPolicy?: PipelineTimeoutPolicy;
   cancellationSignal?: PipelineCancellationSignal;
+  checkpointProducerAuthorizer?: CheckpointProducerAuthorizerPort;
 
   // Domain dependencies (Optional at OS level, required at stage execution)
   plannerPolicy?: PlannerPolicy;
