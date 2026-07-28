@@ -27,15 +27,30 @@ export type StageStatus =
   | 'CANCELLED'
   | 'TIMED_OUT';
 
-export type PipelineStageId =
-  | 'EVIDENCE_EXTRACTION'
-  | 'MENTAL_MODEL'
-  | 'KNOWLEDGE_GRAPH'
-  | 'KNOWLEDGE_COVERAGE'
-  | 'ADAPTIVE_PLANNING'
-  | 'EXECUTIVE_REASONING'
-  | 'EXECUTIVE_DOSSIER'
-  | 'TRANSFORMATION_ASSESSMENT';
+export const PIPELINE_STAGE_IDS = [
+  'EVIDENCE_EXTRACTION',
+  'MENTAL_MODEL',
+  'KNOWLEDGE_GRAPH',
+  'KNOWLEDGE_COVERAGE',
+  'ADAPTIVE_PLANNING',
+  'EXECUTIVE_REASONING',
+  'EXECUTIVE_DOSSIER',
+  'TRANSFORMATION_ASSESSMENT',
+] as const;
+
+export type PipelineStageId = (typeof PIPELINE_STAGE_IDS)[number];
+
+export const EXECUTION_ORIGINS = [
+  'CURRENT_EXECUTION',
+  'PRECOMPUTED',
+] as const;
+
+export type ExecutionOrigin = (typeof EXECUTION_ORIGINS)[number];
+
+export interface PipelineStageAdmissionReference {
+  readonly checkpointId: string;
+  readonly stageId: PipelineStageId;
+}
 
 /**
  * Nominal scenario contract carried by Aura Intelligence OS during execution.
@@ -76,6 +91,12 @@ export interface SerializableAuraOSError {
 export interface PipelineStageResult<T> {
   stage: PipelineStageId;
   status: StageStatus;
+  /**
+   * Additive provenance discriminator. An absent value is interpreted as
+   * CURRENT_EXECUTION for compatibility with existing producers.
+   */
+  executionOrigin?: ExecutionOrigin;
+  admissionReference?: PipelineStageAdmissionReference;
   startedAt: string;
   completedAt: string;
   durationMs: number;
