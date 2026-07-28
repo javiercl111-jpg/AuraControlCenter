@@ -1,5 +1,76 @@
 export type BoundaryExecutionMode = 'DISABLED' | 'SHADOW_ONLY' | 'EVALUATION' | 'PRODUCTIVE';
 
+export const BOUNDARY_INVOCATION_CONTEXT_VERSION = '1' as const;
+export const AUTHORITATIVE_EXECUTION_CONTEXT_VERSION = '1' as const;
+
+export const BOUNDARY_ACTOR_TYPES_V1 = Object.freeze([
+  'USER',
+  'SERVICE',
+  'SYSTEM',
+] as const);
+
+export type BoundaryActorTypeV1 =
+  (typeof BOUNDARY_ACTOR_TYPES_V1)[number];
+
+export const AUTHORITATIVE_BOUNDARY_EXECUTION_MODES_V1 = Object.freeze([
+  'SHADOW_ONLY',
+  'EVALUATION',
+] as const);
+
+export type AuthoritativeBoundaryExecutionModeV1 =
+  (typeof AUTHORITATIVE_BOUNDARY_EXECUTION_MODES_V1)[number];
+
+export interface BoundaryActorReferenceV1 {
+  readonly actorType: BoundaryActorTypeV1;
+  readonly actorId: string;
+}
+
+export interface BoundaryInvocationContextV1 {
+  readonly schemaVersion: typeof BOUNDARY_INVOCATION_CONTEXT_VERSION;
+  readonly tenantId: string;
+  readonly actor: BoundaryActorReferenceV1;
+  readonly consumerId: string;
+  readonly source: string;
+  readonly requestId: string;
+  readonly correlationId: string;
+}
+
+export interface AuthoritativeExecutionContextV1 {
+  readonly schemaVersion:
+    typeof AUTHORITATIVE_EXECUTION_CONTEXT_VERSION;
+  readonly tenantId: string;
+  readonly actor: BoundaryActorReferenceV1;
+  readonly consumerId: string;
+  readonly source: string;
+  readonly requestId: string;
+  readonly correlationId: string;
+  readonly executionMode: AuthoritativeBoundaryExecutionModeV1;
+  readonly initiatedAt: string;
+  readonly authorizationPolicyVersion: string;
+}
+
+/**
+ * Canonical authority vocabulary reserved for H0B conflict detection.
+ * H0A exposes the closed inventory but performs no payload comparison.
+ */
+export const BOUNDARY_RESERVED_AUTHORITY_FIELDS = Object.freeze([
+  'tenant',
+  'tenantId',
+  'actor',
+  'actorId',
+  'actorType',
+  'consumerId',
+  'source',
+  'requestId',
+  'correlationId',
+  'requestedMode',
+  'executionMode',
+  'authorizationPolicyVersion',
+] as const);
+
+export type BoundaryReservedAuthorityField =
+  (typeof BOUNDARY_RESERVED_AUTHORITY_FIELDS)[number];
+
 export type BoundaryStatus =
   | 'REJECTED'
   | 'ACCEPTED'

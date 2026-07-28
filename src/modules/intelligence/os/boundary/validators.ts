@@ -1,8 +1,274 @@
-import type { GovernedExecutionRequest } from './types';
+import {
+  AUTHORITATIVE_BOUNDARY_EXECUTION_MODES_V1,
+  AUTHORITATIVE_EXECUTION_CONTEXT_VERSION,
+  BOUNDARY_ACTOR_TYPES_V1,
+  BOUNDARY_INVOCATION_CONTEXT_VERSION,
+  type AuthoritativeExecutionContextV1,
+  type AuthoritativeBoundaryExecutionModeV1,
+  type BoundaryActorReferenceV1,
+  type BoundaryActorTypeV1,
+  type BoundaryInvocationContextV1,
+} from './types';
 import type { InternalPayloadValue } from './ports';
-import { GovernedBoundaryError } from './errors';
+import {
+  BoundaryContextContractError,
+  GovernedBoundaryError,
+  type BoundaryContextContractIssue,
+  type BoundaryPublicErrorCode,
+} from './errors';
+import type { GovernedExecutionRequest } from './types';
 
 export const MAX_BOUNDARY_PAYLOAD_DEPTH = 20;
+export const MAX_BOUNDARY_AUTHORITY_IDENTIFIER_LENGTH = 180;
+export const MAX_BOUNDARY_POLICY_VERSION_LENGTH = 64;
+
+const SAFE_AUTHORITY_IDENTIFIER_PATTERN =
+  /^[A-Za-z0-9][A-Za-z0-9._:/|-]{0,179}$/;
+const SAFE_POLICY_VERSION_PATTERN =
+  /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+const ACTOR_REFERENCE_KEYS = ['actorType', 'actorId'] as const;
+const INVOCATION_CONTEXT_KEYS = [
+  'schemaVersion',
+  'tenantId',
+  'actor',
+  'consumerId',
+  'source',
+  'requestId',
+  'correlationId',
+] as const;
+const AUTHORITATIVE_CONTEXT_KEYS = [
+  ...INVOCATION_CONTEXT_KEYS,
+  'executionMode',
+  'initiatedAt',
+  'authorizationPolicyVersion',
+] as const;
+
+type ClosedRecord = Readonly<Record<string, unknown>>;
+
+function deepFreezeBoundaryContract<T>(
+  value: T,
+  seen: WeakSet<object> = new WeakSet()
+): T {
+  if (typeof value !== 'object' || value === null || seen.has(value)) {
+    return value;
+  }
+  seen.add(value);
+  for (const nestedValue of Object.values(value)) {
+    deepFreezeBoundaryContract(nestedValue, seen);
+  }
+  return Object.freeze(value);
+}
+
+function getClosedPlainRecord(
+  value: unknown,
+  allowedKeys: readonly string[]
+): ClosedRecord | undefined {
+  try {
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      Array.isArray(value)
+    ) {
+      return undefined;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      return undefined;
+    }
+    const ownKeys = Reflect.ownKeys(value);
+    if (
+      ownKeys.length !== allowedKeys.length ||
+      ownKeys.some(
+        (key) =>
+          typeof key !== 'string' || !allowedKeys.includes(key)
+      )
+    ) {
+      return undefined;
+    }
+    for (const key of allowedKeys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (
+        !descriptor ||
+        !descriptor.enumerable ||
+        !Object.prototype.hasOwnProperty.call(descriptor, 'value')
+      ) {
+        return undefined;
+      }
+    }
+    return value as ClosedRecord;
+  } catch {
+    return undefined;
+  }
+}
+
+function isSafeAuthorityIdentifier(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= MAX_BOUNDARY_AUTHORITY_IDENTIFIER_LENGTH &&
+    SAFE_AUTHORITY_IDENTIFIER_PATTERN.test(value)
+  );
+}
+
+function isSafePolicyVersion(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= MAX_BOUNDARY_POLICY_VERSION_LENGTH &&
+    SAFE_POLICY_VERSION_PATTERN.test(value)
+  );
+}
+
+function isBoundaryActorTypeV1(
+  value: unknown
+): value is BoundaryActorTypeV1 {
+  return (
+    typeof value === 'string' &&
+    BOUNDARY_ACTOR_TYPES_V1.some((candidate) => candidate === value)
+  );
+}
+
+function isAuthoritativeBoundaryExecutionModeV1(
+  value: unknown
+): value is AuthoritativeBoundaryExecutionModeV1 {
+  return (
+    typeof value === 'string' &&
+    AUTHORITATIVE_BOUNDARY_EXECUTION_MODES_V1.some(
+      (mode) => mode === value
+    )
+  );
+}
+
+function isCanonicalIsoTimestamp(value: unknown): value is string {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const milliseconds = Date.parse(value);
+  return (
+    Number.isFinite(milliseconds) &&
+    new Date(milliseconds).toISOString() === value
+  );
+}
+
+function contextContractError(
+  issue: BoundaryContextContractIssue,
+  publicCode?: BoundaryPublicErrorCode
+): never {
+  throw new BoundaryContextContractError(issue, publicCode);
+}
+
+function cloneActorReference(
+  value: unknown,
+  issue: BoundaryContextContractIssue
+): BoundaryActorReferenceV1 {
+  const record = getClosedPlainRecord(value, ACTOR_REFERENCE_KEYS);
+  if (
+    !record ||
+    !isBoundaryActorTypeV1(record.actorType) ||
+    !isSafeAuthorityIdentifier(record.actorId)
+  ) {
+    contextContractError(issue, 'INVALID_ACTOR_CONTEXT');
+  }
+  return deepFreezeBoundaryContract({
+    actorType: record.actorType,
+    actorId: record.actorId,
+  });
+}
+
+function validateAuthorityBase(
+  record: ClosedRecord,
+  expectedVersion: '1',
+  issue: BoundaryContextContractIssue
+): {
+  readonly tenantId: string;
+  readonly actor: BoundaryActorReferenceV1;
+  readonly consumerId: string;
+  readonly source: string;
+  readonly requestId: string;
+  readonly correlationId: string;
+} {
+  if (
+    record.schemaVersion !== expectedVersion ||
+    !isSafeAuthorityIdentifier(record.tenantId) ||
+    !isSafeAuthorityIdentifier(record.consumerId) ||
+    !isSafeAuthorityIdentifier(record.source) ||
+    !isSafeAuthorityIdentifier(record.requestId) ||
+    !isSafeAuthorityIdentifier(record.correlationId)
+  ) {
+    contextContractError(issue);
+  }
+  return {
+    tenantId: record.tenantId,
+    actor: cloneActorReference(record.actor, issue),
+    consumerId: record.consumerId,
+    source: record.source,
+    requestId: record.requestId,
+    correlationId: record.correlationId,
+  };
+}
+
+export function validateBoundaryActorReferenceV1(
+  value: unknown
+): BoundaryActorReferenceV1 {
+  return cloneActorReference(
+    value,
+    'BOUNDARY_INVOCATION_CONTEXT_INVALID'
+  );
+}
+
+export function validateBoundaryInvocationContextV1(
+  value: unknown
+): BoundaryInvocationContextV1 {
+  const record = getClosedPlainRecord(value, INVOCATION_CONTEXT_KEYS);
+  if (!record) {
+    contextContractError('BOUNDARY_INVOCATION_CONTEXT_INVALID');
+  }
+  const base = validateAuthorityBase(
+    record,
+    BOUNDARY_INVOCATION_CONTEXT_VERSION,
+    'BOUNDARY_INVOCATION_CONTEXT_INVALID'
+  );
+  return deepFreezeBoundaryContract({
+    schemaVersion: BOUNDARY_INVOCATION_CONTEXT_VERSION,
+    ...base,
+  });
+}
+
+export function validateAuthoritativeExecutionContextV1(
+  value: unknown
+): AuthoritativeExecutionContextV1 {
+  const record = getClosedPlainRecord(
+    value,
+    AUTHORITATIVE_CONTEXT_KEYS
+  );
+  if (!record) {
+    contextContractError(
+      'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
+    );
+  }
+  const base = validateAuthorityBase(
+    record,
+    AUTHORITATIVE_EXECUTION_CONTEXT_VERSION,
+    'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
+  );
+  if (
+    !isAuthoritativeBoundaryExecutionModeV1(
+      record.executionMode
+    ) ||
+    !isCanonicalIsoTimestamp(record.initiatedAt) ||
+    !isSafePolicyVersion(record.authorizationPolicyVersion)
+  ) {
+    contextContractError(
+      'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
+    );
+  }
+  return deepFreezeBoundaryContract({
+    schemaVersion: AUTHORITATIVE_EXECUTION_CONTEXT_VERSION,
+    ...base,
+    executionMode: record.executionMode,
+    initiatedAt: record.initiatedAt,
+    authorizationPolicyVersion: record.authorizationPolicyVersion,
+  });
+}
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
