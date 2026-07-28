@@ -7,6 +7,7 @@ import type {
   PipelineStageId,
   PipelineStageResult,
   PipelineResult,
+  PipelineExecutionScenario,
   SerializableAuraOSError,
   StageStatus
 } from './types';
@@ -15,10 +16,15 @@ import type { AuraIntelligenceOSDependencies } from './dependencyComposition';
 import { PipelineContextBuilder } from './PipelineContextBuilder';
 import { PipelineExecutionContext } from './PipelineExecutionContext';
 import { executeWithGuards, type GuardContext } from './executionGuards';
+import {
+  assertExecutionScenarioCompatibility,
+  clonePipelineExecutionScenario
+} from './scenarioContract';
 
 export interface OrchestrationInput {
   sessionId: PipelineSessionId;
   executionKey?: PipelineExecutionKey;
+  executionScenario?: PipelineExecutionScenario;
   targetScenario?: string;
   objectiveIds?: readonly string[];
   metadata?: PipelineExecutionMetadata;
@@ -36,6 +42,13 @@ export class AuraIntelligenceOrchestrator {
   private cloneState(state: PipelineAggregatedState): PipelineAggregatedState {
     return {
       ...state,
+      ...(state.executionScenario
+        ? {
+            executionScenario: clonePipelineExecutionScenario(
+              state.executionScenario
+            )
+          }
+        : {}),
       objectiveIds: state.objectiveIds ? [...state.objectiveIds] : undefined,
       metadata: state.metadata ? { ...state.metadata } : undefined,
       evidence: state.evidence ? [...state.evidence] : undefined,
@@ -74,12 +87,28 @@ export class AuraIntelligenceOrchestrator {
     let currentState: PipelineAggregatedState = initialState ? this.cloneState(initialState) : {
       sessionId: input.sessionId,
       executionKey: input.executionKey,
+      ...(input.executionScenario
+        ? {
+            executionScenario: clonePipelineExecutionScenario(
+              input.executionScenario
+            )
+          }
+        : {}),
       targetScenario: input.targetScenario,
       objectiveIds: input.objectiveIds ? [...input.objectiveIds] : undefined,
       metadata: input.metadata ? { ...input.metadata } : undefined
     };
 
     try {
+      assertExecutionScenarioCompatibility(
+        input.executionScenario,
+        input.targetScenario
+      );
+      assertExecutionScenarioCompatibility(
+        currentState.executionScenario,
+        currentState.targetScenario
+      );
+
       let pipelineAborted = false;
 
       // 1. EVIDENCE_EXTRACTION + MENTAL_MODEL + KNOWLEDGE_GRAPH

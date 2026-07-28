@@ -16,7 +16,12 @@ import type {
   TransformationConstraint, 
   TransformationDependency 
 } from '../enterprise-model/assessment/domain/types';
-import type { PipelineSessionId, PipelineExecutionKey, PipelineExecutionMetadata } from './types';
+import type {
+  PipelineSessionId,
+  PipelineExecutionKey,
+  PipelineExecutionMetadata,
+  PipelineExecutionScenario
+} from './types';
 
 /**
  * Agregado completo del estado del Aura OS durante la ejecución de un pipeline.
@@ -27,6 +32,7 @@ export interface PipelineAggregatedState {
   // Metadatos de ejecución de nivel superior
   sessionId: PipelineSessionId;
   executionKey?: PipelineExecutionKey;
+  executionScenario?: PipelineExecutionScenario;
   targetScenario?: string;
   objectiveIds?: readonly string[];
   metadata?: PipelineExecutionMetadata;

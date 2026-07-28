@@ -10,7 +10,8 @@ import {
   createMinimalKnowledgeGraph,
   createMinimalCoverageReport,
   createMinimalReasoningReport,
-  createMinimalDossier
+  createMinimalDossier,
+  createMinimalExecutionScenario
 } from './fixtures';
 
 describe('PipelineContextBuilder', () => {
@@ -31,10 +32,28 @@ describe('PipelineContextBuilder', () => {
 
   describe('Coverage Context', () => {
     it('1. Construccin volida si el state tiene knowledgeGraph', () => {
-      const state: PipelineAggregatedState = { sessionId: 'session-1', knowledgeGraph: dummyGraph, targetScenario: 'M&A' };
+      const executionScenario = createMinimalExecutionScenario('M&A');
+      const state: PipelineAggregatedState = {
+        sessionId: 'session-1',
+        knowledgeGraph: dummyGraph,
+        executionScenario,
+        targetScenario: 'M&A'
+      };
       const ctx = PipelineContextBuilder.buildCoverageContext(state);
       expect(ctx.graph).toBe(dummyGraph);
       expect(ctx.targetScenario).toBe('M&A');
+      expect(ctx.executionScenario).toEqual(executionScenario);
+      expect(ctx.executionScenario).not.toBe(executionScenario);
+    });
+
+    it('28. El contexto legacy no incorpora executionScenario', () => {
+      const ctx = PipelineContextBuilder.buildCoverageContext({
+        sessionId: 'session-1',
+        knowledgeGraph: dummyGraph,
+        targetScenario: 'M&A'
+      });
+
+      expect('executionScenario' in ctx).toBe(false);
     });
 
     it('2 & 3. Error si targetScenario o knowledgeGraph eston ausentes', () => {
@@ -43,16 +62,41 @@ describe('PipelineContextBuilder', () => {
       expect(() => PipelineContextBuilder.buildCoverageContext({ sessionId: 'session-1', targetScenario: 'M&A' }))
         .toThrowError(AuraIntelligenceOSError);
     });
+
+    it('26. Rechaza representaciones de scenario contradictorias', () => {
+      expect(() => PipelineContextBuilder.buildCoverageContext({
+        sessionId: 'session-1',
+        knowledgeGraph: dummyGraph,
+        executionScenario: createMinimalExecutionScenario('PAYROLL_AUDIT'),
+        targetScenario: 'COMPLIANCE_AUDIT'
+      })).toThrowError(/must match targetScenario/);
+    });
+
+    it('27. executionScenario no sustituye targetScenario antes de integrar Coverage', () => {
+      expect(() => PipelineContextBuilder.buildCoverageContext({
+        sessionId: 'session-1',
+        knowledgeGraph: dummyGraph,
+        executionScenario: createMinimalExecutionScenario('PAYROLL_AUDIT')
+      })).toThrowError(/targetScenario is required/);
+    });
   });
 
   describe('Planning Context', () => {
     it('4. Construccin volida de opciones y contexto', () => {
-      const state: PipelineAggregatedState = { sessionId: 'session-1', knowledgeGraph: dummyGraph, targetScenario: 'M&A' };
+      const executionScenario = createMinimalExecutionScenario('M&A');
+      const state: PipelineAggregatedState = {
+        sessionId: 'session-1',
+        knowledgeGraph: dummyGraph,
+        executionScenario,
+        targetScenario: 'M&A'
+      };
       const ctx = PipelineContextBuilder.buildPlanningContext(state, dummyOSDependencies, createDummyOSContext());
       expect(ctx.options.graph).toBe(dummyGraph);
       expect(ctx.options.targetScenario).toBe('M&A');
       expect(ctx.options.policy).toBe(dummyOSDependencies.plannerPolicy);
       expect(ctx.options.realizationProvider).toBe(dummyOSDependencies.questionRealizationProvider);
+      expect(ctx.executionScenario).toEqual(executionScenario);
+      expect('executionScenario' in ctx.options).toBe(false);
     });
 
     it('5 & 6. Error si falta PlannerPolicy, QuestionRealizationProvider o knowledgeGraph', () => {

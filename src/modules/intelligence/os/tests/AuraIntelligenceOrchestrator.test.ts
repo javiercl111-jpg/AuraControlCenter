@@ -13,7 +13,8 @@ import {
   createMinimalPlanResult,
   createMinimalReasoningReport,
   createMinimalDossier,
-  createMinimalAssessment
+  createMinimalAssessment,
+  createMinimalExecutionScenario
 } from './fixtures';
 import type { PipelineClock, PipelineIdGenerator, PipelineAuditSink } from '../ports';
 import type { PlannerPolicy } from '../../enterprise-model/planning/domain/types';
@@ -21,6 +22,8 @@ import type { ReasoningPolicy } from '../../enterprise-model/reasoning/policies/
 import type { DossierPolicy, DiagnosticNarrativeProvider } from '../../enterprise-model/dossier/domain/types';
 import type { AssessmentPolicy } from '../../enterprise-model/assessment/domain/types';
 import type { IQuestionRealizationProvider } from '../../enterprise-model/planning/services/QuestionRealizationProvider';
+import { PipelineContextBuilder } from '../PipelineContextBuilder';
+import { ErrorCodes } from '../errors';
 
 describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
   let mockClock: PipelineClock;
@@ -92,12 +95,16 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('Pipeline completo exitoso y orden exacto', async () => {
     const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
+    const executionScenario = createMinimalExecutionScenario('Test');
+    const coverageContextSpy = vi.spyOn(PipelineContextBuilder, 'buildCoverageContext');
     const inputState: PipelineAggregatedState = {
       sessionId: 'sess-123',
+      executionScenario,
       targetScenario: 'Test',
       extractionResult: createMinimalExtractionResult(),
       mentalModel: createMinimalMentalModel(),
@@ -109,6 +116,68 @@ describe('AuraIntelligenceOrchestrator - Resilience & Cancellation', () => {
     const result = await resultPromise;
 
     expect(result.status).toBe('SUCCESS');
+    expect(coverageContextSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionScenario: expect.objectContaining({ scenarioId: 'Test' })
+      })
+    );
+    const propagatedState = coverageContextSpy.mock.calls[0][0];
+    expect(propagatedState.executionScenario).not.toBe(executionScenario);
+    expect(propagatedState.executionScenario?.includedDomains)
+      .not.toBe(executionScenario.includedDomains);
+    expect(mockCoverageDecisionEngine.evaluateDecisionReadiness).toHaveBeenCalledWith(
+      expect.anything(),
+      'Test'
+    );
+    coverageContextSpy.mockRestore();
+  });
+
+  it('Rechaza OrchestrationInput con representaciones de scenario contradictorias', async () => {
+    const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
+    const result = await orchestrator.executePipeline({
+      sessionId: 'sess-123',
+      executionScenario: createMinimalExecutionScenario('PAYROLL_AUDIT'),
+      targetScenario: 'COMPLIANCE_AUDIT'
+    });
+
+    expect(result.status).toBe('FAILED');
+    expect(result.errors).toEqual([
+      expect.objectContaining({
+        code: ErrorCodes.INVALID_CONTRACT,
+        metadata: {
+          executionScenarioId: 'PAYROLL_AUDIT',
+          targetScenario: 'COMPLIANCE_AUDIT'
+        }
+      })
+    ]);
+    expect(mockCoverageDecisionEngine.evaluateDecisionReadiness).not.toHaveBeenCalled();
+  });
+
+  it('Propaga executionScenario desde OrchestrationInput al estado inicial', async () => {
+    dependencies.extractionApplier = undefined;
+    const orchestrator = new AuraIntelligenceOrchestrator(osContext, dependencies);
+    const executionScenario = createMinimalExecutionScenario('PAYROLL_AUDIT');
+    const coverageContextSpy = vi.spyOn(PipelineContextBuilder, 'buildCoverageContext');
+
+    const resultPromise = orchestrator.executePipeline({
+      sessionId: 'sess-123',
+      executionScenario,
+      targetScenario: executionScenario.scenarioId
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    await resultPromise;
+
+    expect(coverageContextSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionScenario: expect.objectContaining({
+          scenarioId: 'PAYROLL_AUDIT'
+        }),
+        targetScenario: 'PAYROLL_AUDIT'
+      })
+    );
+    const propagatedState = coverageContextSpy.mock.calls[0][0];
+    expect(propagatedState.executionScenario).not.toBe(executionScenario);
+    expect(mockCoverageDecisionEngine.evaluateDecisionReadiness).not.toHaveBeenCalled();
   });
 
   it('Timeout global antes de completar', async () => {

@@ -1,8 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, expectTypeOf } from 'vitest';
 import { PipelineExecutionContext } from '../PipelineExecutionContext';
 import { AuraIntelligenceOSError, ErrorCodes } from '../errors';
 import type { PipelineClock, PipelineCancellationSignal } from '../ports';
-import type { PipelineInput, PipelineResult, PipelineStageResult } from '../types';
+import type {
+  PipelineExecutionScenario,
+  PipelineInput,
+  PipelineResult,
+  PipelineStageResult
+} from '../types';
+import type { PipelineScenarioDescriptor } from '../bootstrap/types';
+import { createMinimalExecutionScenario } from './fixtures';
 
 describe('Aura Intelligence OS - AI-02A Contracts & Execution State', () => {
   const mockClock: PipelineClock = {
@@ -47,6 +54,8 @@ describe('Aura Intelligence OS - AI-02A Contracts & Execution State', () => {
   it('17. Contexto sin targetScenario no lo inventa', () => {
     const context = new PipelineExecutionContext('exec-1', mockClock, mockInput);
     expect(context.initialInput.targetScenario).toBeUndefined();
+    expect(context.initialInput.executionScenario).toBeUndefined();
+    expect('executionScenario' in context.initialInput).toBe(false);
   });
 
   it('18. Contexto sin objectiveIds no los inventa silenciosamente', () => {
@@ -75,6 +84,49 @@ describe('Aura Intelligence OS - AI-02A Contracts & Execution State', () => {
     expect(context.metadata?.stringKey).toBe('str');
     expect(context.metadata?.numKey).toBe(42);
     expect(context.metadata?.boolKey).toBe(true);
+  });
+
+  it('21. Conserva y congela profundamente executionScenario', () => {
+    const executionScenario = createMinimalExecutionScenario();
+    const context = new PipelineExecutionContext('exec-1', mockClock, {
+      sessionId: 's-1',
+      executionScenario,
+      targetScenario: executionScenario.scenarioId
+    });
+
+    expect(context.initialInput.executionScenario).toEqual(executionScenario);
+    expect(context.initialInput.executionScenario).not.toBe(executionScenario);
+    expect(Object.isFrozen(context.initialInput.executionScenario)).toBe(true);
+    expect(Object.isFrozen(context.initialInput.executionScenario?.includedDomains)).toBe(true);
+    expect(Object.isFrozen(context.initialInput.executionScenario?.stageDependencies)).toBe(true);
+    expect(
+      Object.isFrozen(
+        context.initialInput.executionScenario?.stageDependencies.KNOWLEDGE_COVERAGE
+      )
+    ).toBe(true);
+  });
+
+  it('22. Rechaza executionScenario y targetScenario contradictorios', () => {
+    const executionScenario = createMinimalExecutionScenario('PAYROLL_AUDIT');
+
+    expect(() => new PipelineExecutionContext('exec-1', mockClock, {
+      sessionId: 's-1',
+      executionScenario,
+      targetScenario: 'COMPLIANCE_AUDIT'
+    })).toThrowError(
+      expect.objectContaining({
+        code: ErrorCodes.INVALID_CONTRACT,
+        metadata: {
+          executionScenarioId: 'PAYROLL_AUDIT',
+          targetScenario: 'COMPLIANCE_AUDIT'
+        }
+      })
+    );
+  });
+
+  it('23. PipelineScenarioDescriptor es compatible con el contrato core', () => {
+    expectTypeOf<PipelineScenarioDescriptor>()
+      .toMatchTypeOf<PipelineExecutionScenario>();
   });
 });
 
