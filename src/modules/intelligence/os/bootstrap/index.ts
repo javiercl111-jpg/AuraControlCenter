@@ -4,3 +4,4 @@ export * from './provenance';
 export * from './errors';
 export * from './validators';
 export * from './ports';
+export * from './PipelineBootstrapCheckpointMapper';
