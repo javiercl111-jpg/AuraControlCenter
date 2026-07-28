@@ -1361,8 +1361,11 @@ policies utilizables en este sprint.
 policy. Exige al menos un fact, versiones v1, consistencia tenant/correlation y
 límites finitos positivos.
 
-`PipelineBootstrapState` continúa siendo `ACCEPTED | REJECTED`. No contiene
-Mental Model, Knowledge Graph, coverage, reasoning, dossier ni assessment.
+Al cierre original de AI-02G.2A, `PipelineBootstrapState` era
+`ACCEPTED | REJECTED` y no contenía Mental Model, Knowledge Graph, coverage,
+reasoning, dossier ni assessment. La decisión ejecutable de AI-02G.2A.1
+documentada en la sección 27 reemplaza esa forma pre-publicación para el estado
+`ACCEPTED`; la exclusión de outputs futuros permanece vigente.
 
 `PipelineBootstrapPort.bootstrap(input, signal?)` retorna únicamente
 `Promise<PipelineBootstrapState>`. No persiste, no ejecuta el Orchestrator y no
@@ -1395,3 +1398,187 @@ inference rules o versioning.
 
 AI-02H1 permanece bloqueado. Esta resolución solo autoriza contratos,
 invariantes, validadores, documentación, exports y pruebas de AI-02G.2A.
+
+## 27. AI-02G.2A.1 Executable Bootstrap State Decision
+
+### 27.1 Gap detectado durante AI-02G.2B
+
+La compuerta de implementación de AI-02G.2B confirmó que existen las factories
+productivas `createEmptyEnterpriseMentalModel()` y
+`createEmptyEnterpriseKnowledgeGraph()`. El bloqueo era contractual:
+
+- `BootstrapAcceptedState` solo transportaba facts normalizados y un resumen de
+  provenance;
+- no transportaba los objetos de dominio iniciales que debe producir el
+  bootstrapper;
+- `targetScenario` en el OS es un string y no puede conservar objective, stages,
+  dependencies y domains del registry;
+- una implementación compatible no podía devolver un estado ejecutable sin
+  ampliar primero los contratos.
+
+AI-02G.2A.1 resuelve únicamente ese gap. No implementa factories, mapping,
+bootstrapper, adapter ni ejecución.
+
+### 27.2 PipelineInitialDomainState
+
+`PipelineInitialDomainState` es un contrato distinto de
+`PipelineAggregatedState`. Todos sus campos son obligatorios:
+
+- `mentalModel: EnterpriseMentalModel`;
+- `knowledgeGraph: EnterpriseKnowledgeGraph`;
+- `evidence: readonly PipelineInitialEvidence[]`;
+- `scenario: PipelineScenarioDescriptor`;
+- `bootstrapId`;
+- `tenantId`;
+- `correlationId`;
+- `createdAt`;
+- `schemaVersion = '1'`.
+
+El estado no admite combinaciones parciales. Sus validadores exigen la
+estructura canónica del Mental Model, integridad del Knowledge Graph, evidence
+no vacía, contexto consistente y versión v1.
+
+No contiene `extractionResult`, `coverageReport`, `readinessAssessment`,
+`planningResult`, `reasoningReport`, `dossier` ni `assessment`.
+
+### 27.3 PipelineScenarioDescriptor
+
+El descriptor conserva nominalmente:
+
+- `scenarioId`;
+- `scenarioVersion`;
+- `objectiveKey`;
+- `requestedStages`;
+- `allowedStages`;
+- `requiredStages`;
+- `stageDependencies`;
+- `includedDomains`;
+- `excludedDomains`;
+- `source`;
+- `explicitSelection = true`.
+
+El validator compara el descriptor completo contra
+`PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY`. No se permite convertirlo dentro de
+bootstrap a un string narrativo, aplicar heurísticas o redefinir el registry.
+
+### 27.4 Evidence contract y fuente de verdad
+
+`EnterpriseEvidence` no conserva por sí solo toda la semántica bootstrap:
+taxonomy category, valor normalizado, provenance nominal, reliability,
+directness, polarity y schema version. Por ello se define un envelope nominal:
+
+```ts
+interface PipelineInitialEvidence {
+  readonly sourceFact: PipelineBootstrapFact;
+  readonly appliedEvidence: EnterpriseEvidence;
+}
+```
+
+`sourceFact` es la fuente de verdad para taxonomy y provenance.
+`appliedEvidence` es la representación canónica aplicada al Mental Model y
+destinada al futuro `PipelineAggregatedState.evidence`.
+
+El accepted state ya no conserva `normalizedFacts`, evitando una tercera copia.
+Los validadores exigen:
+
+- source type, capture timestamp, category y polarity coherentes;
+- metadata vacía y `originalText = null`, para impedir side channels;
+- evidence IDs únicos;
+- correspondencia exacta entre los envelopes y
+  `mentalModel.evidences`;
+- tenant y correlation conservados en `sourceFact.provenance`.
+
+La polarity `UNCERTAIN` permanece válida en input solo con opt-in, pero no puede
+formar un estado inicial aplicado porque `EnterpriseEvidence` únicamente admite
+`POSITIVE | NEGATIVE`. El bootstrapper futuro deberá rechazar ese mapping hasta
+que exista una representación canónica no confirmatoria.
+
+### 27.5 Accepted y rejected states
+
+`BootstrapAcceptedState` exige ahora:
+
+- status `ACCEPTED`;
+- contexto de bootstrap;
+- `initialDomainState` completo;
+- provenance summary derivado de evidence;
+- bootstrap version v1;
+- timestamp consistente con el estado inicial.
+
+No existe `ACCEPTED` válido sin Mental Model, Knowledge Graph, evidence o
+scenario descriptor.
+
+`BootstrapRejectedState` permanece limitado a IDs de control, errores públicos,
+versión y timestamp. Su validator usa una lista cerrada de campos y rechaza
+`initialDomainState`, objetos de dominio, payload, stack, cause y cualquier
+resultado parcial.
+
+`PipelineBootstrapPort` continúa devolviendo
+`Promise<PipelineBootstrapState>` y conserva su `AbortSignal` opcional. No
+retorna `PipelineAggregatedState` ni ejecuta el Orchestrator.
+
+### 27.6 Compatibilidad conceptual con PipelineAggregatedState
+
+El tipo actual `PipelineAggregatedState` puede representar el handoff inicial
+sin ser modificado. La futura función pura
+`toInitialPipelineAggregatedState(initialDomainState)` podrá copiar:
+
+| PipelineAggregatedState | Origen legítimo |
+|---|---|
+| `sessionId` | `initialDomainState.correlationId` |
+| `targetScenario` | `initialDomainState.scenario.scenarioId` |
+| `mentalModel` | `initialDomainState.mentalModel` |
+| `knowledgeGraph` | `initialDomainState.knowledgeGraph` |
+| `evidence` | `initialDomainState.evidence[].appliedEvidence` |
+
+`objectiveIds` permanece undefined: `objectiveKey` es una intención nominal del
+scenario, no un ID de entidad `EnterpriseObjective`.
+
+También permanecen undefined:
+
+- `metadata`;
+- `extractionResult`;
+- `hypotheses`;
+- `coverageReport`;
+- `readinessAssessment`;
+- `planningResult`;
+- `questionHistory`;
+- `reasoningReport`;
+- `dossier`;
+- `assessment`;
+- constraints, dependencies y executive objectives.
+
+La conversión conceptual pierde deliberadamente los detalles ampliados del
+descriptor dentro del agregado; el descriptor sigue siendo autoridad en
+`PipelineInitialDomainState`. El adapter futuro solo proyectará `scenarioId`
+porque ese es el contrato que consume actualmente Coverage. No se autoriza
+reconstruir el descriptor desde ese string.
+
+### 27.7 Breaking change pre-publicación
+
+El cambio es breaking respecto de la forma interna de AI-02G.2A:
+
+- `initialDomainState` pasa a ser obligatorio para `ACCEPTED`;
+- desaparece `targetScenario` del envelope accepted;
+- desaparece `normalizedFacts` del envelope accepted;
+- evidence aplicada y scenario nominal pasan a formar parte del estado
+  completo.
+
+Los contratos todavía no tienen consumidor productivo, persistencia ni formato
+publicado. Por ello la corrección se realiza antes de AI-02G.2B y no requiere
+migrador ni coexistencia. La versión continúa siendo exclusivamente `1`.
+
+### 27.8 Criterio para reanudar AI-02G.2B
+
+AI-02G.2B puede reanudarse cuando esta decisión sea aprobada y fusionada, con
+todas las pruebas contractuales en verde. Su implementación deberá:
+
+1. usar las factories productivas;
+2. producir todos los campos obligatorios de `PipelineInitialDomainState`;
+3. implementar explícitamente el mapping fact → applied evidence;
+4. conservar el descriptor nominal;
+5. construir únicamente un accepted state completo o un rejected state limpio;
+6. implementar y probar por separado la conversión conceptual descrita arriba;
+7. mantener sin cambios Orchestrator, Boundary y Discovery.
+
+AI-02H1 continúa bloqueado. Estos contratos aún no han sido consumidos
+productivamente y no habilitan ejecución, persistencia, consumer ni deploy.

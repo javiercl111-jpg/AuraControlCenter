@@ -1,9 +1,14 @@
 import {
+  PIPELINE_BOOTSTRAP_ERROR_CODES,
   createPipelineBootstrapError,
   type PipelineBootstrapError,
   type PipelineBootstrapErrorCode,
   type PipelineBootstrapValidationResult,
 } from './errors';
+import type { EnterpriseEvidence } from '../../enterprise-model/domain/evidence';
+import type { EnterpriseMentalModel } from '../../enterprise-model/domain/types';
+import type { EnterpriseKnowledgeGraph } from '../../enterprise-model/graph/domain/types';
+import { validateGraphIntegrity } from '../../enterprise-model/graph/domain/invariants';
 import {
   getPipelineBootstrapTaxonomyEntry,
   isPipelineBootstrapTaxonomyCategory,
@@ -33,11 +38,19 @@ import {
   PIPELINE_BOOTSTRAP_SCENARIO_SOURCES,
   PIPELINE_BOOTSTRAP_SCENARIO_VERSION,
   PIPELINE_BOOTSTRAP_SCHEMA_VERSION,
+  PIPELINE_BOOTSTRAP_VERSION,
+  type BootstrapAcceptedState,
+  type BootstrapRejectedState,
   type PipelineBootstrapContext,
   type PipelineBootstrapFact,
   type PipelineBootstrapInput,
   type PipelineBootstrapPolicy,
+  type PipelineBootstrapProvenanceSummary,
+  type PipelineBootstrapState,
   type PipelineBootstrapTargetScenario,
+  type PipelineInitialDomainState,
+  type PipelineInitialEvidence,
+  type PipelineScenarioDescriptor,
 } from './types';
 
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/|-]{0,179}$/;
@@ -118,6 +131,120 @@ const INPUT_KEYS = [
   'schemaVersion',
 ] as const;
 
+const SCENARIO_DESCRIPTOR_KEYS = [
+  'scenarioId',
+  'scenarioVersion',
+  'objectiveKey',
+  'requestedStages',
+  'allowedStages',
+  'requiredStages',
+  'stageDependencies',
+  'includedDomains',
+  'excludedDomains',
+  'source',
+  'explicitSelection',
+] as const;
+
+const INITIAL_EVIDENCE_KEYS = ['sourceFact', 'appliedEvidence'] as const;
+
+const INITIAL_DOMAIN_STATE_KEYS = [
+  'mentalModel',
+  'knowledgeGraph',
+  'evidence',
+  'scenario',
+  'bootstrapId',
+  'tenantId',
+  'correlationId',
+  'createdAt',
+  'schemaVersion',
+] as const;
+
+const ACCEPTED_STATE_KEYS = [
+  'status',
+  'bootstrapId',
+  'tenantId',
+  'correlationId',
+  'initialDomainState',
+  'provenanceSummary',
+  'bootstrapVersion',
+  'createdAt',
+] as const;
+
+const REJECTED_STATE_KEYS = [
+  'status',
+  'bootstrapId',
+  'tenantId',
+  'correlationId',
+  'errors',
+  'bootstrapVersion',
+  'createdAt',
+] as const;
+
+const PROVENANCE_SUMMARY_KEYS = [
+  'factCount',
+  'sourceTypes',
+  'earliestObservedAt',
+  'latestObservedAt',
+] as const;
+
+const PUBLIC_ERROR_KEYS = ['code', 'message', 'retryable'] as const;
+
+const MENTAL_MODEL_KEYS = [
+  'identity',
+  'strategicContext',
+  'evidences',
+  'domains',
+  'processes',
+  'painPoints',
+  'risks',
+  'capabilities',
+  'objectives',
+  'constraints',
+  'hypotheses',
+  'knowledgeGaps',
+  'productApplicability',
+] as const;
+
+const IDENTITY_KEYS = [
+  'organizationName',
+  'industry',
+  'subindustry',
+  'size',
+  'employeeRange',
+  'locations',
+  'operatingRegions',
+  'businessModel',
+] as const;
+
+const STRATEGIC_CONTEXT_KEYS = [
+  'transformationObjectives',
+  'growthObjectives',
+  'executivePriorities',
+  'constraints',
+  'urgency',
+  'timeHorizon',
+] as const;
+
+const ENTERPRISE_EVIDENCE_KEYS = [
+  'evidenceId',
+  'sessionId',
+  'turnId',
+  'source',
+  'sourceType',
+  'originalText',
+  'normalizedStatement',
+  'category',
+  'entityRefs',
+  'capturedAt',
+  'reliability',
+  'directness',
+  'polarity',
+  'extractorVersion',
+  'metadata',
+] as const;
+
+const KNOWLEDGE_GRAPH_KEYS = ['nodes', 'relationships'] as const;
+
 type SafeRecord = Record<string, unknown>;
 type PipelineBootstrapFactValue = PipelineBootstrapFact['value'];
 
@@ -175,6 +302,188 @@ function getSafeRecord(
   }
 
   return value as SafeRecord;
+}
+
+function getPlainRecord(value: unknown): SafeRecord | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return undefined;
+  }
+
+  for (const ownKey of Reflect.ownKeys(value)) {
+    if (typeof ownKey !== 'string') {
+      return undefined;
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(value, ownKey);
+    if (
+      !descriptor ||
+      !descriptor.enumerable ||
+      !Object.prototype.hasOwnProperty.call(descriptor, 'value')
+    ) {
+      return undefined;
+    }
+  }
+
+  return value as SafeRecord;
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
+
+function isStringArray(value: unknown): value is readonly string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item) => typeof item === 'string')
+  );
+}
+
+function isFiniteUnitInterval(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+  );
+}
+
+function sameOrderedStrings(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+function isEnterpriseMentalModelShape(
+  value: unknown
+): value is EnterpriseMentalModel {
+  const record = getSafeRecord(value, MENTAL_MODEL_KEYS);
+  if (!record) {
+    return false;
+  }
+
+  const identity = getSafeRecord(record.identity, IDENTITY_KEYS);
+  const strategicContext = getSafeRecord(
+    record.strategicContext,
+    STRATEGIC_CONTEXT_KEYS
+  );
+  if (!identity || !strategicContext) {
+    return false;
+  }
+
+  const identityIsValid =
+    isNullableString(identity.organizationName) &&
+    isNullableString(identity.industry) &&
+    isNullableString(identity.subindustry) &&
+    isNullableString(identity.size) &&
+    isNullableString(identity.employeeRange) &&
+    (identity.locations === null || isStringArray(identity.locations)) &&
+    (identity.operatingRegions === null ||
+      isStringArray(identity.operatingRegions)) &&
+    isNullableString(identity.businessModel);
+
+  const strategicContextIsValid =
+    isStringArray(strategicContext.transformationObjectives) &&
+    isStringArray(strategicContext.growthObjectives) &&
+    isStringArray(strategicContext.executivePriorities) &&
+    isStringArray(strategicContext.constraints) &&
+    isNullableString(strategicContext.urgency) &&
+    isNullableString(strategicContext.timeHorizon);
+
+  const collectionKeys = MENTAL_MODEL_KEYS.filter(
+    (key) => key !== 'identity' && key !== 'strategicContext'
+  );
+  const collectionsAreValid = collectionKeys.every(
+    (key) => getPlainRecord(record[key]) !== undefined
+  );
+
+  return identityIsValid && strategicContextIsValid && collectionsAreValid;
+}
+
+function isEnterpriseKnowledgeGraphShape(
+  value: unknown
+): value is EnterpriseKnowledgeGraph {
+  const record = getSafeRecord(value, KNOWLEDGE_GRAPH_KEYS);
+  if (
+    !record ||
+    !getPlainRecord(record.nodes) ||
+    !getPlainRecord(record.relationships)
+  ) {
+    return false;
+  }
+
+  try {
+    validateGraphIntegrity(record as unknown as EnterpriseKnowledgeGraph);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isCanonicalEnterpriseEvidence(
+  value: unknown
+): value is EnterpriseEvidence {
+  const record = getSafeRecord(value, ENTERPRISE_EVIDENCE_KEYS);
+  const metadata = record ? getPlainRecord(record.metadata) : undefined;
+  if (!record || !metadata || Object.keys(metadata).length > 0) {
+    return false;
+  }
+
+  return (
+    isSafeIdentifier(record.evidenceId) &&
+    isSafeIdentifier(record.sessionId) &&
+    isSafeIdentifier(record.turnId) &&
+    typeof record.source === 'string' &&
+    record.source === record.source.trim() &&
+    record.source.length > 0 &&
+    isPipelineBootstrapSourceType(record.sourceType) &&
+    record.originalText === null &&
+    typeof record.normalizedStatement === 'string' &&
+    record.normalizedStatement === record.normalizedStatement.trim() &&
+    record.normalizedStatement.length > 0 &&
+    typeof record.category === 'string' &&
+    record.category.length > 0 &&
+    isStringArray(record.entityRefs) &&
+    !containsDuplicateStrings(record.entityRefs) &&
+    typeof record.capturedAt === 'number' &&
+    Number.isFinite(record.capturedAt) &&
+    isFiniteUnitInterval(record.reliability) &&
+    isFiniteUnitInterval(record.directness) &&
+    (record.polarity === 'POSITIVE' || record.polarity === 'NEGATIVE') &&
+    isSafeIdentifier(record.extractorVersion)
+  );
+}
+
+function sameCanonicalEvidence(
+  left: EnterpriseEvidence,
+  right: EnterpriseEvidence
+): boolean {
+  return (
+    left.evidenceId === right.evidenceId &&
+    left.sessionId === right.sessionId &&
+    left.turnId === right.turnId &&
+    left.source === right.source &&
+    left.sourceType === right.sourceType &&
+    left.originalText === right.originalText &&
+    left.normalizedStatement === right.normalizedStatement &&
+    left.category === right.category &&
+    sameOrderedStrings(left.entityRefs, right.entityRefs) &&
+    left.capturedAt === right.capturedAt &&
+    left.reliability === right.reliability &&
+    left.directness === right.directness &&
+    left.polarity === right.polarity &&
+    left.extractorVersion === right.extractorVersion &&
+    Object.keys(left.metadata).length === 0 &&
+    Object.keys(right.metadata).length === 0
+  );
 }
 
 function isSafeIdentifier(value: unknown): value is string {
@@ -833,6 +1142,93 @@ export function validatePipelineBootstrapTargetScenario(
   return valid(record as unknown as PipelineBootstrapTargetScenario);
 }
 
+export function validatePipelineScenarioDescriptor(
+  value: unknown,
+  policy: PipelineBootstrapPolicy
+): PipelineBootstrapValidationResult<PipelineScenarioDescriptor> {
+  const record = getSafeRecord(value, SCENARIO_DESCRIPTOR_KEYS);
+  if (!record) {
+    return invalid(
+      error('INVALID_SCENARIO_DESCRIPTOR', 'Pipeline scenario descriptor is invalid')
+    );
+  }
+
+  const targetResult = validatePipelineBootstrapTargetScenario(
+    {
+      scenarioId: record.scenarioId,
+      scenarioVersion: record.scenarioVersion,
+      objectiveKey: record.objectiveKey,
+      requestedStages: record.requestedStages,
+      source: record.source,
+      explicitSelection: record.explicitSelection,
+    },
+    policy
+  );
+  if (!targetResult.valid || !Array.isArray(record.requestedStages)) {
+    return invalid(
+      error('INVALID_SCENARIO_DESCRIPTOR', 'Pipeline scenario descriptor is invalid')
+    );
+  }
+
+  const registryEntry =
+    PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY[targetResult.value.scenarioId];
+  const allowedStages = isStringArray(record.allowedStages)
+    ? record.allowedStages
+    : undefined;
+  const requiredStages = isStringArray(record.requiredStages)
+    ? record.requiredStages
+    : undefined;
+  const requestedStages = isStringArray(record.requestedStages)
+    ? record.requestedStages
+    : undefined;
+  const includedDomains = isStringArray(record.includedDomains)
+    ? record.includedDomains
+    : undefined;
+  const excludedDomains = isStringArray(record.excludedDomains)
+    ? record.excludedDomains
+    : undefined;
+  const stageDependencies = getSafeRecord(
+    record.stageDependencies,
+    PIPELINE_BOOTSTRAP_REQUESTABLE_STAGES
+  );
+
+  const dependenciesMatch =
+    stageDependencies !== undefined &&
+    PIPELINE_BOOTSTRAP_REQUESTABLE_STAGES.every((stage) => {
+      const dependencies = stageDependencies[stage];
+      return (
+        isStringArray(dependencies) &&
+        sameOrderedStrings(
+          dependencies,
+          registryEntry.stageDependencies[stage]
+        )
+      );
+    });
+
+  if (
+    !allowedStages ||
+    !requiredStages ||
+    !requestedStages ||
+    !includedDomains ||
+    !excludedDomains ||
+    !sameOrderedStrings(allowedStages, registryEntry.allowedStages) ||
+    !sameOrderedStrings(requiredStages, registryEntry.requiredStages) ||
+    !sameOrderedStrings(requestedStages, targetResult.value.requestedStages ?? []) ||
+    !sameOrderedStrings(includedDomains, registryEntry.includedDomains) ||
+    !sameOrderedStrings(excludedDomains, registryEntry.excludedDomains) ||
+    !dependenciesMatch
+  ) {
+    return invalid(
+      error(
+        'INVALID_SCENARIO_DESCRIPTOR',
+        'Pipeline scenario descriptor diverges from the v1 registry'
+      )
+    );
+  }
+
+  return valid(record as unknown as PipelineScenarioDescriptor);
+}
+
 export function validatePipelineBootstrapContext(
   value: unknown
 ): PipelineBootstrapValidationResult<PipelineBootstrapContext> {
@@ -1275,6 +1671,401 @@ export function validatePipelineBootstrapInput(
   }
 
   return valid(record as unknown as PipelineBootstrapInput);
+}
+
+export function validatePipelineInitialEvidence(
+  value: unknown,
+  policy: PipelineBootstrapPolicy,
+  tenantId: string,
+  correlationId: string
+): PipelineBootstrapValidationResult<PipelineInitialEvidence> {
+  const record = getSafeRecord(value, INITIAL_EVIDENCE_KEYS);
+  if (!record) {
+    return invalid(
+      error('INVALID_INITIAL_DOMAIN_STATE', 'Initial evidence envelope is invalid')
+    );
+  }
+
+  const sourceFactResult = validatePipelineBootstrapFact(
+    record.sourceFact,
+    policy
+  );
+  if (!sourceFactResult.valid) {
+    return invalid(...sourceFactResult.errors);
+  }
+  if (!isCanonicalEnterpriseEvidence(record.appliedEvidence)) {
+    return invalid(
+      error(
+        'INVALID_INITIAL_DOMAIN_STATE',
+        'Applied enterprise evidence is invalid'
+      )
+    );
+  }
+
+  const sourceFact = sourceFactResult.value;
+  const appliedEvidence = record.appliedEvidence;
+  const expectedPolarity =
+    sourceFact.polarity === 'AFFIRMED'
+      ? 'POSITIVE'
+      : sourceFact.polarity === 'NEGATED'
+        ? 'NEGATIVE'
+        : undefined;
+
+  if (
+    sourceFact.provenance.tenantId !== tenantId ||
+    sourceFact.provenance.correlationId !== correlationId
+  ) {
+    return invalid(
+      error(
+        'INITIAL_DOMAIN_CONTEXT_MISMATCH',
+        'Initial evidence context does not match the domain state'
+      )
+    );
+  }
+  if (
+    expectedPolarity === undefined ||
+    appliedEvidence.polarity !== expectedPolarity ||
+    appliedEvidence.sourceType !== sourceFact.provenance.sourceType ||
+    appliedEvidence.capturedAt !== sourceFact.provenance.capturedAt ||
+    appliedEvidence.category !== sourceFact.category
+  ) {
+    return invalid(
+      error(
+        'INVALID_INITIAL_DOMAIN_STATE',
+        'Applied evidence diverges from its source fact'
+      )
+    );
+  }
+
+  return valid(record as unknown as PipelineInitialEvidence);
+}
+
+function validateProvenanceSummary(
+  value: unknown,
+  evidence: readonly PipelineInitialEvidence[]
+): PipelineBootstrapValidationResult<PipelineBootstrapProvenanceSummary> {
+  const record = getSafeRecord(value, PROVENANCE_SUMMARY_KEYS);
+  if (!record || !Array.isArray(record.sourceTypes)) {
+    return invalid(
+      error('INVALID_INITIAL_DOMAIN_STATE', 'Provenance summary is invalid')
+    );
+  }
+
+  const sourceTypes = record.sourceTypes.filter(isPipelineBootstrapSourceType);
+  const expectedSourceTypes = Array.from(
+    new Set(evidence.map((item) => item.sourceFact.provenance.sourceType))
+  );
+  const observedTimes = evidence.map((item) => item.sourceFact.observedAt);
+  const expectedEarliest = Math.min(...observedTimes);
+  const expectedLatest = Math.max(...observedTimes);
+
+  if (
+    sourceTypes.length !== record.sourceTypes.length ||
+    containsDuplicateStrings(sourceTypes) ||
+    record.factCount !== evidence.length ||
+    !sameOrderedStrings(sourceTypes, expectedSourceTypes) ||
+    record.earliestObservedAt !== expectedEarliest ||
+    record.latestObservedAt !== expectedLatest
+  ) {
+    return invalid(
+      error(
+        'INVALID_INITIAL_DOMAIN_STATE',
+        'Provenance summary diverges from initial evidence'
+      )
+    );
+  }
+
+  return valid(record as unknown as PipelineBootstrapProvenanceSummary);
+}
+
+export function validatePipelineInitialDomainState(
+  value: unknown,
+  policy: PipelineBootstrapPolicy
+): PipelineBootstrapValidationResult<PipelineInitialDomainState> {
+  const record = getSafeRecord(value, INITIAL_DOMAIN_STATE_KEYS);
+  if (!record) {
+    return invalid(
+      error('INVALID_INITIAL_DOMAIN_STATE', 'Initial domain state is invalid')
+    );
+  }
+
+  const errors: PipelineBootstrapError[] = [];
+  const bootstrapIdResult = validatePipelineBootstrapId(record.bootstrapId);
+  const tenantIdResult = validatePipelineBootstrapTenantId(record.tenantId);
+  const correlationIdResult = validatePipelineBootstrapCorrelationId(
+    record.correlationId
+  );
+  const createdAtResult = validatePipelineBootstrapTimestamp(record.createdAt);
+  const schemaResult = validatePipelineBootstrapSchemaVersion(
+    record.schemaVersion
+  );
+  const scenarioResult = validatePipelineScenarioDescriptor(
+    record.scenario,
+    policy
+  );
+
+  for (const result of [
+    bootstrapIdResult,
+    tenantIdResult,
+    correlationIdResult,
+    createdAtResult,
+    schemaResult,
+    scenarioResult,
+  ]) {
+    if (!result.valid) {
+      errors.push(...result.errors);
+    }
+  }
+
+  if (record.mentalModel === undefined) {
+    errors.push(
+      error(
+        'MISSING_INITIAL_MENTAL_MODEL',
+        'Initial domain state requires a mental model'
+      )
+    );
+  } else if (!isEnterpriseMentalModelShape(record.mentalModel)) {
+    errors.push(
+      error('INVALID_INITIAL_DOMAIN_STATE', 'Initial mental model is invalid')
+    );
+  }
+
+  if (record.knowledgeGraph === undefined) {
+    errors.push(
+      error(
+        'MISSING_INITIAL_KNOWLEDGE_GRAPH',
+        'Initial domain state requires a knowledge graph'
+      )
+    );
+  } else if (!isEnterpriseKnowledgeGraphShape(record.knowledgeGraph)) {
+    errors.push(
+      error('INVALID_INITIAL_DOMAIN_STATE', 'Initial knowledge graph is invalid')
+    );
+  }
+
+  const evidence: PipelineInitialEvidence[] = [];
+  if (!Array.isArray(record.evidence) || record.evidence.length === 0) {
+    errors.push(
+      error('EMPTY_INITIAL_EVIDENCE', 'Initial domain evidence is required')
+    );
+  } else if (tenantIdResult.valid && correlationIdResult.valid) {
+    for (const candidate of record.evidence) {
+      const evidenceResult = validatePipelineInitialEvidence(
+        candidate,
+        policy,
+        tenantIdResult.value,
+        correlationIdResult.value
+      );
+      if (!evidenceResult.valid) {
+        errors.push(...evidenceResult.errors);
+      } else {
+        evidence.push(evidenceResult.value);
+      }
+    }
+  }
+
+  if (evidence.length > 0) {
+    const factIds = evidence.map((item) => item.sourceFact.factId);
+    const evidenceIds = evidence.map(
+      (item) => item.appliedEvidence.evidenceId
+    );
+    if (
+      containsDuplicateStrings(factIds) ||
+      containsDuplicateStrings(evidenceIds)
+    ) {
+      errors.push(
+        error(
+          'INVALID_INITIAL_DOMAIN_STATE',
+          'Initial domain evidence identifiers must be unique'
+        )
+      );
+    }
+  }
+
+  if (
+    isEnterpriseMentalModelShape(record.mentalModel) &&
+    evidence.length > 0
+  ) {
+    const mentalModel = record.mentalModel;
+    const modelEvidenceIds = Object.keys(mentalModel.evidences);
+    const appliedEvidenceIds = evidence.map(
+      (item) => item.appliedEvidence.evidenceId
+    );
+    const modelEvidenceMatches =
+      modelEvidenceIds.length === appliedEvidenceIds.length &&
+      evidence.every((item) => {
+        const modelEvidence =
+          mentalModel.evidences[item.appliedEvidence.evidenceId];
+        return (
+          modelEvidence !== undefined &&
+          isCanonicalEnterpriseEvidence(modelEvidence) &&
+          sameCanonicalEvidence(modelEvidence, item.appliedEvidence)
+        );
+      });
+    if (!modelEvidenceMatches) {
+      errors.push(
+        error(
+          'INVALID_INITIAL_DOMAIN_STATE',
+          'Mental model evidence diverges from initial evidence'
+        )
+      );
+    }
+  }
+
+  if (errors.length > 0) {
+    return invalid(...errors);
+  }
+
+  return valid(record as unknown as PipelineInitialDomainState);
+}
+
+export function validateBootstrapAcceptedState(
+  value: unknown,
+  policy: PipelineBootstrapPolicy
+): PipelineBootstrapValidationResult<BootstrapAcceptedState> {
+  const record = getSafeRecord(value, ACCEPTED_STATE_KEYS);
+  if (!record || record.status !== 'ACCEPTED') {
+    return invalid(
+      error('INVALID_INITIAL_DOMAIN_STATE', 'Accepted bootstrap state is invalid')
+    );
+  }
+
+  const errors: PipelineBootstrapError[] = [];
+  const bootstrapIdResult = validatePipelineBootstrapId(record.bootstrapId);
+  const tenantIdResult = validatePipelineBootstrapTenantId(record.tenantId);
+  const correlationIdResult = validatePipelineBootstrapCorrelationId(
+    record.correlationId
+  );
+  const createdAtResult = validatePipelineBootstrapTimestamp(record.createdAt);
+  const initialDomainResult = validatePipelineInitialDomainState(
+    record.initialDomainState,
+    policy
+  );
+
+  for (const result of [
+    bootstrapIdResult,
+    tenantIdResult,
+    correlationIdResult,
+    createdAtResult,
+    initialDomainResult,
+  ]) {
+    if (!result.valid) {
+      errors.push(...result.errors);
+    }
+  }
+
+  if (record.bootstrapVersion !== PIPELINE_BOOTSTRAP_VERSION) {
+    errors.push(
+      error(
+        'UNSUPPORTED_SCHEMA_VERSION',
+        'Accepted bootstrap state version is unsupported'
+      )
+    );
+  }
+
+  if (
+    initialDomainResult.valid &&
+    bootstrapIdResult.valid &&
+    tenantIdResult.valid &&
+    correlationIdResult.valid &&
+    createdAtResult.valid
+  ) {
+    const initialDomainState = initialDomainResult.value;
+    if (
+      initialDomainState.bootstrapId !== bootstrapIdResult.value ||
+      initialDomainState.tenantId !== tenantIdResult.value ||
+      initialDomainState.correlationId !== correlationIdResult.value ||
+      initialDomainState.createdAt !== createdAtResult.value
+    ) {
+      errors.push(
+        error(
+          'INITIAL_DOMAIN_CONTEXT_MISMATCH',
+          'Accepted state context does not match its initial domain state'
+        )
+      );
+    }
+
+    const summaryResult = validateProvenanceSummary(
+      record.provenanceSummary,
+      initialDomainState.evidence
+    );
+    if (!summaryResult.valid) {
+      errors.push(...summaryResult.errors);
+    }
+  }
+
+  if (errors.length > 0) {
+    return invalid(...errors);
+  }
+
+  return valid(record as unknown as BootstrapAcceptedState);
+}
+
+export function validateBootstrapRejectedState(
+  value: unknown
+): PipelineBootstrapValidationResult<BootstrapRejectedState> {
+  const record = getSafeRecord(value, REJECTED_STATE_KEYS);
+  if (!record || record.status !== 'REJECTED') {
+    return invalid(
+      error('INVALID_BOOTSTRAP_INPUT', 'Rejected bootstrap state is invalid')
+    );
+  }
+
+  const bootstrapIdResult = validatePipelineBootstrapId(record.bootstrapId);
+  const createdAtResult = validatePipelineBootstrapTimestamp(record.createdAt);
+  const tenantIsValid =
+    record.tenantId === undefined || isSafeIdentifier(record.tenantId);
+  const correlationIsValid =
+    record.correlationId === undefined ||
+    isSafeIdentifier(record.correlationId);
+  const errorsAreValid =
+    Array.isArray(record.errors) &&
+    record.errors.length > 0 &&
+    record.errors.every((candidate) => {
+      const publicError = getSafeRecord(candidate, PUBLIC_ERROR_KEYS);
+      return (
+        publicError !== undefined &&
+        typeof publicError.code === 'string' &&
+        PIPELINE_BOOTSTRAP_ERROR_CODES.some(
+          (code) => code === publicError.code
+        ) &&
+        typeof publicError.message === 'string' &&
+        publicError.message === publicError.message.trim() &&
+        publicError.message.length > 0 &&
+        typeof publicError.retryable === 'boolean'
+      );
+    });
+
+  if (
+    !bootstrapIdResult.valid ||
+    !createdAtResult.valid ||
+    !tenantIsValid ||
+    !correlationIsValid ||
+    !errorsAreValid ||
+    record.bootstrapVersion !== PIPELINE_BOOTSTRAP_VERSION
+  ) {
+    return invalid(
+      error('INVALID_BOOTSTRAP_INPUT', 'Rejected bootstrap state is invalid')
+    );
+  }
+
+  return valid(record as unknown as BootstrapRejectedState);
+}
+
+export function validatePipelineBootstrapState(
+  value: unknown,
+  policy: PipelineBootstrapPolicy
+): PipelineBootstrapValidationResult<PipelineBootstrapState> {
+  const record = getPlainRecord(value);
+  if (record?.status === 'ACCEPTED') {
+    return validateBootstrapAcceptedState(value, policy);
+  }
+  if (record?.status === 'REJECTED') {
+    return validateBootstrapRejectedState(value);
+  }
+  return invalid(
+    error('INVALID_BOOTSTRAP_INPUT', 'Pipeline bootstrap state is invalid')
+  );
 }
 
 export function isPipelineBootstrapValueTypeCompatible(

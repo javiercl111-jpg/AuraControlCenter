@@ -4,17 +4,33 @@ import {
   type PipelineBootstrapError,
 } from '../errors';
 import type {
+  BootstrapAcceptedState,
+  BootstrapRejectedState,
   PipelineBootstrapFact,
   PipelineBootstrapInput,
   PipelineBootstrapPolicy,
+  PipelineInitialDomainState,
+  PipelineInitialEvidence,
+  PipelineScenarioDescriptor,
 } from '../types';
 import {
+  PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY,
+} from '../types';
+import { createEmptyEnterpriseMentalModel } from '../../../enterprise-model/services/modelUpdater';
+import { createEmptyEnterpriseKnowledgeGraph } from '../../../enterprise-model/graph/services/operations';
+import {
+  validateBootstrapAcceptedState,
+  validateBootstrapRejectedState,
   validatePipelineBootstrapContext,
   validatePipelineBootstrapFact,
   validatePipelineBootstrapFactValue,
   validatePipelineBootstrapFacts,
   validatePipelineBootstrapInput,
   validatePipelineBootstrapPolicy,
+  validatePipelineBootstrapState,
+  validatePipelineInitialDomainState,
+  validatePipelineInitialEvidence,
+  validatePipelineScenarioDescriptor,
   validatePipelineBootstrapTimestamp,
 } from '../validators';
 
@@ -112,6 +128,106 @@ function createInput(
     policy: createPolicy(),
     schemaVersion: '1',
     ...overrides,
+  };
+}
+
+function createScenarioDescriptor(): PipelineScenarioDescriptor {
+  const registry = PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY.PAYROLL_AUDIT;
+  return {
+    scenarioId: 'PAYROLL_AUDIT',
+    scenarioVersion: '1',
+    objectiveKey: 'ASSESS_PAYROLL_AUDIT_READINESS',
+    requestedStages: [...registry.requiredStages],
+    allowedStages: [...registry.allowedStages],
+    requiredStages: [...registry.requiredStages],
+    stageDependencies: registry.stageDependencies,
+    includedDomains: [...registry.includedDomains],
+    excludedDomains: [...registry.excludedDomains],
+    source: 'AUTHORIZED_SYSTEM_CONFIGURATION',
+    explicitSelection: true,
+  };
+}
+
+function createInitialEvidence(): PipelineInitialEvidence {
+  return {
+    sourceFact: createFact(),
+    appliedEvidence: {
+      evidenceId: 'evidence-industry-1',
+      sessionId: 'correlation-1',
+      turnId: 'bootstrap-1',
+      source: 'governed-bootstrap-contract',
+      sourceType: 'INTEGRATION',
+      originalText: null,
+      normalizedStatement: 'BUSINESS_INDUSTRY=HOSPITALITY',
+      category: 'BUSINESS_INDUSTRY',
+      entityRefs: [],
+      capturedAt: 200,
+      reliability: 0.8,
+      directness: 1,
+      polarity: 'POSITIVE',
+      extractorVersion: '1',
+      metadata: {},
+    },
+  };
+}
+
+function createInitialDomainState(
+  overrides: Partial<PipelineInitialDomainState> = {}
+): PipelineInitialDomainState {
+  const initialEvidence = createInitialEvidence();
+  const mentalModel = createEmptyEnterpriseMentalModel();
+  mentalModel.evidences[initialEvidence.appliedEvidence.evidenceId] =
+    initialEvidence.appliedEvidence;
+
+  return {
+    mentalModel,
+    knowledgeGraph: createEmptyEnterpriseKnowledgeGraph(),
+    evidence: [initialEvidence],
+    scenario: createScenarioDescriptor(),
+    bootstrapId: 'bootstrap-1',
+    tenantId: 'tenant-1',
+    correlationId: 'correlation-1',
+    createdAt: 300,
+    schemaVersion: '1',
+    ...overrides,
+  };
+}
+
+function createAcceptedState(
+  overrides: Partial<BootstrapAcceptedState> = {}
+): BootstrapAcceptedState {
+  return {
+    status: 'ACCEPTED',
+    bootstrapId: 'bootstrap-1',
+    tenantId: 'tenant-1',
+    correlationId: 'correlation-1',
+    initialDomainState: createInitialDomainState(),
+    provenanceSummary: {
+      factCount: 1,
+      sourceTypes: ['INTEGRATION'],
+      earliestObservedAt: 100,
+      latestObservedAt: 100,
+    },
+    bootstrapVersion: '1',
+    createdAt: 300,
+    ...overrides,
+  };
+}
+
+function createRejectedState(): BootstrapRejectedState {
+  return {
+    status: 'REJECTED',
+    bootstrapId: 'bootstrap-1',
+    tenantId: 'tenant-1',
+    correlationId: 'correlation-1',
+    errors: [
+      createPipelineBootstrapError(
+        'INVALID_INITIAL_DOMAIN_STATE',
+        'Initial domain state is invalid'
+      ),
+    ],
+    bootstrapVersion: '1',
+    createdAt: 300,
   };
 }
 
@@ -439,6 +555,16 @@ describe('Pipeline bootstrap source isolation', () => {
     expect(sourceText).not.toMatch(new RegExp(looseType));
     expect(sourceText).not.toMatch(new RegExp(looseCast));
   });
+
+  it('120. has no orchestrator execution dependency', () => {
+    const token = ['AuraIntelligence', 'Orchestrator'].join('');
+    expect(sourceText).not.toMatch(new RegExp(token));
+  });
+
+  it('121. has no bootstrapper implementation', () => {
+    const token = ['Pipeline', 'Bootstrapper'].join('');
+    expect(sourceText).not.toMatch(new RegExp(token));
+  });
 });
 
 describe('Pipeline bootstrap structural hardening', () => {
@@ -539,6 +665,265 @@ describe('Pipeline bootstrap structural hardening', () => {
       ...createPolicy(),
       allowedScenarioVersion: '2',
     });
+
+    expect(result.valid).toBe(false);
+  });
+});
+
+describe('Executable bootstrap state contracts', () => {
+  it('102. accepts a complete bootstrap state', () => {
+    const result = validateBootstrapAcceptedState(
+      createAcceptedState(),
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(true);
+  });
+
+  it('103. rejects an accepted state without a mental model', () => {
+    const initialState = createInitialDomainState();
+    const { mentalModel: _mentalModel, ...withoutMentalModel } = initialState;
+    const result = validateBootstrapAcceptedState(
+      createAcceptedState({
+        initialDomainState: withoutMentalModel as PipelineInitialDomainState,
+      }),
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.map((item) => item.code)).toContain(
+        'MISSING_INITIAL_MENTAL_MODEL'
+      );
+    }
+  });
+
+  it('104. rejects an accepted state without a knowledge graph', () => {
+    const initialState = createInitialDomainState();
+    const { knowledgeGraph: _knowledgeGraph, ...withoutGraph } = initialState;
+    const result = validateBootstrapAcceptedState(
+      createAcceptedState({
+        initialDomainState: withoutGraph as PipelineInitialDomainState,
+      }),
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.map((item) => item.code)).toContain(
+        'MISSING_INITIAL_KNOWLEDGE_GRAPH'
+      );
+    }
+  });
+
+  it('105. rejects an accepted state with empty evidence', () => {
+    const result = validateBootstrapAcceptedState(
+      createAcceptedState({
+        initialDomainState: createInitialDomainState({ evidence: [] }),
+      }),
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.map((item) => item.code)).toContain(
+        'EMPTY_INITIAL_EVIDENCE'
+      );
+    }
+  });
+
+  it('106. rejects an accepted state without a scenario descriptor', () => {
+    const initialState = createInitialDomainState();
+    const { scenario: _scenario, ...withoutScenario } = initialState;
+    const result = validateBootstrapAcceptedState(
+      createAcceptedState({
+        initialDomainState: withoutScenario as PipelineInitialDomainState,
+      }),
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.map((item) => item.code)).toContain(
+        'INVALID_SCENARIO_DESCRIPTOR'
+      );
+    }
+  });
+
+  it('107. accepts a rejected state without domain objects', () => {
+    const state = createRejectedState();
+    const result = validateBootstrapRejectedState(state);
+
+    expect(result.valid).toBe(true);
+    expect('initialDomainState' in state).toBe(false);
+    expect('mentalModel' in state).toBe(false);
+    expect('knowledgeGraph' in state).toBe(false);
+    expect('evidence' in state).toBe(false);
+  });
+
+  it('108. rejects tenant divergence inside initial evidence', () => {
+    const result = validatePipelineInitialDomainState(
+      createInitialDomainState({ tenantId: 'tenant-2' }),
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.map((item) => item.code)).toContain(
+        'INITIAL_DOMAIN_CONTEXT_MISMATCH'
+      );
+    }
+  });
+
+  it('109. rejects correlation divergence inside initial evidence', () => {
+    const result = validatePipelineInitialDomainState(
+      createInitialDomainState({ correlationId: 'correlation-2' }),
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.map((item) => item.code)).toContain(
+        'INITIAL_DOMAIN_CONTEXT_MISMATCH'
+      );
+    }
+  });
+
+  it('110. preserves source fact provenance in initial evidence', () => {
+    const evidence = createInitialEvidence();
+    const result = validatePipelineInitialEvidence(
+      evidence,
+      createPolicy(),
+      'tenant-1',
+      'correlation-1'
+    );
+
+    expect(result.valid).toBe(true);
+    if (result.valid) {
+      expect(result.value.sourceFact.provenance).toEqual(
+        createFact().provenance
+      );
+    }
+  });
+
+  it('111. rejects an initial state with a non-v1 schema', () => {
+    const result = validatePipelineInitialDomainState(
+      {
+        ...createInitialDomainState(),
+        schemaVersion: '2',
+      },
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('112. rejects a scenario descriptor with an objective mismatch', () => {
+    const result = validatePipelineScenarioDescriptor(
+      {
+        ...createScenarioDescriptor(),
+        objectiveKey: 'ASSESS_COMPLIANCE_AUDIT_READINESS',
+      },
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('113. rejects scenario dependencies that diverge from registry', () => {
+    const descriptor = createScenarioDescriptor();
+    const result = validatePipelineScenarioDescriptor(
+      {
+        ...descriptor,
+        stageDependencies: {
+          ...descriptor.stageDependencies,
+          KNOWLEDGE_COVERAGE: [],
+        },
+      },
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('114. rejects evidence metadata as a side channel', () => {
+    const evidence = createInitialEvidence();
+    const result = validatePipelineInitialEvidence(
+      {
+        ...evidence,
+        appliedEvidence: {
+          ...evidence.appliedEvidence,
+          metadata: { hidden: 'payload' },
+        },
+      },
+      createPolicy(),
+      'tenant-1',
+      'correlation-1'
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('115. rejects mental-model evidence divergence', () => {
+    const result = validatePipelineInitialDomainState(
+      createInitialDomainState({
+        mentalModel: createEmptyEnterpriseMentalModel(),
+      }),
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('116. rejects partial domain objects added to rejected state', () => {
+    const result = validateBootstrapRejectedState({
+      ...createRejectedState(),
+      initialDomainState: createInitialDomainState(),
+    });
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('117. rejects future outputs added to accepted state', () => {
+    const result = validatePipelineBootstrapState(
+      {
+        ...createAcceptedState(),
+        coverageReport: {},
+      },
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('118. rejects an accepted state without initial domain state', () => {
+    const state = createAcceptedState();
+    const {
+      initialDomainState: _initialDomainState,
+      ...withoutInitialDomainState
+    } = state;
+    const result = validatePipelineBootstrapState(
+      withoutInitialDomainState,
+      createPolicy()
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('119. rejects raw text in canonical applied evidence', () => {
+    const evidence = createInitialEvidence();
+    const result = validatePipelineInitialEvidence(
+      {
+        ...evidence,
+        appliedEvidence: {
+          ...evidence.appliedEvidence,
+          originalText: 'raw message',
+        },
+      },
+      createPolicy(),
+      'tenant-1',
+      'correlation-1'
+    );
 
     expect(result.valid).toBe(false);
   });

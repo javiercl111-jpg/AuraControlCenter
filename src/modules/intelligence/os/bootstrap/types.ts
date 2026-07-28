@@ -1,5 +1,8 @@
 import type { PipelineStageId } from '../types';
 import type { CoverageDomain } from '../../enterprise-model/coverage/domain/types';
+import type { EnterpriseEvidence } from '../../enterprise-model/domain/evidence';
+import type { EnterpriseMentalModel } from '../../enterprise-model/domain/types';
+import type { EnterpriseKnowledgeGraph } from '../../enterprise-model/graph/domain/types';
 import type { PipelineBootstrapError } from './errors';
 import type {
   PipelineBootstrapTaxonomyCategory,
@@ -222,6 +225,29 @@ export type PipelineBootstrapTargetScenario = {
     };
 }[PipelineBootstrapScenarioId];
 
+interface PipelineScenarioDescriptorBase {
+  readonly scenarioVersion: typeof PIPELINE_BOOTSTRAP_SCENARIO_VERSION;
+  readonly requestedStages: readonly PipelineStageId[];
+  readonly allowedStages: readonly PipelineStageId[];
+  readonly requiredStages: readonly PipelineStageId[];
+  readonly stageDependencies: Readonly<
+    Record<PipelineStageId, readonly PipelineStageId[]>
+  >;
+  readonly includedDomains: readonly CoverageDomain[];
+  readonly excludedDomains: readonly CoverageDomain[];
+  readonly source: PipelineBootstrapScenarioSource;
+  readonly explicitSelection: true;
+}
+
+export type PipelineScenarioDescriptor = {
+  readonly [ScenarioId in PipelineBootstrapScenarioId]:
+    PipelineScenarioDescriptorBase & {
+      readonly scenarioId: ScenarioId;
+      readonly objectiveKey:
+        (typeof PIPELINE_BOOTSTRAP_SCENARIO_OBJECTIVE_KEYS)[ScenarioId];
+    };
+}[PipelineBootstrapScenarioId];
+
 interface PipelineBootstrapFactBase {
   readonly factId: string;
   readonly category: PipelineBootstrapTaxonomyCategory;
@@ -306,13 +332,34 @@ export interface PipelineBootstrapProvenanceSummary {
   readonly latestObservedAt: number;
 }
 
+/**
+ * The source fact remains the source of truth for bootstrap taxonomy and
+ * provenance. The applied evidence is the canonical enterprise-model
+ * representation produced by the future mapper.
+ */
+export interface PipelineInitialEvidence {
+  readonly sourceFact: PipelineBootstrapFact;
+  readonly appliedEvidence: EnterpriseEvidence;
+}
+
+export interface PipelineInitialDomainState {
+  readonly mentalModel: EnterpriseMentalModel;
+  readonly knowledgeGraph: EnterpriseKnowledgeGraph;
+  readonly evidence: readonly PipelineInitialEvidence[];
+  readonly scenario: PipelineScenarioDescriptor;
+  readonly bootstrapId: string;
+  readonly tenantId: string;
+  readonly correlationId: string;
+  readonly createdAt: number;
+  readonly schemaVersion: typeof PIPELINE_BOOTSTRAP_SCHEMA_VERSION;
+}
+
 export interface BootstrapAcceptedState {
   readonly status: 'ACCEPTED';
   readonly bootstrapId: string;
   readonly tenantId: string;
   readonly correlationId: string;
-  readonly targetScenario: PipelineBootstrapTargetScenario;
-  readonly normalizedFacts: readonly PipelineBootstrapFact[];
+  readonly initialDomainState: PipelineInitialDomainState;
   readonly provenanceSummary: PipelineBootstrapProvenanceSummary;
   readonly bootstrapVersion: typeof PIPELINE_BOOTSTRAP_VERSION;
   readonly createdAt: number;
