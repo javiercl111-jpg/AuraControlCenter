@@ -496,6 +496,49 @@ describe('AI-01E: Adaptive Question Planning Engine', () => {
 
     expect(result.selectedPlan.items.length).toBeGreaterThan(0);
   });
+
+  it('26. should keep nominal planning objectives inside the coverage scope', async () => {
+    const graph = createEmptyEnterpriseKnowledgeGraph();
+    const includedDomains = [
+      'organization',
+      'workforce_analytics',
+      'talent_performance',
+    ] as const;
+    const result = await AdaptiveQuestionPlanner.planQuestionsFromGraph(
+      {
+        graph,
+        coverageScenario: {
+          scenarioId: 'ORGANIZATION_RESTRUCTURE',
+          includedDomains,
+          excludedDomains: [
+            'payroll',
+            'compensation',
+            'benefits',
+            'compliance',
+            'time_attendance',
+          ],
+        },
+      },
+      mockCtx
+    );
+
+    expect(result.objectives.length).toBeGreaterThan(0);
+    expect(
+      result.objectives.every((objective) =>
+        includedDomains.includes(
+          objective.domainId as (typeof includedDomains)[number]
+        )
+      )
+    ).toBe(true);
+    expect(
+      result.objectives.some((objective) => objective.domainId === 'payroll')
+    ).toBe(false);
+    expect(
+      result.objectives.some(
+        (objective) => objective.domainId === 'compensation'
+      )
+    ).toBe(false);
+  });
 });
 
 const AdaptiveQuestionPlannerTestModule = {

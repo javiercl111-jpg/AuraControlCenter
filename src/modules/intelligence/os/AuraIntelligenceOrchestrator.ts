@@ -437,10 +437,16 @@ export class AuraIntelligenceOrchestrator {
           throw new AuraIntelligenceOSError(ErrorCodes.STAGE_DEPENDENCY_FAILED, 'Missing coverage dependencies', false, 'KNOWLEDGE_COVERAGE');
         }
 
-        const report = this.dependencies.coverageCalculator.calculateOverallReport(ctx.graph);
+        const report = this.dependencies.coverageCalculator.calculateOverallReport(
+          ctx.graph,
+          undefined,
+          typeof ctx.coverageScenario === 'string'
+            ? undefined
+            : ctx.coverageScenario.includedDomains
+        );
         const assessment = this.dependencies.coverageDecisionEngine.evaluateDecisionReadiness(
           report,
-          ctx.targetScenario
+          ctx.coverageScenario
         );
 
         return {

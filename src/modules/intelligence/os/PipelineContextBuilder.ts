@@ -5,10 +5,12 @@ import type { PipelineAggregatedState } from './contextTypes';
 import type { PipelineExecutionScenario } from './types';
 import {
   assertExecutionScenarioCompatibility,
-  clonePipelineExecutionScenario
+  clonePipelineExecutionScenario,
+  toCoverageScenarioScope
 } from './scenarioContract';
 
 import type { EnterpriseKnowledgeGraph } from '../enterprise-model/graph/domain/types';
+import type { CoverageScenarioInput } from '../enterprise-model/coverage/domain/types';
 import type { PlanFromGraphOptions } from '../enterprise-model/planning/services/AdaptiveQuestionPlanner';
 import type { PlannerExecutionContext } from '../enterprise-model/planning/domain/types';
 import type { ExecutiveReasoningContext, ReasoningExecutionContext } from '../enterprise-model/reasoning/domain/types';
@@ -21,7 +23,8 @@ export class PipelineContextBuilder {
 
   public static buildCoverageContext(state: PipelineAggregatedState): {
     graph: EnterpriseKnowledgeGraph;
-    targetScenario: string;
+    targetScenario?: string;
+    coverageScenario: CoverageScenarioInput;
     executionScenario?: PipelineExecutionScenario;
   } {
     assertExecutionScenarioCompatibility(
@@ -38,19 +41,27 @@ export class PipelineContextBuilder {
         { missingField: 'knowledgeGraph' }
       );
     }
-    if (!state.targetScenario) {
+    const coverageScenario: CoverageScenarioInput | undefined =
+      state.executionScenario
+        ? toCoverageScenarioScope(state.executionScenario)
+        : state.targetScenario;
+
+    if (!coverageScenario) {
       throw new AuraIntelligenceOSError(
         ErrorCodes.MISSING_REQUIRED_STATE,
-        'targetScenario is required to evaluate coverage readiness',
+        'executionScenario or targetScenario is required to evaluate coverage readiness',
         false,
         'KNOWLEDGE_COVERAGE',
-        { missingField: 'targetScenario' }
+        { missingField: 'executionScenario|targetScenario' }
       );
     }
 
     return {
       graph: state.knowledgeGraph,
-      targetScenario: state.targetScenario,
+      ...(typeof coverageScenario === 'string'
+        ? { targetScenario: coverageScenario }
+        : {}),
+      coverageScenario,
       ...(state.executionScenario
         ? {
             executionScenario: clonePipelineExecutionScenario(
@@ -74,6 +85,10 @@ export class PipelineContextBuilder {
       state.executionScenario,
       state.targetScenario
     );
+
+    const coverageScenario = state.executionScenario
+      ? toCoverageScenarioScope(state.executionScenario)
+      : undefined;
     
     if (!state.knowledgeGraph) {
       throw new AuraIntelligenceOSError(
@@ -107,7 +122,10 @@ export class PipelineContextBuilder {
 
     const options: PlanFromGraphOptions = {
       graph: state.knowledgeGraph,
-      targetScenario: state.targetScenario,
+      targetScenario: state.executionScenario
+        ? undefined
+        : state.targetScenario,
+      ...(coverageScenario ? { coverageScenario } : {}),
       policy: dependencies.plannerPolicy,
       realizationProvider: dependencies.questionRealizationProvider,
       completedObjectiveIds: state.objectiveIds ? [...state.objectiveIds] : undefined

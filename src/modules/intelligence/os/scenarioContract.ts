@@ -1,5 +1,10 @@
 import { AuraIntelligenceOSError, ErrorCodes } from './errors';
 import type { PipelineExecutionScenario } from './types';
+import type { CoverageScenarioScope } from '../enterprise-model/coverage/domain/types';
+import {
+  assertCoverageScenarioScopeValid,
+  CoverageScenarioScopeValidationError
+} from '../enterprise-model/coverage/domain/validation';
 
 export function assertExecutionScenarioCompatibility(
   executionScenario: PipelineExecutionScenario | undefined,
@@ -66,4 +71,34 @@ export function cloneAndFreezePipelineExecutionScenario(
     includedDomains: Object.freeze([...clone.includedDomains]),
     excludedDomains: Object.freeze([...clone.excludedDomains]),
   });
+}
+
+export function toCoverageScenarioScope(
+  scenario: PipelineExecutionScenario
+): CoverageScenarioScope {
+  const scope: CoverageScenarioScope = {
+    scenarioId: scenario.scenarioId,
+    includedDomains: [...scenario.includedDomains],
+    excludedDomains: [...scenario.excludedDomains],
+  };
+
+  try {
+    assertCoverageScenarioScopeValid(scope);
+  } catch (error) {
+    if (error instanceof CoverageScenarioScopeValidationError) {
+      throw new AuraIntelligenceOSError(
+        ErrorCodes.INVALID_CONTRACT,
+        'Invalid nominal coverage scope',
+        false,
+        'KNOWLEDGE_COVERAGE',
+        {
+          scenarioId: scenario.scenarioId,
+          coverageScopeIssue: error.reason,
+        }
+      );
+    }
+    throw error;
+  }
+
+  return scope;
 }

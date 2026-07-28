@@ -188,6 +188,28 @@ describe('AI-01D: Knowledge Coverage Engine - CoverageCalculator', () => {
 
     expect(report.readinessForDecision).toBe(false);
   });
+
+  it('15. scopes score and actionable gaps to explicit required domains', () => {
+    const graph = createEmptyEnterpriseKnowledgeGraph();
+    const requiredDomains = [
+      'organization',
+      'workforce_analytics',
+      'talent_performance',
+    ] as const;
+    const report = CoverageCalculator.calculateOverallReport(
+      graph,
+      undefined,
+      requiredDomains
+    );
+
+    expect(report.overallScore).toBe(0);
+    expect(report.criticalGaps.map((gap) => gap.domain)).toEqual(
+      requiredDomains
+    );
+    expect(report.domainBreakdown.compensation.gaps).toEqual([]);
+    expect(report.domainBreakdown.payroll.gaps).toEqual([]);
+    expect(report.readinessForDecision).toBe(false);
+  });
 });
 
 const CoverageCalculatorTestModule = {

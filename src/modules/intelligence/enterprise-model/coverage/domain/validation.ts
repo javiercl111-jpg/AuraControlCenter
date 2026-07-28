@@ -1,4 +1,101 @@
-import type { CoverageGapType, GapSeverity, OverallCoverageReport } from './types';
+import {
+  COVERAGE_DOMAINS,
+  type CoverageGapType,
+  type CoverageScenarioScope,
+  type GapSeverity,
+  type OverallCoverageReport,
+} from './types';
+
+export type CoverageScenarioScopeValidationReason =
+  | 'INVALID_SCENARIO_ID'
+  | 'EMPTY_INCLUDED_DOMAINS'
+  | 'UNKNOWN_COVERAGE_DOMAIN'
+  | 'DUPLICATE_COVERAGE_DOMAIN'
+  | 'OVERLAPPING_COVERAGE_DOMAINS';
+
+export class CoverageScenarioScopeValidationError extends Error {
+  public readonly code = 'INVALID_CONTRACT';
+  public readonly reason: CoverageScenarioScopeValidationReason;
+
+  constructor(
+    reason: CoverageScenarioScopeValidationReason,
+    message: string
+  ) {
+    super(message);
+    this.name = 'CoverageScenarioScopeValidationError';
+    this.reason = reason;
+    Object.setPrototypeOf(
+      this,
+      CoverageScenarioScopeValidationError.prototype
+    );
+  }
+}
+
+export function assertCoverageScenarioScopeValid(
+  scope: CoverageScenarioScope
+): void {
+  if (
+    !scope ||
+    typeof scope.scenarioId !== 'string' ||
+    scope.scenarioId.trim().length === 0
+  ) {
+    throw new CoverageScenarioScopeValidationError(
+      'INVALID_SCENARIO_ID',
+      'Coverage scenario scope requires a non-empty scenarioId'
+    );
+  }
+
+  if (
+    !Array.isArray(scope.includedDomains) ||
+    scope.includedDomains.length === 0
+  ) {
+    throw new CoverageScenarioScopeValidationError(
+      'EMPTY_INCLUDED_DOMAINS',
+      'Coverage scenario scope requires at least one included domain'
+    );
+  }
+
+  if (!Array.isArray(scope.excludedDomains)) {
+    throw new CoverageScenarioScopeValidationError(
+      'UNKNOWN_COVERAGE_DOMAIN',
+      'Coverage scenario scope contains an invalid excluded domain collection'
+    );
+  }
+
+  const knownDomains = new Set<string>(COVERAGE_DOMAINS);
+  const includedDomains = scope.includedDomains as readonly unknown[];
+  const excludedDomains = scope.excludedDomains as readonly unknown[];
+  const allDomains = [...includedDomains, ...excludedDomains];
+
+  if (
+    allDomains.some(
+      (domain) => typeof domain !== 'string' || !knownDomains.has(domain)
+    )
+  ) {
+    throw new CoverageScenarioScopeValidationError(
+      'UNKNOWN_COVERAGE_DOMAIN',
+      'Coverage scenario scope contains an unknown domain'
+    );
+  }
+
+  if (
+    new Set(includedDomains).size !== includedDomains.length ||
+    new Set(excludedDomains).size !== excludedDomains.length
+  ) {
+    throw new CoverageScenarioScopeValidationError(
+      'DUPLICATE_COVERAGE_DOMAIN',
+      'Coverage scenario scope contains duplicate domains'
+    );
+  }
+
+  const excludedSet = new Set(excludedDomains);
+  if (includedDomains.some((domain) => excludedSet.has(domain))) {
+    throw new CoverageScenarioScopeValidationError(
+      'OVERLAPPING_COVERAGE_DOMAINS',
+      'Coverage scenario scope cannot include and exclude the same domain'
+    );
+  }
+}
 
 export function validateCoverageScore(score: number): boolean {
   return typeof score === 'number' && !isNaN(score) && score >= 0 && score <= 100;
@@ -46,6 +143,7 @@ export function assertCoverageReportValid(report: OverallCoverageReport): boolea
 }
 
 const CoverageValidationModule = {
+  assertCoverageScenarioScopeValid,
   validateCoverageScore,
   calculateCompletenessScore,
   categorizeGapSeverity,
