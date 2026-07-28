@@ -1,3 +1,5 @@
+import type { CoverageDomain } from '../enterprise-model/coverage/domain/types';
+
 export const OS_CONTRACT_VERSION = '1';
 export const OS_PIPELINE_VERSION = '1';
 
@@ -34,6 +36,28 @@ export type PipelineStageId =
   | 'EXECUTIVE_REASONING'
   | 'EXECUTIVE_DOSSIER'
   | 'TRANSFORMATION_ASSESSMENT';
+
+/**
+ * Nominal scenario contract carried by Aura Intelligence OS during execution.
+ *
+ * This contract is intentionally owned by the OS core instead of importing the
+ * bootstrap-specific PipelineScenarioDescriptor. The two contracts are
+ * structurally compatible for these execution fields, while bootstrap remains
+ * free to add admission metadata such as source and explicitSelection.
+ */
+export interface PipelineExecutionScenario {
+  readonly scenarioId: string;
+  readonly scenarioVersion: string;
+  readonly objectiveKey: string;
+  readonly requestedStages: readonly PipelineStageId[];
+  readonly allowedStages: readonly PipelineStageId[];
+  readonly requiredStages: readonly PipelineStageId[];
+  readonly stageDependencies: Readonly<
+    Record<PipelineStageId, readonly PipelineStageId[]>
+  >;
+  readonly includedDomains: readonly CoverageDomain[];
+  readonly excludedDomains: readonly CoverageDomain[];
+}
 
 export interface OSErrorsMetadata {
   [key: string]: string | number | boolean | null | undefined;
@@ -86,6 +110,7 @@ export interface PipelineResult {
 export interface PipelineInput {
   sessionId: PipelineSessionId;
   executionKey?: PipelineExecutionKey;
+  executionScenario?: PipelineExecutionScenario;
   targetScenario?: string;
   objectiveIds?: readonly string[];
   metadata?: PipelineExecutionMetadata;

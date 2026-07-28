@@ -6,6 +6,52 @@ import type { AdaptiveQuestionPlanResult } from '../../enterprise-model/planning
 import type { ExecutiveReasoningReport } from '../../enterprise-model/reasoning/domain/types';
 import type { ExecutiveDossier } from '../../enterprise-model/dossier/domain/types';
 import type { EnterpriseTransformationAssessment, TransformationReadiness, ConfidenceMatrix, AssessmentAudit, AssessmentMetadata, EvidenceMap, ExecutiveInsight } from '../../enterprise-model/assessment/domain/types';
+import type { PipelineExecutionScenario } from '../types';
+
+export const createMinimalExecutionScenario = (
+  scenarioId = 'PAYROLL_AUDIT'
+): PipelineExecutionScenario => ({
+  scenarioId,
+  scenarioVersion: '1',
+  objectiveKey: `OBJECTIVE_${scenarioId}`,
+  requestedStages: ['KNOWLEDGE_COVERAGE'],
+  allowedStages: [
+    'EVIDENCE_EXTRACTION',
+    'MENTAL_MODEL',
+    'KNOWLEDGE_GRAPH',
+    'KNOWLEDGE_COVERAGE',
+    'ADAPTIVE_PLANNING',
+    'EXECUTIVE_REASONING',
+    'EXECUTIVE_DOSSIER',
+    'TRANSFORMATION_ASSESSMENT'
+  ],
+  requiredStages: ['KNOWLEDGE_COVERAGE'],
+  stageDependencies: {
+    EVIDENCE_EXTRACTION: [],
+    MENTAL_MODEL: ['EVIDENCE_EXTRACTION'],
+    KNOWLEDGE_GRAPH: ['EVIDENCE_EXTRACTION', 'MENTAL_MODEL'],
+    KNOWLEDGE_COVERAGE: [
+      'EVIDENCE_EXTRACTION',
+      'MENTAL_MODEL',
+      'KNOWLEDGE_GRAPH'
+    ],
+    ADAPTIVE_PLANNING: ['KNOWLEDGE_COVERAGE'],
+    EXECUTIVE_REASONING: ['KNOWLEDGE_COVERAGE'],
+    EXECUTIVE_DOSSIER: ['EXECUTIVE_REASONING'],
+    TRANSFORMATION_ASSESSMENT: [
+      'EXECUTIVE_REASONING',
+      'EXECUTIVE_DOSSIER'
+    ]
+  },
+  includedDomains: ['payroll', 'organization', 'compliance'],
+  excludedDomains: [
+    'compensation',
+    'benefits',
+    'talent_performance',
+    'time_attendance',
+    'workforce_analytics'
+  ]
+});
 
 export const createMinimalMentalModel = (): EnterpriseMentalModel => ({
   identity: {

@@ -2,6 +2,11 @@ import { AuraIntelligenceOSError, ErrorCodes } from './errors';
 import type { PipelineExecutionContext } from './PipelineExecutionContext';
 import type { AuraIntelligenceOSDependencies } from './dependencyComposition';
 import type { PipelineAggregatedState } from './contextTypes';
+import type { PipelineExecutionScenario } from './types';
+import {
+  assertExecutionScenarioCompatibility,
+  clonePipelineExecutionScenario
+} from './scenarioContract';
 
 import type { EnterpriseKnowledgeGraph } from '../enterprise-model/graph/domain/types';
 import type { PlanFromGraphOptions } from '../enterprise-model/planning/services/AdaptiveQuestionPlanner';
@@ -14,7 +19,16 @@ import type { ExecutiveReasoningReport } from '../enterprise-model/reasoning/dom
 
 export class PipelineContextBuilder {
 
-  public static buildCoverageContext(state: PipelineAggregatedState): { graph: EnterpriseKnowledgeGraph; targetScenario: string } {
+  public static buildCoverageContext(state: PipelineAggregatedState): {
+    graph: EnterpriseKnowledgeGraph;
+    targetScenario: string;
+    executionScenario?: PipelineExecutionScenario;
+  } {
+    assertExecutionScenarioCompatibility(
+      state.executionScenario,
+      state.targetScenario
+    );
+
     if (!state.knowledgeGraph) {
       throw new AuraIntelligenceOSError(
         ErrorCodes.MISSING_REQUIRED_STATE,
@@ -36,7 +50,14 @@ export class PipelineContextBuilder {
 
     return {
       graph: state.knowledgeGraph,
-      targetScenario: state.targetScenario
+      targetScenario: state.targetScenario,
+      ...(state.executionScenario
+        ? {
+            executionScenario: clonePipelineExecutionScenario(
+              state.executionScenario
+            )
+          }
+        : {})
     };
   }
 
@@ -44,7 +65,15 @@ export class PipelineContextBuilder {
     state: PipelineAggregatedState,
     dependencies: AuraIntelligenceOSDependencies,
     osContext: PipelineExecutionContext
-  ): { options: PlanFromGraphOptions; executionContext: PlannerExecutionContext } {
+  ): {
+    options: PlanFromGraphOptions;
+    executionContext: PlannerExecutionContext;
+    executionScenario?: PipelineExecutionScenario;
+  } {
+    assertExecutionScenarioCompatibility(
+      state.executionScenario,
+      state.targetScenario
+    );
     
     if (!state.knowledgeGraph) {
       throw new AuraIntelligenceOSError(
@@ -90,7 +119,17 @@ export class PipelineContextBuilder {
       policy: dependencies.plannerPolicy
     };
 
-    return { options, executionContext };
+    return {
+      options,
+      executionContext,
+      ...(state.executionScenario
+        ? {
+            executionScenario: clonePipelineExecutionScenario(
+              state.executionScenario
+            )
+          }
+        : {})
+    };
   }
 
   public static buildReasoningContext(

@@ -6,6 +6,10 @@ import type {
 } from './types';
 import { OS_CONTRACT_VERSION, OS_PIPELINE_VERSION } from './types';
 import type { PipelineClock, PipelineCancellationSignal } from './ports';
+import {
+  assertExecutionScenarioCompatibility,
+  cloneAndFreezePipelineExecutionScenario
+} from './scenarioContract';
 
 export class PipelineExecutionContext {
   public readonly executionId: PipelineExecutionId;
@@ -32,10 +36,22 @@ export class PipelineExecutionContext {
     this.sessionId = input.sessionId;
     this.executionKey = input.executionKey;
     this.cancellationSignal = cancellationSignal;
+
+    assertExecutionScenarioCompatibility(
+      input.executionScenario,
+      input.targetScenario
+    );
     
     // Deep freeze initial input to ensure immutability
     this.initialInput = Object.freeze({
       ...input,
+      ...(input.executionScenario
+        ? {
+            executionScenario: cloneAndFreezePipelineExecutionScenario(
+              input.executionScenario
+            )
+          }
+        : {}),
       objectiveIds: input.objectiveIds ? Object.freeze([...input.objectiveIds]) : undefined,
       metadata: input.metadata ? Object.freeze({ ...input.metadata }) : undefined
     });
