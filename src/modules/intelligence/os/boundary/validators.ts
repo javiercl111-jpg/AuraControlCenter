@@ -51,6 +51,7 @@ const AUTHORITATIVE_CONTEXT_KEYS = [
   ...INVOCATION_CONTEXT_KEYS,
   'executionMode',
   'initiatedAt',
+  'authoritativeDeadlineAt',
   'authorizationPolicyVersion',
 ] as const;
 const AUTHORITATIVE_POLICY_QUERY_KEYS = [
@@ -311,7 +312,23 @@ export function validateAuthoritativeExecutionContextV1(
       record.executionMode
     ) ||
     !isCanonicalIsoTimestamp(record.initiatedAt) ||
+    !isCanonicalIsoTimestamp(record.authoritativeDeadlineAt) ||
     !isSafePolicyVersion(record.authorizationPolicyVersion)
+  ) {
+    contextContractError(
+      'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
+    );
+  }
+  const initiatedAtMilliseconds = Date.parse(record.initiatedAt);
+  const deadlineAtMilliseconds = Date.parse(
+    record.authoritativeDeadlineAt
+  );
+  if (
+    !Number.isSafeInteger(initiatedAtMilliseconds) ||
+    !Number.isSafeInteger(deadlineAtMilliseconds) ||
+    initiatedAtMilliseconds < 0 ||
+    deadlineAtMilliseconds < 0 ||
+    deadlineAtMilliseconds < initiatedAtMilliseconds
   ) {
     contextContractError(
       'BOUNDARY_AUTHORITATIVE_CONTEXT_INVALID'
@@ -322,6 +339,7 @@ export function validateAuthoritativeExecutionContextV1(
     ...base,
     executionMode: record.executionMode,
     initiatedAt: record.initiatedAt,
+    authoritativeDeadlineAt: record.authoritativeDeadlineAt,
     authorizationPolicyVersion: record.authorizationPolicyVersion,
   });
 }
