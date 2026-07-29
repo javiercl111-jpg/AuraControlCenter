@@ -368,6 +368,105 @@ export {
 } from './serverComposition/validators';
 
 export {
+  CANONICAL_TENANT_AUTHORITY_VERSION,
+  IDENTITY_CLAIMS_PROJECTION_VERSION,
+  IDENTITY_RESOLUTION_CONTRACT_VERSION,
+  NEUTRAL_AUTHENTICATION_TRANSPORTS,
+  PRINCIPAL_RESOLUTION_REJECTION_REASONS,
+  SERVER_OWNED_TENANT_MEMBERSHIP_STATUSES,
+  SERVER_OWNED_TENANT_MEMBERSHIP_VERSION,
+  TENANT_MEMBERSHIP_KEY_VERSION,
+  TENANT_MEMBERSHIP_RESOLUTION_REASONS,
+  TENANT_SELECTOR_HINT_VERSION,
+  TENANT_SELECTOR_STRATEGIES,
+  VERIFIED_AUTHENTICATION_ASSURANCE_LEVELS,
+  VERIFIED_AUTHENTICATION_SUBJECT_VERSION,
+  VERIFIED_IDENTITY_BINDING_VERSION,
+  VERIFIED_IDENTITY_PROVIDERS,
+  VERIFIED_IDENTITY_TENANT_BINDING_CONTRACT_ERROR_VERSION,
+  VERIFIED_IDENTITY_TENANT_BINDING_SCHEMA_VERSION,
+} from './serverIdentity/types';
+
+export type {
+  CanonicalTenantAuthorityV1,
+  CanonicalTenantMembershipKeyInputV1,
+  IdentityClaimsProjectionV1,
+  NeutralAuthenticationContextV1,
+  NeutralAuthenticationTransport,
+  PrincipalResolutionInputV1,
+  PrincipalResolutionRejectionReason,
+  PrincipalResolutionResultV1,
+  ResolverInvocationIdentityV1,
+  ServerOwnedTenantMembershipRecordV1,
+  ServerOwnedTenantMembershipStatus,
+  TenantMembershipResolutionInputV1,
+  TenantMembershipResolutionReason,
+  TenantMembershipResolutionResultV1,
+  TenantSelectorHintV1,
+  TenantSelectorStrategy,
+  TrustedPrincipalFromVerifiedBindingInputV1,
+  TrustedTenantMembershipFromAuthorityInputV1,
+  VerifiedAuthenticationAssuranceLevel,
+  VerifiedAuthenticationSubjectV1,
+  VerifiedIdentityBindingV1,
+  VerifiedIdentityProvider,
+  VerifiedServiceIdentityBindingV1,
+  VerifiedSystemIdentityBindingV1,
+  VerifiedUserIdentityBindingV1,
+} from './serverIdentity/types';
+
+export {
+  VERIFIED_IDENTITY_TENANT_BINDING_CONTRACT_ISSUES,
+  VerifiedIdentityTenantBindingContractError,
+} from './serverIdentity/errors';
+
+export type {
+  VerifiedIdentityTenantBindingContractIssue,
+} from './serverIdentity/errors';
+
+export {
+  assertUniqueTenantMembershipRecordsV1,
+  createCanonicalTenantAuthorityV1,
+  createCanonicalTenantMembershipKeyV1,
+  createIdentityClaimsProjectionV1,
+  createNeutralAuthenticationContextV1,
+  createPrincipalResolutionInputV1,
+  createPrincipalResolutionResultV1,
+  createResolverInvocationIdentityV1,
+  createServerOwnedTenantMembershipRecordV1,
+  createTenantMembershipResolutionInputV1,
+  createTenantMembershipResolutionResultV1,
+  createTenantSelectorHintV1,
+  createTrustedServerPrincipalFromVerifiedBindingV1,
+  createTrustedTenantMembershipFromAuthorityV1,
+  createVerifiedAuthenticationSubjectV1,
+  createVerifiedIdentityBindingV1,
+  createVerifiedServiceIdentityBindingV1,
+  createVerifiedSystemIdentityBindingV1,
+  createVerifiedUserIdentityBindingV1,
+  deriveBoundaryActorFromTrustedPrincipalV1,
+  requireExplicitTenantSelectorV1,
+} from './serverIdentity/factories';
+
+export {
+  validateCanonicalTenantAuthorityV1,
+  validateIdentityClaimsProjectionV1,
+  validateNeutralAuthenticationContextV1,
+  validatePrincipalResolutionInputV1,
+  validatePrincipalResolutionResultV1,
+  validateResolverInvocationIdentityV1,
+  validateServerOwnedTenantMembershipRecordV1,
+  validateTenantMembershipResolutionInputV1,
+  validateTenantMembershipResolutionResultV1,
+  validateTenantSelectorHintV1,
+  validateVerifiedAuthenticationSubjectV1,
+  validateVerifiedIdentityBindingV1,
+  validateVerifiedServiceIdentityBindingV1,
+  validateVerifiedSystemIdentityBindingV1,
+  validateVerifiedUserIdentityBindingV1,
+} from './serverIdentity/validators';
+
+export {
   AUTHORITATIVE_POLICY_ENTRY_VERSION,
   AUTHORITATIVE_POLICY_EXECUTION_MODES_V1,
   AUTHORITATIVE_POLICY_MAX_TIMEOUT_MS,

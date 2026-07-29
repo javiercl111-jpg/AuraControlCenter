@@ -76,6 +76,50 @@ Therefore this module deliberately performs no deadline adaptation. A future
 composition may preserve transport cancellation, but changing authoritative
 deadline semantics requires a separate certified Boundary contract change.
 
+## Verified identity and tenant binding contracts
+
+`src/modules/intelligence/serverIdentity` defines the closed, versioned
+server-only contracts that a future authoritative principal and tenant resolver
+must satisfy. It contains no resolver runtime, Firebase Admin, Auth, Firestore,
+Functions handler, composition root, persistence, network, or productive
+consumer.
+
+The authority chain is explicit:
+
+1. `VerifiedAuthenticationSubjectV1` records a verified `USER`, `SERVICE`, or
+   `SYSTEM` provider subject, credential lifecycle, and revocation-check time.
+2. A provider-specific verified binding maps that exact subject to one
+   canonical principal. Firebase user identity is the exact Firebase UID; email
+   is never an identity key. Service and system identities require explicit IAM
+   bindings and the literal `system` is not a principal.
+3. `CanonicalTenantAuthorityV1.tenantId` is the exact canonical tenant document
+   ID. Slugs, organization references, and client references are derived lookup
+   aliases only. `aura_root` is never a tenant.
+4. `ServerOwnedTenantMembershipRecordV1` is the sole membership authority.
+   Membership lookup uses the deterministic length-framed tuple
+   `(principalType, principalId, tenantId)`. Only an exact `ACTIVE` record can
+   be adapted into `TrustedTenantMembershipV1`; suspended, revoked, deleted,
+   duplicate, mismatched, or globally scoped roles fail closed.
+5. `TenantSelectorHintV1` is explicitly `NON_AUTHORITATIVE`. It can select a
+   candidate for server verification but cannot grant a tenant or membership,
+   and there is no implicit first-tenant strategy.
+6. `IdentityClaimsProjectionV1` is explicitly `DERIVED`, expirable, and marked
+   `authorityUse: PROHIBITED`. It cannot create membership authority.
+7. Boundary actors are derived only from a validated
+   `TrustedServerPrincipalV1`; request payload identity is not an input to that
+   derivation.
+
+The module also defines Firebase-neutral resolver inputs and closed
+`RESOLVED`, `REJECTED`, and `AMBIGUOUS` result contracts. Rejection results
+carry only allowlisted internal reason codes, versions, and timestamps; they do
+not echo provider subjects, tenant candidates, emails, tokens, or record
+existence.
+
+All factories validate unknown fields, canonical identifiers, explicit
+versions, timestamp ordering, provider/type compatibility, role scope, and
+cross-contract identity equality before returning frozen copies. They use no
+ambient clock or randomness.
+
 ## Authoritative policy snapshot contracts
 
 `src/modules/intelligence/serverPolicy` defines the immutable, versioned policy
