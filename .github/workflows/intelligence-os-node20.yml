@@ -1,0 +1,47 @@
+name: Intelligence OS Node 20 consumption
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-node20-consumption:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      - name: Verify clean checkout
+        run: test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Assert Node 20
+        run: npm run assert:node20
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build and stage private package
+        run: npm run stage:intelligence-os:functions
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Validate Node 20 consumption
+        run: npm run validate:intelligence-os:node20
