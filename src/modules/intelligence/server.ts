@@ -512,3 +512,134 @@ export {
 export {
   InMemoryAuthoritativeFeaturePolicyProducer,
 } from './serverPolicy/InMemoryAuthoritativeFeaturePolicyProducer';
+
+export {
+  AUTHORITY_ALIAS_KEY_VERSION,
+  AUTHORITY_AUDIT_EVENT_VERSION,
+  AUTHORITY_COMMAND_VERSION,
+  AUTHORITY_EVENT_TYPES,
+  AUTHORITY_IDEMPOTENCY_RECORD_VERSION,
+  AUTHORITY_IDEMPOTENCY_STATUSES,
+  AUTHORITY_MEMBERSHIP_KEY_VERSION,
+  AUTHORITY_MIGRATION_METADATA_VERSION,
+  AUTHORITY_MIGRATION_STATUSES,
+  AUTHORITY_OPERATION_TYPES,
+  AUTHORITY_OUTBOX_EVENT_VERSION,
+  AUTHORITY_PERSISTENCE_CONTRACT_ERROR_VERSION,
+  AUTHORITY_PERSISTENCE_SCHEMA_VERSION,
+  AUTHORITY_REPOSITORY_RESULT_STATUSES,
+  AUTHORITY_REPOSITORY_RESULT_VERSION,
+  AUTHORITY_RESOURCE_TYPES,
+  AUTHORITY_TENANT_ROLE_VOCABULARY_VERSION,
+  AUTHORITY_WRITE_PRECONDITION_TYPES,
+  AUTHORITY_WRITE_PRECONDITION_VERSION,
+  TENANT_ALIAS_RECORD_VERSION,
+  TENANT_ALIAS_STATUSES,
+  TENANT_ALIAS_TYPES,
+  TENANT_AUTHORITY_RECORD_VERSION,
+  TENANT_AUTHORITY_STATUSES,
+  TENANT_MEMBERSHIP_AUTHORITY_STATUSES,
+  TENANT_MEMBERSHIP_RECORD_VERSION,
+} from './serverAuthorityPersistence/types';
+
+export type {
+  AuthorityAdministrativeCommandV1,
+  AuthorityAuditEventV1,
+  AuthorityEventPayloadSummaryV1,
+  AuthorityEventType,
+  AuthorityIdempotencyRecordV1,
+  AuthorityIdempotencyStatus,
+  AuthorityMigrationMetadataV1,
+  AuthorityMigrationStatus,
+  AuthorityOperationType,
+  AuthorityOutboxEventV1,
+  AuthorityRepositoryResultStatus,
+  AuthorityRepositoryResultV1,
+  AuthorityResourceType,
+  AuthorityWritePreconditionType,
+  AuthorityWritePreconditionV1,
+  CanonicalizeLegacyTenantCommandV1,
+  CanonicalizeLegacyTenantPayloadV1,
+  ChangeTenantMembershipStatusCommandV1,
+  ChangeTenantMembershipStatusPayloadV1,
+  CreateTenantAuthorityCommandV1,
+  CreateTenantAuthorityPayloadV1,
+  CreateTenantMembershipCommandV1,
+  CreateTenantMembershipPayloadV1,
+  PersistedTenantAliasRecordV1,
+  PersistedTenantAuthorityRecordV1,
+  PersistedTenantMembershipRecordV1,
+  ReserveTenantAliasCommandV1,
+  ReserveTenantAliasPayloadV1,
+  TenantAliasKeyInputV1,
+  TenantAliasStatus,
+  TenantAliasType,
+  TenantAuthorityStatus,
+  TenantMembershipAuthorityStatus,
+  TenantMembershipKeyInputV1,
+  TombstoneTenantAliasCommandV1,
+  TombstoneTenantAliasPayloadV1,
+  UpdateTenantMembershipRolesCommandV1,
+  UpdateTenantMembershipRolesPayloadV1,
+  UpdateTenantStatusCommandV1,
+  UpdateTenantStatusPayloadV1,
+} from './serverAuthorityPersistence/types';
+
+export {
+  AUTHORITY_PERSISTENCE_CONTRACT_ISSUES,
+  AuthorityPersistenceContractError,
+} from './serverAuthorityPersistence/errors';
+
+export type {
+  AuthorityPersistenceContractIssue,
+} from './serverAuthorityPersistence/errors';
+
+export {
+  assertAuthorityAliasKeyV1,
+  assertAuthorityMembershipKeyV1,
+  createAuthorityAliasKeyV1,
+  createAuthorityMembershipKeyV1,
+  validateTenantDocumentIdV1,
+} from './serverAuthorityPersistence/ids';
+
+export {
+  assertTenantAuthorityTransitionV1,
+  assertTenantMembershipTransitionV1,
+  isTenantAuthorityTransitionAllowedV1,
+  isTenantMembershipTransitionAllowedV1,
+} from './serverAuthorityPersistence/transitions';
+
+export {
+  assertTenantAliasReservationCollisionFreeV1,
+  validateAuthorityAdministrativeCommandV1,
+  validateAuthorityAuditEventV1,
+  validateAuthorityIdempotencyRecordV1,
+  validateAuthorityMigrationMetadataV1,
+  validateAuthorityOutboxEventV1,
+  validateAuthorityRepositoryResultV1,
+  validateAuthorityWritePreconditionV1,
+  validatePersistedTenantAliasRecordV1,
+  validatePersistedTenantAuthorityRecordV1,
+  validatePersistedTenantMembershipRecordV1,
+} from './serverAuthorityPersistence/validators';
+
+export {
+  createAuthorityAdministrativeCommandV1,
+  createAuthorityAuditEventV1,
+  createAuthorityIdempotencyRecordV1,
+  createAuthorityMigrationMetadataV1,
+  createAuthorityOutboxEventV1,
+  createAuthorityRepositoryResultV1,
+  createAuthorityWritePreconditionV1,
+  createCanonicalizeLegacyTenantCommandV1,
+  createChangeTenantMembershipStatusCommandV1,
+  createCreateTenantAuthorityCommandV1,
+  createCreateTenantMembershipCommandV1,
+  createPersistedTenantAliasRecordV1,
+  createPersistedTenantAuthorityRecordV1,
+  createPersistedTenantMembershipRecordV1,
+  createReserveTenantAliasCommandV1,
+  createTombstoneTenantAliasCommandV1,
+  createUpdateTenantMembershipRolesCommandV1,
+  createUpdateTenantStatusCommandV1,
+} from './serverAuthorityPersistence/factories';
