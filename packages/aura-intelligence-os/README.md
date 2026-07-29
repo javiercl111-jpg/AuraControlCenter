@@ -75,3 +75,23 @@ Boundary derives its authoritative deadline from policy and does not propagate
 Therefore this module deliberately performs no deadline adaptation. A future
 composition may preserve transport cancellation, but changing authoritative
 deadline semantics requires a separate certified Boundary contract change.
+
+## Authoritative policy snapshot contracts
+
+`src/modules/intelligence/serverPolicy` defines the immutable, versioned policy
+snapshot consumed by a future server-only authoritative policy producer. The
+initial table contains one explicit test-only binding for the certified trusted
+consumer and source, and permits only `SHADOW_ONLY` with an explicit timeout.
+
+Snapshot validation reuses the trusted consumer/source registries, requires
+exact tenant and Boundary actor identifiers, rejects duplicate policy IDs and
+lookup keys, canonicalizes entry order, and freezes the resulting data. Lookup
+keys use explicit length framing so separator characters cannot create
+ambiguous collisions.
+
+Transport is intentionally absent because
+`AuthoritativeBoundaryPolicyQueryV1` does not carry it. Trusted server
+composition remains responsible for transport admission before policy
+evaluation. This module contains no policy producer runtime, Boundary
+integration, productive policy, Firebase, environment authority, I/O, or
+network dependency.
