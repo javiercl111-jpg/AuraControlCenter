@@ -16,9 +16,14 @@ import {
 } from '../factories';
 import {
   createAuthorityAliasKeyV1,
+  createAuthorityAuditEventIdV1,
   createAuthorityMembershipKeyV1,
+  createAuthorityOutboxEventIdV1,
   validateTenantDocumentIdV1,
 } from '../ids';
+import {
+  createAuthorityRepositoryResultFingerprintV1,
+} from '../fingerprints';
 import {
   assertTenantAuthorityTransitionV1,
   assertTenantMembershipTransitionV1,
@@ -55,6 +60,23 @@ const ACTOR = Object.freeze({
   actorId: PRINCIPAL_ID,
 });
 
+function validAppliedResult(
+  overrides: Readonly<Record<string, unknown>> = {},
+) {
+  return {
+    schemaVersion: AUTHORITY_REPOSITORY_RESULT_VERSION,
+    operationId: 'operation:tenant-001',
+    correlationId: 'correlation:authority-001',
+    status: 'APPLIED',
+    safeCode: 'TENANT_CREATED',
+    resultingVersion: 1,
+    resourceReference: `platform_tenants/${TENANT_ID}`,
+    completedAt: COMPLETED_AT,
+    retryDisposition: 'DO_NOT_RETRY',
+    ...overrides,
+  };
+}
+
 function validMigration(
   overrides: Readonly<Record<string, unknown>> = {},
 ) {
@@ -67,6 +89,28 @@ function validMigration(
     classifiedVariant: 'AUTO_ID_WITH_TENANT_SLUG',
     migrationStatus: 'VALIDATED',
     validatedAt: CHANGED_AT,
+    ...overrides,
+  };
+}
+
+function validCanonicalizationInput(
+  overrides: Readonly<Record<string, unknown>> = {},
+) {
+  return {
+    schemaVersion: '1',
+    canonicalDocumentId: TENANT_ID,
+    classifiedVariant: 'AUTO_ID_WITH_TENANT_SLUG',
+    classification: 'CANONICALIZABLE',
+    sourceRecordVersion: 'legacy-v1',
+    sourceRecordFingerprint: FINGERPRINT,
+    canonicalTarget: {
+      tenantId: TENANT_ID,
+      status: 'PENDING',
+      tenantSlug: 'tenant-alpha',
+    },
+    aliasesToReserve: [],
+    migrationMetadata: validMigration(),
+    conflictDisposition: 'NONE',
     ...overrides,
   };
 }
@@ -182,6 +226,7 @@ function command(
     requestedAt: UPDATED_AT,
     precondition,
     reasonCode: 'ADMINISTRATIVE_CHANGE',
+    requestId: 'request:authority-001',
     correlationId: 'correlation:authority-001',
     payload,
     ...overrides,
@@ -191,15 +236,21 @@ function command(
 function validAuditEvent(
   overrides: Readonly<Record<string, unknown>> = {},
 ) {
+  const identity = {
+    operationId: 'operation:tenant-status-001',
+    eventType: 'TENANT_STATUS_CHANGED' as const,
+    resourceType: 'TENANT' as const,
+    resourceId: `platform_tenants/${TENANT_ID}`,
+  };
   return {
     schemaVersion: AUTHORITY_AUDIT_EVENT_VERSION,
-    eventId: 'event:tenant-status-001',
-    eventType: 'TENANT_STATUS_CHANGED',
-    operationId: 'operation:tenant-status-001',
+    eventId: createAuthorityAuditEventIdV1(identity),
+    eventType: identity.eventType,
+    operationId: identity.operationId,
     correlationId: 'correlation:authority-001',
     actor: ACTOR,
-    resourceType: 'TENANT',
-    resourceId: `platform_tenants/${TENANT_ID}`,
+    resourceType: identity.resourceType,
+    resourceId: identity.resourceId,
     reasonCode: 'ADMINISTRATIVE_CHANGE',
     beforeVersion: 6,
     afterVersion: 7,
@@ -549,10 +600,7 @@ describe('preconditions and administrative commands', () => {
       command(
         'CANONICALIZE_LEGACY_TENANT',
         {
-          tenantId: TENANT_ID,
-          canonicalStatus: 'PENDING',
-          tenantSlug: 'tenant-alpha',
-          migrationMetadata: validMigration(),
+          canonicalizationInput: validCanonicalizationInput(),
         },
         expectedRecordVersionPrecondition(),
       ),
@@ -652,16 +700,23 @@ describe('closed transition matrices', () => {
 
 describe('idempotency and repository-safe results', () => {
   it('26 accepts coherent idempotency lifecycle states', () => {
+    const exactRepositoryResult =
+      createAuthorityRepositoryResultV1(validAppliedResult());
     expect(
       createAuthorityIdempotencyRecordV1({
         schemaVersion: AUTHORITY_IDEMPOTENCY_RECORD_VERSION,
         idempotencyKey: 'idempotency:tenant-001',
+        operationId: exactRepositoryResult.operationId,
         operationType: 'CREATE_TENANT_AUTHORITY',
         requestFingerprint: FINGERPRINT,
         status: 'COMPLETED',
         startedAt: CREATED_AT,
         completedAt: COMPLETED_AT,
-        resultReference: `platform_tenants/${TENANT_ID}`,
+        exactRepositoryResult,
+        resultFingerprint:
+          createAuthorityRepositoryResultFingerprintV1(
+            exactRepositoryResult,
+          ),
         version: 2,
       }).status,
     ).toBe('COMPLETED');
@@ -672,6 +727,7 @@ describe('idempotency and repository-safe results', () => {
       createAuthorityIdempotencyRecordV1({
         schemaVersion: AUTHORITY_IDEMPOTENCY_RECORD_VERSION,
         idempotencyKey: 'idempotency:tenant-001',
+        operationId: 'operation:tenant-001',
         operationType: 'CREATE_TENANT_AUTHORITY',
         requestFingerprint: FINGERPRINT,
         status: 'IN_PROGRESS',
@@ -684,16 +740,7 @@ describe('idempotency and repository-safe results', () => {
 
   it('28 accepts a closed APPLIED result', () => {
     expect(
-      createAuthorityRepositoryResultV1({
-        schemaVersion: AUTHORITY_REPOSITORY_RESULT_VERSION,
-        operationId: 'operation:tenant-001',
-        correlationId: 'correlation:authority-001',
-        status: 'APPLIED',
-        safeCode: 'TENANT_CREATED',
-        resultingVersion: 1,
-        resourceReference: `platform_tenants/${TENANT_ID}`,
-        completedAt: COMPLETED_AT,
-      }),
+      createAuthorityRepositoryResultV1(validAppliedResult()),
     ).toMatchObject({ status: 'APPLIED', resultingVersion: 1 });
   });
 
@@ -708,6 +755,7 @@ describe('idempotency and repository-safe results', () => {
         resultingVersion: 1,
         resourceReference: `platform_tenants/${TENANT_ID}`,
         completedAt: COMPLETED_AT,
+        retryDisposition: 'DO_NOT_RETRY',
       }),
     ).toThrow(AuthorityPersistenceContractError);
   });
@@ -735,10 +783,17 @@ describe('neutral audit, outbox, and migration contracts', () => {
   });
 
   it('32 accepts a valid neutral outbox event', () => {
+    const source = validAuditEvent();
     expect(
       createAuthorityOutboxEventV1({
-        ...validAuditEvent(),
+        ...source,
         schemaVersion: AUTHORITY_OUTBOX_EVENT_VERSION,
+        eventId: createAuthorityOutboxEventIdV1({
+          operationId: source.operationId,
+          eventType: source.eventType,
+          resourceType: source.resourceType,
+          resourceId: source.resourceId,
+        }),
       }).eventType,
     ).toBe('TENANT_STATUS_CHANGED');
   });

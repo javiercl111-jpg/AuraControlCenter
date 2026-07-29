@@ -1,5 +1,9 @@
-import type { BoundaryActorReferenceV1 } from '../os/boundary/types';
 import type {
+  BoundaryActorReferenceV1,
+  BoundaryActorTypeV1,
+} from '../os/boundary/types';
+import type {
+  TrustedServerPrincipalV1,
   TrustedServerPrincipalType,
   TrustedTenantMembershipRole,
 } from '../serverComposition/types';
@@ -19,6 +23,15 @@ export const AUTHORITY_PERSISTENCE_CONTRACT_ERROR_VERSION = '1' as const;
 export const AUTHORITY_TENANT_ROLE_VOCABULARY_VERSION = '1' as const;
 export const AUTHORITY_MEMBERSHIP_KEY_VERSION = '1' as const;
 export const AUTHORITY_ALIAS_KEY_VERSION = '1' as const;
+export const AUTHORITY_REPOSITORY_AUTHORIZATION_DECISION_VERSION =
+  '1' as const;
+export const AUTHORITY_REPOSITORY_INVOCATION_CONTEXT_VERSION =
+  '1' as const;
+export const AUTHORITY_OPERATION_BINDING_RECORD_VERSION = '1' as const;
+export const AUTHORITY_OUTBOX_DELIVERY_RECORD_VERSION = '1' as const;
+export const TENANT_ACTIVATION_PREREQUISITE_VERSION = '1' as const;
+export const LEGACY_TENANT_CANONICALIZATION_INPUT_VERSION = '1' as const;
+export const AUTHORITY_DETERMINISTIC_ID_VERSION = '1' as const;
 
 export const TENANT_AUTHORITY_STATUSES = Object.freeze([
   'PENDING',
@@ -194,6 +207,49 @@ export const AUTHORITY_OPERATION_TYPES = Object.freeze([
 export type AuthorityOperationType =
   (typeof AUTHORITY_OPERATION_TYPES)[number];
 
+export const AUTHORITY_REPOSITORY_AUTHORIZATION_DECISIONS = Object.freeze([
+  'ALLOWED',
+  'DENIED',
+] as const);
+
+export type AuthorityRepositoryAuthorizationDecision =
+  (typeof AUTHORITY_REPOSITORY_AUTHORIZATION_DECISIONS)[number];
+
+export interface AuthorityRepositoryAuthorizationDecisionV1 {
+  readonly schemaVersion:
+    typeof AUTHORITY_REPOSITORY_AUTHORIZATION_DECISION_VERSION;
+  readonly decisionVersion:
+    typeof AUTHORITY_REPOSITORY_AUTHORIZATION_DECISION_VERSION;
+  readonly decision: AuthorityRepositoryAuthorizationDecision;
+  readonly authorizationVersion: string;
+  readonly operationTypes: readonly AuthorityOperationType[];
+  readonly principalType: TrustedServerPrincipalType;
+  readonly principalId: string;
+  readonly actorType: BoundaryActorTypeV1;
+  readonly actorId: string;
+  readonly decidedAt: string;
+  readonly expiresAt?: string;
+  readonly safeReasonCode: string;
+}
+
+export interface AuthorityRepositoryInvocationContextV1 {
+  readonly schemaVersion:
+    typeof AUTHORITY_REPOSITORY_INVOCATION_CONTEXT_VERSION;
+  readonly principal: TrustedServerPrincipalV1;
+  readonly actor: BoundaryActorReferenceV1;
+  readonly authorizationDecision:
+    AuthorityRepositoryAuthorizationDecisionV1;
+  readonly authorizedOperationTypes: readonly AuthorityOperationType[];
+  readonly consumerId: string;
+  readonly source: string;
+  readonly requestId: string;
+  readonly correlationId: string;
+  readonly initiatedAt: string;
+  readonly authorizationVersion: string;
+  /** Preserves the infrastructure signal by identity; never clone or freeze. */
+  readonly cancellationSignal?: AbortSignal;
+}
+
 interface AuthorityAdministrativeCommandBaseV1 {
   readonly schemaVersion: typeof AUTHORITY_COMMAND_VERSION;
   readonly operationType: AuthorityOperationType;
@@ -203,6 +259,7 @@ interface AuthorityAdministrativeCommandBaseV1 {
   readonly requestedAt: string;
   readonly precondition: AuthorityWritePreconditionV1;
   readonly reasonCode: string;
+  readonly requestId: string;
   readonly correlationId: string;
 }
 
@@ -228,6 +285,7 @@ export interface UpdateTenantStatusPayloadV1 {
   readonly tenantId: string;
   readonly currentStatus: TenantAuthorityStatus;
   readonly targetStatus: TenantAuthorityStatus;
+  readonly activationPrerequisite?: TenantActivationPrerequisiteV1;
 }
 
 export interface UpdateTenantStatusCommandV1
@@ -313,13 +371,83 @@ export interface TombstoneTenantAliasCommandV1
   readonly payload: TombstoneTenantAliasPayloadV1;
 }
 
-export interface CanonicalizeLegacyTenantPayloadV1 {
+export interface TenantActivationPrerequisiteV1 {
+  readonly schemaVersion: typeof TENANT_ACTIVATION_PREREQUISITE_VERSION;
   readonly tenantId: string;
-  readonly canonicalStatus: TenantAuthorityStatus;
+  readonly tenantCurrentStatus: 'PENDING' | 'SUSPENDED';
+  readonly tenantExpectedRecordVersion: number;
+  readonly membershipKey: string;
+  readonly membershipPrincipalType: 'USER';
+  readonly membershipPrincipalId: string;
+  readonly membershipTenantId: string;
+  readonly membershipStatus: 'ACTIVE';
+  readonly membershipRoles: readonly TrustedTenantMembershipRole[];
+  readonly membershipExpectedVersion: number;
+}
+
+export const LEGACY_TENANT_VARIANTS = Object.freeze([
+  'AUTO_ID_WITH_TENANT_ID_SLUG',
+  'AUTO_ID_WITH_TENANT_SLUG',
+  'DOCUMENT_ID_EQUALS_TENANT_ID',
+  'MISSING_SLUG',
+  'STATUS_FIELD_ONLY',
+  'TENANT_STATUS_FIELD_ONLY',
+  'CONFLICTING_STATUS_FIELDS',
+] as const);
+
+export type LegacyTenantVariantV1 =
+  (typeof LEGACY_TENANT_VARIANTS)[number];
+
+export const LEGACY_TENANT_CANONICALIZATION_CLASSIFICATIONS =
+  Object.freeze([
+    'CANONICALIZABLE',
+    'REQUIRES_REVIEW',
+    'REJECTED',
+  ] as const);
+
+export type LegacyTenantCanonicalizationClassificationV1 =
+  (typeof LEGACY_TENANT_CANONICALIZATION_CLASSIFICATIONS)[number];
+
+export const LEGACY_TENANT_CONFLICT_DISPOSITIONS = Object.freeze([
+  'NONE',
+  'REQUIRE_REVIEW',
+  'REJECT',
+] as const);
+
+export type LegacyTenantConflictDispositionV1 =
+  (typeof LEGACY_TENANT_CONFLICT_DISPOSITIONS)[number];
+
+export interface LegacyTenantCanonicalTargetV1 {
+  readonly tenantId: string;
+  readonly status: TenantAuthorityStatus;
   readonly tenantSlug?: string;
   readonly organizationReference?: string;
   readonly clientReference?: string;
+}
+
+export interface LegacyTenantAliasReservationV1 {
+  readonly aliasKey: string;
+  readonly aliasType: TenantAliasType;
+  readonly normalizedAlias: string;
+  readonly tenantId: string;
+}
+
+export interface LegacyTenantCanonicalizationInputV1 {
+  readonly schemaVersion:
+    typeof LEGACY_TENANT_CANONICALIZATION_INPUT_VERSION;
+  readonly canonicalDocumentId: string;
+  readonly classifiedVariant: LegacyTenantVariantV1;
+  readonly classification: LegacyTenantCanonicalizationClassificationV1;
+  readonly sourceRecordVersion: string;
+  readonly sourceRecordFingerprint: string;
+  readonly canonicalTarget: LegacyTenantCanonicalTargetV1;
+  readonly aliasesToReserve: readonly LegacyTenantAliasReservationV1[];
   readonly migrationMetadata: AuthorityMigrationMetadataV1;
+  readonly conflictDisposition: LegacyTenantConflictDispositionV1;
+}
+
+export interface CanonicalizeLegacyTenantPayloadV1 {
+  readonly canonicalizationInput: LegacyTenantCanonicalizationInputV1;
 }
 
 export interface CanonicalizeLegacyTenantCommandV1
@@ -350,6 +478,7 @@ export type AuthorityIdempotencyStatus =
 interface AuthorityIdempotencyRecordBaseV1 {
   readonly schemaVersion: typeof AUTHORITY_IDEMPOTENCY_RECORD_VERSION;
   readonly idempotencyKey: string;
+  readonly operationId: string;
   readonly operationType: AuthorityOperationType;
   readonly requestFingerprint: string;
   readonly status: AuthorityIdempotencyStatus;
@@ -367,14 +496,56 @@ export type AuthorityIdempotencyRecordV1 =
       AuthorityIdempotencyRecordBaseV1 & {
         status: 'COMPLETED';
         completedAt: string;
-        resultReference: string;
+        exactRepositoryResult: AuthorityRepositoryResultV1;
+        resultFingerprint: string;
       }
     >
   | Readonly<
       AuthorityIdempotencyRecordBaseV1 & {
         status: 'REJECTED';
         completedAt: string;
+        exactRepositoryResult: AuthorityRepositoryResultV1;
+        resultFingerprint: string;
         failureCode: string;
+      }
+    >;
+
+export type AuthoritySingleTransactionIdempotencyRecordV1 = Extract<
+  AuthorityIdempotencyRecordV1,
+  { readonly status: 'COMPLETED' | 'REJECTED' }
+>;
+
+export const AUTHORITY_OPERATION_BINDING_STATUSES = Object.freeze([
+  'BOUND',
+  'COMPLETED',
+  'REJECTED',
+] as const);
+
+export type AuthorityOperationBindingStatus =
+  (typeof AUTHORITY_OPERATION_BINDING_STATUSES)[number];
+
+interface AuthorityOperationBindingRecordBaseV1 {
+  readonly schemaVersion: typeof AUTHORITY_OPERATION_BINDING_RECORD_VERSION;
+  readonly operationId: string;
+  readonly idempotencyKey: string;
+  readonly operationType: AuthorityOperationType;
+  readonly requestFingerprint: string;
+  readonly status: AuthorityOperationBindingStatus;
+  readonly createdAt: string;
+  readonly version: number;
+}
+
+export type AuthorityOperationBindingRecordV1 =
+  | Readonly<
+      AuthorityOperationBindingRecordBaseV1 & {
+        readonly status: 'BOUND';
+      }
+    >
+  | Readonly<
+      AuthorityOperationBindingRecordBaseV1 & {
+        readonly status: 'COMPLETED' | 'REJECTED';
+        readonly repositoryResultReference: string;
+        readonly completedAt: string;
       }
     >;
 
@@ -390,6 +561,15 @@ export const AUTHORITY_REPOSITORY_RESULT_STATUSES = Object.freeze([
 export type AuthorityRepositoryResultStatus =
   (typeof AUTHORITY_REPOSITORY_RESULT_STATUSES)[number];
 
+export const AUTHORITY_RETRY_DISPOSITIONS = Object.freeze([
+  'DO_NOT_RETRY',
+  'RETRY_AFTER_READ',
+  'SAFE_TO_RETRY_WITH_SAME_IDEMPOTENCY_KEY',
+] as const);
+
+export type AuthorityRetryDisposition =
+  (typeof AUTHORITY_RETRY_DISPOSITIONS)[number];
+
 interface AuthorityRepositoryResultBaseV1 {
   readonly schemaVersion: typeof AUTHORITY_REPOSITORY_RESULT_VERSION;
   readonly operationId: string;
@@ -397,6 +577,7 @@ interface AuthorityRepositoryResultBaseV1 {
   readonly status: AuthorityRepositoryResultStatus;
   readonly safeCode: string;
   readonly completedAt: string;
+  readonly retryDisposition: AuthorityRetryDisposition;
 }
 
 export type AuthorityRepositoryResultV1 =
@@ -427,11 +608,19 @@ export type AuthorityRepositoryResultV1 =
 export const AUTHORITY_EVENT_TYPES = Object.freeze([
   'TENANT_CREATED',
   'TENANT_STATUS_CHANGED',
+  'TENANT_ACTIVATED',
+  'TENANT_SUSPENDED',
+  'TENANT_REACTIVATED',
+  'TENANT_DEACTIVATED',
+  'TENANT_DELETED',
   'TENANT_CANONICALIZED',
   'MEMBERSHIP_CREATED',
+  'MEMBERSHIP_ACTIVATED',
   'MEMBERSHIP_ROLES_CHANGED',
   'MEMBERSHIP_SUSPENDED',
+  'MEMBERSHIP_REACTIVATED',
   'MEMBERSHIP_REVOKED',
+  'MEMBERSHIP_DELETED',
   'ALIAS_RESERVED',
   'ALIAS_TOMBSTONED',
   'MIGRATION_APPLIED',
@@ -484,3 +673,49 @@ export interface AuthorityAuditEventV1 extends AuthorityEventBaseV1 {
 export interface AuthorityOutboxEventV1 extends AuthorityEventBaseV1 {
   readonly schemaVersion: typeof AUTHORITY_OUTBOX_EVENT_VERSION;
 }
+
+export const AUTHORITY_OUTBOX_DELIVERY_STATUSES = Object.freeze([
+  'PENDING',
+  'LEASED',
+  'DELIVERED',
+  'FAILED_TERMINAL',
+] as const);
+
+export type AuthorityOutboxDeliveryStatus =
+  (typeof AUTHORITY_OUTBOX_DELIVERY_STATUSES)[number];
+
+interface AuthorityOutboxDeliveryRecordBaseV1 {
+  readonly schemaVersion: typeof AUTHORITY_OUTBOX_DELIVERY_RECORD_VERSION;
+  readonly eventId: string;
+  readonly deliveryStatus: AuthorityOutboxDeliveryStatus;
+  readonly attemptCount: number;
+  readonly availableAt: string;
+  readonly lastAttemptAt?: string;
+  readonly version: number;
+}
+
+export type AuthorityOutboxDeliveryRecordV1 =
+  | Readonly<
+      AuthorityOutboxDeliveryRecordBaseV1 & {
+        readonly deliveryStatus: 'PENDING';
+      }
+    >
+  | Readonly<
+      AuthorityOutboxDeliveryRecordBaseV1 & {
+        readonly deliveryStatus: 'LEASED';
+        readonly leaseOwner: string;
+        readonly leaseExpiresAt: string;
+      }
+    >
+  | Readonly<
+      AuthorityOutboxDeliveryRecordBaseV1 & {
+        readonly deliveryStatus: 'DELIVERED';
+        readonly deliveredAt: string;
+      }
+    >
+  | Readonly<
+      AuthorityOutboxDeliveryRecordBaseV1 & {
+        readonly deliveryStatus: 'FAILED_TERMINAL';
+        readonly safeFailureCode: string;
+      }
+    >;

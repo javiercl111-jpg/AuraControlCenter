@@ -1,5 +1,6 @@
 import { failAuthorityPersistenceContract } from './helpers';
 import type {
+  AuthorityEventType,
   TenantAuthorityStatus,
   TenantMembershipAuthorityStatus,
 } from './types';
@@ -56,4 +57,46 @@ export function assertTenantMembershipTransitionV1(
   if (!isTenantMembershipTransitionAllowedV1(currentStatus, targetStatus)) {
     failAuthorityPersistenceContract('INVALID_TRANSITION');
   }
+}
+
+export function getTenantAuthorityTransitionEventTypeV1(
+  currentStatus: TenantAuthorityStatus,
+  targetStatus: TenantAuthorityStatus,
+): AuthorityEventType {
+  assertTenantAuthorityTransitionV1(currentStatus, targetStatus);
+  if (targetStatus === 'ACTIVE') {
+    return currentStatus === 'PENDING'
+      ? 'TENANT_ACTIVATED'
+      : 'TENANT_REACTIVATED';
+  }
+  if (targetStatus === 'SUSPENDED') {
+    return 'TENANT_SUSPENDED';
+  }
+  if (targetStatus === 'DEACTIVATED') {
+    return 'TENANT_DEACTIVATED';
+  }
+  if (targetStatus === 'DELETED') {
+    return 'TENANT_DELETED';
+  }
+  return failAuthorityPersistenceContract('INVALID_TRANSITION');
+}
+
+export function getTenantMembershipTransitionEventTypeV1(
+  currentStatus: TenantMembershipAuthorityStatus,
+  targetStatus: TenantMembershipAuthorityStatus,
+): AuthorityEventType {
+  assertTenantMembershipTransitionV1(currentStatus, targetStatus);
+  if (targetStatus === 'ACTIVE') {
+    return 'MEMBERSHIP_REACTIVATED';
+  }
+  if (targetStatus === 'SUSPENDED') {
+    return 'MEMBERSHIP_SUSPENDED';
+  }
+  if (targetStatus === 'REVOKED') {
+    return 'MEMBERSHIP_REVOKED';
+  }
+  if (targetStatus === 'DELETED') {
+    return 'MEMBERSHIP_DELETED';
+  }
+  return failAuthorityPersistenceContract('INVALID_TRANSITION');
 }

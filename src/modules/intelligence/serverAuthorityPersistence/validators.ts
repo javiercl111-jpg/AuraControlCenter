@@ -5,9 +5,16 @@ import {
   type TrustedTenantMembershipRole,
 } from '../serverComposition/types';
 import {
+  validateTrustedServerPrincipalV1,
+} from '../serverComposition/validators';
+import {
   createAuthorityAliasKeyV1,
+  createAuthorityAuditEventIdV1,
+  createAuthorityIdempotencyDocumentIdV1,
   createAuthorityMembershipKeyV1,
+  createAuthorityOutboxEventIdV1,
 } from './ids';
+import { createCanonicalAuthorityHashV1 } from './canonicalHash';
 import {
   failAuthorityPersistenceContract,
   freezeArray,
@@ -42,16 +49,29 @@ import {
   AUTHORITY_EVENT_TYPES,
   AUTHORITY_IDEMPOTENCY_RECORD_VERSION,
   AUTHORITY_IDEMPOTENCY_STATUSES,
+  AUTHORITY_OPERATION_BINDING_RECORD_VERSION,
+  AUTHORITY_OPERATION_BINDING_STATUSES,
   AUTHORITY_MIGRATION_METADATA_VERSION,
   AUTHORITY_MIGRATION_STATUSES,
   AUTHORITY_OPERATION_TYPES,
+  AUTHORITY_OUTBOX_DELIVERY_RECORD_VERSION,
+  AUTHORITY_OUTBOX_DELIVERY_STATUSES,
   AUTHORITY_OUTBOX_EVENT_VERSION,
+  AUTHORITY_REPOSITORY_AUTHORIZATION_DECISION_VERSION,
+  AUTHORITY_REPOSITORY_AUTHORIZATION_DECISIONS,
+  AUTHORITY_REPOSITORY_INVOCATION_CONTEXT_VERSION,
   AUTHORITY_REPOSITORY_RESULT_STATUSES,
   AUTHORITY_REPOSITORY_RESULT_VERSION,
+  AUTHORITY_RETRY_DISPOSITIONS,
   AUTHORITY_RESOURCE_TYPES,
   AUTHORITY_TENANT_ROLE_VOCABULARY_VERSION,
   AUTHORITY_WRITE_PRECONDITION_TYPES,
   AUTHORITY_WRITE_PRECONDITION_VERSION,
+  LEGACY_TENANT_CANONICALIZATION_CLASSIFICATIONS,
+  LEGACY_TENANT_CANONICALIZATION_INPUT_VERSION,
+  LEGACY_TENANT_CONFLICT_DISPOSITIONS,
+  LEGACY_TENANT_VARIANTS,
+  TENANT_ACTIVATION_PREREQUISITE_VERSION,
   TENANT_ALIAS_RECORD_VERSION,
   TENANT_ALIAS_STATUSES,
   TENANT_ALIAS_TYPES,
@@ -65,8 +85,12 @@ import {
   type AuthorityEventType,
   type AuthorityIdempotencyRecordV1,
   type AuthorityMigrationMetadataV1,
+  type AuthorityOperationBindingRecordV1,
   type AuthorityOperationType,
+  type AuthorityOutboxDeliveryRecordV1,
   type AuthorityOutboxEventV1,
+  type AuthorityRepositoryAuthorizationDecisionV1,
+  type AuthorityRepositoryInvocationContextV1,
   type AuthorityRepositoryResultV1,
   type AuthorityResourceType,
   type AuthorityWritePreconditionV1,
@@ -74,11 +98,15 @@ import {
   type ChangeTenantMembershipStatusCommandV1,
   type CreateTenantAuthorityCommandV1,
   type CreateTenantMembershipCommandV1,
+  type LegacyTenantAliasReservationV1,
+  type LegacyTenantCanonicalTargetV1,
+  type LegacyTenantCanonicalizationInputV1,
   type PersistedTenantAliasRecordV1,
   type PersistedTenantAuthorityRecordV1,
   type PersistedTenantMembershipRecordV1,
   type ReserveTenantAliasCommandV1,
   type TenantAliasType,
+  type TenantActivationPrerequisiteV1,
   type TombstoneTenantAliasCommandV1,
   type UpdateTenantMembershipRolesCommandV1,
   type UpdateTenantStatusCommandV1,
@@ -188,7 +216,8 @@ function optionalCanonicalReference(
   value: unknown,
   issue:
     | 'INVALID_TENANT_RECORD'
-    | 'INVALID_COMMAND',
+    | 'INVALID_COMMAND'
+    | 'INVALID_LEGACY_CANONICALIZATION',
 ): string | undefined {
   return value === undefined
     ? undefined
@@ -199,7 +228,8 @@ function optionalTenantSlug(
   value: unknown,
   issue:
     | 'INVALID_TENANT_RECORD'
-    | 'INVALID_COMMAND',
+    | 'INVALID_COMMAND'
+    | 'INVALID_LEGACY_CANONICALIZATION',
 ): string | undefined {
   return value === undefined ? undefined : requireTenantSlug(value, issue);
 }
@@ -848,6 +878,7 @@ function validateCommandBase(
   requestedAt: string;
   precondition: AuthorityWritePreconditionV1;
   reasonCode: string;
+  requestId: string;
   correlationId: string;
 }> {
   return Object.freeze({
@@ -872,6 +903,7 @@ function validateCommandBase(
     ),
     precondition: validateAuthorityWritePreconditionV1(record.precondition),
     reasonCode: requireReasonCode(record.reasonCode, 'INVALID_COMMAND'),
+    requestId: requireOperationalId(record.requestId, 'INVALID_COMMAND'),
     correlationId: requireOperationalId(
       record.correlationId,
       'INVALID_COMMAND',
@@ -971,6 +1003,101 @@ function validateAliasIdentityPayload(
   });
 }
 
+export function validateTenantActivationPrerequisiteV1(
+  value: unknown,
+): TenantActivationPrerequisiteV1 {
+  const record = getClosedRecord(
+    value,
+    [
+      'schemaVersion',
+      'tenantId',
+      'tenantCurrentStatus',
+      'tenantExpectedRecordVersion',
+      'membershipKey',
+      'membershipPrincipalType',
+      'membershipPrincipalId',
+      'membershipTenantId',
+      'membershipStatus',
+      'membershipRoles',
+      'membershipExpectedVersion',
+    ],
+    'INVALID_ACTIVATION_PREREQUISITE',
+  );
+  const tenantId = requireCanonicalDocumentId(
+    record.tenantId,
+    'INVALID_ACTIVATION_PREREQUISITE',
+  );
+  const membershipPrincipalType = requireExactLiteral(
+    record.membershipPrincipalType,
+    'USER',
+    'INVALID_ACTIVATION_PREREQUISITE',
+  );
+  const membershipPrincipalId = requireCanonicalPrincipalId(
+    record.membershipPrincipalId,
+    'INVALID_ACTIVATION_PREREQUISITE',
+  );
+  const membershipTenantId = requireCanonicalDocumentId(
+    record.membershipTenantId,
+    'INVALID_ACTIVATION_PREREQUISITE',
+  );
+  const membershipKey = createAuthorityMembershipKeyV1({
+    principalType: membershipPrincipalType,
+    principalId: membershipPrincipalId,
+    tenantId: membershipTenantId,
+  });
+  let membershipRoles: readonly TrustedTenantMembershipRole[];
+  try {
+    membershipRoles = validateRoles(
+      record.membershipRoles,
+      membershipPrincipalType,
+    );
+  } catch {
+    return failAuthorityPersistenceContract(
+      'INVALID_ACTIVATION_PREREQUISITE',
+    );
+  }
+  if (
+    membershipTenantId !== tenantId ||
+    record.membershipKey !== membershipKey ||
+    !membershipRoles.includes('TENANT_ADMIN')
+  ) {
+    return failAuthorityPersistenceContract(
+      'INVALID_ACTIVATION_PREREQUISITE',
+    );
+  }
+  return Object.freeze({
+    schemaVersion: requireExactLiteral(
+      record.schemaVersion,
+      TENANT_ACTIVATION_PREREQUISITE_VERSION,
+      'INVALID_ACTIVATION_PREREQUISITE',
+    ),
+    tenantId,
+    tenantCurrentStatus: requireEnumValue(
+      record.tenantCurrentStatus,
+      ['PENDING', 'SUSPENDED'] as const,
+      'INVALID_ACTIVATION_PREREQUISITE',
+    ),
+    tenantExpectedRecordVersion: requirePositiveInteger(
+      record.tenantExpectedRecordVersion,
+      'INVALID_ACTIVATION_PREREQUISITE',
+    ),
+    membershipKey,
+    membershipPrincipalType,
+    membershipPrincipalId,
+    membershipTenantId,
+    membershipStatus: requireExactLiteral(
+      record.membershipStatus,
+      'ACTIVE',
+      'INVALID_ACTIVATION_PREREQUISITE',
+    ),
+    membershipRoles,
+    membershipExpectedVersion: requirePositiveInteger(
+      record.membershipExpectedVersion,
+      'INVALID_ACTIVATION_PREREQUISITE',
+    ),
+  });
+}
+
 function validateCreateTenantAuthorityCommand(
   record: PlainRecord,
   base: ReturnType<typeof validateCommandBase>,
@@ -1029,7 +1156,16 @@ function validateUpdateTenantStatusCommand(
   requireUpdatePrecondition(base.precondition);
   const payload = getClosedRecord(
     record.payload,
-    ['tenantId', 'currentStatus', 'targetStatus'],
+    [
+      'tenantId',
+      'currentStatus',
+      'targetStatus',
+      'activationPrerequisite',
+    ],
+    'INVALID_COMMAND',
+  );
+  const tenantId = requireCanonicalDocumentId(
+    payload.tenantId,
     'INVALID_COMMAND',
   );
   const currentStatus = requireEnumValue(
@@ -1043,16 +1179,34 @@ function validateUpdateTenantStatusCommand(
     'INVALID_COMMAND',
   );
   assertTenantAuthorityTransitionV1(currentStatus, targetStatus);
+  const activationPrerequisite =
+    payload.activationPrerequisite === undefined
+      ? undefined
+      : validateTenantActivationPrerequisiteV1(
+          payload.activationPrerequisite,
+        );
+  if (
+    (targetStatus === 'ACTIVE' && activationPrerequisite === undefined) ||
+    (targetStatus !== 'ACTIVE' && activationPrerequisite !== undefined) ||
+    (activationPrerequisite !== undefined &&
+      (activationPrerequisite.tenantId !== tenantId ||
+        activationPrerequisite.tenantCurrentStatus !== currentStatus ||
+        (base.precondition.type === 'MUST_EXIST_AT_VERSION' &&
+          activationPrerequisite.tenantExpectedRecordVersion !==
+            base.precondition.recordVersion)))
+  ) {
+    return failAuthorityPersistenceContract('INVALID_COMMAND');
+  }
   return Object.freeze({
     ...base,
     operationType: 'UPDATE_TENANT_STATUS',
     payload: Object.freeze({
-      tenantId: requireCanonicalDocumentId(
-        payload.tenantId,
-        'INVALID_COMMAND',
-      ),
+      tenantId,
       currentStatus,
       targetStatus,
+      ...(activationPrerequisite === undefined
+        ? {}
+        : { activationPrerequisite }),
     }),
   });
 }
@@ -1198,6 +1352,195 @@ function validateTombstoneAliasCommand(
   });
 }
 
+function validateLegacyTenantCanonicalTargetV1(
+  value: unknown,
+): LegacyTenantCanonicalTargetV1 {
+  const record = getClosedRecord(
+    value,
+    [
+      'tenantId',
+      'status',
+      'tenantSlug',
+      'organizationReference',
+      'clientReference',
+    ],
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const tenantSlug = optionalTenantSlug(
+    record.tenantSlug,
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const organizationReference = optionalCanonicalReference(
+    record.organizationReference,
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const clientReference = optionalCanonicalReference(
+    record.clientReference,
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  return Object.freeze({
+    tenantId: requireCanonicalDocumentId(
+      record.tenantId,
+      'INVALID_LEGACY_CANONICALIZATION',
+    ),
+    status: requireEnumValue(
+      record.status,
+      TENANT_AUTHORITY_STATUSES,
+      'INVALID_LEGACY_CANONICALIZATION',
+    ),
+    ...(tenantSlug === undefined ? {} : { tenantSlug }),
+    ...(organizationReference === undefined
+      ? {}
+      : { organizationReference }),
+    ...(clientReference === undefined ? {} : { clientReference }),
+  });
+}
+
+function validateLegacyTenantAliasReservationV1(
+  value: unknown,
+): LegacyTenantAliasReservationV1 {
+  const record = getClosedRecord(
+    value,
+    ['aliasKey', 'aliasType', 'normalizedAlias', 'tenantId'],
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const aliasType = requireEnumValue(
+    record.aliasType,
+    TENANT_ALIAS_TYPES,
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const normalizedAlias = requireNormalizedAlias(
+    record.normalizedAlias,
+    aliasType,
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const aliasKey = createAuthorityAliasKeyV1({
+    aliasType,
+    normalizedAlias,
+  });
+  if (record.aliasKey !== aliasKey) {
+    return failAuthorityPersistenceContract(
+      'INVALID_LEGACY_CANONICALIZATION',
+    );
+  }
+  return Object.freeze({
+    aliasKey,
+    aliasType,
+    normalizedAlias,
+    tenantId: requireCanonicalDocumentId(
+      record.tenantId,
+      'INVALID_LEGACY_CANONICALIZATION',
+    ),
+  });
+}
+
+export function validateLegacyTenantCanonicalizationInputV1(
+  value: unknown,
+): LegacyTenantCanonicalizationInputV1 {
+  const record = getClosedRecord(
+    value,
+    [
+      'schemaVersion',
+      'canonicalDocumentId',
+      'classifiedVariant',
+      'classification',
+      'sourceRecordVersion',
+      'sourceRecordFingerprint',
+      'canonicalTarget',
+      'aliasesToReserve',
+      'migrationMetadata',
+      'conflictDisposition',
+    ],
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const classifiedVariant = requireEnumValue(
+    record.classifiedVariant,
+    LEGACY_TENANT_VARIANTS,
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const classification = requireEnumValue(
+    record.classification,
+    LEGACY_TENANT_CANONICALIZATION_CLASSIFICATIONS,
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const conflictDisposition = requireEnumValue(
+    record.conflictDisposition,
+    LEGACY_TENANT_CONFLICT_DISPOSITIONS,
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  const canonicalTarget = validateLegacyTenantCanonicalTargetV1(
+    record.canonicalTarget,
+  );
+  const canonicalDocumentId = requireCanonicalDocumentId(
+    record.canonicalDocumentId,
+    'INVALID_LEGACY_CANONICALIZATION',
+  );
+  if (
+    !Array.isArray(record.aliasesToReserve) ||
+    record.aliasesToReserve.length > 8
+  ) {
+    return failAuthorityPersistenceContract(
+      'INVALID_LEGACY_CANONICALIZATION',
+    );
+  }
+  const aliasesToReserve = record.aliasesToReserve
+    .map(validateLegacyTenantAliasReservationV1)
+    .sort((left, right) => left.aliasKey.localeCompare(right.aliasKey));
+  const migrationMetadata = validateAuthorityMigrationMetadataV1(
+    record.migrationMetadata,
+  );
+  if (
+    canonicalDocumentId !== canonicalTarget.tenantId ||
+    aliasesToReserve.some(
+      (alias) => alias.tenantId !== canonicalTarget.tenantId,
+    ) ||
+    new Set(aliasesToReserve.map((alias) => alias.aliasKey)).size !==
+      aliasesToReserve.length ||
+    migrationMetadata.classifiedVariant !== classifiedVariant ||
+    (classifiedVariant === 'CONFLICTING_STATUS_FIELDS' &&
+      (classification !== 'REQUIRES_REVIEW' ||
+        conflictDisposition !== 'REQUIRE_REVIEW')) ||
+    (classifiedVariant !== 'CONFLICTING_STATUS_FIELDS' &&
+      ((classification === 'CANONICALIZABLE' &&
+        conflictDisposition !== 'NONE') ||
+        (classification === 'REQUIRES_REVIEW' &&
+          conflictDisposition !== 'REQUIRE_REVIEW') ||
+        (classification === 'REJECTED' &&
+          conflictDisposition !== 'REJECT'))) ||
+    ((classifiedVariant === 'AUTO_ID_WITH_TENANT_ID_SLUG' ||
+      classifiedVariant === 'AUTO_ID_WITH_TENANT_SLUG') &&
+      canonicalTarget.tenantSlug === undefined) ||
+    (classifiedVariant === 'MISSING_SLUG' &&
+      canonicalTarget.tenantSlug !== undefined)
+  ) {
+    return failAuthorityPersistenceContract(
+      'INVALID_LEGACY_CANONICALIZATION',
+    );
+  }
+  return Object.freeze({
+    schemaVersion: requireExactLiteral(
+      record.schemaVersion,
+      LEGACY_TENANT_CANONICALIZATION_INPUT_VERSION,
+      'INVALID_LEGACY_CANONICALIZATION',
+    ),
+    canonicalDocumentId,
+    classifiedVariant,
+    classification,
+    sourceRecordVersion: requireNonEmptyVersion(
+      record.sourceRecordVersion,
+      'INVALID_LEGACY_CANONICALIZATION',
+    ),
+    sourceRecordFingerprint: requireFingerprint(
+      record.sourceRecordFingerprint,
+      'INVALID_LEGACY_CANONICALIZATION',
+    ),
+    canonicalTarget,
+    aliasesToReserve: freezeArray(aliasesToReserve),
+    migrationMetadata,
+    conflictDisposition,
+  });
+}
+
 function validateCanonicalizeLegacyTenantCommand(
   record: PlainRecord,
   base: ReturnType<typeof validateCommandBase>,
@@ -1205,55 +1548,45 @@ function validateCanonicalizeLegacyTenantCommand(
   requireUpdatePrecondition(base.precondition);
   const payload = getClosedRecord(
     record.payload,
-    [
-      'tenantId',
-      'canonicalStatus',
-      'tenantSlug',
-      'organizationReference',
-      'clientReference',
-      'migrationMetadata',
-    ],
+    ['canonicalizationInput'],
     'INVALID_COMMAND',
   );
-  const migrationMetadata = validateAuthorityMigrationMetadataV1(
-    payload.migrationMetadata,
-  );
-  if (migrationMetadata.migrationStatus !== 'VALIDATED') {
-    return failAuthorityPersistenceContract('INVALID_COMMAND');
+  const canonicalizationInput =
+    validateLegacyTenantCanonicalizationInputV1(
+      payload.canonicalizationInput,
+    );
+  if (
+    canonicalizationInput.classification !== 'CANONICALIZABLE' ||
+    canonicalizationInput.conflictDisposition !== 'NONE' ||
+    canonicalizationInput.migrationMetadata.migrationStatus !== 'VALIDATED'
+  ) {
+    return failAuthorityPersistenceContract(
+      'LEGACY_CANONICALIZATION_NOT_APPLICABLE',
+    );
   }
-  const tenantSlug = optionalTenantSlug(
-    payload.tenantSlug,
-    'INVALID_COMMAND',
-  );
-  const organizationReference = optionalCanonicalReference(
-    payload.organizationReference,
-    'INVALID_COMMAND',
-  );
-  const clientReference = optionalCanonicalReference(
-    payload.clientReference,
-    'INVALID_COMMAND',
-  );
   return Object.freeze({
     ...base,
     operationType: 'CANONICALIZE_LEGACY_TENANT',
     payload: Object.freeze({
-      tenantId: requireCanonicalDocumentId(
-        payload.tenantId,
-        'INVALID_COMMAND',
-      ),
-      canonicalStatus: requireEnumValue(
-        payload.canonicalStatus,
-        TENANT_AUTHORITY_STATUSES,
-        'INVALID_COMMAND',
-      ),
-      ...(tenantSlug === undefined ? {} : { tenantSlug }),
-      ...(organizationReference === undefined
-        ? {}
-        : { organizationReference }),
-      ...(clientReference === undefined ? {} : { clientReference }),
-      migrationMetadata,
+      canonicalizationInput,
     }),
   });
+}
+
+function assertCanonicalizationInputIsNotAuthority(
+  input: LegacyTenantCanonicalizationInputV1,
+): void {
+  if (input.migrationMetadata.authorityUse !== 'PROHIBITED') {
+    failAuthorityPersistenceContract('MIGRATION_METADATA_NOT_AUTHORITY');
+  }
+}
+
+export function assertLegacyTenantCanonicalizationInputIsNotAuthorityV1(
+  value: unknown,
+): LegacyTenantCanonicalizationInputV1 {
+  const input = validateLegacyTenantCanonicalizationInputV1(value);
+  assertCanonicalizationInputIsNotAuthority(input);
+  return input;
 }
 
 export function validateAuthorityAdministrativeCommandV1(
@@ -1270,6 +1603,7 @@ export function validateAuthorityAdministrativeCommandV1(
       'requestedAt',
       'precondition',
       'reasonCode',
+      'requestId',
       'correlationId',
       'payload',
     ],
@@ -1301,6 +1635,287 @@ export function validateAuthorityAdministrativeCommandV1(
   }
 }
 
+function validateAuthorizedOperationTypes(
+  value: unknown,
+  issue:
+    | 'INVALID_AUTHORIZATION_DECISION'
+    | 'INVALID_INVOCATION_CONTEXT',
+): readonly AuthorityOperationType[] {
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some(
+      (operationType) =>
+        typeof operationType !== 'string' ||
+        !AUTHORITY_OPERATION_TYPES.includes(
+          operationType as AuthorityOperationType,
+        ),
+    )
+  ) {
+    return failAuthorityPersistenceContract(issue);
+  }
+  const operationTypes = value as AuthorityOperationType[];
+  if (new Set(operationTypes).size !== operationTypes.length) {
+    return failAuthorityPersistenceContract(issue);
+  }
+  return freezeArray([...operationTypes].sort());
+}
+
+export function validateAuthorityRepositoryAuthorizationDecisionV1(
+  value: unknown,
+): AuthorityRepositoryAuthorizationDecisionV1 {
+  const record = getClosedRecord(
+    value,
+    [
+      'schemaVersion',
+      'decisionVersion',
+      'decision',
+      'authorizationVersion',
+      'operationTypes',
+      'principalType',
+      'principalId',
+      'actorType',
+      'actorId',
+      'decidedAt',
+      'expiresAt',
+      'safeReasonCode',
+    ],
+    'INVALID_AUTHORIZATION_DECISION',
+  );
+  const principalType = requireEnumValue(
+    record.principalType,
+    TRUSTED_SERVER_PRINCIPAL_TYPES,
+    'INVALID_AUTHORIZATION_DECISION',
+  );
+  const principalId = requireCanonicalPrincipalId(
+    record.principalId,
+    'INVALID_AUTHORIZATION_DECISION',
+  );
+  const actor = requireCanonicalActor(
+    {
+      actorType: record.actorType,
+      actorId: record.actorId,
+    },
+    'INVALID_AUTHORIZATION_DECISION',
+  );
+  if (
+    actor.actorType !== principalType ||
+    actor.actorId !== principalId
+  ) {
+    return failAuthorityPersistenceContract(
+      'INVALID_AUTHORIZATION_DECISION',
+    );
+  }
+  const decidedAt = requireCanonicalTimestamp(
+    record.decidedAt,
+    'INVALID_AUTHORIZATION_DECISION',
+  );
+  const expiresAt =
+    record.expiresAt === undefined
+      ? undefined
+      : requireCanonicalTimestamp(
+          record.expiresAt,
+          'INVALID_AUTHORIZATION_DECISION',
+        );
+  if (expiresAt !== undefined) {
+    requireTimestampOrder(
+      decidedAt,
+      expiresAt,
+      false,
+      'INVALID_AUTHORIZATION_DECISION',
+    );
+  }
+  return Object.freeze({
+    schemaVersion: requireExactLiteral(
+      record.schemaVersion,
+      AUTHORITY_REPOSITORY_AUTHORIZATION_DECISION_VERSION,
+      'INVALID_AUTHORIZATION_DECISION',
+    ),
+    decisionVersion: requireExactLiteral(
+      record.decisionVersion,
+      AUTHORITY_REPOSITORY_AUTHORIZATION_DECISION_VERSION,
+      'INVALID_AUTHORIZATION_DECISION',
+    ),
+    decision: requireEnumValue(
+      record.decision,
+      AUTHORITY_REPOSITORY_AUTHORIZATION_DECISIONS,
+      'INVALID_AUTHORIZATION_DECISION',
+    ),
+    authorizationVersion: requireNonEmptyVersion(
+      record.authorizationVersion,
+      'INVALID_AUTHORIZATION_DECISION',
+    ),
+    operationTypes: validateAuthorizedOperationTypes(
+      record.operationTypes,
+      'INVALID_AUTHORIZATION_DECISION',
+    ),
+    principalType,
+    principalId,
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+    decidedAt,
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+    safeReasonCode: requireReasonCode(
+      record.safeReasonCode,
+      'INVALID_AUTHORIZATION_DECISION',
+    ),
+  });
+}
+
+function isAbortSignal(value: unknown): value is AbortSignal {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  return (
+    typeof Reflect.get(value, 'aborted') === 'boolean' &&
+    typeof Reflect.get(value, 'addEventListener') === 'function' &&
+    typeof Reflect.get(value, 'removeEventListener') === 'function'
+  );
+}
+
+function arraysEqual(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+export function validateAuthorityRepositoryInvocationContextV1(
+  value: unknown,
+  commandValue: unknown,
+): AuthorityRepositoryInvocationContextV1 {
+  const command = validateAuthorityAdministrativeCommandV1(commandValue);
+  const record = getClosedRecord(
+    value,
+    [
+      'schemaVersion',
+      'principal',
+      'actor',
+      'authorizationDecision',
+      'authorizedOperationTypes',
+      'consumerId',
+      'source',
+      'requestId',
+      'correlationId',
+      'initiatedAt',
+      'authorizationVersion',
+      'cancellationSignal',
+    ],
+    'INVALID_INVOCATION_CONTEXT',
+  );
+  let principal: ReturnType<typeof validateTrustedServerPrincipalV1>;
+  try {
+    principal = validateTrustedServerPrincipalV1(record.principal);
+  } catch {
+    return failAuthorityPersistenceContract('INVALID_INVOCATION_CONTEXT');
+  }
+  const actor = requireCanonicalActor(
+    record.actor,
+    'INVALID_INVOCATION_CONTEXT',
+  );
+  const authorizationDecision =
+    validateAuthorityRepositoryAuthorizationDecisionV1(
+      record.authorizationDecision,
+    );
+  const authorizedOperationTypes = validateAuthorizedOperationTypes(
+    record.authorizedOperationTypes,
+    'INVALID_INVOCATION_CONTEXT',
+  );
+  const requestId = requireOperationalId(
+    record.requestId,
+    'INVALID_INVOCATION_CONTEXT',
+  );
+  const correlationId = requireOperationalId(
+    record.correlationId,
+    'INVALID_INVOCATION_CONTEXT',
+  );
+  const initiatedAt = requireCanonicalTimestamp(
+    record.initiatedAt,
+    'INVALID_INVOCATION_CONTEXT',
+  );
+  const authorizationVersion = requireNonEmptyVersion(
+    record.authorizationVersion,
+    'INVALID_INVOCATION_CONTEXT',
+  );
+  const cancellationSignal =
+    record.cancellationSignal === undefined
+      ? undefined
+      : record.cancellationSignal;
+  if (
+    authorizationDecision.decision !== 'ALLOWED' ||
+    !authorizedOperationTypes.includes(command.operationType)
+  ) {
+    return failAuthorityPersistenceContract('OPERATION_NOT_AUTHORIZED');
+  }
+  if (
+    (cancellationSignal !== undefined &&
+      !isAbortSignal(cancellationSignal)) ||
+    principal.principalType !== actor.actorType ||
+    principal.principalId !== actor.actorId ||
+    authorizationDecision.principalType !== principal.principalType ||
+    authorizationDecision.principalId !== principal.principalId ||
+    authorizationDecision.actorType !== actor.actorType ||
+    authorizationDecision.actorId !== actor.actorId ||
+    authorizationDecision.authorizationVersion !== authorizationVersion ||
+    !arraysEqual(
+      authorizationDecision.operationTypes,
+      authorizedOperationTypes,
+    ) ||
+    command.actor.actorType !== actor.actorType ||
+    command.actor.actorId !== actor.actorId ||
+    requestId !== command.requestId ||
+    correlationId !== command.correlationId ||
+    Date.parse(authorizationDecision.decidedAt) > Date.parse(initiatedAt) ||
+    Date.parse(initiatedAt) > Date.parse(command.requestedAt)
+  ) {
+    return failAuthorityPersistenceContract(
+      'INVOCATION_CONTEXT_MISMATCH',
+    );
+  }
+  if (
+    authorizationDecision.expiresAt !== undefined &&
+    (Date.parse(initiatedAt) >=
+      Date.parse(authorizationDecision.expiresAt) ||
+      Date.parse(command.requestedAt) >=
+        Date.parse(authorizationDecision.expiresAt))
+  ) {
+    return failAuthorityPersistenceContract('AUTHORIZATION_EXPIRED');
+  }
+  return Object.freeze({
+    schemaVersion: requireExactLiteral(
+      record.schemaVersion,
+      AUTHORITY_REPOSITORY_INVOCATION_CONTEXT_VERSION,
+      'INVALID_INVOCATION_CONTEXT',
+    ),
+    principal,
+    actor,
+    authorizationDecision,
+    authorizedOperationTypes,
+    consumerId: requireOperationalId(
+      record.consumerId,
+      'INVALID_INVOCATION_CONTEXT',
+    ),
+    source: requireOperationalId(
+      record.source,
+      'INVALID_INVOCATION_CONTEXT',
+    ),
+    requestId,
+    correlationId,
+    initiatedAt,
+    authorizationVersion,
+    ...(cancellationSignal === undefined
+      ? {}
+      : { cancellationSignal }),
+  });
+}
+
+export function validateAuthorityClockOutputV1(value: unknown): string {
+  return requireCanonicalTimestamp(value, 'INVALID_CLOCK_OUTPUT');
+}
+
 export function validateAuthorityIdempotencyRecordV1(
   value: unknown,
 ): AuthorityIdempotencyRecordV1 {
@@ -1309,12 +1924,14 @@ export function validateAuthorityIdempotencyRecordV1(
     [
       'schemaVersion',
       'idempotencyKey',
+      'operationId',
       'operationType',
       'requestFingerprint',
       'status',
       'startedAt',
       'completedAt',
-      'resultReference',
+      'exactRepositoryResult',
+      'resultFingerprint',
       'failureCode',
       'version',
     ],
@@ -1334,6 +1951,10 @@ export function validateAuthorityIdempotencyRecordV1(
     schemaVersion,
     idempotencyKey: requireOperationalId(
       record.idempotencyKey,
+      'INVALID_IDEMPOTENCY_RECORD',
+    ),
+    operationId: requireOperationalId(
+      record.operationId,
       'INVALID_IDEMPOTENCY_RECORD',
     ),
     operationType: requireEnumValue(
@@ -1358,7 +1979,8 @@ export function validateAuthorityIdempotencyRecordV1(
   if (status === 'IN_PROGRESS') {
     if (
       hasDefined(record, 'completedAt') ||
-      hasDefined(record, 'resultReference') ||
+      hasDefined(record, 'exactRepositoryResult') ||
+      hasDefined(record, 'resultFingerprint') ||
       hasDefined(record, 'failureCode')
     ) {
       return failAuthorityPersistenceContract(
@@ -1383,40 +2005,213 @@ export function validateAuthorityIdempotencyRecordV1(
     true,
     'INVALID_IDEMPOTENCY_RECORD',
   );
+  if (
+    !hasDefined(record, 'exactRepositoryResult') ||
+    !hasDefined(record, 'resultFingerprint') ||
+    (status === 'COMPLETED' && hasDefined(record, 'failureCode')) ||
+    (status === 'REJECTED' && !hasDefined(record, 'failureCode'))
+  ) {
+    return failAuthorityPersistenceContract('INVALID_IDEMPOTENCY_RECORD');
+  }
+  const exactRepositoryResult = validateAuthorityRepositoryResultV1(
+    record.exactRepositoryResult,
+  );
+  const resultFingerprint = requireFingerprint(
+    record.resultFingerprint,
+    'INVALID_IDEMPOTENCY_RECORD',
+  );
+  const expectedResultFingerprint = createCanonicalAuthorityHashV1(
+    'authority-repository-result-fingerprint:v1',
+    exactRepositoryResult,
+    'INVALID_IDEMPOTENCY_RECORD',
+  );
+  if (
+    exactRepositoryResult.operationId !== base.operationId ||
+    exactRepositoryResult.completedAt !== completedAt ||
+    resultFingerprint !== expectedResultFingerprint ||
+    (status === 'COMPLETED' &&
+      exactRepositoryResult.status !== 'APPLIED' &&
+      exactRepositoryResult.status !== 'NO_OP') ||
+    (status === 'REJECTED' &&
+      exactRepositoryResult.status !== 'REJECTED')
+  ) {
+    return failAuthorityPersistenceContract('INVALID_IDEMPOTENCY_RECORD');
+  }
   if (status === 'COMPLETED') {
-    if (
-      !hasDefined(record, 'resultReference') ||
-      hasDefined(record, 'failureCode')
-    ) {
-      return failAuthorityPersistenceContract(
-        'INVALID_IDEMPOTENCY_RECORD',
-      );
-    }
     return Object.freeze({
       ...base,
       status,
       completedAt,
-      resultReference: requireAuthorityResourceReference(
-        record.resultReference,
-        'INVALID_IDEMPOTENCY_RECORD',
-      ),
+      exactRepositoryResult,
+      resultFingerprint,
     });
   }
-  if (
-    !hasDefined(record, 'failureCode') ||
-    hasDefined(record, 'resultReference')
-  ) {
+  const failureCode = requireReasonCode(
+    record.failureCode,
+    'INVALID_IDEMPOTENCY_RECORD',
+  );
+  if (failureCode !== exactRepositoryResult.safeCode) {
     return failAuthorityPersistenceContract('INVALID_IDEMPOTENCY_RECORD');
   }
   return Object.freeze({
     ...base,
     status,
     completedAt,
-    failureCode: requireReasonCode(
-      record.failureCode,
-      'INVALID_IDEMPOTENCY_RECORD',
-    ),
+    exactRepositoryResult,
+    resultFingerprint,
+    failureCode,
   });
+}
+
+export function validateAuthorityOperationBindingRecordV1(
+  value: unknown,
+): AuthorityOperationBindingRecordV1 {
+  const record = getClosedRecord(
+    value,
+    [
+      'schemaVersion',
+      'operationId',
+      'idempotencyKey',
+      'operationType',
+      'requestFingerprint',
+      'status',
+      'repositoryResultReference',
+      'createdAt',
+      'completedAt',
+      'version',
+    ],
+    'INVALID_OPERATION_BINDING',
+  );
+  const status = requireEnumValue(
+    record.status,
+    AUTHORITY_OPERATION_BINDING_STATUSES,
+    'INVALID_OPERATION_BINDING',
+  );
+  const base = {
+    schemaVersion: requireExactLiteral(
+      record.schemaVersion,
+      AUTHORITY_OPERATION_BINDING_RECORD_VERSION,
+      'INVALID_OPERATION_BINDING',
+    ),
+    operationId: requireOperationalId(
+      record.operationId,
+      'INVALID_OPERATION_BINDING',
+    ),
+    idempotencyKey: requireOperationalId(
+      record.idempotencyKey,
+      'INVALID_OPERATION_BINDING',
+    ),
+    operationType: requireEnumValue(
+      record.operationType,
+      AUTHORITY_OPERATION_TYPES,
+      'INVALID_OPERATION_BINDING',
+    ),
+    requestFingerprint: requireFingerprint(
+      record.requestFingerprint,
+      'INVALID_OPERATION_BINDING',
+    ),
+    status,
+    createdAt: requireCanonicalTimestamp(
+      record.createdAt,
+      'INVALID_OPERATION_BINDING',
+    ),
+    version: requirePositiveInteger(
+      record.version,
+      'INVALID_OPERATION_BINDING',
+    ),
+  } as const;
+  if (status === 'BOUND') {
+    if (
+      hasDefined(record, 'repositoryResultReference') ||
+      hasDefined(record, 'completedAt')
+    ) {
+      return failAuthorityPersistenceContract(
+        'INVALID_OPERATION_BINDING',
+      );
+    }
+    return Object.freeze({ ...base, status });
+  }
+  if (
+    !hasDefined(record, 'repositoryResultReference') ||
+    !hasDefined(record, 'completedAt')
+  ) {
+    return failAuthorityPersistenceContract('INVALID_OPERATION_BINDING');
+  }
+  const completedAt = requireCanonicalTimestamp(
+    record.completedAt,
+    'INVALID_OPERATION_BINDING',
+  );
+  requireTimestampOrder(
+    base.createdAt,
+    completedAt,
+    true,
+    'INVALID_OPERATION_BINDING',
+  );
+  const repositoryResultReference = requireAuthorityResourceReference(
+    record.repositoryResultReference,
+    'INVALID_OPERATION_BINDING',
+  );
+  const expectedRepositoryResultReference =
+    `authority_idempotency/${createAuthorityIdempotencyDocumentIdV1(
+      base.idempotencyKey,
+    )}`;
+  if (repositoryResultReference !== expectedRepositoryResultReference) {
+    return failAuthorityPersistenceContract('INVALID_OPERATION_BINDING');
+  }
+  return Object.freeze({
+    ...base,
+    status,
+    repositoryResultReference,
+    completedAt,
+  });
+}
+
+function createValidatedCommandFingerprint(
+  command: AuthorityAdministrativeCommandV1,
+): string {
+  return createCanonicalAuthorityHashV1(
+    'authority-command-fingerprint:v1',
+    command,
+    'INVALID_COMMAND_FINGERPRINT',
+  );
+}
+
+export function assertAuthorityIdempotencyRecordMatchesCommandV1(
+  value: unknown,
+  commandValue: unknown,
+): AuthorityIdempotencyRecordV1 {
+  const record = validateAuthorityIdempotencyRecordV1(value);
+  const command = validateAuthorityAdministrativeCommandV1(commandValue);
+  if (
+    record.idempotencyKey !== command.idempotencyKey ||
+    record.operationId !== command.operationId ||
+    record.operationType !== command.operationType ||
+    record.requestFingerprint !== createValidatedCommandFingerprint(command)
+  ) {
+    return failAuthorityPersistenceContract(
+      'IDEMPOTENCY_BINDING_MISMATCH',
+    );
+  }
+  return record;
+}
+
+export function assertAuthorityOperationBindingMatchesCommandV1(
+  value: unknown,
+  commandValue: unknown,
+): AuthorityOperationBindingRecordV1 {
+  const record = validateAuthorityOperationBindingRecordV1(value);
+  const command = validateAuthorityAdministrativeCommandV1(commandValue);
+  if (
+    record.operationId !== command.operationId ||
+    record.idempotencyKey !== command.idempotencyKey ||
+    record.operationType !== command.operationType ||
+    record.requestFingerprint !== createValidatedCommandFingerprint(command)
+  ) {
+    return failAuthorityPersistenceContract(
+      'OPERATION_BINDING_MISMATCH',
+    );
+  }
+  return record;
 }
 
 export function validateAuthorityRepositoryResultV1(
@@ -1433,6 +2228,7 @@ export function validateAuthorityRepositoryResultV1(
       'resultingVersion',
       'resourceReference',
       'completedAt',
+      'retryDisposition',
     ],
     'INVALID_REPOSITORY_RESULT',
   );
@@ -1463,7 +2259,21 @@ export function validateAuthorityRepositoryResultV1(
       record.completedAt,
       'INVALID_REPOSITORY_RESULT',
     ),
+    retryDisposition: requireEnumValue(
+      record.retryDisposition,
+      AUTHORITY_RETRY_DISPOSITIONS,
+      'INVALID_REPOSITORY_RESULT',
+    ),
   } as const;
+  const expectedRetryDisposition =
+    base.status === 'CONFLICT'
+      ? 'RETRY_AFTER_READ'
+      : base.status === 'INTERNAL_ERROR'
+        ? 'SAFE_TO_RETRY_WITH_SAME_IDEMPOTENCY_KEY'
+        : 'DO_NOT_RETRY';
+  if (base.retryDisposition !== expectedRetryDisposition) {
+    return failAuthorityPersistenceContract('INVALID_REPOSITORY_RESULT');
+  }
   const hasVersion = hasDefined(record, 'resultingVersion');
   const hasReference = hasDefined(record, 'resourceReference');
   if (base.status === 'APPLIED') {
@@ -1642,20 +2452,50 @@ function assertEventPayloadMatchesType(
       exactKeys('tenantStatusTo')) ||
     (eventType === 'TENANT_STATUS_CHANGED' &&
       exactKeys('tenantStatusFrom', 'tenantStatusTo')) ||
+    (eventType === 'TENANT_ACTIVATED' &&
+      exactKeys('tenantStatusFrom', 'tenantStatusTo') &&
+      payload.tenantStatusFrom === 'PENDING' &&
+      payload.tenantStatusTo === 'ACTIVE') ||
+    (eventType === 'TENANT_SUSPENDED' &&
+      exactKeys('tenantStatusFrom', 'tenantStatusTo') &&
+      payload.tenantStatusFrom === 'ACTIVE' &&
+      payload.tenantStatusTo === 'SUSPENDED') ||
+    (eventType === 'TENANT_REACTIVATED' &&
+      exactKeys('tenantStatusFrom', 'tenantStatusTo') &&
+      payload.tenantStatusFrom === 'SUSPENDED' &&
+      payload.tenantStatusTo === 'ACTIVE') ||
+    (eventType === 'TENANT_DEACTIVATED' &&
+      exactKeys('tenantStatusFrom', 'tenantStatusTo') &&
+      payload.tenantStatusTo === 'DEACTIVATED') ||
+    (eventType === 'TENANT_DELETED' &&
+      exactKeys('tenantStatusFrom', 'tenantStatusTo') &&
+      payload.tenantStatusFrom === 'DEACTIVATED' &&
+      payload.tenantStatusTo === 'DELETED') ||
     (eventType === 'TENANT_CANONICALIZED' &&
       exactKeys('migrationStatus') &&
       payload.migrationStatus === 'APPLIED') ||
     (eventType === 'MEMBERSHIP_CREATED' &&
       exactKeys('membershipStatusTo', 'resultingRoleCount') &&
       payload.membershipStatusTo === 'ACTIVE') ||
+    (eventType === 'MEMBERSHIP_ACTIVATED' &&
+      exactKeys('membershipStatusTo') &&
+      payload.membershipStatusTo === 'ACTIVE') ||
     (eventType === 'MEMBERSHIP_ROLES_CHANGED' &&
       exactKeys('previousRoleCount', 'resultingRoleCount')) ||
     (eventType === 'MEMBERSHIP_SUSPENDED' &&
       exactKeys('membershipStatusFrom', 'membershipStatusTo') &&
       payload.membershipStatusTo === 'SUSPENDED') ||
+    (eventType === 'MEMBERSHIP_REACTIVATED' &&
+      exactKeys('membershipStatusFrom', 'membershipStatusTo') &&
+      payload.membershipStatusFrom === 'SUSPENDED' &&
+      payload.membershipStatusTo === 'ACTIVE') ||
     (eventType === 'MEMBERSHIP_REVOKED' &&
       exactKeys('membershipStatusFrom', 'membershipStatusTo') &&
       payload.membershipStatusTo === 'REVOKED') ||
+    (eventType === 'MEMBERSHIP_DELETED' &&
+      exactKeys('membershipStatusFrom', 'membershipStatusTo') &&
+      payload.membershipStatusFrom === 'REVOKED' &&
+      payload.membershipStatusTo === 'DELETED') ||
     (eventType === 'ALIAS_RESERVED' &&
       exactKeys('aliasType', 'aliasStatus') &&
       payload.aliasStatus === 'ACTIVE') ||
@@ -1672,7 +2512,12 @@ function assertEventPayloadMatchesType(
     failAuthorityPersistenceContract('INVALID_AUDIT_EVENT');
   }
   if (
-    eventType === 'TENANT_STATUS_CHANGED' &&
+    (eventType === 'TENANT_STATUS_CHANGED' ||
+      eventType === 'TENANT_ACTIVATED' ||
+      eventType === 'TENANT_SUSPENDED' ||
+      eventType === 'TENANT_REACTIVATED' ||
+      eventType === 'TENANT_DEACTIVATED' ||
+      eventType === 'TENANT_DELETED') &&
     payload.tenantStatusFrom !== undefined &&
     payload.tenantStatusTo !== undefined
   ) {
@@ -1683,7 +2528,9 @@ function assertEventPayloadMatchesType(
   }
   if (
     (eventType === 'MEMBERSHIP_SUSPENDED' ||
-      eventType === 'MEMBERSHIP_REVOKED') &&
+      eventType === 'MEMBERSHIP_REACTIVATED' ||
+      eventType === 'MEMBERSHIP_REVOKED' ||
+      eventType === 'MEMBERSHIP_DELETED') &&
     payload.membershipStatusFrom !== undefined &&
     payload.membershipStatusTo !== undefined
   ) {
@@ -1760,19 +2607,42 @@ function validateAuthorityEventBase(
     }
     throw error;
   }
+  const operationId = requireOperationalId(record.operationId, issue);
+  const resourceId = requireAuthorityResourceReference(
+    record.resourceId,
+    issue,
+  );
+  const eventId = requireOperationalId(record.eventId, issue);
+  const expectedEventId =
+    issue === 'INVALID_AUDIT_EVENT'
+      ? createAuthorityAuditEventIdV1({
+          operationId,
+          eventType,
+          resourceType,
+          resourceId,
+        })
+      : createAuthorityOutboxEventIdV1({
+          operationId,
+          eventType,
+          resourceType,
+          resourceId,
+        });
+  if (eventId !== expectedEventId) {
+    return failAuthorityPersistenceContract(issue);
+  }
   return Object.freeze({
     schemaVersion: requireExactLiteral(
       record.schemaVersion,
       schemaVersion,
       issue,
     ),
-    eventId: requireOperationalId(record.eventId, issue),
+    eventId,
     eventType,
-    operationId: requireOperationalId(record.operationId, issue),
+    operationId,
     correlationId: requireOperationalId(record.correlationId, issue),
     actor: requireCanonicalActor(record.actor, issue),
     resourceType,
-    resourceId: requireAuthorityResourceReference(record.resourceId, issue),
+    resourceId,
     reasonCode: requireReasonCode(record.reasonCode, issue),
     ...(beforeVersion === undefined ? {} : { beforeVersion }),
     ...(afterVersion === undefined ? {} : { afterVersion }),
@@ -1799,4 +2669,191 @@ export function validateAuthorityOutboxEventV1(
     AUTHORITY_OUTBOX_EVENT_VERSION,
     'INVALID_OUTBOX_EVENT',
   );
+}
+
+export function validateAuthorityOutboxDeliveryRecordV1(
+  value: unknown,
+): AuthorityOutboxDeliveryRecordV1 {
+  const record = getClosedRecord(
+    value,
+    [
+      'schemaVersion',
+      'eventId',
+      'deliveryStatus',
+      'attemptCount',
+      'availableAt',
+      'leaseOwner',
+      'leaseExpiresAt',
+      'lastAttemptAt',
+      'deliveredAt',
+      'safeFailureCode',
+      'version',
+    ],
+    'INVALID_OUTBOX_DELIVERY',
+  );
+  const deliveryStatus = requireEnumValue(
+    record.deliveryStatus,
+    AUTHORITY_OUTBOX_DELIVERY_STATUSES,
+    'INVALID_OUTBOX_DELIVERY',
+  );
+  const availableAt = requireCanonicalTimestamp(
+    record.availableAt,
+    'INVALID_OUTBOX_DELIVERY',
+  );
+  const lastAttemptAt =
+    record.lastAttemptAt === undefined
+      ? undefined
+      : requireCanonicalTimestamp(
+          record.lastAttemptAt,
+          'INVALID_OUTBOX_DELIVERY',
+        );
+  const eventId = requireOperationalId(
+    record.eventId,
+    'INVALID_OUTBOX_DELIVERY',
+  );
+  if (!/^aoutbox_v1_[a-f0-9]{64}$/.test(eventId)) {
+    return failAuthorityPersistenceContract('INVALID_OUTBOX_DELIVERY');
+  }
+  const base = {
+    schemaVersion: requireExactLiteral(
+      record.schemaVersion,
+      AUTHORITY_OUTBOX_DELIVERY_RECORD_VERSION,
+      'INVALID_OUTBOX_DELIVERY',
+    ),
+    eventId,
+    deliveryStatus,
+    attemptCount: requireNonNegativeInteger(
+      record.attemptCount,
+      'INVALID_OUTBOX_DELIVERY',
+    ),
+    availableAt,
+    ...(lastAttemptAt === undefined ? {} : { lastAttemptAt }),
+    version: requirePositiveInteger(
+      record.version,
+      'INVALID_OUTBOX_DELIVERY',
+    ),
+  } as const;
+  const hasLeaseOwner = hasDefined(record, 'leaseOwner');
+  const hasLeaseExpiry = hasDefined(record, 'leaseExpiresAt');
+  const hasDeliveredAt = hasDefined(record, 'deliveredAt');
+  const hasFailure = hasDefined(record, 'safeFailureCode');
+  if (lastAttemptAt !== undefined && base.attemptCount === 0) {
+    return failAuthorityPersistenceContract('INVALID_OUTBOX_DELIVERY');
+  }
+  if (deliveryStatus === 'PENDING') {
+    if (
+      hasLeaseOwner ||
+      hasLeaseExpiry ||
+      hasDeliveredAt ||
+      hasFailure ||
+      (lastAttemptAt !== undefined &&
+        Date.parse(lastAttemptAt) > Date.parse(availableAt))
+    ) {
+      return failAuthorityPersistenceContract(
+        'INVALID_OUTBOX_DELIVERY',
+      );
+    }
+    return Object.freeze({ ...base, deliveryStatus });
+  }
+  if (deliveryStatus === 'LEASED') {
+    if (
+      !hasLeaseOwner ||
+      !hasLeaseExpiry ||
+      hasDeliveredAt ||
+      hasFailure ||
+      base.attemptCount === 0
+    ) {
+      return failAuthorityPersistenceContract(
+        'INVALID_OUTBOX_DELIVERY',
+      );
+    }
+    const leaseExpiresAt = requireCanonicalTimestamp(
+      record.leaseExpiresAt,
+      'INVALID_OUTBOX_DELIVERY',
+    );
+    requireTimestampOrder(
+      availableAt,
+      leaseExpiresAt,
+      false,
+      'INVALID_OUTBOX_DELIVERY',
+    );
+    if (
+      lastAttemptAt !== undefined &&
+      (Date.parse(lastAttemptAt) < Date.parse(availableAt) ||
+        Date.parse(lastAttemptAt) > Date.parse(leaseExpiresAt))
+    ) {
+      return failAuthorityPersistenceContract(
+        'INVALID_OUTBOX_DELIVERY',
+      );
+    }
+    return Object.freeze({
+      ...base,
+      deliveryStatus,
+      leaseOwner: requireOperationalId(
+        record.leaseOwner,
+        'INVALID_OUTBOX_DELIVERY',
+      ),
+      leaseExpiresAt,
+    });
+  }
+  if (deliveryStatus === 'DELIVERED') {
+    if (
+      hasLeaseOwner ||
+      hasLeaseExpiry ||
+      !hasDeliveredAt ||
+      hasFailure ||
+      base.attemptCount === 0
+    ) {
+      return failAuthorityPersistenceContract(
+        'INVALID_OUTBOX_DELIVERY',
+      );
+    }
+    const deliveredAt = requireCanonicalTimestamp(
+      record.deliveredAt,
+      'INVALID_OUTBOX_DELIVERY',
+    );
+    requireTimestampOrder(
+      availableAt,
+      deliveredAt,
+      true,
+      'INVALID_OUTBOX_DELIVERY',
+    );
+    if (
+      lastAttemptAt !== undefined &&
+      (Date.parse(lastAttemptAt) < Date.parse(availableAt) ||
+        Date.parse(lastAttemptAt) > Date.parse(deliveredAt))
+    ) {
+      return failAuthorityPersistenceContract(
+        'INVALID_OUTBOX_DELIVERY',
+      );
+    }
+    return Object.freeze({
+      ...base,
+      deliveryStatus,
+      deliveredAt,
+    });
+  }
+  if (
+    hasLeaseOwner ||
+    hasLeaseExpiry ||
+    hasDeliveredAt ||
+    !hasFailure ||
+    base.attemptCount === 0
+  ) {
+    return failAuthorityPersistenceContract('INVALID_OUTBOX_DELIVERY');
+  }
+  if (
+    lastAttemptAt !== undefined &&
+    Date.parse(lastAttemptAt) < Date.parse(availableAt)
+  ) {
+    return failAuthorityPersistenceContract('INVALID_OUTBOX_DELIVERY');
+  }
+  return Object.freeze({
+    ...base,
+    deliveryStatus,
+    safeFailureCode: requireReasonCode(
+      record.safeFailureCode,
+      'INVALID_OUTBOX_DELIVERY',
+    ),
+  });
 }
