@@ -259,3 +259,110 @@ export {
 export type {
   PipelineBootstrapEvidenceContext,
 } from './os/bootstrap/PipelineBootstrapEvidenceFactory';
+
+export {
+  TRUSTED_AUTHENTICATION_METHODS,
+  TRUSTED_AUTHENTICATION_PROVIDERS,
+  TRUSTED_REQUEST_GENERATION_STRATEGIES,
+  TRUSTED_REQUEST_IDENTITY_VERSION,
+  TRUSTED_RESOLVER_INPUT_VERSION,
+  TRUSTED_RESOURCE_SCOPE_TYPES,
+  TRUSTED_SANITIZED_TRANSPORT_CONTEXT_VERSION,
+  TRUSTED_SERVER_INVOCATION_CLASSES,
+  TRUSTED_SERVER_LIFECYCLE_VERSION,
+  TRUSTED_SERVER_PRINCIPAL_TYPES,
+  TRUSTED_SERVER_PRINCIPAL_VERSION,
+  TRUSTED_SERVER_REQUEST_CONTEXT_VERSION,
+  TRUSTED_SERVER_RESPONSE_SAFE_CODES,
+  TRUSTED_SERVER_RESPONSE_STATUSES,
+  TRUSTED_SERVER_RESPONSE_VERSION,
+  TRUSTED_SERVER_RESULT_OUTCOMES,
+  TRUSTED_SERVER_TRANSPORTS,
+  TRUSTED_TENANT_MEMBERSHIP_ROLES,
+  TRUSTED_TENANT_MEMBERSHIP_STATUSES,
+  TRUSTED_TENANT_MEMBERSHIP_VERSION,
+} from './serverComposition/types';
+
+export type {
+  TrustedAuthenticationMethod,
+  TrustedAuthenticationProvider,
+  TrustedAuthenticationReferenceV1,
+  TrustedConsumerId,
+  TrustedConsumerRegistryEntryV1,
+  TrustedConsumerRegistryV1,
+  TrustedPrincipalResolutionInputV1,
+  TrustedRegistrySelectionV1,
+  TrustedRequestGenerationStrategy,
+  TrustedRequestIdentityFactoryInputV1,
+  TrustedRequestIdentityV1,
+  TrustedResourceScopeType,
+  TrustedResourceScopeV1,
+  TrustedSanitizedTransportContextV1,
+  TrustedServerCancelledResponseV1,
+  TrustedServerCompletedResponseV1,
+  TrustedServerExecutionResponseV1,
+  TrustedServerExecutionStatus,
+  TrustedServerInternalErrorResponseV1,
+  TrustedServerInvocationClass,
+  TrustedServerLifecycleV1,
+  TrustedServerPrincipalType,
+  TrustedServerPrincipalV1,
+  TrustedServerRejectedResponseV1,
+  TrustedServerRequestContextV1,
+  TrustedServerResponseSafeCode,
+  TrustedServerResponseSourceV1,
+  TrustedServerResultOutcome,
+  TrustedServerResultSummaryV1,
+  TrustedServerTimedOutResponseV1,
+  TrustedServerTransport,
+  TrustedSourceId,
+  TrustedSourceRegistryEntryV1,
+  TrustedSourceRegistryV1,
+  TrustedTenantAuthorityResolutionInputV1,
+  TrustedTenantMembershipRole,
+  TrustedTenantMembershipStatus,
+  TrustedTenantMembershipV1,
+} from './serverComposition/types';
+
+export {
+  TRUSTED_COMPOSITION_REGISTRY_VERSION,
+  TRUSTED_CONSUMER_REGISTRY_V1,
+  TRUSTED_SOURCE_REGISTRY_V1,
+} from './serverComposition/registry';
+
+export {
+  TrustedCompositionContractError,
+} from './serverComposition/errors';
+
+export type {
+  TrustedCompositionContractIssue,
+} from './serverComposition/errors';
+
+export type {
+  TrustedCancellationAdapterPort,
+  TrustedCompositionRootDependencies,
+  TrustedConsumerSourceRegistryPort,
+  TrustedPrincipalResolverPort,
+  TrustedRequestIdentityFactoryPort,
+  TrustedServerResponseSanitizerPort,
+  TrustedTenantAuthorityResolverPort,
+} from './serverComposition/ports';
+
+export {
+  createTrustedAuthenticationReferenceV1,
+  createTrustedCompositionRootDependencies,
+  createTrustedPrincipalResolutionInputV1,
+  createTrustedRequestIdentityV1,
+  createTrustedResourceScopeV1,
+  createTrustedSanitizedTransportContextV1,
+  createTrustedServerExecutionResponseV1,
+  createTrustedServerLifecycleV1,
+  createTrustedServerPrincipalV1,
+  createTrustedServerRequestContextV1,
+  createTrustedTenantAuthorityResolutionInputV1,
+  createTrustedTenantMembershipV1,
+} from './serverComposition/factories';
+
+export {
+  resolveTrustedRegistrySelectionV1,
+} from './serverComposition/validators';
