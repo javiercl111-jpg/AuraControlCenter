@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build --prefix packages/aura-executive-documents && tsc -b && vite build",
+    "typecheck:intelligence-os": "npm run typecheck --prefix packages/aura-intelligence-os",
+    "build:intelligence-os": "npm run build --prefix packages/aura-intelligence-os",
+    "test:intelligence-os:architecture": "npm run test:architecture --prefix packages/aura-intelligence-os",
     "lint": "eslint .",
     "preview": "vite preview"
   },

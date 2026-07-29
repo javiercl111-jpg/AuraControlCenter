@@ -1,5 +1,5 @@
 import type { RelationshipType } from './types';
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 
 export function generateDeterministicNodeId(type: string, label: string): string {
   const normalizedType = type.trim().toUpperCase();
