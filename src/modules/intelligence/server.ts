@@ -366,3 +366,46 @@ export {
 export {
   resolveTrustedRegistrySelectionV1,
 } from './serverComposition/validators';
+
+export {
+  AUTHORITATIVE_POLICY_ENTRY_VERSION,
+  AUTHORITATIVE_POLICY_EXECUTION_MODES_V1,
+  AUTHORITATIVE_POLICY_MAX_TIMEOUT_MS,
+  AUTHORITATIVE_POLICY_PRODUCER_VERSION,
+  AUTHORITATIVE_POLICY_SNAPSHOT_SCHEMA_VERSION,
+  AUTHORITATIVE_POLICY_TEST_AUTHORIZATION_VERSION,
+} from './serverPolicy/types';
+
+export type {
+  AuthoritativePolicyEntryV1,
+  AuthoritativePolicyExecutionModeV1,
+  AuthoritativePolicyLookupInputV1,
+  AuthoritativePolicySnapshotV1,
+} from './serverPolicy/types';
+
+export {
+  AUTHORITATIVE_POLICY_SNAPSHOT_CONTRACT_ERROR_VERSION,
+  AUTHORITATIVE_POLICY_SNAPSHOT_CONTRACT_ISSUES,
+  AuthoritativePolicySnapshotContractError,
+} from './serverPolicy/errors';
+
+export type {
+  AuthoritativePolicySnapshotContractIssue,
+} from './serverPolicy/errors';
+
+export {
+  createAuthoritativePolicyLookupKeyV1,
+} from './serverPolicy/helpers';
+
+export {
+  createAuthoritativePolicySnapshotV1,
+} from './serverPolicy/factories';
+
+export {
+  AUTHORITATIVE_POLICY_TEST_SNAPSHOT_V1,
+} from './serverPolicy/table';
+
+export {
+  validateAuthoritativePolicyEntryV1,
+  validateAuthoritativePolicySnapshotV1,
+} from './serverPolicy/validators';
