@@ -1211,9 +1211,12 @@ describe('immutability and architectural restrictions', () => {
     expect(workflow).toContain('assert:node20');
   });
 
-  it('62 contains zero repository runtime implementation', () => {
+  it('62 contains only the authorized in-memory repository runtime', () => {
+    expect(productionSource()).toMatch(
+      /\bclass\s+InMemoryAuthorityMutationRepository\b/,
+    );
     expect(productionSource()).not.toMatch(
-      /\bclass\s+.*(?:Repository|Adapter)\b/,
+      /\bclass\s+.*(?:Firestore|Firebase).*Adapter\b/,
     );
     expect(productionSource()).not.toMatch(
       /\b(?:create|set|update|delete)\s*\(\s*(?:document|snapshot|ref)/,

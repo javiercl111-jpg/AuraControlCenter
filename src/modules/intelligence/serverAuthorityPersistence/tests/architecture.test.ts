@@ -18,6 +18,12 @@ const PRODUCTION_FILES = [
   'ports.ts',
   'validators.ts',
   'factories.ts',
+  'runtimeTypes.ts',
+  'snapshot.ts',
+  'mutationPlan.ts',
+  'planner.ts',
+  'applyMutationPlan.ts',
+  'InMemoryAuthorityMutationRepository.ts',
 ].map((file) => path.join(MODULE_ROOT, file));
 
 function productionSource(): string {
@@ -43,9 +49,9 @@ describe('serverAuthorityPersistence architecture', () => {
     );
   });
 
-  it('4 has no repository, resolver, migration, or handler runtime', () => {
+  it('4 has no infrastructure repository, resolver, migration, or handler runtime', () => {
     expect(productionSource()).not.toMatch(
-      /\bclass\s+(?:.*Repository|.*Resolver|.*Migration|.*Handler)\b/,
+      /\bclass\s+(?:.*Firestore.*Repository|.*Firebase.*Repository|.*Resolver|.*Migration|.*Handler)\b/,
     );
     expect(productionSource()).not.toMatch(
       /\b(?:getFirestore|initializeApp|onCall|onRequest|setDoc|addDoc|runTransaction)\s*\(/,
@@ -118,7 +124,7 @@ describe('serverAuthorityPersistence architecture', () => {
     expect(productionSource()).not.toMatch(/\ballow\s+(?:read|write)\s*:/);
   });
 
-  it('12 exposes only a neutral repository port without an adapter', () => {
+  it('12 exposes a neutral port and only its in-memory implementation', () => {
     const portSource = fs.readFileSync(
       path.join(MODULE_ROOT, 'ports.ts'),
       'utf8',
@@ -127,8 +133,127 @@ describe('serverAuthorityPersistence architecture', () => {
       /interface\s+AuthorityMutationRepositoryPort/,
     );
     expect(portSource).toMatch(/interface\s+AuthorityClockPort/);
+    expect(productionSource()).toMatch(
+      /\bclass\s+InMemoryAuthorityMutationRepository\b/,
+    );
     expect(productionSource()).not.toMatch(
       /\b(?:RepositoryAdapter|FirestoreAdapter|FirebaseAdapter)\b/,
     );
+  });
+
+  it('54 has zero Firebase imports', () => {
+    expect(productionSource()).not.toMatch(
+      /from\s+['"](?:firebase|firebase-admin|firebase-functions)/,
+    );
+  });
+
+  it('55 has zero Firestore imports or types', () => {
+    expect(productionSource()).not.toMatch(
+      /\b(?:Firestore|DocumentSnapshot|DocumentReference|Transaction)\b/,
+    );
+  });
+
+  it('56 has zero Functions imports', () => {
+    expect(productionSource()).not.toMatch(
+      /from\s+['"][^'"]*functions[^'"]*['"]/,
+    );
+  });
+
+  it('57 has no ambient time, randomness, environment, or unsafe escape', () => {
+    expect(productionSource()).not.toMatch(
+      /\b(?:Date\.now|Math\.random|randomUUID|process\.env)\b/,
+    );
+    expect(productionSource()).not.toMatch(
+      /\b(?:as any|@ts-ignore|@ts-nocheck|eslint-disable)\b/,
+    );
+  });
+
+  it('58 updates the closed server export', () => {
+    const entrypoint = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/modules/intelligence/server.ts'),
+      'utf8',
+    );
+    expect(entrypoint).toContain('planAuthorityMutationV1');
+    expect(entrypoint).toContain('InMemoryAuthorityMutationRepository');
+  });
+
+  it('59 updates the runtime allowlist', () => {
+    const allowlist = fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        'packages/aura-intelligence-os/tests/authorizedExports.ts',
+      ),
+      'utf8',
+    );
+    expect(allowlist).toContain('planAuthorityMutationV1');
+    expect(allowlist).toContain('InMemoryAuthorityMutationRepository');
+  });
+
+  it('60 stays in the Node-only package compilation graph', () => {
+    expect(productionSource()).toContain("from 'node:crypto'");
+    expect(productionSource()).not.toMatch(
+      /\b(?:window|localStorage|sessionStorage)\b/,
+    );
+  });
+
+  it('61 retains structural Node 20 validation', () => {
+    const workflow = fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        '.github/workflows/intelligence-os-node20.yml',
+      ),
+      'utf8',
+    );
+    expect(workflow).toMatch(/node-version:\s*20/);
+  });
+
+  it('62 has zero Firestore adapter', () => {
+    expect(PRODUCTION_FILES.map((file) => path.basename(file))).not.toContain(
+      'FirestoreAuthorityMutationRepository.ts',
+    );
+    expect(productionSource()).not.toMatch(/\bFirestoreAdapter\b/);
+  });
+
+  it('63 has zero emulator runtime', () => {
+    expect(productionSource()).not.toMatch(
+      /\b(?:emulator|FIRESTORE_EMULATOR_HOST)\b/i,
+    );
+  });
+
+  it('64 has zero handlers', () => {
+    expect(productionSource()).not.toMatch(
+      /\b(?:onCall|onRequest|https\.onCall|https\.onRequest)\b/,
+    );
+  });
+
+  it('65 has no delivery worker or runtime I/O', () => {
+    expect(productionSource()).not.toMatch(
+      /\bclass\s+.*Delivery.*Worker\b|\b(?:fetch|readFile|writeFile)\s*\(/,
+    );
+  });
+
+  it('66 has no global repository singleton', () => {
+    expect(productionSource()).not.toMatch(
+      /\b(?:singleton|globalRepository|repositoryInstance)\b/i,
+    );
+  });
+
+  it('67 uses closed collections instead of arbitrary paths', () => {
+    const runtimeTypes = fs.readFileSync(
+      path.join(MODULE_ROOT, 'runtimeTypes.ts'),
+      'utf8',
+    );
+    expect(runtimeTypes).toContain('AUTHORITY_REPOSITORY_COLLECTIONS');
+    expect(productionSource()).not.toMatch(
+      /from\s+['"]node:path['"]|\bDocumentReference\b/,
+    );
+  });
+
+  it('68 never emits the legacy generic tenant status event', () => {
+    const planner = fs.readFileSync(
+      path.join(MODULE_ROOT, 'planner.ts'),
+      'utf8',
+    );
+    expect(planner).not.toContain('TENANT_STATUS_CHANGED');
   });
 });

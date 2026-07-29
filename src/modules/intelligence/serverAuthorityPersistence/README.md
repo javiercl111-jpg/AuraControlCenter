@@ -1,9 +1,9 @@
 # Authority persistence contracts
 
 `serverAuthorityPersistence` defines the closed, versioned, server-only
-contracts for a future tenant-authority persistence adapter. It contains no
-repository implementation, Firebase Admin SDK, Firestore dependency, security
-rules, Functions handler, resolver, migration runtime, I/O, or network access.
+contracts and the infrastructure-neutral authority mutation core. It contains
+no Firebase Admin SDK, Firestore dependency or adapter, security rules,
+Functions handler, resolver, migration executor, I/O, or network access.
 
 The canonical document locations described by these contracts are:
 
@@ -37,9 +37,39 @@ exactly. A denied or expired decision, an unlisted operation, or a command
 actor mismatch fails closed. `AbortSignal`, when present, is preserved by
 identity and is never cloned or frozen.
 
-`AuthorityClockPort` exposes only `nowIso()`. A future runtime must resolve one
-validated timestamp before starting a transaction and reuse it for every
-transaction retry.
+`AuthorityClockPort` exposes only `nowIso()`. The in-memory repository resolves
+one validated timestamp per execution and reuses it for the result, records,
+audit, outbox, and initial delivery state.
+
+## Pure mutation runtime
+
+`AuthorityRepositorySnapshotV1` is a closed, immutable, canonically sorted
+representation of tenants, memberships, aliases, classified legacy sources,
+idempotency records, operation bindings, audit, outbox, and delivery state.
+Every entry carries its neutral document ID. Construction validates each
+record, the ID-to-record binding, duplicates, and outbox-to-delivery
+references. It exposes no mutable maps or infrastructure snapshots.
+
+`planAuthorityMutationV1(command, context, snapshot, occurredAt)` is pure. It
+validates authority before inspecting resources, checks cancellation and both
+idempotency bindings, evaluates preconditions and transitions, and returns a
+frozen `AuthorityMutationPlanV1`. Plans contain only closed reads, writes,
+events, versions, and the safe repository result. They contain no callbacks,
+infrastructure references, arbitrary paths, clocks, or I/O.
+
+`InMemoryAuthorityMutationRepository` injects only an initial snapshot and an
+`AuthorityClockPort`. It owns a private validated snapshot, executes the pure
+planner, checks cancellation again before apply, validates the complete next
+snapshot, and then swaps state once. Failed validation leaves the prior
+snapshot unchanged. Its test snapshot method returns a fresh validated frozen
+clone. The class is reusable and has no singleton or global state.
+
+All eight closed operations are supported: tenant creation/status changes,
+membership creation/role/status changes, alias reservation/tombstoning, and
+validated legacy canonicalization. Canonicalization reads a neutral classified
+legacy-source record and verifies its numeric precondition plus the exact
+source version and fingerprint. It does not decode or execute an external
+migration.
 
 ## Determinism and replay
 
@@ -61,6 +91,15 @@ Repository results expose only closed retry dispositions:
 `DO_NOT_RETRY`, `RETRY_AFTER_READ`, or
 `SAFE_TO_RETRY_WITH_SAME_IDEMPOTENCY_KEY`. They never expose Firebase error
 codes.
+
+The in-memory runtime persists terminal replay state only for `APPLIED`,
+`NO_OP`, and authorized deterministic `REJECTED` results. That is the exact
+closed vocabulary supported by `AuthorityIdempotencyRecordV1`: `COMPLETED`
+accepts only `APPLIED`/`NO_OP`, and `REJECTED` accepts only `REJECTED`.
+`CONFLICT` and `NOT_FOUND` remain safe non-persistent results and must be
+retried, when appropriate, after a new read. Contract, context, authorization,
+and cancellation failures are never persisted. Replays return the exact
+stored result and create no record, version, audit, or outbox change.
 
 ## Authority versions and events
 
@@ -91,5 +130,5 @@ Legacy canonicalization accepts only the seven allowlisted variants.
 canonicalization command. Unknown variants fail closed. A normalized target,
 source version and fingerprint, deterministic alias reservations, migration
 metadata, and conflict disposition are mandatory. No decoder, database read,
-repository implementation, migration runtime, or delivery worker exists in
+infrastructure repository, migration executor, or delivery worker exists in
 this module.

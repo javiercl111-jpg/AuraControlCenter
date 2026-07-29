@@ -719,3 +719,48 @@ export {
   createUpdateTenantMembershipRolesCommandV1,
   createUpdateTenantStatusCommandV1,
 } from './serverAuthorityPersistence/factories';
+
+export {
+  AUTHORITY_LEGACY_SOURCE_RECORD_VERSION,
+  AUTHORITY_MUTATION_PLAN_STATUSES,
+  AUTHORITY_MUTATION_PLAN_VERSION,
+  AUTHORITY_MUTATION_READ_EXPECTATIONS,
+  AUTHORITY_REPOSITORY_COLLECTIONS,
+  AUTHORITY_REPOSITORY_SNAPSHOT_VERSION,
+} from './serverAuthorityPersistence/runtimeTypes';
+
+export type {
+  AuthorityLegacyTenantSourceRecordV1,
+  AuthorityMutationExpectedReadV1,
+  AuthorityMutationPlanStatus,
+  AuthorityMutationPlanV1,
+  AuthorityMutationResourceWriteV1,
+  AuthorityRepositoryCollection,
+  AuthorityRepositoryDocumentV1,
+  AuthorityRepositorySnapshotV1,
+  AuthorityResultingVersionV1,
+} from './serverAuthorityPersistence/runtimeTypes';
+
+export {
+  cloneAuthorityRepositorySnapshotV1,
+  createEmptyAuthorityRepositorySnapshotV1,
+  validateAuthorityLegacyTenantSourceRecordV1,
+  validateAuthorityRepositorySnapshotV1,
+} from './serverAuthorityPersistence/snapshot';
+
+export {
+  createAuthorityMutationPlanV1,
+  validateAuthorityMutationPlanV1,
+} from './serverAuthorityPersistence/mutationPlan';
+
+export {
+  planAuthorityMutationV1,
+} from './serverAuthorityPersistence/planner';
+
+export {
+  applyAuthorityMutationPlanV1,
+} from './serverAuthorityPersistence/applyMutationPlan';
+
+export {
+  InMemoryAuthorityMutationRepository,
+} from './serverAuthorityPersistence/InMemoryAuthorityMutationRepository';
