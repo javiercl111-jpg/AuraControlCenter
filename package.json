@@ -12,11 +12,12 @@
     "build:functions": "npm run stage:intelligence-os:functions && npm run build --prefix functions",
     "assert:node20": "node scripts/assert-node20.cjs",
     "test:intelligence-os": "vitest run src/modules/intelligence/os",
+    "test:intelligence-os:integration": "vitest run src/modules/intelligence/serverIntegrationValidation",
     "test:intelligence-os:architecture": "npm run test:architecture --prefix packages/aura-intelligence-os",
     "test:intelligence-os:distribution": "npm run stage:intelligence-os:functions && npm run test:distribution --prefix packages/aura-intelligence-os",
     "test:intelligence-os:consumption": "npm run test:intelligence-os-consumption --prefix functions",
     "test:enterprise-model": "vitest run src/modules/intelligence/enterprise-model",
-    "validate:intelligence-os:node20": "npm run assert:node20 && npm run test:intelligence-os:architecture && npm run test:intelligence-os:distribution && npm run test:intelligence-os:consumption && npm run build --prefix functions && npm run test:intelligence-os && npm run test:enterprise-model && npm run build",
+    "validate:intelligence-os:node20": "npm run assert:node20 && npm run test:intelligence-os:architecture && npm run test:intelligence-os:distribution && npm run test:intelligence-os:consumption && npm run test:intelligence-os:integration && npm run build --prefix functions && npm run test:intelligence-os && npm run test:enterprise-model && npm run build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

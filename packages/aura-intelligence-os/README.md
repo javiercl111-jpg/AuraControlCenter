@@ -106,3 +106,32 @@ authority.
 The producer is side-effect-free and has no Boundary execution integration,
 composition root, productive policy, Firebase, environment authority, audit,
 I/O, or network dependency.
+
+## In-memory Boundary integration validation
+
+`src/modules/intelligence/serverIntegrationValidation/tests` contains the
+test-only AI-02H1D.4 harness. It composes the trusted request contracts and
+registries, the immutable in-memory policy producer, the governed Boundary,
+the bootstrap adapter, and the production bootstrapper entirely in memory.
+The final value is passed through the closed trusted response sanitizer.
+
+The fixture uses explicit timestamps, request identities, bootstrap clock, and
+`AbortSignal`; it never obtains authority from ambient time, randomness,
+environment variables, transport metadata, or business payload. Its positive
+path is limited to the existing contract-test consumer/source and
+`SHADOW_ONLY`. Negative paths cover missing and disabled policy, authority and
+mode mismatches, deadline, cancellation, missing context, and response
+sanitization.
+
+Run it with:
+
+`npm run test:intelligence-os:integration`
+
+The aggregate `validate:intelligence-os:node20` command also runs this suite,
+so the dedicated Node 20 workflow certifies the same integration from a clean
+checkout.
+
+This harness is not exported from `@aura/intelligence-os/server`, is excluded
+from the package build, and creates no productive composition root, Functions
+handler, Firebase adapter, resolver, network or persistence integration, or
+productive consumer.

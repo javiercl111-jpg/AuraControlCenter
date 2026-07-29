@@ -100,6 +100,9 @@ describe('Aura Intelligence OS Node 20 validation contract', () => {
     expect(rootManifest.scripts['test:intelligence-os:consumption']).toBe(
       'npm run test:intelligence-os-consumption --prefix functions'
     );
+    expect(
+      rootManifest.scripts['validate:intelligence-os:node20']
+    ).toContain('npm run test:intelligence-os:integration');
     expect(consumptionTest).toContain(
       'require("@aura/intelligence-os/server")'
     );
