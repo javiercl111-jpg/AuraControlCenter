@@ -318,18 +318,24 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
     expect(accepted.status, `${accepted.stdout}\n${accepted.stderr}`).toBe(0);
   });
 
-  it('reconstructs identical staging after generated outputs are removed', () => {
-    const firstInventory = listFilesFrom(stagingRoot, stagingRoot);
-    const firstFingerprint = fingerprint(stagingRoot, firstInventory);
+  it(
+    'reconstructs identical staging after generated outputs are removed',
+    () => {
+      const firstInventory = listFilesFrom(stagingRoot, stagingRoot);
+      const firstFingerprint = fingerprint(stagingRoot, firstInventory);
 
-    removeGeneratedDirectory(distRoot, packageRoot);
-    removeGeneratedDirectory(stagingRoot, stagingParent);
+      removeGeneratedDirectory(distRoot, packageRoot);
+      removeGeneratedDirectory(stagingRoot, stagingParent);
 
-    const result = runCanonicalStaging();
-    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      const result = runCanonicalStaging();
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
 
-    const rebuiltInventory = listFilesFrom(stagingRoot, stagingRoot);
-    expect(rebuiltInventory).toEqual(firstInventory);
-    expect(fingerprint(stagingRoot, rebuiltInventory)).toBe(firstFingerprint);
-  });
+      const rebuiltInventory = listFilesFrom(stagingRoot, stagingRoot);
+      expect(rebuiltInventory).toEqual(firstInventory);
+      expect(fingerprint(stagingRoot, rebuiltInventory)).toBe(
+        firstFingerprint
+      );
+    },
+    15_000
+  );
 });

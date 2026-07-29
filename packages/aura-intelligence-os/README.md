@@ -50,3 +50,28 @@ closed export and dependency contract, and executes the production
 `PipelineBootstrapper` entirely in memory. Its consumer is located under
 `functions/tests`; production `functions/src` remains free of OS imports and
 execution.
+
+## Trusted server composition contracts
+
+`src/modules/intelligence/serverComposition` defines the server-only contracts
+for a future trusted composition root. It contains:
+
+- authenticated principal and resolved tenant-membership contracts;
+- a test-only consumer/source registry that authorizes only `INTERNAL_TEST`
+  with `SHADOW_ONLY`;
+- server-generated or server-verified request identity;
+- transport lifecycle and identity-preserving `AbortSignal` handling;
+- allowlisted, non-authoritative transport context;
+- closed sanitized responses;
+- neutral resolver ports and the required composition dependency contract.
+
+The module contains no Firebase adapter, resolver implementation, policy
+producer, Boundary execution, Functions handler, productive consumer, I/O, or
+network integration. Business payload is not part of server authority.
+
+`transportDeadlineAt` is operational context only. The current certified
+Boundary derives its authoritative deadline from policy and does not propagate
+`min(transport deadline, policy deadline)` as the authoritative deadline.
+Therefore this module deliberately performs no deadline adaptation. A future
+composition may preserve transport cancellation, but changing authoritative
+deadline semantics requires a separate certified Boundary contract change.
