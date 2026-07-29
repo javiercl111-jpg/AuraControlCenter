@@ -179,3 +179,28 @@ This harness is not exported from `@aura/intelligence-os/server`, is excluded
 from the package build, and creates no productive composition root, Functions
 handler, Firebase adapter, resolver, network or persistence integration, or
 productive consumer.
+
+## Authority persistence contracts
+
+`src/modules/intelligence/serverAuthorityPersistence` defines the server-only,
+fail-closed persistence contracts for canonical tenant documents, deterministic
+tenant-membership documents, derived tenant aliases, administrative commands,
+explicit write preconditions, idempotency, repository-safe results, and neutral
+audit/outbox events.
+
+The module is contract-only. It has no Firebase Admin or Firestore dependency,
+repository implementation, security rule, Functions handler, migration
+runtime, resolver, I/O, network access, ambient clock, randomness, or
+environment authority. Document factories receive explicit document IDs and
+reject mismatches. Write commands require either `MUST_NOT_EXIST` or an exact
+record/authority version; blind writes cannot be represented.
+
+Tenant and membership state transitions use closed matrices, with `DELETED`
+terminal. Membership roles reuse the certified trusted tenant-role vocabulary
+and remain principal-type compatible. Alias keys use reversible safe encoding,
+and collision validation cannot turn an alias into authority.
+
+Migration metadata is temporary and explicitly carries
+`authorityUse: PROHIBITED`. Audit and outbox payload summaries are closed and
+exclude email, tokens, claims, headers, complete records, and arbitrary
+metadata.
