@@ -26,6 +26,7 @@ export const AUTHORIZED_SERVER_RUNTIME_EXPORTS = Object.freeze([
   'BoundaryPolicyContractError',
   'GovernedBoundaryError',
   'GovernedExecutionBoundary',
+  'InMemoryAuthoritativeFeaturePolicyProducer',
   'PIPELINE_BOOTSTRAP_ACTOR_TYPES',
   'PIPELINE_BOOTSTRAP_COLLECTION_METHODS',
   'PIPELINE_BOOTSTRAP_CORE_ISSUES',

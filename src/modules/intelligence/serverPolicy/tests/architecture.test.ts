@@ -80,12 +80,9 @@ describe('AI-02H1D.2 server policy architecture', () => {
     );
   });
 
-  it('48. defines no policy producer runtime or Boundary integration', () => {
-    expect(source).not.toMatch(
-      /class\s+InMemoryAuthoritativeFeaturePolicyProducer/
-    );
-    expect(source).not.toMatch(/evaluateAuthoritativePolicy\s*\(/);
+  it('48. contains no Boundary execution integration', () => {
     expect(source).not.toMatch(/new\s+GovernedExecutionBoundary/);
+    expect(source).not.toMatch(/BoundaryExecutionPort/);
   });
 
   it('49. exposes only snapshot contracts through the closed server surface', () => {
@@ -101,12 +98,10 @@ describe('AI-02H1D.2 server policy architecture', () => {
       'createAuthoritativePolicySnapshotV1',
       'validateAuthoritativePolicyEntryV1',
       'validateAuthoritativePolicySnapshotV1',
+      'InMemoryAuthoritativeFeaturePolicyProducer',
     ]) {
       expect(names.has(name)).toBe(true);
     }
-    expect(
-      names.has('InMemoryAuthoritativeFeaturePolicyProducer')
-    ).toBe(false);
   });
 
   it('50. remains in the strict Node-only package compile graph', () => {

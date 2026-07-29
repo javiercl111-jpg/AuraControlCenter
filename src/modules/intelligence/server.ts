@@ -409,3 +409,7 @@ export {
   validateAuthoritativePolicyEntryV1,
   validateAuthoritativePolicySnapshotV1,
 } from './serverPolicy/validators';
+
+export {
+  InMemoryAuthoritativeFeaturePolicyProducer,
+} from './serverPolicy/InMemoryAuthoritativeFeaturePolicyProducer';

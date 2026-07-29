@@ -92,6 +92,17 @@ ambiguous collisions.
 Transport is intentionally absent because
 `AuthoritativeBoundaryPolicyQueryV1` does not carry it. Trusted server
 composition remains responsible for transport admission before policy
-evaluation. This module contains no policy producer runtime, Boundary
-integration, productive policy, Firebase, environment authority, I/O, or
-network dependency.
+evaluation.
+
+`InMemoryAuthoritativeFeaturePolicyProducer` is the first server-only runtime
+consumer of this snapshot. Construction revalidates and clones the complete
+snapshot, builds a private exact-key index once, and retains no caller-owned
+mutable reference. Authoritative evaluation validates every query and decision,
+permits only an exact enabled `SHADOW_ONLY` match, and returns deterministic
+specific denial reason codes for every other path. The inherited legacy
+`getEffectivePolicy()` method always returns `undefined` and cannot grant
+authority.
+
+The producer is side-effect-free and has no Boundary execution integration,
+composition root, productive policy, Firebase, environment authority, audit,
+I/O, or network dependency.
