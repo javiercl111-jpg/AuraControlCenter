@@ -1,4 +1,4 @@
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 
 /**
  * Creates a deterministic ID for evidence based on session, turn, normalized text, and category.
