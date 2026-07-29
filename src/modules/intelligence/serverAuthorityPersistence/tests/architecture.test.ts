@@ -12,6 +12,10 @@ const PRODUCTION_FILES = [
   'helpers.ts',
   'ids.ts',
   'transitions.ts',
+  'canonicalHash.ts',
+  'fingerprints.ts',
+  'versioning.ts',
+  'ports.ts',
   'validators.ts',
   'factories.ts',
 ].map((file) => path.join(MODULE_ROOT, file));
@@ -82,8 +86,10 @@ describe('serverAuthorityPersistence architecture', () => {
       imports.every(
         (value) =>
           value.startsWith('./') ||
+          value === 'node:crypto' ||
           value === '../os/boundary/types' ||
-          value === '../serverComposition/types',
+          value === '../serverComposition/types' ||
+          value === '../serverComposition/validators',
       ),
     ).toBe(true);
   });
@@ -112,9 +118,17 @@ describe('serverAuthorityPersistence architecture', () => {
     expect(productionSource()).not.toMatch(/\ballow\s+(?:read|write)\s*:/);
   });
 
-  it('12 exposes contracts without a runtime repository port or adapter', () => {
+  it('12 exposes only a neutral repository port without an adapter', () => {
+    const portSource = fs.readFileSync(
+      path.join(MODULE_ROOT, 'ports.ts'),
+      'utf8',
+    );
+    expect(portSource).toMatch(
+      /interface\s+AuthorityMutationRepositoryPort/,
+    );
+    expect(portSource).toMatch(/interface\s+AuthorityClockPort/);
     expect(productionSource()).not.toMatch(
-      /\b(?:RepositoryPort|RepositoryAdapter|FirestoreAdapter|FirebaseAdapter)\b/,
+      /\b(?:RepositoryAdapter|FirestoreAdapter|FirebaseAdapter)\b/,
     );
   });
 });
