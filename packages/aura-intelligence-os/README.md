@@ -29,3 +29,24 @@ build. The Firebase ignore contract retains its default exclusions without
 excluding `.generated`, so the local package is inside the uploaded Functions
 source. The package is not imported by production Functions code and is never
 published.
+
+## Node 20 consumption validation
+
+The dedicated
+`.github/workflows/intelligence-os-node20.yml` workflow runs on pull requests
+and pushes to `main` with `actions/setup-node` configured for Node 20. It fails
+closed if `process.version` does not start with `v20.`.
+
+From a clean checkout under Node 20, the workflow executes:
+
+1. `npm ci`
+2. `npm run stage:intelligence-os:functions`
+3. `npm ci --prefix functions`
+4. `npm run validate:intelligence-os:node20`
+
+The validation requires the installed local package from Functions, checks the
+closed export and dependency contract, and executes the production
+`GovernedExecutionBoundary`, `BootstrapBoundaryAdapter`, and
+`PipelineBootstrapper` entirely in memory. Its consumer is located under
+`functions/tests`; production `functions/src` remains free of OS imports and
+execution.
