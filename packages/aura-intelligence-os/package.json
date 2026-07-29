@@ -23,6 +23,8 @@
     "clean": "node ./scripts/clean.cjs",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "build": "npm run clean && tsc -p tsconfig.build.json",
-    "test:architecture": "npm run build && vitest run tests"
+    "stage:functions": "node ./scripts/stage-for-functions.cjs",
+    "test:architecture": "npm run build && vitest run tests --exclude tests/distribution.test.ts",
+    "test:distribution": "vitest run tests/distribution.test.ts"
   }
 }

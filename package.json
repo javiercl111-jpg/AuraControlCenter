@@ -8,7 +8,10 @@
     "build": "npm run build --prefix packages/aura-executive-documents && tsc -b && vite build",
     "typecheck:intelligence-os": "npm run typecheck --prefix packages/aura-intelligence-os",
     "build:intelligence-os": "npm run build --prefix packages/aura-intelligence-os",
+    "stage:intelligence-os:functions": "npm run build:intelligence-os && npm run stage:functions --prefix packages/aura-intelligence-os",
+    "build:functions": "npm run stage:intelligence-os:functions && npm run build --prefix functions",
     "test:intelligence-os:architecture": "npm run test:architecture --prefix packages/aura-intelligence-os",
+    "test:intelligence-os:distribution": "npm run stage:intelligence-os:functions && npm run test:distribution --prefix packages/aura-intelligence-os",
     "lint": "eslint .",
     "preview": "vite preview"
   },

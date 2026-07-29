@@ -5,7 +5,15 @@
   "functions": {
     "source": "functions",
     "runtime": "nodejs20",
+    "ignore": [
+      ".git",
+      ".runtimeconfig.json",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "node_modules"
+    ],
     "predeploy": [
+      "npm --prefix \"$PROJECT_DIR\" run stage:intelligence-os:functions",
       "npm --prefix \"$RESOURCE_DIR\" run build"
     ]
   },
