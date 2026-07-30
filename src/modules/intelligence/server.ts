@@ -864,6 +864,106 @@ export {
 } from './serverTenantScopeResolution/tenantScopeResolutionFactories';
 
 export {
+  AUTHORITY_AUTHORIZATION_ALLOW_REASON_CODES,
+  AUTHORITY_AUTHORIZATION_CHANNELS,
+  AUTHORITY_AUTHORIZATION_CONTEXT_VERSION,
+  AUTHORITY_AUTHORIZATION_DECISIONS,
+  AUTHORITY_AUTHORIZATION_DECISION_REASON_CODES,
+  AUTHORITY_AUTHORIZATION_DENY_REASON_CODES,
+  AUTHORITY_AUTHORIZATION_ERROR_VERSION,
+  AUTHORITY_AUTHORIZATION_EVALUATION_REASON_CODES,
+  AUTHORITY_AUTHORIZATION_FRESHNESS_VERSION,
+  AUTHORITY_AUTHORIZATION_OBLIGATION_TYPES,
+  AUTHORITY_AUTHORIZATION_OBLIGATION_VERSION,
+  AUTHORITY_AUTHORIZATION_OPERATION_BINDING_VERSION,
+  AUTHORITY_AUTHORIZATION_POLICY_EVIDENCE_VERSION,
+  AUTHORITY_AUTHORIZATION_POLICY_SOURCES,
+  AUTHORITY_AUTHORIZATION_PRINCIPAL_BINDING_VERSION,
+  AUTHORITY_AUTHORIZATION_REQUEST_VERSION,
+  AUTHORITY_AUTHORIZATION_RESOURCE_BINDING_VERSION,
+  AUTHORITY_AUTHORIZATION_RESOURCE_TYPES,
+  AUTHORITY_AUTHORIZATION_RESULT_STATUSES,
+  AUTHORITY_AUTHORIZATION_RESULT_VERSION,
+  AUTHORITY_AUTHORIZATION_RETRY_DISPOSITIONS,
+  AUTHORITY_AUTHORIZATION_SCHEMA_VERSION,
+  AUTHORITY_AUTHORIZATION_SCOPE_BINDING_VERSION,
+  AUTHORITY_PERMISSIONS,
+} from './serverAuthorityAuthorization/authorityAuthorizationTypes';
+
+export type {
+  AuthorityAuthorizationChannel,
+  AuthorityAuthorizationDecision,
+  AuthorityAuthorizationDecisionReasonCode,
+  AuthorityAuthorizationDecisionV1,
+  AuthorityAuthorizationEvaluationContextV1,
+  AuthorityAuthorizationEvaluationReasonCode,
+  AuthorityAuthorizationFreshnessV1,
+  AuthorityAuthorizationObligationType,
+  AuthorityAuthorizationObligationV1,
+  AuthorityAuthorizationOperationBindingV1,
+  AuthorityAuthorizationPolicyEvidenceV1,
+  AuthorityAuthorizationPolicySource,
+  AuthorityAuthorizationPrincipalBindingV1,
+  AuthorityAuthorizationPriorDecisionReferenceV1,
+  AuthorityAuthorizationRequestV1,
+  AuthorityAuthorizationResourceBindingV1,
+  AuthorityAuthorizationResourceType,
+  AuthorityAuthorizationResultStatus,
+  AuthorityAuthorizationResultV1,
+  AuthorityAuthorizationRetryDisposition,
+  AuthorityAuthorizationSafeMetadataV1,
+  AuthorityAuthorizationScopeBindingV1,
+  AuthorityPermissionV1,
+} from './serverAuthorityAuthorization/authorityAuthorizationTypes';
+
+export type {
+  AuthorityAuthorizationEvaluatorPort,
+} from './serverAuthorityAuthorization/authorityAuthorizationPorts';
+
+export {
+  AUTHORITY_AUTHORIZATION_CONTRACT_ISSUES,
+  AUTHORITY_AUTHORIZATION_ERROR_CODES,
+  AuthorityAuthorizationContractError,
+  AuthorityAuthorizationEvaluationError,
+  AuthorityAuthorizationValidationError,
+} from './serverAuthorityAuthorization/authorityAuthorizationErrors';
+
+export type {
+  AuthorityAuthorizationContractIssue,
+  AuthorityAuthorizationErrorCode,
+  AuthorityAuthorizationSafeErrorV1,
+} from './serverAuthorityAuthorization/authorityAuthorizationErrors';
+
+export {
+  validateAuthorityAuthorizationDecisionV1,
+  validateAuthorityAuthorizationEvaluationContextV1,
+  validateAuthorityAuthorizationFreshnessV1,
+  validateAuthorityAuthorizationObligationV1,
+  validateAuthorityAuthorizationOperationBindingV1,
+  validateAuthorityAuthorizationPolicyEvidenceV1,
+  validateAuthorityAuthorizationPrincipalBindingV1,
+  validateAuthorityAuthorizationRequestV1,
+  validateAuthorityAuthorizationResourceBindingV1,
+  validateAuthorityAuthorizationResultV1,
+  validateAuthorityAuthorizationScopeBindingV1,
+  validateAuthorityPermissionV1,
+} from './serverAuthorityAuthorization/authorityAuthorizationValidators';
+
+export {
+  createAuthorityAuthorizationDecisionV1,
+  createAuthorityAuthorizationEvaluationContextV1,
+  createAuthorityAuthorizationFreshnessV1,
+  createAuthorityAuthorizationObligationV1,
+  createAuthorityAuthorizationOperationBindingV1,
+  createAuthorityAuthorizationPolicyEvidenceV1,
+  createAuthorityAuthorizationPrincipalBindingV1,
+  createAuthorityAuthorizationRequestV1,
+  createAuthorityAuthorizationResourceBindingV1,
+  createAuthorityAuthorizationResultV1,
+  createAuthorityAuthorizationScopeBindingV1,
+} from './serverAuthorityAuthorization/authorityAuthorizationFactories';
+
+export {
   AUTHORITY_PERSISTENCE_CONTRACT_ISSUES,
   AuthorityPersistenceContractError,
 } from './serverAuthorityPersistence/errors';
