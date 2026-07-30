@@ -204,3 +204,12 @@ Migration metadata is temporary and explicitly carries
 `authorityUse: PROHIBITED`. Audit and outbox payload summaries are closed and
 exclude email, tokens, claims, headers, complete records, and arbitrary
 metadata.
+
+Legacy tenant canonicalization is closed over the single allowlisted physical
+source `PLATFORM_TENANTS -> platform_tenants`. The exported neutral descriptor,
+deterministic locator, raw-record validator, timestamp/status normalizers, pure
+decoder, source fingerprint/version factories, and read-registry contracts use
+no Firebase types or I/O. Canonicalization embeds the decoded source record;
+free `sourceReference` paths are rejected, and `MUST_MATCH_SOURCE` binds the
+collection, document ID, locator key, source version, and fingerprint.
+Review-required or rejected variants cannot produce an applicable command.

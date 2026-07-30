@@ -7,14 +7,17 @@ import type {
   AuthorityOutboxDeliveryRecordV1,
   AuthorityOutboxEventV1,
   AuthorityRepositoryResultV1,
-  LegacyTenantVariantV1,
   PersistedTenantAliasRecordV1,
   PersistedTenantAuthorityRecordV1,
   PersistedTenantMembershipRecordV1,
 } from './types';
+import type {
+  AuthorityLegacySourceRecordVersionV1,
+  AuthorityLegacyTenantSourceCollectionV1,
+  AuthorityLegacyTenantSourceRecordV1,
+} from './legacyTenantSources';
 
 export const AUTHORITY_REPOSITORY_SNAPSHOT_VERSION = '1' as const;
-export const AUTHORITY_LEGACY_SOURCE_RECORD_VERSION = '1' as const;
 export const AUTHORITY_MUTATION_PLAN_VERSION = '1' as const;
 
 export const AUTHORITY_REPOSITORY_COLLECTIONS = Object.freeze([
@@ -35,16 +38,6 @@ export type AuthorityRepositoryCollection =
 export interface AuthorityRepositoryDocumentV1<T> {
   readonly documentId: string;
   readonly value: T;
-}
-
-export interface AuthorityLegacyTenantSourceRecordV1 {
-  readonly schemaVersion: typeof AUTHORITY_LEGACY_SOURCE_RECORD_VERSION;
-  readonly sourceReference: string;
-  readonly recordVersion: number;
-  readonly sourceRecordVersion: string;
-  readonly sourceRecordFingerprint: string;
-  readonly classifiedVariant: LegacyTenantVariantV1;
-  readonly authorityUse: 'PROHIBITED';
 }
 
 export interface AuthorityRepositorySnapshotV1 {
@@ -98,8 +91,11 @@ export type AuthorityMutationExpectedReadV1 =
       collection: 'LEGACY_TENANT_SOURCES';
       documentId: string;
       expectation: 'MUST_MATCH_SOURCE';
-      expectedRecordVersion: number;
-      expectedSourceRecordVersion: string;
+      sourceCollection: AuthorityLegacyTenantSourceCollectionV1;
+      sourceDocumentId: string;
+      locatorKey: string;
+      expectedSourceRecordVersion:
+        AuthorityLegacySourceRecordVersionV1;
       expectedSourceRecordFingerprint: string;
     }>;
 

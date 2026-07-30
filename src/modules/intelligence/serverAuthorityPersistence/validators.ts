@@ -16,6 +16,13 @@ import {
 } from './ids';
 import { createCanonicalAuthorityHashV1 } from './canonicalHash';
 import {
+  createAuthorityLegacySourceRecordVersionKeyV1,
+  validateAuthorityLegacySourceRecordVersionV1,
+  validateAuthorityLegacyTenantAliasCandidateV1,
+  validateAuthorityLegacyTenantSourceRecordV1,
+  type AuthorityLegacyTenantAliasCandidateV1,
+} from './legacyTenantSources';
+import {
   failAuthorityPersistenceContract,
   freezeArray,
   getClosedRecord,
@@ -67,7 +74,6 @@ import {
   AUTHORITY_TENANT_ROLE_VOCABULARY_VERSION,
   AUTHORITY_WRITE_PRECONDITION_TYPES,
   AUTHORITY_WRITE_PRECONDITION_VERSION,
-  LEGACY_TENANT_CANONICALIZATION_CLASSIFICATIONS,
   LEGACY_TENANT_CANONICALIZATION_INPUT_VERSION,
   LEGACY_TENANT_CONFLICT_DISPOSITIONS,
   LEGACY_TENANT_VARIANTS,
@@ -98,7 +104,6 @@ import {
   type ChangeTenantMembershipStatusCommandV1,
   type CreateTenantAuthorityCommandV1,
   type CreateTenantMembershipCommandV1,
-  type LegacyTenantAliasReservationV1,
   type LegacyTenantCanonicalTargetV1,
   type LegacyTenantCanonicalizationInputV1,
   type PersistedTenantAliasRecordV1,
@@ -244,7 +249,9 @@ export function validateAuthorityMigrationMetadataV1(
       'authorityUse',
       'migrationVersion',
       'sourceSystem',
-      'sourceReference',
+      'sourceLocatorKey',
+      'sourceRecordVersion',
+      'sourceRecordFingerprint',
       'classifiedVariant',
       'migrationStatus',
       'validatedAt',
@@ -339,12 +346,21 @@ export function validateAuthorityMigrationMetadataV1(
       record.sourceSystem,
       'INVALID_MIGRATION_METADATA',
     ),
-    sourceReference: requireCanonicalReference(
-      record.sourceReference,
+    sourceLocatorKey: requireFingerprint(
+      record.sourceLocatorKey,
       'INVALID_MIGRATION_METADATA',
     ),
-    classifiedVariant: requireReasonCode(
+    sourceRecordVersion:
+      validateAuthorityLegacySourceRecordVersionV1(
+        record.sourceRecordVersion,
+      ),
+    sourceRecordFingerprint: requireFingerprint(
+      record.sourceRecordFingerprint,
+      'INVALID_MIGRATION_METADATA',
+    ),
+    classifiedVariant: requireEnumValue(
       record.classifiedVariant,
+      LEGACY_TENANT_VARIANTS,
       'INVALID_MIGRATION_METADATA',
     ),
     migrationStatus,
@@ -1396,42 +1412,30 @@ function validateLegacyTenantCanonicalTargetV1(
   });
 }
 
-function validateLegacyTenantAliasReservationV1(
-  value: unknown,
-): LegacyTenantAliasReservationV1 {
-  const record = getClosedRecord(
-    value,
-    ['aliasKey', 'aliasType', 'normalizedAlias', 'tenantId'],
-    'INVALID_LEGACY_CANONICALIZATION',
-  );
-  const aliasType = requireEnumValue(
-    record.aliasType,
-    TENANT_ALIAS_TYPES,
-    'INVALID_LEGACY_CANONICALIZATION',
-  );
-  const normalizedAlias = requireNormalizedAlias(
-    record.normalizedAlias,
-    aliasType,
-    'INVALID_LEGACY_CANONICALIZATION',
-  );
-  const aliasKey = createAuthorityAliasKeyV1({
-    aliasType,
-    normalizedAlias,
-  });
-  if (record.aliasKey !== aliasKey) {
-    return failAuthorityPersistenceContract(
-      'INVALID_LEGACY_CANONICALIZATION',
-    );
+function legacyAliasCandidateKey(
+  candidate: AuthorityLegacyTenantAliasCandidateV1,
+): string {
+  return [
+    candidate.aliasType,
+    candidate.normalizedAlias,
+    candidate.sourceField,
+    candidate.confidence,
+    candidate.disposition,
+  ].join(':');
+}
+
+function expectedConflictDisposition(
+  classification:
+    LegacyTenantCanonicalizationInputV1['sourceRecord']['classificationDisposition'],
+): LegacyTenantCanonicalizationInputV1['conflictDisposition'] {
+  switch (classification) {
+    case 'CANONICALIZABLE':
+      return 'NONE';
+    case 'REQUIRES_REVIEW':
+      return 'REQUIRE_REVIEW';
+    case 'REJECTED':
+      return 'REJECT';
   }
-  return Object.freeze({
-    aliasKey,
-    aliasType,
-    normalizedAlias,
-    tenantId: requireCanonicalDocumentId(
-      record.tenantId,
-      'INVALID_LEGACY_CANONICALIZATION',
-    ),
-  });
 }
 
 export function validateLegacyTenantCanonicalizationInputV1(
@@ -1442,27 +1446,16 @@ export function validateLegacyTenantCanonicalizationInputV1(
     [
       'schemaVersion',
       'canonicalDocumentId',
-      'classifiedVariant',
-      'classification',
-      'sourceRecordVersion',
-      'sourceRecordFingerprint',
+      'sourceRecord',
       'canonicalTarget',
-      'aliasesToReserve',
+      'selectedAliasCandidates',
       'migrationMetadata',
       'conflictDisposition',
     ],
     'INVALID_LEGACY_CANONICALIZATION',
   );
-  const classifiedVariant = requireEnumValue(
-    record.classifiedVariant,
-    LEGACY_TENANT_VARIANTS,
-    'INVALID_LEGACY_CANONICALIZATION',
-  );
-  const classification = requireEnumValue(
-    record.classification,
-    LEGACY_TENANT_CANONICALIZATION_CLASSIFICATIONS,
-    'INVALID_LEGACY_CANONICALIZATION',
-  );
+  const sourceRecord =
+    validateAuthorityLegacyTenantSourceRecordV1(record.sourceRecord);
   const conflictDisposition = requireEnumValue(
     record.conflictDisposition,
     LEGACY_TENANT_CONFLICT_DISPOSITIONS,
@@ -1476,42 +1469,80 @@ export function validateLegacyTenantCanonicalizationInputV1(
     'INVALID_LEGACY_CANONICALIZATION',
   );
   if (
-    !Array.isArray(record.aliasesToReserve) ||
-    record.aliasesToReserve.length > 8
+    !Array.isArray(record.selectedAliasCandidates) ||
+    record.selectedAliasCandidates.length > 8
   ) {
     return failAuthorityPersistenceContract(
       'INVALID_LEGACY_CANONICALIZATION',
     );
   }
-  const aliasesToReserve = record.aliasesToReserve
-    .map(validateLegacyTenantAliasReservationV1)
-    .sort((left, right) => left.aliasKey.localeCompare(right.aliasKey));
+  const selectedAliasCandidates = record.selectedAliasCandidates
+    .map(validateAuthorityLegacyTenantAliasCandidateV1)
+    .sort((left, right) =>
+      legacyAliasCandidateKey(left).localeCompare(
+        legacyAliasCandidateKey(right),
+      ),
+    );
   const migrationMetadata = validateAuthorityMigrationMetadataV1(
     record.migrationMetadata,
   );
+  const sourceCandidateKeys = new Set(
+    sourceRecord.aliasCandidates.map(legacyAliasCandidateKey),
+  );
+  const selectedCandidateKeys = selectedAliasCandidates.map(
+    legacyAliasCandidateKey,
+  );
+  const selectedSlug = selectedAliasCandidates.find(
+    (candidate) => candidate.aliasType === 'TENANT_SLUG',
+  );
+  const selectedClientReference = selectedAliasCandidates.find(
+    (candidate) => candidate.aliasType === 'CLIENT_REFERENCE',
+  );
+  const selectedOrganizationReference = selectedAliasCandidates.find(
+    (candidate) => candidate.aliasType === 'ORGANIZATION_REFERENCE',
+  );
   if (
     canonicalDocumentId !== canonicalTarget.tenantId ||
-    aliasesToReserve.some(
-      (alias) => alias.tenantId !== canonicalTarget.tenantId,
+    new Set(selectedCandidateKeys).size !==
+      selectedCandidateKeys.length ||
+    selectedAliasCandidates.some(
+      (candidate) =>
+        candidate.disposition !== 'RESERVE' ||
+        candidate.confidence === 'AMBIGUOUS' ||
+        !sourceCandidateKeys.has(legacyAliasCandidateKey(candidate)),
     ) ||
-    new Set(aliasesToReserve.map((alias) => alias.aliasKey)).size !==
-      aliasesToReserve.length ||
-    migrationMetadata.classifiedVariant !== classifiedVariant ||
-    (classifiedVariant === 'CONFLICTING_STATUS_FIELDS' &&
-      (classification !== 'REQUIRES_REVIEW' ||
-        conflictDisposition !== 'REQUIRE_REVIEW')) ||
-    (classifiedVariant !== 'CONFLICTING_STATUS_FIELDS' &&
-      ((classification === 'CANONICALIZABLE' &&
-        conflictDisposition !== 'NONE') ||
-        (classification === 'REQUIRES_REVIEW' &&
-          conflictDisposition !== 'REQUIRE_REVIEW') ||
-        (classification === 'REJECTED' &&
-          conflictDisposition !== 'REJECT'))) ||
-    ((classifiedVariant === 'AUTO_ID_WITH_TENANT_ID_SLUG' ||
-      classifiedVariant === 'AUTO_ID_WITH_TENANT_SLUG') &&
-      canonicalTarget.tenantSlug === undefined) ||
-    (classifiedVariant === 'MISSING_SLUG' &&
-      canonicalTarget.tenantSlug !== undefined)
+    conflictDisposition !==
+      expectedConflictDisposition(
+        sourceRecord.classificationDisposition,
+      ) ||
+    migrationMetadata.classifiedVariant !==
+      sourceRecord.classifiedVariant ||
+    migrationMetadata.sourceLocatorKey !==
+      sourceRecord.sourceLocator.locatorKey ||
+    migrationMetadata.sourceRecordFingerprint !==
+      sourceRecord.sourceRecordFingerprint ||
+    createAuthorityLegacySourceRecordVersionKeyV1(
+      migrationMetadata.sourceRecordVersion,
+    ) !==
+      createAuthorityLegacySourceRecordVersionKeyV1(
+        sourceRecord.sourceRecordVersion,
+      ) ||
+    (sourceRecord.normalizedStatus !== undefined &&
+      canonicalTarget.status !== sourceRecord.normalizedStatus) ||
+    canonicalDocumentId.toLowerCase() ===
+      sourceRecord.observedTenantSlug?.toLowerCase() ||
+    canonicalDocumentId.toLowerCase() ===
+      selectedSlug?.normalizedAlias ||
+    (canonicalTarget.tenantSlug === undefined) !==
+      (selectedSlug === undefined) ||
+    (canonicalTarget.tenantSlug !== undefined &&
+      canonicalTarget.tenantSlug !== selectedSlug?.normalizedAlias) ||
+    (canonicalTarget.clientReference !== undefined &&
+      canonicalTarget.clientReference.toLowerCase() !==
+        selectedClientReference?.normalizedAlias) ||
+    (canonicalTarget.organizationReference !== undefined &&
+      canonicalTarget.organizationReference.toLowerCase() !==
+        selectedOrganizationReference?.normalizedAlias)
   ) {
     return failAuthorityPersistenceContract(
       'INVALID_LEGACY_CANONICALIZATION',
@@ -1524,18 +1555,9 @@ export function validateLegacyTenantCanonicalizationInputV1(
       'INVALID_LEGACY_CANONICALIZATION',
     ),
     canonicalDocumentId,
-    classifiedVariant,
-    classification,
-    sourceRecordVersion: requireNonEmptyVersion(
-      record.sourceRecordVersion,
-      'INVALID_LEGACY_CANONICALIZATION',
-    ),
-    sourceRecordFingerprint: requireFingerprint(
-      record.sourceRecordFingerprint,
-      'INVALID_LEGACY_CANONICALIZATION',
-    ),
+    sourceRecord,
     canonicalTarget,
-    aliasesToReserve: freezeArray(aliasesToReserve),
+    selectedAliasCandidates: freezeArray(selectedAliasCandidates),
     migrationMetadata,
     conflictDisposition,
   });
@@ -1545,7 +1567,8 @@ function validateCanonicalizeLegacyTenantCommand(
   record: PlainRecord,
   base: ReturnType<typeof validateCommandBase>,
 ): CanonicalizeLegacyTenantCommandV1 {
-  requireUpdatePrecondition(base.precondition);
+  const precondition = base.precondition;
+  requireCreatePrecondition(precondition);
   const payload = getClosedRecord(
     record.payload,
     ['canonicalizationInput'],
@@ -1554,9 +1577,10 @@ function validateCanonicalizeLegacyTenantCommand(
   const canonicalizationInput =
     validateLegacyTenantCanonicalizationInputV1(
       payload.canonicalizationInput,
-    );
+  );
   if (
-    canonicalizationInput.classification !== 'CANONICALIZABLE' ||
+    canonicalizationInput.sourceRecord.classificationDisposition !==
+      'CANONICALIZABLE' ||
     canonicalizationInput.conflictDisposition !== 'NONE' ||
     canonicalizationInput.migrationMetadata.migrationStatus !== 'VALIDATED'
   ) {
@@ -1566,6 +1590,7 @@ function validateCanonicalizeLegacyTenantCommand(
   }
   return Object.freeze({
     ...base,
+    precondition,
     operationType: 'CANONICALIZE_LEGACY_TENANT',
     payload: Object.freeze({
       canonicalizationInput,

@@ -7,22 +7,14 @@ import {
   freezeArray,
   getClosedRecord,
   requireAuthorityResourceReference,
-  requireCanonicalReference,
-  requireEnumValue,
   requireExactLiteral,
-  requireFingerprint,
-  requireNonEmptyVersion,
-  requirePositiveInteger,
 } from './helpers';
 import {
-  AUTHORITY_LEGACY_SOURCE_RECORD_VERSION,
   AUTHORITY_REPOSITORY_SNAPSHOT_VERSION,
-  type AuthorityLegacyTenantSourceRecordV1,
   type AuthorityRepositoryDocumentV1,
   type AuthorityRepositorySnapshotV1,
 } from './runtimeTypes';
 import {
-  LEGACY_TENANT_VARIANTS,
   type AuthorityAuditEventV1,
   type AuthorityIdempotencyRecordV1,
   type AuthorityOperationBindingRecordV1,
@@ -32,6 +24,9 @@ import {
   type PersistedTenantAuthorityRecordV1,
   type PersistedTenantMembershipRecordV1,
 } from './types';
+import {
+  validateAuthorityLegacyTenantSourceRecordV1,
+} from './legacyTenantSources';
 import {
   validateAuthorityAuditEventV1,
   validateAuthorityIdempotencyRecordV1,
@@ -82,64 +77,6 @@ function validateDocumentArray<T>(
     );
   }
   return freezeArray(documents);
-}
-
-export function validateAuthorityLegacyTenantSourceRecordV1(
-  value: unknown,
-  documentId: unknown,
-): AuthorityLegacyTenantSourceRecordV1 {
-  const record = getClosedRecord(
-    value,
-    [
-      'schemaVersion',
-      'sourceReference',
-      'recordVersion',
-      'sourceRecordVersion',
-      'sourceRecordFingerprint',
-      'classifiedVariant',
-      'authorityUse',
-    ],
-    'INVALID_LEGACY_SOURCE_RECORD',
-  );
-  const sourceReference = requireCanonicalReference(
-    record.sourceReference,
-    'INVALID_LEGACY_SOURCE_RECORD',
-  );
-  if (documentId !== sourceReference) {
-    return failAuthorityPersistenceContract(
-      'REPOSITORY_DOCUMENT_ID_MISMATCH',
-    );
-  }
-  return Object.freeze({
-    schemaVersion: requireExactLiteral(
-      record.schemaVersion,
-      AUTHORITY_LEGACY_SOURCE_RECORD_VERSION,
-      'INVALID_LEGACY_SOURCE_RECORD',
-    ),
-    sourceReference,
-    recordVersion: requirePositiveInteger(
-      record.recordVersion,
-      'INVALID_LEGACY_SOURCE_RECORD',
-    ),
-    sourceRecordVersion: requireNonEmptyVersion(
-      record.sourceRecordVersion,
-      'INVALID_LEGACY_SOURCE_RECORD',
-    ),
-    sourceRecordFingerprint: requireFingerprint(
-      record.sourceRecordFingerprint,
-      'INVALID_LEGACY_SOURCE_RECORD',
-    ),
-    classifiedVariant: requireEnumValue(
-      record.classifiedVariant,
-      LEGACY_TENANT_VARIANTS,
-      'INVALID_LEGACY_SOURCE_RECORD',
-    ),
-    authorityUse: requireExactLiteral(
-      record.authorityUse,
-      'PROHIBITED',
-      'INVALID_LEGACY_SOURCE_RECORD',
-    ),
-  });
 }
 
 function validateTenant(

@@ -721,7 +721,6 @@ export {
 } from './serverAuthorityPersistence/factories';
 
 export {
-  AUTHORITY_LEGACY_SOURCE_RECORD_VERSION,
   AUTHORITY_MUTATION_PLAN_STATUSES,
   AUTHORITY_MUTATION_PLAN_VERSION,
   AUTHORITY_MUTATION_READ_EXPECTATIONS,
@@ -730,7 +729,6 @@ export {
 } from './serverAuthorityPersistence/runtimeTypes';
 
 export type {
-  AuthorityLegacyTenantSourceRecordV1,
   AuthorityMutationExpectedReadV1,
   AuthorityMutationPlanStatus,
   AuthorityMutationPlanV1,
@@ -742,9 +740,66 @@ export type {
 } from './serverAuthorityPersistence/runtimeTypes';
 
 export {
+  AUTHORITY_LEGACY_SOURCE_RECORD_VERSION,
+  AUTHORITY_LEGACY_SOURCE_RECORD_VERSION_PROVENANCES,
+  AUTHORITY_LEGACY_SOURCE_RECORD_VERSION_SCHEMA,
+  AUTHORITY_LEGACY_TENANT_ALIAS_CONFIDENCES,
+  AUTHORITY_LEGACY_TENANT_ALIAS_DISPOSITIONS,
+  AUTHORITY_LEGACY_TENANT_ALIAS_SOURCE_FIELDS,
+  AUTHORITY_LEGACY_TENANT_ALIAS_TYPES,
+  AUTHORITY_LEGACY_TENANT_CANONICALIZATION_WARNINGS,
+  AUTHORITY_LEGACY_TENANT_PHYSICAL_LOCATOR_VERSION,
+  AUTHORITY_LEGACY_TENANT_RAW_RECORD_VERSION,
+  AUTHORITY_LEGACY_TENANT_SOURCE_COLLECTIONS,
+  AUTHORITY_LEGACY_TENANT_SOURCE_DESCRIPTOR_VERSION,
+  AUTHORITY_LEGACY_TENANT_SOURCE_LOCATOR_VERSION,
+  AUTHORITY_REPOSITORY_READ_REGISTRY_ENTRY_VERSION,
+  AUTHORITY_REPOSITORY_READ_STATUSES,
+  classifyLegacyTenantVariantV1,
+  createAuthorityLegacySourceRecordVersionKeyV1,
+  createAuthorityLegacyTenantPhysicalLocatorV1,
+  createAuthorityLegacyTenantSourceDescriptorV1,
+  createAuthorityLegacyTenantSourceFingerprintV1,
+  createAuthorityRepositoryReadRegistryEntryV1,
+  decodeAuthorityLegacyTenantSourceRecordV1,
+  getLegacyTenantSourceCollectionPathV1,
+  normalizeAuthorityLegacyTenantRawRecordV1,
+  normalizeLegacyTenantStatusV1,
+  normalizeLegacyTenantTimestampV1,
+  validateAuthorityLegacySourceRecordVersionV1,
+  validateAuthorityLegacyTenantAliasCandidateV1,
+  validateAuthorityLegacyTenantPhysicalLocatorV1,
+  validateAuthorityLegacyTenantRawRecordV1,
+  validateAuthorityLegacyTenantSourceDescriptorV1,
+  validateAuthorityLegacyTenantSourceRecordV1,
+  validateAuthorityRepositoryReadRegistryEntryV1,
+  validateAuthorityRepositoryReadRegistryV1,
+} from './serverAuthorityPersistence/legacyTenantSources';
+
+export type {
+  AuthorityLegacySourceRecordVersionProvenanceV1,
+  AuthorityLegacySourceRecordVersionV1,
+  AuthorityLegacyTenantAliasCandidateV1,
+  AuthorityLegacyTenantAliasConfidenceV1,
+  AuthorityLegacyTenantAliasDispositionV1,
+  AuthorityLegacyTenantAliasSourceFieldV1,
+  AuthorityLegacyTenantCanonicalizationWarningV1,
+  AuthorityLegacyTenantNormalizedRawRecordV1,
+  AuthorityLegacyTenantPhysicalLocatorV1,
+  AuthorityLegacyTenantRawRecordV1,
+  AuthorityLegacyTenantSourceCollectionV1,
+  AuthorityLegacyTenantSourceDescriptorV1,
+  AuthorityLegacyTenantSourceRecordV1,
+  AuthorityLegacyTenantTimestampShapeV1,
+  AuthorityLegacyTenantTimestampV1,
+  AuthorityLegacyTenantUsageV1,
+  AuthorityRepositoryReadRegistryEntryV1,
+  AuthorityRepositoryReadStatusV1,
+} from './serverAuthorityPersistence/legacyTenantSources';
+
+export {
   cloneAuthorityRepositorySnapshotV1,
   createEmptyAuthorityRepositorySnapshotV1,
-  validateAuthorityLegacyTenantSourceRecordV1,
   validateAuthorityRepositorySnapshotV1,
 } from './serverAuthorityPersistence/snapshot';
 

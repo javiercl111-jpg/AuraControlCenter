@@ -7,7 +7,6 @@ import {
   requireEnumValue,
   requireExactLiteral,
   requireFingerprint,
-  requireNonEmptyVersion,
   requireOperationalId,
   requirePositiveInteger,
 } from './helpers';
@@ -15,6 +14,13 @@ import {
   createAuthorityIdempotencyDocumentIdV1,
   createAuthorityOperationBindingDocumentIdV1,
 } from './ids';
+import {
+  AUTHORITY_LEGACY_TENANT_SOURCE_DESCRIPTOR_VERSION,
+  AUTHORITY_LEGACY_TENANT_SOURCE_LOCATOR_VERSION,
+  AUTHORITY_LEGACY_TENANT_SOURCE_COLLECTIONS,
+  createAuthorityLegacyTenantPhysicalLocatorV1,
+  validateAuthorityLegacySourceRecordVersionV1,
+} from './legacyTenantSources';
 import {
   AUTHORITY_MUTATION_PLAN_STATUSES,
   AUTHORITY_MUTATION_PLAN_VERSION,
@@ -57,7 +63,9 @@ function validateExpectedRead(
       'documentId',
       'expectation',
       'expectedVersion',
-      'expectedRecordVersion',
+      'sourceCollection',
+      'sourceDocumentId',
+      'locatorKey',
       'expectedSourceRecordVersion',
       'expectedSourceRecordFingerprint',
     ],
@@ -80,7 +88,9 @@ function validateExpectedRead(
   if (expectation === 'MUST_NOT_EXIST' || expectation === 'MUST_EXIST') {
     if (
       hasDefined(record, 'expectedVersion') ||
-      hasDefined(record, 'expectedRecordVersion') ||
+      hasDefined(record, 'sourceCollection') ||
+      hasDefined(record, 'sourceDocumentId') ||
+      hasDefined(record, 'locatorKey') ||
       hasDefined(record, 'expectedSourceRecordVersion') ||
       hasDefined(record, 'expectedSourceRecordFingerprint')
     ) {
@@ -97,7 +107,9 @@ function validateExpectedRead(
         collection !== 'MEMBERSHIPS' &&
         collection !== 'ALIASES') ||
       !hasDefined(record, 'expectedVersion') ||
-      hasDefined(record, 'expectedRecordVersion') ||
+      hasDefined(record, 'sourceCollection') ||
+      hasDefined(record, 'sourceDocumentId') ||
+      hasDefined(record, 'locatorKey') ||
       hasDefined(record, 'expectedSourceRecordVersion') ||
       hasDefined(record, 'expectedSourceRecordFingerprint')
     ) {
@@ -116,9 +128,36 @@ function validateExpectedRead(
   if (
     collection !== 'LEGACY_TENANT_SOURCES' ||
     hasDefined(record, 'expectedVersion') ||
-    !hasDefined(record, 'expectedRecordVersion') ||
+    !hasDefined(record, 'sourceCollection') ||
+    !hasDefined(record, 'sourceDocumentId') ||
+    !hasDefined(record, 'locatorKey') ||
     !hasDefined(record, 'expectedSourceRecordVersion') ||
     !hasDefined(record, 'expectedSourceRecordFingerprint')
+  ) {
+    return failAuthorityPersistenceContract('INVALID_MUTATION_PLAN');
+  }
+  const sourceCollection = requireEnumValue(
+    record.sourceCollection,
+    AUTHORITY_LEGACY_TENANT_SOURCE_COLLECTIONS,
+    'INVALID_MUTATION_PLAN',
+  );
+  const expectedLocator =
+    createAuthorityLegacyTenantPhysicalLocatorV1({
+      schemaVersion:
+        AUTHORITY_LEGACY_TENANT_SOURCE_DESCRIPTOR_VERSION,
+      sourceCollection,
+      sourceDocumentId: record.sourceDocumentId,
+      sourceLocatorVersion:
+        AUTHORITY_LEGACY_TENANT_SOURCE_LOCATOR_VERSION,
+      authorityUse: 'PROHIBITED',
+    });
+  const locatorKey = requireFingerprint(
+    record.locatorKey,
+    'INVALID_MUTATION_PLAN',
+  );
+  if (
+    locatorKey !== expectedLocator.locatorKey ||
+    documentId !== locatorKey
   ) {
     return failAuthorityPersistenceContract('INVALID_MUTATION_PLAN');
   }
@@ -126,14 +165,13 @@ function validateExpectedRead(
     collection,
     documentId,
     expectation,
-    expectedRecordVersion: requirePositiveInteger(
-      record.expectedRecordVersion,
-      'INVALID_MUTATION_PLAN',
-    ),
-    expectedSourceRecordVersion: requireNonEmptyVersion(
-      record.expectedSourceRecordVersion,
-      'INVALID_MUTATION_PLAN',
-    ),
+    sourceCollection,
+    sourceDocumentId: expectedLocator.documentId,
+    locatorKey,
+    expectedSourceRecordVersion:
+      validateAuthorityLegacySourceRecordVersionV1(
+        record.expectedSourceRecordVersion,
+      ),
     expectedSourceRecordFingerprint: requireFingerprint(
       record.expectedSourceRecordFingerprint,
       'INVALID_MUTATION_PLAN',

@@ -25,6 +25,12 @@ import {
   createAuthorityRepositoryResultFingerprintV1,
 } from '../fingerprints';
 import {
+  AUTHORITY_LEGACY_TENANT_SOURCE_DESCRIPTOR_VERSION,
+  AUTHORITY_LEGACY_TENANT_SOURCE_LOCATOR_VERSION,
+  createAuthorityLegacyTenantSourceDescriptorV1,
+  decodeAuthorityLegacyTenantSourceRecordV1,
+} from '../legacyTenantSources';
+import {
   assertTenantAuthorityTransitionV1,
   assertTenantMembershipTransitionV1,
   isTenantAuthorityTransitionAllowedV1,
@@ -55,6 +61,7 @@ const COMPLETED_AT = '2026-07-29T10:15:00.000Z';
 const FINGERPRINT = `sha256:${'a'.repeat(64)}`;
 const TENANT_ID = 'tenantDoc001';
 const PRINCIPAL_ID = 'firebase_uid_123';
+const LEGACY_SOURCE_DOCUMENT_ID = 'AbCdEfGhIjKlMnOpQrSt';
 const ACTOR = Object.freeze({
   actorType: 'USER' as const,
   actorId: PRINCIPAL_ID,
@@ -80,35 +87,56 @@ function validAppliedResult(
 function validMigration(
   overrides: Readonly<Record<string, unknown>> = {},
 ) {
+  const sourceRecord = validLegacySource();
   return {
     schemaVersion: AUTHORITY_MIGRATION_METADATA_VERSION,
     authorityUse: 'PROHIBITED',
     migrationVersion: 'migration-v1',
     sourceSystem: 'legacy_platform',
-    sourceReference: 'platform_tenants/legacy_tenant_001',
-    classifiedVariant: 'AUTO_ID_WITH_TENANT_SLUG',
+    sourceLocatorKey: sourceRecord.sourceLocator.locatorKey,
+    sourceRecordVersion: sourceRecord.sourceRecordVersion,
+    sourceRecordFingerprint: sourceRecord.sourceRecordFingerprint,
+    classifiedVariant: sourceRecord.classifiedVariant,
     migrationStatus: 'VALIDATED',
     validatedAt: CHANGED_AT,
     ...overrides,
   };
 }
 
+function validLegacySource() {
+  return decodeAuthorityLegacyTenantSourceRecordV1(
+    createAuthorityLegacyTenantSourceDescriptorV1({
+      schemaVersion:
+        AUTHORITY_LEGACY_TENANT_SOURCE_DESCRIPTOR_VERSION,
+      sourceCollection: 'PLATFORM_TENANTS',
+      sourceDocumentId: LEGACY_SOURCE_DOCUMENT_ID,
+      sourceLocatorVersion:
+        AUTHORITY_LEGACY_TENANT_SOURCE_LOCATOR_VERSION,
+      authorityUse: 'PROHIBITED',
+    }),
+    {
+      tenantSlug: 'tenant-alpha',
+      status: 'PENDING',
+      recordVersion: 1,
+    },
+    CHANGED_AT,
+  );
+}
+
 function validCanonicalizationInput(
   overrides: Readonly<Record<string, unknown>> = {},
 ) {
+  const sourceRecord = validLegacySource();
   return {
     schemaVersion: '1',
     canonicalDocumentId: TENANT_ID,
-    classifiedVariant: 'AUTO_ID_WITH_TENANT_SLUG',
-    classification: 'CANONICALIZABLE',
-    sourceRecordVersion: 'legacy-v1',
-    sourceRecordFingerprint: FINGERPRINT,
+    sourceRecord,
     canonicalTarget: {
       tenantId: TENANT_ID,
       status: 'PENDING',
       tenantSlug: 'tenant-alpha',
     },
-    aliasesToReserve: [],
+    selectedAliasCandidates: sourceRecord.aliasCandidates,
     migrationMetadata: validMigration(),
     conflictDisposition: 'NONE',
     ...overrides,
@@ -602,7 +630,7 @@ describe('preconditions and administrative commands', () => {
         {
           canonicalizationInput: validCanonicalizationInput(),
         },
-        expectedRecordVersionPrecondition(),
+        createOnlyPrecondition(),
       ),
     ];
     expect(

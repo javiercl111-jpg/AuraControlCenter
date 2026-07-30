@@ -4,6 +4,9 @@ import {
 import {
   validateAuthorityMutationPlanV1,
 } from './mutationPlan';
+import {
+  createAuthorityLegacySourceRecordVersionKeyV1,
+} from './legacyTenantSources';
 import type {
   AuthorityMutationExpectedReadV1,
   AuthorityMutationResourceWriteV1,
@@ -84,16 +87,46 @@ function readMatches(
             : 'aliasVersion';
     return Reflect.get(value, versionKey) === read.expectedVersion;
   }
-  if (!('expectedRecordVersion' in read)) {
+  if (!('locatorKey' in read)) {
     return false;
   }
+  const sourceRecordVersion =
+    value !== undefined &&
+    typeof value === 'object' &&
+    value !== null
+      ? Reflect.get(value, 'sourceRecordVersion')
+      : undefined;
+  const sourceDescriptor =
+    value !== undefined &&
+    typeof value === 'object' &&
+    value !== null
+      ? Reflect.get(value, 'sourceDescriptor')
+      : undefined;
+  const sourceLocator =
+    value !== undefined &&
+    typeof value === 'object' &&
+    value !== null
+      ? Reflect.get(value, 'sourceLocator')
+      : undefined;
   return (
     value !== undefined &&
     typeof value === 'object' &&
     value !== null &&
-    Reflect.get(value, 'recordVersion') === read.expectedRecordVersion &&
-    Reflect.get(value, 'sourceRecordVersion') ===
-      read.expectedSourceRecordVersion &&
+    typeof sourceDescriptor === 'object' &&
+    sourceDescriptor !== null &&
+    typeof sourceLocator === 'object' &&
+    sourceLocator !== null &&
+    Reflect.get(sourceDescriptor, 'sourceCollection') ===
+      read.sourceCollection &&
+    Reflect.get(sourceDescriptor, 'sourceDocumentId') ===
+      read.sourceDocumentId &&
+    Reflect.get(sourceLocator, 'locatorKey') === read.locatorKey &&
+    createAuthorityLegacySourceRecordVersionKeyV1(
+      sourceRecordVersion,
+    ) ===
+      createAuthorityLegacySourceRecordVersionKeyV1(
+        read.expectedSourceRecordVersion,
+      ) &&
     Reflect.get(value, 'sourceRecordFingerprint') ===
       read.expectedSourceRecordFingerprint
   );

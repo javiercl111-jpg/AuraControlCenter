@@ -7,6 +7,11 @@ import type {
   TrustedServerPrincipalType,
   TrustedTenantMembershipRole,
 } from '../serverComposition/types';
+import type {
+  AuthorityLegacySourceRecordVersionV1,
+  AuthorityLegacyTenantAliasCandidateV1,
+  AuthorityLegacyTenantSourceRecordV1,
+} from './legacyTenantSources';
 
 export const AUTHORITY_PERSISTENCE_SCHEMA_VERSION = '1' as const;
 export const TENANT_AUTHORITY_RECORD_VERSION = '1' as const;
@@ -88,7 +93,9 @@ export interface AuthorityMigrationMetadataV1 {
   readonly authorityUse: 'PROHIBITED';
   readonly migrationVersion: string;
   readonly sourceSystem: string;
-  readonly sourceReference: string;
+  readonly sourceLocatorKey: string;
+  readonly sourceRecordVersion: AuthorityLegacySourceRecordVersionV1;
+  readonly sourceRecordFingerprint: string;
   readonly classifiedVariant: string;
   readonly migrationStatus: AuthorityMigrationStatus;
   readonly validatedAt?: string;
@@ -436,12 +443,10 @@ export interface LegacyTenantCanonicalizationInputV1 {
   readonly schemaVersion:
     typeof LEGACY_TENANT_CANONICALIZATION_INPUT_VERSION;
   readonly canonicalDocumentId: string;
-  readonly classifiedVariant: LegacyTenantVariantV1;
-  readonly classification: LegacyTenantCanonicalizationClassificationV1;
-  readonly sourceRecordVersion: string;
-  readonly sourceRecordFingerprint: string;
+  readonly sourceRecord: AuthorityLegacyTenantSourceRecordV1;
   readonly canonicalTarget: LegacyTenantCanonicalTargetV1;
-  readonly aliasesToReserve: readonly LegacyTenantAliasReservationV1[];
+  readonly selectedAliasCandidates:
+    readonly AuthorityLegacyTenantAliasCandidateV1[];
   readonly migrationMetadata: AuthorityMigrationMetadataV1;
   readonly conflictDisposition: LegacyTenantConflictDispositionV1;
 }
@@ -453,6 +458,10 @@ export interface CanonicalizeLegacyTenantPayloadV1 {
 export interface CanonicalizeLegacyTenantCommandV1
   extends AuthorityAdministrativeCommandBaseV1 {
   readonly operationType: 'CANONICALIZE_LEGACY_TENANT';
+  readonly precondition: Readonly<{
+    schemaVersion: typeof AUTHORITY_WRITE_PRECONDITION_VERSION;
+    type: 'MUST_NOT_EXIST';
+  }>;
   readonly payload: CanonicalizeLegacyTenantPayloadV1;
 }
 

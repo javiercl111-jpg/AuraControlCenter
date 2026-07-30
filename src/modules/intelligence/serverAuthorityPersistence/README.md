@@ -67,9 +67,77 @@ clone. The class is reusable and has no singleton or global state.
 All eight closed operations are supported: tenant creation/status changes,
 membership creation/role/status changes, alias reservation/tombstoning, and
 validated legacy canonicalization. Canonicalization reads a neutral classified
-legacy-source record and verifies its numeric precondition plus the exact
-source version and fingerprint. It does not decode or execute an external
+legacy-source record and verifies the exact physical locator, source version,
+and fingerprint. The target is create-only. It does not execute an external
 migration.
+
+## Legacy tenant source closure
+
+`AuthorityLegacyTenantSourceCollectionV1` is a versioned closed vocabulary.
+Its only value is `PLATFORM_TENANTS`, mapped internally and immutably to the
+fixed collection path `platform_tenants`. Callers provide no collection path.
+`AuthorityLegacyTenantSourceDescriptorV1` accepts one simple document ID and
+always carries `authorityUse: PROHIBITED`. It cannot contain a project,
+database, absolute path, subcollection, or infrastructure reference.
+
+`createAuthorityLegacyTenantPhysicalLocatorV1` produces a neutral locator with
+the fixed collection path, exact document ID, and a versioned SHA-256
+`locatorKey` over canonical framing of collection, document ID, and locator
+version. The locator is descriptive only and grants no tenant authority.
+
+`AuthorityLegacyTenantRawRecordV1` is the closed union of fields observed in
+the audited `platform_tenants` writers. Unknown fields, accessors, class
+instances, nested unknown objects, auth data, roles, claims, and arbitrary
+metadata fail closed. Legacy timestamps accept only canonical UTC ISO strings
+or the neutral `{ seconds, nanoseconds }` shape. Normalization emits UTC ISO
+with nine fractional digits and uses no ambient clock.
+
+`decodeAuthorityLegacyTenantSourceRecordV1` is a pure decoder. It receives the
+descriptor, unknown raw value, and explicit `decodedAt`; validates and clones
+the raw record; normalizes timestamps and status; classifies the variant;
+derives alias candidates; computes the source fingerprint and source version;
+then freezes the complete record. `decodedAt` is excluded from the source
+fingerprint. A valid legacy `recordVersion` becomes
+`EXPLICIT_NUMERIC_VERSION`; otherwise the distinguishable
+`CONTENT_FINGERPRINT_ONLY` provenance is used. No update time is simulated.
+
+Variant priority is explicit:
+
+1. `CONFLICTING_STATUS_FIELDS`;
+2. `AUTO_ID_WITH_TENANT_ID_SLUG`;
+3. `AUTO_ID_WITH_TENANT_SLUG`;
+4. `DOCUMENT_ID_EQUALS_TENANT_ID`;
+5. `MISSING_SLUG`;
+6. `STATUS_FIELD_ONLY`;
+7. `TENANT_STATUS_FIELD_ONLY`.
+
+The closed status mapping is:
+
+- `PENDING`, `READY`, and `PENDING_ACTIVATION` to `PENDING`;
+- `ACTIVE` to `ACTIVE`;
+- `GRACE_PERIOD` and `SUSPENDED` to `SUSPENDED`;
+- `CANCELLED` and `DEACTIVATED` to `DEACTIVATED`;
+- `DELETED` to `DELETED`.
+
+The explicitly listed lowercase equivalents are also accepted. Unknown status
+tokens are classified `REJECTED` and never become `ACTIVE`. Conflicting status
+fields are `REQUIRES_REVIEW`. Company names never become alias or tenant
+identity. Only tenant slug, legacy tenant ID, client reference, and
+organization reference candidates can be selected.
+
+Canonicalization input embeds the validated decoded record. Selected aliases
+must be exact `RESERVE` candidates from that record. Migration metadata binds
+the locator key, source version, fingerprint, and classified variant.
+`sourceReference` is not accepted. A target document ID equal to the decoded
+slug is rejected. `REQUIRES_REVIEW` and `REJECTED` records can be represented
+for review but cannot become an administrative command.
+
+`AuthorityRepositoryReadRegistryEntryV1` is a separate immutable, server-only
+read-coverage contract. `PRESENT` binds collection, document ID, locator,
+version, and fingerprint; `ABSENT` carries no record identity. It is not part
+of `AuthorityRepositorySnapshotV1`. The planner reports a missing registry
+entry as `LEGACY_SOURCE_NOT_READ` and only reports
+`LEGACY_SOURCE_NOT_FOUND` for an explicit `ABSENT` entry.
 
 ## Determinism and replay
 
@@ -127,8 +195,7 @@ versions. Global roles cannot satisfy this prerequisite.
 
 Legacy canonicalization accepts only the seven allowlisted variants.
 `CONFLICTING_STATUS_FIELDS` always requires review and cannot be passed to a
-canonicalization command. Unknown variants fail closed. A normalized target,
-source version and fingerprint, deterministic alias reservations, migration
-metadata, and conflict disposition are mandatory. No decoder, database read,
-infrastructure repository, migration executor, or delivery worker exists in
-this module.
+canonicalization command. Unknown variants fail closed. A decoded source
+record, normalized target, selected source-backed aliases, migration metadata,
+and conflict disposition are mandatory. No database read, infrastructure
+adapter, migration executor, or delivery worker exists in this module.

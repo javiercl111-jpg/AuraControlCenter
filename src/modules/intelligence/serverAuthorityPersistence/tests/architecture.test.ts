@@ -18,6 +18,7 @@ const PRODUCTION_FILES = [
   'ports.ts',
   'validators.ts',
   'factories.ts',
+  'legacyTenantSources.ts',
   'runtimeTypes.ts',
   'snapshot.ts',
   'mutationPlan.ts',

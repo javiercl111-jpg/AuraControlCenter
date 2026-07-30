@@ -21,7 +21,13 @@ import {
   replayAuthorityRepositoryResultV1,
 } from '../fingerprints';
 import {
-  createAuthorityAliasKeyV1,
+  AUTHORITY_LEGACY_TENANT_SOURCE_DESCRIPTOR_VERSION,
+  AUTHORITY_LEGACY_TENANT_SOURCE_LOCATOR_VERSION,
+  createAuthorityLegacyTenantSourceDescriptorV1,
+  decodeAuthorityLegacyTenantSourceRecordV1,
+  type AuthorityLegacyTenantSourceRecordV1,
+} from '../legacyTenantSources';
+import {
   createAuthorityAuditEventIdV1,
   createAuthorityIdempotencyDocumentIdV1,
   createAuthorityMembershipKeyV1,
@@ -78,7 +84,7 @@ const REQUEST_ID = 'request:authority-contract-001';
 const CORRELATION_ID = 'correlation:authority-contract-001';
 const OPERATION_ID = 'operation:authority-contract-001';
 const IDEMPOTENCY_KEY = 'idempotency:authority-contract-001';
-const SOURCE_FINGERPRINT = `sha256:${'a'.repeat(64)}`;
+const LEGACY_SOURCE_DOCUMENT_ID = 'AbCdEfGhIjKlMnOpQrSt';
 const RESULT_REFERENCE = `platform_tenants/${TENANT_ID}`;
 
 const ACTOR = Object.freeze({
@@ -290,8 +296,32 @@ function activationPrerequisite(
   };
 }
 
+function legacySource(
+  rawOverrides: Readonly<Record<string, unknown>> = {},
+) {
+  return decodeAuthorityLegacyTenantSourceRecordV1(
+    createAuthorityLegacyTenantSourceDescriptorV1({
+      schemaVersion:
+        AUTHORITY_LEGACY_TENANT_SOURCE_DESCRIPTOR_VERSION,
+      sourceCollection: 'PLATFORM_TENANTS',
+      sourceDocumentId: LEGACY_SOURCE_DOCUMENT_ID,
+      sourceLocatorVersion:
+        AUTHORITY_LEGACY_TENANT_SOURCE_LOCATOR_VERSION,
+      authorityUse: 'PROHIBITED',
+    }),
+    {
+      tenantSlug: 'tenant-contract',
+      status: 'PENDING',
+      clientId: 'client_contract',
+      recordVersion: 1,
+      ...rawOverrides,
+    },
+    DECIDED_AT,
+  );
+}
+
 function migrationMetadata(
-  classifiedVariant = 'AUTO_ID_WITH_TENANT_SLUG',
+  sourceRecord: AuthorityLegacyTenantSourceRecordV1 = legacySource(),
   overrides: Readonly<Record<string, unknown>> = {},
 ) {
   return {
@@ -299,8 +329,10 @@ function migrationMetadata(
     authorityUse: 'PROHIBITED',
     migrationVersion: 'migration-v1',
     sourceSystem: 'legacy_platform',
-    sourceReference: 'platform_tenants/legacy_tenant_contract',
-    classifiedVariant,
+    sourceLocatorKey: sourceRecord.sourceLocator.locatorKey,
+    sourceRecordVersion: sourceRecord.sourceRecordVersion,
+    sourceRecordFingerprint: sourceRecord.sourceRecordFingerprint,
+    classifiedVariant: sourceRecord.classifiedVariant,
     migrationStatus: 'VALIDATED',
     validatedAt: DECIDED_AT,
     ...overrides,
@@ -310,20 +342,18 @@ function migrationMetadata(
 function legacyInput(
   overrides: Readonly<Record<string, unknown>> = {},
 ) {
+  const sourceRecord = legacySource();
   return {
     schemaVersion: LEGACY_TENANT_CANONICALIZATION_INPUT_VERSION,
     canonicalDocumentId: TENANT_ID,
-    classifiedVariant: 'AUTO_ID_WITH_TENANT_SLUG',
-    classification: 'CANONICALIZABLE',
-    sourceRecordVersion: 'legacy-v1',
-    sourceRecordFingerprint: SOURCE_FINGERPRINT,
+    sourceRecord,
     canonicalTarget: {
       tenantId: TENANT_ID,
       status: 'PENDING',
       tenantSlug: 'tenant-contract',
     },
-    aliasesToReserve: [],
-    migrationMetadata: migrationMetadata(),
+    selectedAliasCandidates: sourceRecord.aliasCandidates,
+    migrationMetadata: migrationMetadata(sourceRecord),
     conflictDisposition: 'NONE',
     ...overrides,
   };
@@ -632,33 +662,17 @@ describe('fingerprints, IDs, and authority versions', () => {
         membershipRolesCommand(['TENANT_MEMBER', 'TENANT_ADMIN']),
       ),
     );
-    const aliases = [
-      {
-        aliasKey: createAuthorityAliasKeyV1({
-          aliasType: 'TENANT_SLUG',
-          normalizedAlias: 'tenant-contract',
-        }),
-        aliasType: 'TENANT_SLUG',
-        normalizedAlias: 'tenant-contract',
-        tenantId: TENANT_ID,
-      },
-      {
-        aliasKey: createAuthorityAliasKeyV1({
-          aliasType: 'CLIENT_REFERENCE',
-          normalizedAlias: 'clients/client_contract',
-        }),
-        aliasType: 'CLIENT_REFERENCE',
-        normalizedAlias: 'clients/client_contract',
-        tenantId: TENANT_ID,
-      },
-    ];
+    const sourceRecord = legacySource();
+    const aliases = sourceRecord.aliasCandidates;
     const canonicalizationCommand = (orderedAliases: readonly unknown[]) =>
       command({
         operationType: 'CANONICALIZE_LEGACY_TENANT',
-        precondition: expectedVersionPrecondition(),
+        precondition: createOnlyPrecondition(),
         payload: {
           canonicalizationInput: legacyInput({
-            aliasesToReserve: orderedAliases,
+            sourceRecord,
+            selectedAliasCandidates: orderedAliases,
+            migrationMetadata: migrationMetadata(sourceRecord),
           }),
         },
       });
@@ -1015,27 +1029,30 @@ describe('activation and legacy canonicalization closure', () => {
   it('46 accepts a classified legacy variant', () => {
     expect(
       createLegacyTenantCanonicalizationInputV1(legacyInput())
-        .classification,
+        .sourceRecord.classificationDisposition,
     ).toBe('CANONICALIZABLE');
   });
 
   it('47 requires review for conflicting status fields', () => {
+    const sourceRecord = legacySource({
+      status: 'ACTIVE',
+      tenantStatus: 'SUSPENDED',
+    });
     const result = createLegacyTenantCanonicalizationInputV1(
       legacyInput({
-        classifiedVariant: 'CONFLICTING_STATUS_FIELDS',
-        classification: 'REQUIRES_REVIEW',
-        migrationMetadata: migrationMetadata(
-          'CONFLICTING_STATUS_FIELDS',
-        ),
+        sourceRecord,
+        migrationMetadata: migrationMetadata(sourceRecord),
         conflictDisposition: 'REQUIRE_REVIEW',
       }),
     );
-    expect(result.classification).toBe('REQUIRES_REVIEW');
+    expect(result.sourceRecord.classificationDisposition).toBe(
+      'REQUIRES_REVIEW',
+    );
     expect(() =>
       createAuthorityAdministrativeCommandV1(
         command({
           operationType: 'CANONICALIZE_LEGACY_TENANT',
-          precondition: expectedVersionPrecondition(),
+          precondition: createOnlyPrecondition(),
           payload: { canonicalizationInput: result },
         }),
       ),
@@ -1043,9 +1060,15 @@ describe('activation and legacy canonicalization closure', () => {
   });
 
   it('48 rejects an unknown legacy variant', () => {
+    const sourceRecord = legacySource();
     expect(() =>
       createLegacyTenantCanonicalizationInputV1(
-        legacyInput({ classifiedVariant: 'UNKNOWN_LEGACY_VARIANT' }),
+        legacyInput({
+          sourceRecord: {
+            ...sourceRecord,
+            classifiedVariant: 'UNKNOWN_LEGACY_VARIANT',
+          },
+        }),
       ),
     ).toThrow(AuthorityPersistenceContractError);
   });
@@ -1059,10 +1082,9 @@ describe('activation and legacy canonicalization closure', () => {
     expect(() =>
       createLegacyTenantCanonicalizationInputV1(
         legacyInput({
-          migrationMetadata: migrationMetadata(
-            'AUTO_ID_WITH_TENANT_SLUG',
-            { authorityUse: 'ALLOWED' },
-          ),
+          migrationMetadata: migrationMetadata(legacySource(), {
+            authorityUse: 'ALLOWED',
+          }),
         }),
       ),
     ).toThrow(AuthorityPersistenceContractError);
@@ -1113,22 +1135,21 @@ describe('immutability and architectural restrictions', () => {
   });
 
   it('53 caller mutation cannot alter canonicalized aliases', () => {
-    const aliases = [
-      {
-        aliasKey: createAuthorityAliasKeyV1({
-          aliasType: 'TENANT_SLUG',
-          normalizedAlias: 'tenant-contract',
-        }),
-        aliasType: 'TENANT_SLUG',
-        normalizedAlias: 'tenant-contract',
-        tenantId: TENANT_ID,
-      },
-    ];
+    const sourceRecord = legacySource();
+    const aliases = sourceRecord.aliasCandidates.map((candidate) => ({
+      ...candidate,
+    }));
     const result = createLegacyTenantCanonicalizationInputV1(
-      legacyInput({ aliasesToReserve: aliases }),
+      legacyInput({
+        sourceRecord,
+        selectedAliasCandidates: aliases,
+        migrationMetadata: migrationMetadata(sourceRecord),
+      }),
     );
-    aliases[0].tenantId = 'tenantContract002';
-    expect(result.aliasesToReserve[0].tenantId).toBe(TENANT_ID);
+    aliases[0].normalizedAlias = 'changed-alias';
+    expect(result.selectedAliasCandidates[0]?.normalizedAlias).not.toBe(
+      'changed-alias',
+    );
   });
 
   it('54 has no Firebase imports', () => {
