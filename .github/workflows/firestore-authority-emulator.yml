@@ -1,0 +1,54 @@
+name: Firestore authority emulator certification
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firestore-authority-emulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-firestore-authority-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build and stage private package
+        run: npm run stage:intelligence-os:functions
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Assert credential-free environment
+        run: test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+
+      - name: Run Firestore authority emulator certification
+        run: npm run test:firestore-authority-emulator
