@@ -113,6 +113,14 @@ describe('AI-02H1D.4 integration architecture', () => {
       }))
       .filter(
         ({ path, source }) =>
+          ![
+            'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts',
+          ].includes(
+            relative(productionFunctionsRoot, path).replaceAll(
+              '\\',
+              '/'
+            )
+          ) &&
           !relative(productionFunctionsRoot, path)
             .replaceAll('\\', '/')
             .startsWith(

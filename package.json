@@ -18,6 +18,7 @@
     "test:intelligence-os:consumption": "npm run test:intelligence-os-consumption --prefix functions",
     "test:firestore-authority-adapter": "vitest run --config functions/tests/vitest.authority.config.ts",
     "test:firestore-authority-emulator": "npm run assert:node20 && npm run stage:intelligence-os:functions && node functions/tests/emulator/runFirestoreAuthorityEmulator.cjs",
+    "test:authority-dark-composition": "vitest run --config functions/tests/vitest.authorityDarkComposition.config.ts",
     "test:enterprise-model": "vitest run src/modules/intelligence/enterprise-model",
     "validate:intelligence-os:node20": "npm run assert:node20 && npm run test:intelligence-os:architecture && npm run test:intelligence-os:distribution && npm run test:intelligence-os:consumption && npm run test:intelligence-os:integration && npm run build --prefix functions && npm run test:intelligence-os && npm run test:enterprise-model && npm run build",
     "lint": "eslint .",

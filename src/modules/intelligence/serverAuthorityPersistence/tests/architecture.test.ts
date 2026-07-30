@@ -101,7 +101,7 @@ describe('serverAuthorityPersistence architecture', () => {
     ).toBe(true);
   });
 
-  it('10 is consumed only through the closed package subpath by the Functions adapter', () => {
+  it('10 is consumed only through the closed package subpath by certified Functions infrastructure', () => {
     const functionsRoot = path.resolve(process.cwd(), 'functions/src');
     const importers = fs
       .readdirSync(functionsRoot, { recursive: true })
@@ -117,15 +117,22 @@ describe('serverAuthorityPersistence architecture', () => {
         /serverAuthorityPersistence|@aura\/intelligence-os/.test(source),
       );
     expect(
-      importers.every(({ entry, source }) =>
-        entry.startsWith(
+      importers.every(({ entry, source }) => {
+        const isCertifiedAdapter = entry.startsWith(
           'infrastructure/firestore/authorityPersistence/',
-        ) &&
-        source.includes('@aura/intelligence-os/server') &&
-        !source.includes('src/modules/intelligence'),
-      ),
+        );
+        const isCertifiedDarkCompositionTypes =
+          entry ===
+          'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts';
+        return (
+          (isCertifiedAdapter ||
+            isCertifiedDarkCompositionTypes) &&
+          source.includes('@aura/intelligence-os/server') &&
+          !source.includes('src/modules/intelligence')
+        );
+      }),
     ).toBe(true);
-    expect(importers).toHaveLength(7);
+    expect(importers).toHaveLength(8);
   });
 
   it('11 does not modify or embed Firestore security rules', () => {

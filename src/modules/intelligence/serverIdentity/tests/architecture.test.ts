@@ -92,6 +92,8 @@ describe('serverIdentity architecture', () => {
           !entry.startsWith(
             'infrastructure/firestore/authorityPersistence/',
           ) &&
+          entry !==
+            'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts' &&
           /@aura\/intelligence-os|serverIdentity|modules\/intelligence/.test(
             source,
           ),
