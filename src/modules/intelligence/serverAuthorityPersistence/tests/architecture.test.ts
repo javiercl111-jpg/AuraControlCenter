@@ -101,21 +101,31 @@ describe('serverAuthorityPersistence architecture', () => {
     ).toBe(true);
   });
 
-  it('10 is not imported by production Functions', () => {
+  it('10 is consumed only through the closed package subpath by the Functions adapter', () => {
     const functionsRoot = path.resolve(process.cwd(), 'functions/src');
-    const sources = fs
+    const importers = fs
       .readdirSync(functionsRoot, { recursive: true })
       .filter(
         (entry): entry is string =>
           typeof entry === 'string' && /\.(?:ts|js)$/.test(entry),
       )
-      .map((entry) =>
-        fs.readFileSync(path.join(functionsRoot, entry), 'utf8'),
-      )
-      .join('\n');
-    expect(sources).not.toMatch(
-      /serverAuthorityPersistence|@aura\/intelligence-os/,
-    );
+      .map((entry) => ({
+        entry: entry.replaceAll('\\', '/'),
+        source: fs.readFileSync(path.join(functionsRoot, entry), 'utf8'),
+      }))
+      .filter(({ source }) =>
+        /serverAuthorityPersistence|@aura\/intelligence-os/.test(source),
+      );
+    expect(
+      importers.every(({ entry, source }) =>
+        entry.startsWith(
+          'infrastructure/firestore/authorityPersistence/',
+        ) &&
+        source.includes('@aura/intelligence-os/server') &&
+        !source.includes('src/modules/intelligence'),
+      ),
+    ).toBe(true);
+    expect(importers).toHaveLength(7);
   });
 
   it('11 does not modify or embed Firestore security rules', () => {

@@ -1,6 +1,11 @@
 {
   "compilerOptions": {
     "module": "commonjs",
+    "paths": {
+      "@aura/intelligence-os/server": [
+        "./.generated/aura-intelligence-os/dist/server.d.ts"
+      ]
+    },
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "outDir": "lib",

@@ -111,10 +111,16 @@ describe('AI-02H1D.4 integration architecture', () => {
         path,
         source: readFileSync(path, 'utf8'),
       }))
-      .filter(({ source }) =>
-        /@aura\/intelligence-os|src\/modules\/intelligence/.test(
-          source
-        )
+      .filter(
+        ({ path, source }) =>
+          !relative(productionFunctionsRoot, path)
+            .replaceAll('\\', '/')
+            .startsWith(
+              'infrastructure/firestore/authorityPersistence/'
+            ) &&
+          /@aura\/intelligence-os|src\/modules\/intelligence/.test(
+            source
+          )
       )
       .map(({ path }) =>
         relative(productionFunctionsRoot, path).replaceAll(

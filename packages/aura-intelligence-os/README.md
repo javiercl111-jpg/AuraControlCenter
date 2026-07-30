@@ -27,8 +27,12 @@ From a clean checkout, the reproducible order is:
 Firebase predeploy runs the staging command before the verified Functions
 build. The Firebase ignore contract retains its default exclusions without
 excluding `.generated`, so the local package is inside the uploaded Functions
-source. The package is not imported by production Functions code and is never
-published.
+source. The closed Firestore authority persistence adapter under
+`functions/src/infrastructure/firestore/authorityPersistence` is the only
+production Functions code permitted to import
+`@aura/intelligence-os/server`; it consumes the certified persistence port and
+pure planner without exporting infrastructure back through this package. The
+package is never published.
 
 ## Node 20 consumption validation
 
@@ -47,9 +51,10 @@ From a clean checkout under Node 20, the workflow executes:
 The validation requires the installed local package from Functions, checks the
 closed export and dependency contract, and executes the production
 `GovernedExecutionBoundary`, `BootstrapBoundaryAdapter`, and
-`PipelineBootstrapper` entirely in memory. Its consumer is located under
-`functions/tests`; production `functions/src` remains free of OS imports and
-execution.
+`PipelineBootstrapper` entirely in memory. Boundary execution remains confined
+to `functions/tests`; the production Firestore adapter consumes only the
+server-side authority persistence contracts and planner and does not register
+a handler or composition root.
 
 ## Trusted server composition contracts
 

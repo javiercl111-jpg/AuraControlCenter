@@ -263,7 +263,7 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
     expect(functionsGitignore.trim()).toBe('.generated/');
   });
 
-  it('does not import the package from production Functions source', () => {
+  it('allows only the closed Firestore authority adapter to import the server package', () => {
     const sourceRoot = resolve(functionsRoot, 'src');
     const sourceFiles = listFilesFrom(sourceRoot, sourceRoot).filter((file) =>
       file.endsWith('.ts')
@@ -274,7 +274,24 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
       )
     );
 
-    expect(importers).toEqual([]);
+    expect(importers).toEqual([
+      'infrastructure/firestore/authorityPersistence/FirestoreAuthorityMutationRepository.ts',
+      'infrastructure/firestore/authorityPersistence/firestoreAuthorityCollections.ts',
+      'infrastructure/firestore/authorityPersistence/firestoreAuthorityErrors.ts',
+      'infrastructure/firestore/authorityPersistence/firestoreAuthorityExpectedReads.ts',
+      'infrastructure/firestore/authorityPersistence/firestoreAuthorityReadSet.ts',
+      'infrastructure/firestore/authorityPersistence/firestoreAuthoritySnapshot.ts',
+      'infrastructure/firestore/authorityPersistence/firestoreAuthorityWritePlan.ts',
+    ]);
+    importers.forEach((file) => {
+      const source = readFileSync(resolve(sourceRoot, file), 'utf8');
+      expect(source).not.toContain(
+        'from \'@aura/intelligence-os\''
+      );
+      expect(source).not.toContain(
+        'from "@aura/intelligence-os"'
+      );
+    });
   });
 
   it('fails closed when the staged manifest is tampered', () => {

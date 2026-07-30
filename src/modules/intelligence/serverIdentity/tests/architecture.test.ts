@@ -75,21 +75,28 @@ describe('serverIdentity architecture', () => {
     ).toBe(true);
   });
 
-  it('9 never imports serverIdentity from production Functions', () => {
+  it('9 is not imported directly by production Functions', () => {
     const functionsRoot = path.resolve(process.cwd(), 'functions/src');
-    const sources = fs
+    const violations = fs
       .readdirSync(functionsRoot, { recursive: true })
       .filter(
         (entry): entry is string =>
           typeof entry === 'string' && /\.(?:ts|js)$/.test(entry),
       )
-      .map((entry) =>
-        fs.readFileSync(path.join(functionsRoot, entry), 'utf8'),
-      )
-      .join('\n');
-    expect(sources).not.toMatch(
-      /@aura\/intelligence-os|serverIdentity|modules\/intelligence/,
-    );
+      .map((entry) => ({
+        entry: entry.replaceAll('\\', '/'),
+        source: fs.readFileSync(path.join(functionsRoot, entry), 'utf8'),
+      }))
+      .filter(
+        ({ entry, source }) =>
+          !entry.startsWith(
+            'infrastructure/firestore/authorityPersistence/',
+          ) &&
+          /@aura\/intelligence-os|serverIdentity|modules\/intelligence/.test(
+            source,
+          ),
+      );
+    expect(violations).toEqual([]);
   });
 
   it('10 defines no resolver runtime class or composition root', () => {
@@ -98,4 +105,3 @@ describe('serverIdentity architecture', () => {
     );
   });
 });
-
