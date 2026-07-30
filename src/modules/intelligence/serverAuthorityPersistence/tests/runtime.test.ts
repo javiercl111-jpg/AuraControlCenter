@@ -14,10 +14,17 @@ import {
   createAuthorityAliasKeyV1,
   createAuthorityMembershipKeyV1,
 } from '../ids';
+import {
+  AUTHORITY_LEGACY_TENANT_SOURCE_DESCRIPTOR_VERSION,
+  AUTHORITY_LEGACY_TENANT_SOURCE_LOCATOR_VERSION,
+  AUTHORITY_REPOSITORY_READ_REGISTRY_ENTRY_VERSION,
+  createAuthorityLegacyTenantSourceDescriptorV1,
+  createAuthorityRepositoryReadRegistryEntryV1,
+  decodeAuthorityLegacyTenantSourceRecordV1,
+} from '../legacyTenantSources';
 import { planAuthorityMutationV1 } from '../planner';
 import type { AuthorityClockPort } from '../ports';
 import {
-  AUTHORITY_LEGACY_SOURCE_RECORD_VERSION,
   AUTHORITY_REPOSITORY_SNAPSHOT_VERSION,
   type AuthorityRepositorySnapshotV1,
 } from '../runtimeTypes';
@@ -57,7 +64,6 @@ const ACTOR = Object.freeze({
   actorType: 'USER' as const,
   actorId: PRINCIPAL_ID,
 });
-const SOURCE_FINGERPRINT = `sha256:${'a'.repeat(64)}`;
 
 function operationId(suffix: string): string {
   return `operation:runtime:${suffix}`;
@@ -473,64 +479,78 @@ function tombstoneAliasCommand(
   );
 }
 
-function legacyFixture() {
-  const sourceReference = 'legacy_tenants/sourceRuntime001';
+function legacyFixture(
+  rawOverrides: Readonly<Record<string, unknown>> = {},
+) {
+  const source = decodeAuthorityLegacyTenantSourceRecordV1(
+    createAuthorityLegacyTenantSourceDescriptorV1({
+      schemaVersion:
+        AUTHORITY_LEGACY_TENANT_SOURCE_DESCRIPTOR_VERSION,
+      sourceCollection: 'PLATFORM_TENANTS',
+      sourceDocumentId: 'RtAbCdEfGhIjKlMnOpQr',
+      sourceLocatorVersion:
+        AUTHORITY_LEGACY_TENANT_SOURCE_LOCATOR_VERSION,
+      authorityUse: 'PROHIBITED',
+    }),
+    {
+      tenantSlug: 'tenant-runtime',
+      clientId: 'client_runtime_001',
+      status: 'PENDING',
+      recordVersion: 1,
+      ...rawOverrides,
+    },
+    REQUESTED_AT,
+  );
+  const selectedAliasCandidates = source.aliasCandidates;
+  const collisionCandidate = selectedAliasCandidates[0];
+  if (collisionCandidate === undefined) {
+    throw new Error('Legacy fixture requires one alias candidate.');
+  }
   const aliasKey = createAuthorityAliasKeyV1({
-    aliasType: 'LEGACY_TENANT_ID',
-    normalizedAlias: 'legacy-runtime-001',
+    aliasType: collisionCandidate.aliasType,
+    normalizedAlias: collisionCandidate.normalizedAlias,
   });
   const canonicalizationInput = {
     schemaVersion: LEGACY_TENANT_CANONICALIZATION_INPUT_VERSION,
     canonicalDocumentId: TENANT_ID,
-    classifiedVariant: 'AUTO_ID_WITH_TENANT_SLUG',
-    classification: 'CANONICALIZABLE',
-    sourceRecordVersion: 'legacy-v1',
-    sourceRecordFingerprint: SOURCE_FINGERPRINT,
+    sourceRecord: source,
     canonicalTarget: {
       tenantId: TENANT_ID,
       status: 'PENDING',
       tenantSlug: 'tenant-runtime',
     },
-    aliasesToReserve: [
-      {
-        aliasKey,
-        aliasType: 'LEGACY_TENANT_ID',
-        normalizedAlias: 'legacy-runtime-001',
-        tenantId: TENANT_ID,
-      },
-    ],
+    selectedAliasCandidates,
     migrationMetadata: {
       schemaVersion: '1',
       authorityUse: 'PROHIBITED',
       migrationVersion: 'migration-v1',
       sourceSystem: 'LEGACY_TENANTS',
-      sourceReference,
-      classifiedVariant: 'AUTO_ID_WITH_TENANT_SLUG',
+      sourceLocatorKey: source.sourceLocator.locatorKey,
+      sourceRecordVersion: source.sourceRecordVersion,
+      sourceRecordFingerprint: source.sourceRecordFingerprint,
+      classifiedVariant: source.classifiedVariant,
       migrationStatus: 'VALIDATED',
       validatedAt: REQUESTED_AT,
     },
-    conflictDisposition: 'NONE',
+    conflictDisposition:
+      source.classificationDisposition === 'CANONICALIZABLE'
+        ? 'NONE'
+        : source.classificationDisposition === 'REQUIRES_REVIEW'
+          ? 'REQUIRE_REVIEW'
+          : 'REJECT',
   };
   const commandValue = command(
     'CANONICALIZE_LEGACY_TENANT',
     { canonicalizationInput },
-    atRecordVersion(1),
+    createOnly(),
     'canonicalize',
   );
-  const source = {
-    schemaVersion: AUTHORITY_LEGACY_SOURCE_RECORD_VERSION,
-    sourceReference,
-    recordVersion: 1,
-    sourceRecordVersion: 'legacy-v1',
-    sourceRecordFingerprint: SOURCE_FINGERPRINT,
-    classifiedVariant: 'AUTO_ID_WITH_TENANT_SLUG',
-    authorityUse: 'PROHIBITED',
-  };
   return {
     commandValue,
-    sourceReference,
+    locatorKey: source.sourceLocator.locatorKey,
     source,
     aliasKey,
+    aliasCandidate: collisionCandidate,
     canonicalizationInput,
   };
 }
@@ -1026,7 +1046,7 @@ describe('authority mutation runtime', () => {
       snapshot({
         legacyTenantSources: [
           {
-            documentId: fixture.sourceReference,
+            documentId: fixture.locatorKey,
             value: fixture.source,
           },
         ],
@@ -1047,29 +1067,101 @@ describe('authority mutation runtime', () => {
       authorityUse: 'PROHIBITED',
       migrationStatus: 'APPLIED',
     });
-    expect(state.aliases).toHaveLength(1);
+    expect(state.aliases).toHaveLength(
+      fixture.source.aliasCandidates.length,
+    );
+  });
+
+  it('31b binds MUST_MATCH_SOURCE to the full physical identity', () => {
+    const fixture = legacyFixture();
+    const initial = snapshot({
+      legacyTenantSources: [
+        {
+          documentId: fixture.locatorKey,
+          value: fixture.source,
+        },
+      ],
+    });
+    const readRegistry = [
+      createAuthorityRepositoryReadRegistryEntryV1({
+        schemaVersion:
+          AUTHORITY_REPOSITORY_READ_REGISTRY_ENTRY_VERSION,
+        collection: fixture.source.sourceDescriptor.sourceCollection,
+        documentId: fixture.source.sourceDocumentId,
+        locatorKey: fixture.locatorKey,
+        readStatus: 'PRESENT',
+        recordFingerprint: fixture.source.sourceRecordFingerprint,
+        recordVersion: fixture.source.sourceRecordVersion,
+        authorityUse: 'PROHIBITED',
+      }),
+    ];
+    const plan = planAuthorityMutationV1(
+      fixture.commandValue,
+      context(fixture.commandValue),
+      initial,
+      OCCURRED_AT,
+      readRegistry,
+    );
+    expect(
+      plan.expectedReads.find(
+        (read) => read.expectation === 'MUST_MATCH_SOURCE',
+      ),
+    ).toMatchObject({
+      collection: 'LEGACY_TENANT_SOURCES',
+      documentId: fixture.locatorKey,
+      sourceCollection: 'PLATFORM_TENANTS',
+      sourceDocumentId: fixture.source.sourceDocumentId,
+      locatorKey: fixture.locatorKey,
+      expectedSourceRecordVersion:
+        fixture.source.sourceRecordVersion,
+      expectedSourceRecordFingerprint:
+        fixture.source.sourceRecordFingerprint,
+    });
+  });
+
+  it('31c distinguishes not-read from read-absent source state', () => {
+    const fixture = legacyFixture();
+    const initial = snapshot({ legacyTenantSources: [] });
+    expect(
+      planAuthorityMutationV1(
+        fixture.commandValue,
+        context(fixture.commandValue),
+        initial,
+        OCCURRED_AT,
+      ).repositoryResult,
+    ).toMatchObject({
+      status: 'CONFLICT',
+      safeCode: 'LEGACY_SOURCE_NOT_READ',
+    });
+    const absent = createAuthorityRepositoryReadRegistryEntryV1({
+      schemaVersion:
+        AUTHORITY_REPOSITORY_READ_REGISTRY_ENTRY_VERSION,
+      collection: fixture.source.sourceDescriptor.sourceCollection,
+      documentId: fixture.source.sourceDocumentId,
+      locatorKey: fixture.locatorKey,
+      readStatus: 'ABSENT',
+      authorityUse: 'PROHIBITED',
+    });
+    expect(
+      planAuthorityMutationV1(
+        fixture.commandValue,
+        context(fixture.commandValue),
+        initial,
+        OCCURRED_AT,
+        [absent],
+      ).repositoryResult,
+    ).toMatchObject({
+      status: 'NOT_FOUND',
+      safeCode: 'LEGACY_SOURCE_NOT_FOUND',
+    });
   });
 
   it('32 rejects a review-required canonicalization contract', () => {
-    const fixture = legacyFixture();
     expect(() =>
-      command(
-        'CANONICALIZE_LEGACY_TENANT',
-        {
-          canonicalizationInput: {
-            ...fixture.canonicalizationInput,
-            classifiedVariant: 'CONFLICTING_STATUS_FIELDS',
-            classification: 'REQUIRES_REVIEW',
-            conflictDisposition: 'REQUIRE_REVIEW',
-            migrationMetadata: {
-              ...fixture.canonicalizationInput.migrationMetadata,
-              classifiedVariant: 'CONFLICTING_STATUS_FIELDS',
-            },
-          },
-        },
-        atRecordVersion(1),
-        'canonicalize-review',
-      ),
+      legacyFixture({
+        status: 'ACTIVE',
+        tenantStatus: 'SUSPENDED',
+      }),
     ).toThrow(AuthorityPersistenceContractError);
   });
 
@@ -1079,8 +1171,8 @@ describe('authority mutation runtime', () => {
       {
         schemaVersion: TENANT_ALIAS_RECORD_VERSION,
         aliasKey: fixture.aliasKey,
-        aliasType: 'LEGACY_TENANT_ID',
-        normalizedAlias: 'legacy-runtime-001',
+        aliasType: fixture.aliasCandidate.aliasType,
+        normalizedAlias: fixture.aliasCandidate.normalizedAlias,
         tenantId: 'tenantRuntimeOther',
         status: 'ACTIVE',
         aliasVersion: 1,
@@ -1096,7 +1188,7 @@ describe('authority mutation runtime', () => {
       snapshot({
         legacyTenantSources: [
           {
-            documentId: fixture.sourceReference,
+            documentId: fixture.locatorKey,
             value: fixture.source,
           },
         ],

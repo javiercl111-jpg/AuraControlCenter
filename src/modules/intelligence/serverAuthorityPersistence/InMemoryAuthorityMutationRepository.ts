@@ -8,6 +8,10 @@ import {
   applyAuthorityMutationPlanV1,
 } from './applyMutationPlan';
 import {
+  AUTHORITY_REPOSITORY_READ_REGISTRY_ENTRY_VERSION,
+  createAuthorityRepositoryReadRegistryEntryV1,
+} from './legacyTenantSources';
+import {
   createAuthorityCancellationResultV1,
   planAuthorityMutationV1,
 } from './planner';
@@ -89,6 +93,19 @@ export class InMemoryAuthorityMutationRepository
         context,
         this.#snapshot,
         occurredAt,
+        this.#snapshot.legacyTenantSources.map(({ value }) =>
+          createAuthorityRepositoryReadRegistryEntryV1({
+            schemaVersion:
+              AUTHORITY_REPOSITORY_READ_REGISTRY_ENTRY_VERSION,
+            collection: value.sourceDescriptor.sourceCollection,
+            documentId: value.sourceDocumentId,
+            locatorKey: value.sourceLocator.locatorKey,
+            readStatus: 'PRESENT',
+            recordFingerprint: value.sourceRecordFingerprint,
+            recordVersion: value.sourceRecordVersion,
+            authorityUse: 'PROHIBITED',
+          }),
+        ),
       );
       if (isCancellationRequested(context)) {
         return createAuthorityCancellationResultV1(command, occurredAt);

@@ -15,12 +15,18 @@ import {
   replayAuthorityRepositoryResultV1,
 } from './fingerprints';
 import {
+  createAuthorityAliasKeyV1,
   createAuthorityAuditEventIdV1,
   createAuthorityIdempotencyDocumentIdV1,
   createAuthorityMembershipKeyV1,
   createAuthorityOperationBindingDocumentIdV1,
   createAuthorityOutboxEventIdV1,
 } from './ids';
+import {
+  createAuthorityLegacySourceRecordVersionKeyV1,
+  validateAuthorityRepositoryReadRegistryV1,
+  type AuthorityRepositoryReadRegistryEntryV1,
+} from './legacyTenantSources';
 import {
   createAuthorityMutationPlanV1,
 } from './mutationPlan';
@@ -1441,26 +1447,39 @@ function planCanonicalization(
   >,
   snapshot: AuthorityRepositorySnapshotV1,
   occurredAt: string,
+  readRegistry: readonly AuthorityRepositoryReadRegistryEntryV1[],
 ): PlannedMutation {
   const input = command.payload.canonicalizationInput;
-  const sourceReference = input.migrationMetadata.sourceReference;
+  const sourceIdentity = input.sourceRecord;
+  const sourceLocator = sourceIdentity.sourceLocator;
   const source = findDocument(
     snapshot.legacyTenantSources,
-    sourceReference,
+    sourceLocator.locatorKey,
   )?.value;
-  const expectedRecordVersion =
-    command.precondition.type === 'MUST_EXIST_AT_VERSION'
-      ? command.precondition.recordVersion
-      : command.precondition.type === 'MUST_MATCH_AUTHORITY_VERSION'
-        ? command.precondition.authorityVersion
-        : 0;
+  const sourceReadRegistryEntry = readRegistry.find(
+    (entry) => entry.locatorKey === sourceLocator.locatorKey,
+  );
+  const aliasesToReserve = input.selectedAliasCandidates.map(
+    (candidate) => ({
+      aliasKey: createAuthorityAliasKeyV1({
+        aliasType: candidate.aliasType,
+        normalizedAlias: candidate.normalizedAlias,
+      }),
+      aliasType: candidate.aliasType,
+      normalizedAlias: candidate.normalizedAlias,
+      tenantId: input.canonicalTarget.tenantId,
+    }),
+  );
   const sourceRead: AuthorityMutationExpectedReadV1 = {
     collection: 'LEGACY_TENANT_SOURCES',
-    documentId: sourceReference,
+    documentId: sourceLocator.locatorKey,
     expectation: 'MUST_MATCH_SOURCE',
-    expectedRecordVersion,
-    expectedSourceRecordVersion: input.sourceRecordVersion,
-    expectedSourceRecordFingerprint: input.sourceRecordFingerprint,
+    sourceCollection: sourceIdentity.sourceDescriptor.sourceCollection,
+    sourceDocumentId: sourceIdentity.sourceDocumentId,
+    locatorKey: sourceLocator.locatorKey,
+    expectedSourceRecordVersion: sourceIdentity.sourceRecordVersion,
+    expectedSourceRecordFingerprint:
+      sourceIdentity.sourceRecordFingerprint,
   };
   const reads: AuthorityMutationExpectedReadV1[] = [
     ...ledgerReads(command),
@@ -1470,7 +1489,7 @@ function planCanonicalization(
       documentId: input.canonicalDocumentId,
       expectation: 'MUST_NOT_EXIST',
     },
-    ...input.aliasesToReserve.map(
+    ...aliasesToReserve.map(
       (alias): AuthorityMutationExpectedReadV1 => ({
         collection: 'ALIASES',
         documentId: alias.aliasKey,
@@ -1478,7 +1497,14 @@ function planCanonicalization(
       }),
     ),
   ];
-  if (source === undefined) {
+  if (sourceReadRegistryEntry === undefined) {
+    return {
+      status: 'CONFLICT',
+      safeCode: 'LEGACY_SOURCE_NOT_READ',
+      expectedReads: reads,
+    };
+  }
+  if (sourceReadRegistryEntry.readStatus === 'ABSENT') {
     return {
       status: 'NOT_FOUND',
       safeCode: 'LEGACY_SOURCE_NOT_FOUND',
@@ -1486,10 +1512,34 @@ function planCanonicalization(
     };
   }
   if (
-    source.recordVersion !== expectedRecordVersion ||
-    source.sourceRecordVersion !== input.sourceRecordVersion ||
-    source.sourceRecordFingerprint !== input.sourceRecordFingerprint ||
-    source.classifiedVariant !== input.classifiedVariant ||
+    sourceReadRegistryEntry.collection !==
+      sourceIdentity.sourceDescriptor.sourceCollection ||
+    sourceReadRegistryEntry.documentId !==
+      sourceIdentity.sourceDocumentId ||
+    sourceReadRegistryEntry.recordFingerprint !==
+      sourceIdentity.sourceRecordFingerprint ||
+    createAuthorityLegacySourceRecordVersionKeyV1(
+      sourceReadRegistryEntry.recordVersion,
+    ) !==
+      createAuthorityLegacySourceRecordVersionKeyV1(
+        sourceIdentity.sourceRecordVersion,
+      ) ||
+    source === undefined ||
+    source.sourceDescriptor.sourceCollection !==
+      sourceIdentity.sourceDescriptor.sourceCollection ||
+    source.sourceDocumentId !== sourceIdentity.sourceDocumentId ||
+    source.sourceLocator.locatorKey !== sourceLocator.locatorKey ||
+    createAuthorityLegacySourceRecordVersionKeyV1(
+      source.sourceRecordVersion,
+    ) !==
+      createAuthorityLegacySourceRecordVersionKeyV1(
+        sourceIdentity.sourceRecordVersion,
+      ) ||
+    source.sourceRecordFingerprint !==
+      sourceIdentity.sourceRecordFingerprint ||
+    source.classifiedVariant !== sourceIdentity.classifiedVariant ||
+    source.classificationDisposition !==
+      sourceIdentity.classificationDisposition ||
     source.authorityUse !== 'PROHIBITED'
   ) {
     return {
@@ -1508,7 +1558,7 @@ function planCanonicalization(
     };
   }
   if (
-    input.aliasesToReserve.some(
+    aliasesToReserve.some(
       (alias) =>
         findDocument(snapshot.aliases, alias.aliasKey) !== undefined,
     )
@@ -1524,7 +1574,7 @@ function planCanonicalization(
     migrationStatus: 'APPLIED',
     appliedAt: occurredAt,
   });
-  const legacyAliases = input.aliasesToReserve
+  const legacyAliases = aliasesToReserve
     .filter((alias) => alias.aliasType === 'LEGACY_TENANT_ID')
     .map((alias) => alias.normalizedAlias);
   const tenant = createPersistedTenantAuthorityRecordV1(
@@ -1557,7 +1607,7 @@ function planCanonicalization(
     },
     input.canonicalDocumentId,
   );
-  const aliases = input.aliasesToReserve.map((alias) =>
+  const aliases = aliasesToReserve.map((alias) =>
     createPersistedTenantAliasRecordV1(
       {
         schemaVersion: TENANT_ALIAS_RECORD_VERSION,
@@ -1640,6 +1690,7 @@ function planOperation(
   command: AuthorityAdministrativeCommandV1,
   snapshot: AuthorityRepositorySnapshotV1,
   occurredAt: string,
+  readRegistry: readonly AuthorityRepositoryReadRegistryEntryV1[],
 ): PlannedMutation {
   switch (command.operationType) {
     case 'CREATE_TENANT_AUTHORITY':
@@ -1657,7 +1708,12 @@ function planOperation(
     case 'TOMBSTONE_TENANT_ALIAS':
       return planTombstoneAlias(command, snapshot, occurredAt);
     case 'CANONICALIZE_LEGACY_TENANT':
-      return planCanonicalization(command, snapshot, occurredAt);
+      return planCanonicalization(
+        command,
+        snapshot,
+        occurredAt,
+        readRegistry,
+      );
   }
 }
 
@@ -1680,6 +1736,7 @@ export function planAuthorityMutationV1(
   contextValue: unknown,
   snapshotValue: unknown,
   occurredAtValue: unknown,
+  readRegistryValue: unknown = [],
 ): AuthorityMutationPlanV1 {
   const command = validateAuthorityAdministrativeCommandV1(commandValue);
   const context = validateAuthorityRepositoryInvocationContextV1(
@@ -1687,6 +1744,8 @@ export function planAuthorityMutationV1(
     command,
   );
   const snapshot = validateAuthorityRepositorySnapshotV1(snapshotValue);
+  const readRegistry =
+    validateAuthorityRepositoryReadRegistryV1(readRegistryValue);
   const occurredAt = validateAuthorityClockOutputV1(occurredAtValue);
   const requestFingerprint = createAuthorityCommandFingerprintV1(command);
   if (context.cancellationSignal?.aborted === true) {
@@ -1713,7 +1772,7 @@ export function planAuthorityMutationV1(
   }
   return buildPlan(
     command,
-    planOperation(command, snapshot, occurredAt),
+    planOperation(command, snapshot, occurredAt, readRegistry),
     requestFingerprint,
     occurredAt,
   );
