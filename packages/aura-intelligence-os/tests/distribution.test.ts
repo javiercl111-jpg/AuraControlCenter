@@ -263,7 +263,7 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
     expect(functionsGitignore.trim()).toBe('.generated/');
   });
 
-  it('allows only the closed Firestore authority adapter to import the server package', () => {
+  it('allows only certified Functions infrastructure to import the server package', () => {
     const sourceRoot = resolve(functionsRoot, 'src');
     const sourceFiles = listFilesFrom(sourceRoot, sourceRoot).filter((file) =>
       file.endsWith('.ts')
@@ -275,6 +275,7 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
     );
 
     expect(importers).toEqual([
+      'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts',
       'infrastructure/firestore/authorityPersistence/FirestoreAuthorityMutationRepository.ts',
       'infrastructure/firestore/authorityPersistence/firestoreAuthorityCollections.ts',
       'infrastructure/firestore/authorityPersistence/firestoreAuthorityErrors.ts',
@@ -291,6 +292,7 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
       expect(source).not.toContain(
         'from "@aura/intelligence-os"'
       );
+      expect(source).toContain('@aura/intelligence-os/server');
     });
   });
 
