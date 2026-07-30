@@ -749,6 +749,121 @@ export {
 } from './serverPrincipalResolution/principalResolutionFactories';
 
 export {
+  AUTHORITY_PLATFORM_BOUNDARIES,
+  AUTHORITY_PLATFORM_OPERATION_CATEGORIES,
+  AUTHORITY_SUPPORT_IMPERSONATION_MODES,
+  AUTHORITY_TENANT_BOOTSTRAP_OPERATIONS,
+  AUTHORITY_TENANT_MEMBERSHIP_BINDING_VERSION,
+  AUTHORITY_TENANT_MEMBERSHIP_STATUSES,
+  AUTHORITY_TENANT_SCOPE_CONTEXT_VERSION,
+  AUTHORITY_TENANT_SCOPE_ERROR_VERSION,
+  AUTHORITY_TENANT_SCOPE_EVIDENCE_VERSION,
+  AUTHORITY_TENANT_SCOPE_FRESHNESS_VERSION,
+  AUTHORITY_TENANT_SCOPE_OPERATION_CATEGORIES,
+  AUTHORITY_TENANT_SCOPE_PRINCIPAL_REFERENCE_VERSION,
+  AUTHORITY_TENANT_SCOPE_REASON_CODES,
+  AUTHORITY_TENANT_SCOPE_REQUEST_VERSION,
+  AUTHORITY_TENANT_SCOPE_RESOLUTION_SOURCES,
+  AUTHORITY_TENANT_SCOPE_RESOLUTION_STATUSES,
+  AUTHORITY_TENANT_SCOPE_RESULT_VERSION,
+  AUTHORITY_TENANT_SCOPE_RETRY_DISPOSITIONS,
+  AUTHORITY_TENANT_SCOPE_SCHEMA_VERSION,
+  AUTHORITY_TENANT_SCOPE_STATUSES,
+  AUTHORITY_TENANT_SCOPE_TYPES,
+  AUTHORITY_TENANT_SELECTOR_TYPES,
+  AUTHORITY_TENANT_SELECTOR_VERSION,
+} from './serverTenantScopeResolution/tenantScopeResolutionTypes';
+
+export type {
+  AuthorityLegacyCanonicalizationBindingV1,
+  AuthorityPlatformBoundary,
+  AuthorityPlatformOperationCategory,
+  AuthorityResolvedPrincipalReferenceV1,
+  AuthoritySupportImpersonationMode,
+  AuthorityTenantAliasReferenceV1,
+  AuthorityTenantBootstrapOperation,
+  AuthorityTenantIdV1,
+  AuthorityTenantMembershipBindingV1,
+  AuthorityTenantMembershipStatus,
+  AuthorityTenantScopeFreshnessV1,
+  AuthorityTenantScopeOperationCategory,
+  AuthorityTenantScopeReasonCode,
+  AuthorityTenantScopeResolutionContextV1,
+  AuthorityTenantScopeResolutionEvidenceV1,
+  AuthorityTenantScopeResolutionRequestV1,
+  AuthorityTenantScopeResolutionResultV1,
+  AuthorityTenantScopeResolutionSource,
+  AuthorityTenantScopeResolutionStatus,
+  AuthorityTenantScopeRetryDisposition,
+  AuthorityTenantScopeSafeMetadataV1,
+  AuthorityTenantScopeSourceVersionV1,
+  AuthorityTenantScopeStatus,
+  AuthorityTenantScopeType,
+  AuthorityTenantSelectorType,
+  AuthorityTenantSelectorV1,
+  ResolvedAuthorityTenantScopeV1,
+  ResolvedLegacyCanonicalizationScopeV1,
+  ResolvedMigrationTenantScopeV1,
+  ResolvedPlatformAuthorityScopeV1,
+  ResolvedSupportTenantScopeV1,
+  ResolvedTenantAuthorityScopeV1,
+  ResolvedTenantBootstrapScopeV1,
+} from './serverTenantScopeResolution/tenantScopeResolutionTypes';
+
+export type {
+  AuthorityTenantScopeResolverPort,
+} from './serverTenantScopeResolution/tenantScopeResolutionPorts';
+
+export {
+  AUTHORITY_TENANT_SCOPE_CONTRACT_ISSUES,
+  AUTHORITY_TENANT_SCOPE_ERROR_CODES,
+  AuthorityTenantScopeContractError,
+  AuthorityTenantScopeResolutionError,
+  AuthorityTenantScopeValidationError,
+} from './serverTenantScopeResolution/tenantScopeResolutionErrors';
+
+export type {
+  AuthorityTenantScopeContractIssue,
+  AuthorityTenantScopeErrorCode,
+  AuthorityTenantScopeSafeErrorV1,
+} from './serverTenantScopeResolution/tenantScopeResolutionErrors';
+
+export {
+  validateAuthorityResolvedPrincipalReferenceV1,
+  validateAuthorityTenantAliasV1,
+  validateAuthorityTenantIdV1,
+  validateAuthorityTenantMembershipBindingV1,
+  validateAuthorityTenantScopeFreshnessV1,
+  validateAuthorityTenantScopeResolutionContextV1,
+  validateAuthorityTenantScopeResolutionEvidenceV1,
+  validateAuthorityTenantScopeResolutionRequestV1,
+  validateAuthorityTenantScopeResolutionResultV1,
+  validateAuthorityTenantSelectorV1,
+  validateResolvedAuthorityTenantScopeV1,
+  validateResolvedLegacyCanonicalizationScopeV1,
+  validateResolvedMigrationTenantScopeV1,
+  validateResolvedPlatformAuthorityScopeV1,
+  validateResolvedSupportTenantScopeV1,
+  validateResolvedTenantAuthorityScopeV1,
+  validateResolvedTenantBootstrapScopeV1,
+} from './serverTenantScopeResolution/tenantScopeResolutionValidators';
+
+export {
+  createAuthorityResolvedPrincipalReferenceV1,
+  createAuthorityTenantMembershipBindingV1,
+  createAuthorityTenantScopeResolutionContextV1,
+  createAuthorityTenantScopeResolutionRequestV1,
+  createAuthorityTenantScopeResolutionResultV1,
+  createAuthorityTenantSelectorV1,
+  createResolvedLegacyCanonicalizationScopeV1,
+  createResolvedMigrationTenantScopeV1,
+  createResolvedPlatformAuthorityScopeV1,
+  createResolvedSupportTenantScopeV1,
+  createResolvedTenantAuthorityScopeV1,
+  createResolvedTenantBootstrapScopeV1,
+} from './serverTenantScopeResolution/tenantScopeResolutionFactories';
+
+export {
   AUTHORITY_PERSISTENCE_CONTRACT_ISSUES,
   AuthorityPersistenceContractError,
 } from './serverAuthorityPersistence/errors';
