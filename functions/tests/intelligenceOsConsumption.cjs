@@ -26,6 +26,15 @@ const stagedPackageRoot = resolve(
   ".generated",
   "aura-intelligence-os"
 );
+const CERTIFIED_PRODUCTION_CONSUMER_DIRECTORY =
+  "infrastructure/firestore/authorityPersistence/";
+const CERTIFIED_PRODUCTION_PACKAGE_SPECIFIER =
+  "@aura/intelligence-os/server";
+const FORBIDDEN_PRODUCTION_SOURCE_REFERENCES = [
+  ".generated/aura-intelligence-os",
+  "packages/aura-intelligence-os",
+  "src/modules/intelligence",
+];
 
 function listFiles(directory) {
   const files = [];
@@ -43,30 +52,151 @@ function listFiles(directory) {
   return files;
 }
 
-function assertNoProductionConsumer() {
-  const forbiddenReferences = [
-    "@aura/intelligence-os",
-    ".generated/aura-intelligence-os",
-    "packages/aura-intelligence-os",
-    "src/modules/intelligence",
-  ];
+function normalizeProductionSourcePath(file) {
+  return file.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+function extractModuleSpecifiers(source) {
+  const specifiers = [];
+  const staticModulePattern =
+    /\b(?:import|export)\s+(?:[^"'`;]*?\s+from\s+)?["']([^"']+)["']/g;
+  const dynamicModulePattern =
+    /\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/g;
+
+  for (const pattern of [staticModulePattern, dynamicModulePattern]) {
+    for (const match of source.matchAll(pattern)) {
+      specifiers.push(match[1]);
+    }
+  }
+
+  return specifiers;
+}
+
+function certifiedProductionConsumerViolations(file, source) {
+  const normalizedFile = normalizeProductionSourcePath(file);
+  const normalizedSource = source.replaceAll("\\", "/");
+  const isCertifiedDirectory = normalizedFile.startsWith(
+    CERTIFIED_PRODUCTION_CONSUMER_DIRECTORY
+  );
+  const moduleSpecifiers = extractModuleSpecifiers(source);
+  const packageStringSpecifiers = [
+    ...source.matchAll(
+      /["'](@aura\/intelligence-os(?:\/[^"']*)?)["']/g
+    ),
+  ].map((match) => match[1]);
+  const packageModuleSpecifiers = moduleSpecifiers.filter((specifier) =>
+    specifier.startsWith("@aura/intelligence-os")
+  );
+  const packageReferenceCount = (
+    source.match(/@aura\/intelligence-os/g) || []
+  ).length;
+  const violations = [];
+
+  if (
+    packageReferenceCount !== packageStringSpecifiers.length ||
+    packageStringSpecifiers.length !== packageModuleSpecifiers.length
+  ) {
+    violations.push(
+      `${normalizedFile} contains a non-literal or non-module Aura Intelligence OS reference`
+    );
+  }
+
+  for (const specifier of packageModuleSpecifiers) {
+    if (!isCertifiedDirectory) {
+      violations.push(
+        `${normalizedFile} imports ${specifier} outside the certified directory`
+      );
+    } else if (specifier !== CERTIFIED_PRODUCTION_PACKAGE_SPECIFIER) {
+      violations.push(
+        `${normalizedFile} imports unauthorized specifier ${specifier}`
+      );
+    }
+  }
+
+  for (const reference of FORBIDDEN_PRODUCTION_SOURCE_REFERENCES) {
+    if (normalizedSource.includes(reference)) {
+      violations.push(
+        `${normalizedFile} references forbidden source path ${reference}`
+      );
+    }
+  }
+
+  return violations;
+}
+
+function assertCertifiedProductionConsumerPolicy() {
+  const certifiedImport =
+    'import { planAuthorityMutationV1 } from "@aura/intelligence-os/server";';
+
+  assert.deepEqual(
+    certifiedProductionConsumerViolations(
+      "infrastructure/firestore/authorityPersistence/adapter.ts",
+      certifiedImport
+    ),
+    []
+  );
+  assert.deepEqual(
+    certifiedProductionConsumerViolations(
+      "infrastructure\\firestore\\authorityPersistence\\adapter.ts",
+      certifiedImport
+    ),
+    []
+  );
+  assert.deepEqual(
+    certifiedProductionConsumerViolations(
+      "other\\consumer.ts",
+      certifiedImport
+    ),
+    certifiedProductionConsumerViolations(
+      "other/consumer.ts",
+      certifiedImport
+    )
+  );
+
+  for (const [file, source] of [
+    ["other/consumer.ts", certifiedImport],
+    [
+      "infrastructure/firestore/authorityPersistence/adapter.ts",
+      'import root from "@aura/intelligence-os";',
+    ],
+    [
+      "infrastructure/firestore/authorityPersistence/adapter.ts",
+      'const client = import("@aura/intelligence-os/client");',
+    ],
+    [
+      "infrastructure/firestore/authorityPersistence/adapter.ts",
+      'const packageSource = require("../../../../../packages/aura-intelligence-os");',
+    ],
+  ]) {
+    assert.notDeepEqual(
+      certifiedProductionConsumerViolations(file, source),
+      [],
+      `${file} must remain rejected by the production consumer policy`
+    );
+  }
+}
+
+function assertOnlyCertifiedProductionConsumers() {
+  assertCertifiedProductionConsumerPolicy();
   const violations = listFiles(productionSourceRoot)
     .filter((file) => file.endsWith(".ts"))
     .flatMap((file) => {
       const source = readFileSync(file, "utf8");
-      return forbiddenReferences
-        .filter((reference) => source.includes(reference))
-        .map(
-          (reference) =>
-            `${relative(productionSourceRoot, file)} references ${reference}`
-        );
+      return certifiedProductionConsumerViolations(
+        relative(productionSourceRoot, file),
+        source
+      );
     });
 
   assert.deepEqual(
     violations,
     [],
-    "Production Functions source must not consume Aura Intelligence OS"
+    "Only certified production Functions consumers may consume Aura Intelligence OS"
   );
+}
+
+function assertNoProductionConsumer() {
+  assertOnlyCertifiedProductionConsumers();
 }
 
 function assertInstalledPackageBoundary() {
@@ -288,12 +418,12 @@ async function validateInMemoryComposition(runtime) {
 }
 
 async function main() {
+  assertNoProductionConsumer();
   assert.equal(
     process.version.startsWith(EXPECTED_NODE_PREFIX),
     true,
     `Functions consumption validation requires Node 20; received ${process.version}`
   );
-  assertNoProductionConsumer();
   assertInstalledPackageBoundary();
 
   const runtime = require("@aura/intelligence-os/server");
