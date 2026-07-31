@@ -30,8 +30,11 @@ const CERTIFIED_PRODUCTION_CONSUMER_DIRECTORY =
   "infrastructure/firestore/authorityPersistence/";
 const CERTIFIED_PRODUCTION_PACKAGE_SPECIFIER =
   "@aura/intelligence-os/server";
-const CERTIFIED_DARK_COMPOSITION_CONSUMER_FILE =
-  "composition/authorityDarkComposition/authorityDarkCompositionTypes.ts";
+const CERTIFIED_COMPOSITION_CONSUMER_FILES = new Set([
+  "composition/authorityDarkComposition/authorityDarkCompositionTypes.ts",
+  "composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts",
+  "composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts",
+]);
 const FORBIDDEN_PRODUCTION_SOURCE_REFERENCES = [
   ".generated/aura-intelligence-os",
   "packages/aura-intelligence-os",
@@ -81,7 +84,7 @@ function certifiedProductionConsumerViolations(file, source) {
     CERTIFIED_PRODUCTION_CONSUMER_DIRECTORY
   );
   const isCertifiedDarkCompositionFile =
-    normalizedFile === CERTIFIED_DARK_COMPOSITION_CONSUMER_FILE;
+    CERTIFIED_COMPOSITION_CONSUMER_FILES.has(normalizedFile);
   const isCertifiedConsumer =
     isCertifiedAdapterDirectory || isCertifiedDarkCompositionFile;
   const moduleSpecifiers = extractModuleSpecifiers(source);
@@ -135,6 +138,8 @@ function assertCertifiedProductionConsumerPolicy() {
     'import { planAuthorityMutationV1 } from "@aura/intelligence-os/server";';
   const darkCompositionImport =
     'import type { AuthorityClockPort } from "@aura/intelligence-os/server";';
+  const darkHandlerImport =
+    'import type { AuthorityApplicationServiceV1 } from "@aura/intelligence-os/server";';
 
   assert.deepEqual(
     certifiedProductionConsumerViolations(
@@ -143,6 +148,22 @@ function assertCertifiedProductionConsumerPolicy() {
     ),
     []
   );
+  for (const file of [
+    "composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts",
+    "composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts",
+  ]) {
+    assert.deepEqual(
+      certifiedProductionConsumerViolations(file, darkHandlerImport),
+      []
+    );
+    assert.deepEqual(
+      certifiedProductionConsumerViolations(
+        file.replaceAll("/", "\\"),
+        darkHandlerImport
+      ),
+      []
+    );
+  }
   assert.deepEqual(
     certifiedProductionConsumerViolations(
       "infrastructure\\firestore\\authorityPersistence\\adapter.ts",
@@ -196,6 +217,22 @@ function assertCertifiedProductionConsumerPolicy() {
     [
       "composition/authorityDarkComposition/authorityDarkCompositionTypes.ts",
       'import type { Client } from "@aura/intelligence-os/client";',
+    ],
+    [
+      "composition/authorityDarkHandlerComposition/index.ts",
+      darkHandlerImport,
+    ],
+    [
+      "composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts",
+      'import root from "@aura/intelligence-os";',
+    ],
+    [
+      "composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts",
+      'const client = import("@aura/intelligence-os/client");',
+    ],
+    [
+      "composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts",
+      'const source = require("../../../../packages/aura-intelligence-os");',
     ],
   ]) {
     assert.notDeepEqual(

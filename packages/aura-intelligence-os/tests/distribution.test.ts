@@ -276,6 +276,8 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
 
     expect(importers).toEqual([
       'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts',
+      'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
+      'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
       'infrastructure/firestore/authorityPersistence/FirestoreAuthorityMutationRepository.ts',
       'infrastructure/firestore/authorityPersistence/firestoreAuthorityCollections.ts',
       'infrastructure/firestore/authorityPersistence/firestoreAuthorityErrors.ts',

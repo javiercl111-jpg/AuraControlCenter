@@ -115,6 +115,8 @@ describe('AI-02H1D.4 integration architecture', () => {
         ({ path, source }) =>
           ![
             'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts',
+            'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
+            'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
           ].includes(
             relative(productionFunctionsRoot, path).replaceAll(
               '\\',

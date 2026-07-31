@@ -224,6 +224,13 @@ describe('Authority Application Service architecture', () => {
           source,
         ),
       );
-    expect(consumers).toEqual([]);
+    expect(consumers.map(({ entry }) => entry).sort()).toEqual([
+      'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
+      'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
+    ]);
+    expect(consumers.every(({ source }) =>
+      source.includes('@aura/intelligence-os/server') &&
+      !source.includes('src/modules/intelligence')
+    )).toBe(true);
   });
 });
