@@ -1,6 +1,9 @@
 import type {
   AuthorityAuthenticationMethod,
 } from '../../../serverPrincipalResolution/principalResolutionTypes';
+import {
+  createAuthorityMembershipKeyV1,
+} from '../../../serverAuthorityPersistence/ids';
 
 export const CERTIFICATION_HASH_A = `sha256:${'a'.repeat(64)}`;
 export const CERTIFICATION_HASH_B = `sha256:${'b'.repeat(64)}`;
@@ -8,6 +11,12 @@ export const CERTIFICATION_HASH_C = `sha256:${'c'.repeat(64)}`;
 export const CERTIFICATION_PRINCIPAL_ID =
   'apr_v1_human_binding_human_001';
 export const CERTIFICATION_TENANT_ID = 'tenant_001';
+export const CERTIFICATION_MEMBERSHIP_ID =
+  createAuthorityMembershipKeyV1({
+    principalType: 'USER',
+    principalId: CERTIFICATION_PRINCIPAL_ID,
+    tenantId: CERTIFICATION_TENANT_ID,
+  });
 export const CERTIFICATION_RESOLVED_AT =
   '2026-07-30T12:00:10.000Z';
 export const CERTIFICATION_VALID_UNTIL =
@@ -423,7 +432,7 @@ export function tenantScopeFixture(overrides: Input = {}): Input {
     canonicalTenantAuthorityVersion: 'tenant-v1',
     membershipBinding: {
       schemaVersion: '1',
-      membershipId: 'membership_001',
+      membershipId: CERTIFICATION_MEMBERSHIP_ID,
       tenantId: CERTIFICATION_TENANT_ID,
       principalId: CERTIFICATION_PRINCIPAL_ID,
       membershipStatus: 'ACTIVE',

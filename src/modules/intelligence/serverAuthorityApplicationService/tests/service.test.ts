@@ -26,6 +26,7 @@ import {
   HASH_B,
   HASH_E,
   NOW,
+  TENANT_ID,
   applicationRequest,
   authorizationDecision,
   dependencies,
@@ -758,6 +759,32 @@ describe('Authority Application Service lifecycle and mapping', () => {
       state.repositoryResult = repositoryResult(repositoryStatus);
       const result = await execute(state);
       expect(result.status).toBe(expectedStatus);
+      expect(result.metadata).not.toHaveProperty('resourceReference');
+    },
+  );
+
+  it.each([
+    ['APPLIED', 'APPLIED'],
+    ['NO_OP', 'REPLAYED'],
+  ] as const)(
+    'omits physical repository reference for %s mapped as %s',
+    async (repositoryStatus, expectedStatus) => {
+      const state = dependencyState();
+      const repository = repositoryResult(repositoryStatus);
+      if (repository.status !== 'APPLIED' && repository.status !== 'NO_OP') {
+        throw new Error('Physical reference fixture status is invalid.');
+      }
+      state.repositoryResult = {
+        ...repository,
+        resourceReference: `platform_tenants/${TENANT_ID}`,
+      };
+      const result = await execute(state);
+      const serialized = JSON.stringify(result);
+      expect(result.status).toBe(expectedStatus);
+      expect(result.metadata).not.toHaveProperty('resourceReference');
+      expect(serialized).not.toContain('platform_tenants/');
+      expect(serialized).not.toContain('authority_idempotency');
+      expect(serialized).not.toContain('authority_outbox');
     },
   );
 

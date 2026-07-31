@@ -255,6 +255,121 @@ function reference(value: unknown, field: string): string {
   return value;
 }
 
+const CANONICAL_MEMBERSHIP_REFERENCE_MINIMUM_LENGTH = 21;
+const CANONICAL_MEMBERSHIP_REFERENCE_MAXIMUM_LENGTH = 278;
+const CANONICAL_MEMBERSHIP_PRINCIPAL_TYPES = Object.freeze([
+  'USER',
+  'SERVICE',
+  'SYSTEM',
+] as const);
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint <= 31 || codePoint === 127)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function canonicalMembershipFrame(
+  value: string,
+  cursor: number,
+  terminal: boolean,
+  field: string,
+): Readonly<{ component: string; cursor: number }> {
+  const lengthStart = cursor;
+  while (cursor < value.length && /[0-9]/.test(value[cursor])) {
+    cursor += 1;
+  }
+  const lengthText = value.slice(lengthStart, cursor);
+  if (
+    lengthText.length === 0 ||
+    (lengthText.length > 1 && lengthText.startsWith('0')) ||
+    value[cursor] !== ':'
+  ) {
+    return fail('INVALID_REFERENCE', field);
+  }
+  const componentLength = Number(lengthText);
+  if (!Number.isSafeInteger(componentLength) || componentLength < 1) {
+    return fail('INVALID_REFERENCE', field);
+  }
+  const componentStart = cursor + 1;
+  const componentEnd = componentStart + componentLength;
+  if (componentEnd > value.length) {
+    return fail('INVALID_REFERENCE', field);
+  }
+  const component = value.slice(componentStart, componentEnd);
+  if (terminal) {
+    if (componentEnd !== value.length) {
+      return fail('INVALID_REFERENCE', field);
+    }
+    return Object.freeze({ component, cursor: componentEnd });
+  }
+  if (value[componentEnd] !== '|') {
+    return fail('INVALID_REFERENCE', field);
+  }
+  return Object.freeze({ component, cursor: componentEnd + 1 });
+}
+
+function validateAuthorityCanonicalMembershipReferenceV1(
+  value: unknown,
+  field: string,
+): string {
+  if (
+    typeof value !== 'string' ||
+    value.length < CANONICAL_MEMBERSHIP_REFERENCE_MINIMUM_LENGTH ||
+    value.length > CANONICAL_MEMBERSHIP_REFERENCE_MAXIMUM_LENGTH ||
+    value.trim() !== value ||
+    hasControlCharacter(value) ||
+    value.includes('/') ||
+    value.includes('\\') ||
+    value.includes('..') ||
+    value.includes('://') ||
+    !value.startsWith('v1|')
+  ) {
+    return fail('INVALID_REFERENCE', field);
+  }
+  const principalTypeFrame = canonicalMembershipFrame(
+    value,
+    3,
+    false,
+    field,
+  );
+  const principalIdFrame = canonicalMembershipFrame(
+    value,
+    principalTypeFrame.cursor,
+    false,
+    field,
+  );
+  const tenantIdFrame = canonicalMembershipFrame(
+    value,
+    principalIdFrame.cursor,
+    true,
+    field,
+  );
+  if (
+    !CANONICAL_MEMBERSHIP_PRINCIPAL_TYPES.includes(
+      principalTypeFrame.component as
+        (typeof CANONICAL_MEMBERSHIP_PRINCIPAL_TYPES)[number],
+    ) ||
+    principalIdFrame.component.length < 3 ||
+    principalIdFrame.component.length > 128 ||
+    !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(
+      principalIdFrame.component,
+    ) ||
+    tenantIdFrame.component.length < 3 ||
+    tenantIdFrame.component.length > 128 ||
+    !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(
+      tenantIdFrame.component,
+    )
+  ) {
+    return fail('INVALID_REFERENCE', field);
+  }
+  return value;
+}
+
 export function validateAuthorityTenantIdV1(
   value: unknown,
 ): AuthorityTenantIdV1 {
@@ -658,7 +773,7 @@ export function validateAuthorityTenantMembershipBindingV1(
       AUTHORITY_TENANT_MEMBERSHIP_BINDING_VERSION,
       'membershipBinding.schemaVersion',
     ),
-    membershipId: identifier(
+    membershipId: validateAuthorityCanonicalMembershipReferenceV1(
       record.membershipId,
       'membershipBinding.membershipId',
     ),

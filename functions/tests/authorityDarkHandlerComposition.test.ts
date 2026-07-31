@@ -823,6 +823,7 @@ describe("Authority dark handler architecture", () => {
     expect(consumers.map((file) => path.basename(file)).sort()).toEqual([
       "authorityDarkHandlerComposition.test.ts",
       "authorityDarkHandlerTestCapability.ts",
+      "authorityEndToEndHarness.ts",
     ]);
   });
 

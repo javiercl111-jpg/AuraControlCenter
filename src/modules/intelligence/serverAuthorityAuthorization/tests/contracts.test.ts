@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createAuthorityMembershipKeyV1,
+} from '../../serverAuthorityPersistence/ids';
+import {
   AuthorityAuthorizationEvaluationError,
   AuthorityAuthorizationValidationError,
   createAuthorityAuthorizationDecisionV1,
@@ -17,6 +20,12 @@ import {
 
 const PRINCIPAL_ID = 'apr_v1_human_binding_human_001';
 const TENANT_ID = 'tenant_001';
+const TARGET_PRINCIPAL_ID = 'apr_v1_human_binding_target_001';
+const MEMBERSHIP_ID = createAuthorityMembershipKeyV1({
+  principalType: 'USER',
+  principalId: TARGET_PRINCIPAL_ID,
+  tenantId: TENANT_ID,
+});
 const PRINCIPAL_RESOLVED_AT = '2026-07-30T11:55:00.000Z';
 const SCOPE_RESOLVED_AT = '2026-07-30T11:56:00.000Z';
 const REQUESTED_AT = '2026-07-30T11:59:00.000Z';
@@ -90,13 +99,15 @@ function tenantResource(
   };
 }
 
-function membershipResource(): Readonly<Record<string, unknown>> {
+function membershipResource(
+  membershipId = MEMBERSHIP_ID,
+): Readonly<Record<string, unknown>> {
   return {
     schemaVersion: '1',
     resourceType: 'MEMBERSHIP',
     tenantId: TENANT_ID,
-    membershipId: 'membership_001',
-    targetPrincipalId: 'apr_v1_human_binding_target_001',
+    membershipId,
+    targetPrincipalId: TARGET_PRINCIPAL_ID,
   };
 }
 
@@ -404,12 +415,41 @@ describe('Authority authorization decision contracts', () => {
   });
 
   it('28 validates membership resource', () => {
-    expect(
-      createAuthorityAuthorizationResourceBindingV1(
-        membershipResource(),
-      ),
-    ).toMatchObject({ resourceType: 'MEMBERSHIP' });
+    const resource = createAuthorityAuthorizationResourceBindingV1(
+      membershipResource(),
+    );
+    expect(resource).toMatchObject({
+      resourceType: 'MEMBERSHIP',
+      membershipId: MEMBERSHIP_ID,
+    });
   });
+
+  it.each([
+    ['forward slash', MEMBERSHIP_ID.replace('|', '/')],
+    ['backslash', MEMBERSHIP_ID.replace('|', '\\')],
+    ['parent traversal', MEMBERSHIP_ID.replace('|', '..')],
+    ['URL', `https://${MEMBERSHIP_ID}`],
+    ['physical locator', `authority_memberships/${MEMBERSHIP_ID}`],
+    ['wrong framing length', MEMBERSHIP_ID.replace(
+      `${TARGET_PRINCIPAL_ID.length}:${TARGET_PRINCIPAL_ID}`,
+      `${TARGET_PRINCIPAL_ID.length + 1}:${TARGET_PRINCIPAL_ID}`,
+    )],
+    ['wrong version', `v2${MEMBERSHIP_ID.slice(2)}`],
+    ['empty component', `v1|4:USER|0:|${TENANT_ID.length}:${TENANT_ID}`],
+    ['external whitespace', ` ${MEMBERSHIP_ID}`],
+    ['control character', `${MEMBERSHIP_ID}\u0000`],
+    ['excessive component', `v1|4:USER|129:${'a'.repeat(129)}|${TENANT_ID.length}:${TENANT_ID}`],
+    ['simple identifier', 'membership_001'],
+  ] as const)(
+    'rejects non-canonical membership reference: %s',
+    (_name, membershipId) => {
+      expect(() =>
+        createAuthorityAuthorizationResourceBindingV1(
+          membershipResource(membershipId),
+        ),
+      ).toThrow(AuthorityAuthorizationValidationError);
+    },
+  );
 
   it('29 validates alias resource', () => {
     expect(
