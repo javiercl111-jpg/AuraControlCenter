@@ -28,6 +28,7 @@ import {
 } from './authorityApplicationServiceErrors';
 import {
   commandActorType,
+  mapAuthorizationPrincipalBindingV1,
   mapAuthorizationRequestV1,
   mapInvocationContextFingerprintInputV1,
   mapPrincipalResolutionContextV1,
@@ -617,6 +618,51 @@ export function buildAuthorityApplicationServiceV1(
           trace,
         });
       }
+      if (
+        scope.scopeType === 'TENANT' &&
+        (scope.status !== 'ACTIVE' ||
+          scope.tenantStatus !== 'ACTIVE' ||
+          scope.membershipBinding.membershipStatus !== 'ACTIVE')
+      ) {
+        appendTrace(trace, {
+          stage: 'TENANT_SCOPE_RESOLUTION',
+          status: 'STOPPED',
+          startedAt: scopeStartedAt,
+          completedAt: scopeCompletedAt,
+          safeCode: 'AUTHORITY_SCOPE_NOT_RESOLVED',
+          retryDisposition: 'DO_NOT_RETRY',
+        });
+        return stop({
+          status: 'REJECTED',
+          safeCode: 'AUTHORITY_SCOPE_NOT_RESOLVED',
+          retryDisposition: 'DO_NOT_RETRY',
+          operationId: request.command.operationId,
+          correlationId: context.correlationId,
+          trace,
+        });
+      }
+      if (
+        scope.scopeType === 'TENANT' &&
+        (scope.membershipBinding.principalId !== principal.principalId ||
+          scope.membershipBinding.tenantId !== scope.tenantId)
+      ) {
+        appendTrace(trace, {
+          stage: 'TENANT_SCOPE_RESOLUTION',
+          status: 'STOPPED',
+          startedAt: scopeStartedAt,
+          completedAt: scopeCompletedAt,
+          safeCode: 'AUTHORITY_OPERATION_CONFLICT',
+          retryDisposition: 'RETRY_AFTER_OPERATOR_REVIEW',
+        });
+        return stop({
+          status: 'CONFLICT',
+          safeCode: 'AUTHORITY_OPERATION_CONFLICT',
+          retryDisposition: 'RETRY_AFTER_OPERATOR_REVIEW',
+          operationId: request.command.operationId,
+          correlationId: context.correlationId,
+          trace,
+        });
+      }
       appendTrace(trace, {
         stage: 'TENANT_SCOPE_RESOLUTION',
         status: 'COMPLETED',
@@ -714,6 +760,45 @@ export function buildAuthorityApplicationServiceV1(
         });
       }
       const decision = authorizationResult.decision;
+      const expectedPrincipalBinding =
+        mapAuthorizationPrincipalBindingV1(principal);
+      if (
+        decision.principalBinding.principalId !==
+          expectedPrincipalBinding.principalId ||
+        decision.principalBinding.principalType !==
+          expectedPrincipalBinding.principalType ||
+        decision.principalBinding.principalStatus !==
+          expectedPrincipalBinding.principalStatus ||
+        decision.principalBinding.authenticationMethod !==
+          expectedPrincipalBinding.authenticationMethod ||
+        decision.principalBinding.assuranceLevel !==
+          expectedPrincipalBinding.assuranceLevel ||
+        decision.principalBinding.principalBindingVersion !==
+          expectedPrincipalBinding.principalBindingVersion ||
+        decision.principalBinding.principalEvidenceFingerprint !==
+          expectedPrincipalBinding.principalEvidenceFingerprint ||
+        decision.principalBinding.resolvedAt !==
+          expectedPrincipalBinding.resolvedAt ||
+        decision.principalBinding.validUntil !==
+          expectedPrincipalBinding.validUntil
+      ) {
+        appendTrace(trace, {
+          stage: 'AUTHORIZATION_EVALUATION',
+          status: 'STOPPED',
+          startedAt: authorizationStartedAt,
+          completedAt: authorizationCompletedAt,
+          safeCode: 'AUTHORITY_OPERATION_CONFLICT',
+          retryDisposition: 'RETRY_AFTER_OPERATOR_REVIEW',
+        });
+        return stop({
+          status: 'CONFLICT',
+          safeCode: 'AUTHORITY_OPERATION_CONFLICT',
+          retryDisposition: 'RETRY_AFTER_OPERATOR_REVIEW',
+          operationId: request.command.operationId,
+          correlationId: context.correlationId,
+          trace,
+        });
+      }
       if (decision.decision !== 'ALLOW') {
         const notAuthorized = decision.decision === 'DENY';
         appendTrace(trace, {
