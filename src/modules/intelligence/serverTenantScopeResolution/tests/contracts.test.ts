@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createAuthorityMembershipKeyV1,
+} from '../../serverAuthorityPersistence/ids';
+import {
   AuthorityTenantScopeResolutionError,
   AuthorityTenantScopeValidationError,
   createAuthorityTenantMembershipBindingV1,
@@ -25,6 +28,11 @@ const HASH_B = `sha256:${'b'.repeat(64)}`;
 const HASH_C = `sha256:${'c'.repeat(64)}`;
 const TENANT_ID = 'tenant_001';
 const PRINCIPAL_ID = 'apr_v1_human_binding_human_001';
+const MEMBERSHIP_ID = createAuthorityMembershipKeyV1({
+  principalType: 'USER',
+  principalId: PRINCIPAL_ID,
+  tenantId: TENANT_ID,
+});
 const PRINCIPAL_BINDING_VERSION = 'principal-binding-v1';
 
 function selectorTenant(): Readonly<Record<string, unknown>> {
@@ -80,7 +88,7 @@ function membership(
 ): Readonly<Record<string, unknown>> {
   return {
     schemaVersion: '1',
-    membershipId: 'membership_001',
+    membershipId: MEMBERSHIP_ID,
     tenantId: TENANT_ID,
     principalId: PRINCIPAL_ID,
     membershipStatus: 'ACTIVE',
@@ -487,6 +495,27 @@ describe('Authority tenant and scope contracts', () => {
       membership(),
     );
   });
+
+  it.each([
+    ['simple ID', 'membership_001'],
+    ['physical path', `authority_memberships/${MEMBERSHIP_ID}`],
+    ['platform path', `platform_tenants/${MEMBERSHIP_ID}`],
+    ['URL', `https://${MEMBERSHIP_ID}`],
+    ['traversal', MEMBERSHIP_ID.replace('|', '..')],
+    ['incorrect framing', MEMBERSHIP_ID.replace(
+      `${PRINCIPAL_ID.length}:${PRINCIPAL_ID}`,
+      `${PRINCIPAL_ID.length + 1}:${PRINCIPAL_ID}`,
+    )],
+  ] as const)(
+    'rejects a non-canonical membership binding: %s',
+    (_name, membershipId) => {
+      expect(() =>
+        createAuthorityTenantMembershipBindingV1(
+          membership({ membershipId }),
+        ),
+      ).toThrow(AuthorityTenantScopeValidationError);
+    },
+  );
 
   it('24 rejects a membership principal mismatch', () => {
     expect(() =>

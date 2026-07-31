@@ -28,6 +28,7 @@ import {
   HASH_B,
   HASH_E,
   NOW,
+  TENANT_ID,
   applicationRequest,
   authorizationDecision,
   executionContext,
@@ -963,6 +964,34 @@ describe('Authority repository, cancellation, trace, and safety matrix', () => {
       expect(result.status).toBe(expectedStatus);
       expect(result.safeCode).toBe(safeCode);
       expect(state.repositoryCalls).toBe(1);
+      expect(result.metadata).not.toHaveProperty('resourceReference');
+    },
+  );
+
+  it.each([
+    ['APPLIED', 'APPLIED'],
+    ['NO_OP', 'REPLAYED'],
+  ] as const)(
+    'redacts physical repository reference for %s',
+    async (repositoryStatus, expectedStatus) => {
+      const { result } = await runAuthorityBoundaryCertification(
+        (candidate) => {
+          const repository = repositoryResult(repositoryStatus);
+          if (
+            repository.status !== 'APPLIED' &&
+            repository.status !== 'NO_OP'
+          ) {
+            throw new Error('Physical reference fixture status is invalid.');
+          }
+          candidate.repositoryResult = {
+            ...repository,
+            resourceReference: `platform_tenants/${TENANT_ID}`,
+          };
+        },
+      );
+      expect(result.status).toBe(expectedStatus);
+      expect(result.metadata).not.toHaveProperty('resourceReference');
+      expect(JSON.stringify(result)).not.toContain('platform_tenants/');
     },
   );
 

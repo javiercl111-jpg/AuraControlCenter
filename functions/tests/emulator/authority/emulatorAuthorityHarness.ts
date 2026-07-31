@@ -235,17 +235,19 @@ function createEmulatorOnlyCredential(projectId: string) {
   });
 }
 
-export function createEmulatorAuthorityHarness():
+let harnessInstance = 0;
+
+export function createEmulatorAuthorityHarness(
+  isolation = assertAuthorityEmulatorIsolation(),
+):
   EmulatorAuthorityHarness {
-  const isolation = assertAuthorityEmulatorIsolation();
+  harnessInstance += 1;
   const app = initializeApp(
     {
       projectId: isolation.projectId,
-      credential: createEmulatorOnlyCredential(
-        isolation.projectId,
-      ),
+      credential: createEmulatorOnlyCredential(isolation.projectId),
     },
-    `authority-emulator-${process.pid}-${Date.now()}`,
+    `authority-emulator-${process.pid}-${harnessInstance}`,
   );
   const firestore = getFirestore(app);
 

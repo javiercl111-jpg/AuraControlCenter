@@ -1,35 +1,35 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { resolve } = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { resolve } = require("node:path");
 
-const PROJECT_ID = "demo-aura-intelligence-os-authority";
+const PROJECT_ID = "demo-aura-intelligence-os-authority-e2e";
+const EMULATOR_HOST = "127.0.0.1:8089";
+const FIREBASE_TOOLS_VERSION = "15.25.0";
 const repositoryRoot = resolve(__dirname, "..", "..", "..");
 const emulatorConfig = resolve(
   __dirname,
-  "firebase.emulator.json"
+  "firebase.authorityEndToEnd.json"
 );
-const npxExecutable =
-  process.platform === "win32" ? "npx.cmd" : "npx";
+const npxExecutable = process.platform === "win32" ? "npx.cmd" : "npx";
 
 assert.equal(
   process.version.startsWith("v20."),
   true,
-  `Firestore authority emulator certification requires Node 20; received ${process.version}`
+  `D.9 requires Node 20; received ${process.version}`
 );
 assert.equal(
   process.env.GOOGLE_APPLICATION_CREDENTIALS,
   undefined,
-  "GOOGLE_APPLICATION_CREDENTIALS is forbidden for emulator certification"
+  "D.9 forbids GOOGLE_APPLICATION_CREDENTIALS"
 );
-assert.equal(
-  PROJECT_ID.startsWith("demo-"),
-  true,
-  "Emulator project ID must start with demo-"
-);
+assert.equal(PROJECT_ID.startsWith("demo-"), true);
+assert.equal(EMULATOR_HOST.startsWith("127.0.0.1:"), true);
+
 const childEnvironment = {
   ...process.env,
+  FIRESTORE_EMULATOR_HOST: EMULATOR_HOST,
   GCLOUD_PROJECT: PROJECT_ID,
   GOOGLE_CLOUD_PROJECT: PROJECT_ID,
   FIREBASE_CONFIG: JSON.stringify({ projectId: PROJECT_ID }),
@@ -37,7 +37,7 @@ const childEnvironment = {
 delete childEnvironment.GOOGLE_APPLICATION_CREDENTIALS;
 
 const rawTestCommand =
-  "npm exec -- vitest run --config functions/tests/emulator/vitest.config.ts";
+  "npm exec -- vitest run --config functions/tests/emulator/authorityEndToEnd/vitest.config.ts";
 const testCommand = process.platform === "win32"
   ? `"${rawTestCommand}"`
   : rawTestCommand;
@@ -45,7 +45,7 @@ const result = spawnSync(
   npxExecutable,
   [
     "--yes",
-    "firebase-tools@15.25.0",
+    `firebase-tools@${FIREBASE_TOOLS_VERSION}`,
     "emulators:exec",
     "--only",
     "firestore",

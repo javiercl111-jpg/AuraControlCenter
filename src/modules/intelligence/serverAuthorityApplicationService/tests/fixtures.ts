@@ -4,6 +4,9 @@ import type {
 import type {
   AuthorityMutationRepositoryPort,
 } from '../../serverAuthorityPersistence/ports';
+import {
+  createAuthorityMembershipKeyV1,
+} from '../../serverAuthorityPersistence/ids';
 import type {
   AuthorityRepositoryResultV1,
 } from '../../serverAuthorityPersistence/types';
@@ -25,6 +28,11 @@ import type {
 
 export const PRINCIPAL_ID = 'apr_v1_human_binding_human_001';
 export const TENANT_ID = 'tenant_001';
+export const MEMBERSHIP_ID = createAuthorityMembershipKeyV1({
+  principalType: 'USER',
+  principalId: PRINCIPAL_ID,
+  tenantId: TENANT_ID,
+});
 export const RECEIVED_AT = '2026-07-30T12:00:00.000Z';
 export const RESOLVED_AT = '2026-07-30T12:00:10.000Z';
 export const EVALUATED_AT = '2026-07-30T12:00:30.000Z';
@@ -172,7 +180,7 @@ export function resolvedScope(
     canonicalTenantAuthorityVersion: 'tenant-v1',
     membershipBinding: {
       schemaVersion: '1',
-      membershipId: 'membership_001',
+      membershipId: MEMBERSHIP_ID,
       tenantId: TENANT_ID,
       principalId: PRINCIPAL_ID,
       membershipStatus: 'ACTIVE',

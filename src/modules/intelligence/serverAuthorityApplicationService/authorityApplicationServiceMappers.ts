@@ -553,10 +553,6 @@ export function mapRepositoryResultV1(
     repositoryResult.resultingVersion !== undefined
       ? { resultingVersion: repositoryResult.resultingVersion }
       : {}),
-    ...('resourceReference' in repositoryResult &&
-    repositoryResult.resourceReference !== undefined
-      ? { resourceReference: repositoryResult.resourceReference }
-      : {}),
     maskNotFound,
   });
   const mapping = Object.freeze({
