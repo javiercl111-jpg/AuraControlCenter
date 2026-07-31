@@ -124,15 +124,20 @@ describe('serverAuthorityPersistence architecture', () => {
         const isCertifiedDarkCompositionTypes =
           entry ===
           'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts';
+        const isCertifiedDarkHandlerComposition = new Set([
+          'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
+          'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
+        ]).has(entry);
         return (
           (isCertifiedAdapter ||
-            isCertifiedDarkCompositionTypes) &&
+            isCertifiedDarkCompositionTypes ||
+            isCertifiedDarkHandlerComposition) &&
           source.includes('@aura/intelligence-os/server') &&
           !source.includes('src/modules/intelligence')
         );
       }),
     ).toBe(true);
-    expect(importers).toHaveLength(8);
+    expect(importers).toHaveLength(10);
   });
 
   it('11 does not modify or embed Firestore security rules', () => {

@@ -198,7 +198,7 @@ describe('Authority Boundary Unit Certification architecture', () => {
           typeof entry === 'string' && /\.(?:ts|js)$/.test(entry),
       )
       .map((entry) => ({
-        entry,
+        entry: entry.replaceAll('\\', '/'),
         source: fs.readFileSync(path.join(functionsRoot, entry), 'utf8'),
       }))
       .filter(({ source }) =>
@@ -206,6 +206,13 @@ describe('Authority Boundary Unit Certification architecture', () => {
           source,
         ),
       );
-    expect(consumers).toEqual([]);
+    expect(consumers.map(({ entry }) => entry).sort()).toEqual([
+      'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
+      'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
+    ]);
+    expect(consumers.every(({ source }) =>
+      source.includes('@aura/intelligence-os/server') &&
+      !source.includes('src/modules/intelligence')
+    )).toBe(true);
   });
 });

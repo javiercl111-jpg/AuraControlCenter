@@ -94,6 +94,10 @@ describe('serverIdentity architecture', () => {
           ) &&
           entry !==
             'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts' &&
+          ![
+            'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
+            'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
+          ].includes(entry) &&
           /@aura\/intelligence-os|serverIdentity|modules\/intelligence/.test(
             source,
           ),
