@@ -1252,3 +1252,83 @@ export {
 export {
   projectAuthorityInvocationContextToRepositoryV1,
 } from './serverAuthorityInvocationContext/authorityInvocationContextProjectors';
+
+export {
+  AUTHORITY_APPLICATION_EXECUTION_CONTEXT_VERSION,
+  AUTHORITY_APPLICATION_EXECUTION_MODES,
+  AUTHORITY_APPLICATION_IDEMPOTENCY_INPUT_VERSION,
+  AUTHORITY_APPLICATION_OBLIGATION_INPUT_VERSION,
+  AUTHORITY_APPLICATION_RESULT_STATUSES,
+  AUTHORITY_APPLICATION_RETRY_DISPOSITIONS,
+  AUTHORITY_APPLICATION_SAFE_CODES,
+  AUTHORITY_APPLICATION_SERVICE_ERROR_VERSION,
+  AUTHORITY_APPLICATION_SERVICE_REQUEST_VERSION,
+  AUTHORITY_APPLICATION_SERVICE_RESULT_VERSION,
+  AUTHORITY_APPLICATION_SERVICE_VERSION,
+  AUTHORITY_APPLICATION_STAGE_STATUSES,
+  AUTHORITY_APPLICATION_STAGE_TRACE_VERSION,
+  AUTHORITY_APPLICATION_STAGES,
+  AUTHORITY_OBLIGATION_VERIFICATION_RESULT_VERSION,
+  AUTHORITY_OBLIGATION_VERIFICATION_STATUSES,
+} from './serverAuthorityApplicationService/authorityApplicationServiceTypes';
+
+export type {
+  AuthorityApplicationExecutionContextV1,
+  AuthorityApplicationExecutionMode,
+  AuthorityApplicationIdempotencyInputV1,
+  AuthorityApplicationObligationEvidenceInputV1,
+  AuthorityApplicationRepositoryResultV1,
+  AuthorityApplicationResolvedInputsV1,
+  AuthorityApplicationResultMetadataV1,
+  AuthorityApplicationResultStatus,
+  AuthorityApplicationRetryDisposition,
+  AuthorityApplicationSafeCode,
+  AuthorityApplicationServiceRequestV1,
+  AuthorityApplicationServiceResultV1,
+  AuthorityApplicationServiceV1,
+  AuthorityApplicationStage,
+  AuthorityApplicationStageStatus,
+  AuthorityApplicationStageTraceV1,
+  AuthorityApplicationUpstreamRetryDisposition,
+  AuthorityInvocationContextFingerprintInputV1,
+  AuthorityObligationVerificationContextV1,
+  AuthorityObligationVerificationFailureV1,
+  AuthorityObligationVerificationResultV1,
+  AuthorityObligationVerificationStatus,
+  AuthorityObligationVerificationSuccessV1,
+} from './serverAuthorityApplicationService/authorityApplicationServiceTypes';
+
+export type {
+  AuthorityApplicationServiceDependenciesV1,
+  AuthorityInvocationContextFingerprintPort,
+  AuthorityObligationVerifierPort,
+} from './serverAuthorityApplicationService/authorityApplicationServicePorts';
+
+export {
+  AUTHORITY_APPLICATION_SERVICE_CONTRACT_ISSUES,
+  AUTHORITY_APPLICATION_SERVICE_ERROR_CODES,
+  AuthorityApplicationServiceContractError,
+  AuthorityApplicationServiceExecutionError,
+  AuthorityApplicationServiceValidationError,
+} from './serverAuthorityApplicationService/authorityApplicationServiceErrors';
+
+export type {
+  AuthorityApplicationServiceContractIssue,
+  AuthorityApplicationServiceErrorCode,
+  AuthorityApplicationServiceSafeErrorV1,
+} from './serverAuthorityApplicationService/authorityApplicationServiceErrors';
+
+export {
+  validateAuthorityApplicationExecutionContextV1,
+  validateAuthorityApplicationIdempotencyInputV1,
+  validateAuthorityApplicationObligationEvidenceInputV1,
+  validateAuthorityApplicationServiceDependenciesV1,
+  validateAuthorityApplicationServiceRequestV1,
+  validateAuthorityApplicationServiceResultV1,
+  validateAuthorityApplicationStageTraceV1,
+  validateAuthorityObligationVerificationResultV1,
+} from './serverAuthorityApplicationService/authorityApplicationServiceValidators';
+
+export {
+  createAuthorityApplicationServiceV1,
+} from './serverAuthorityApplicationService/authorityApplicationServiceFactories';
