@@ -1162,3 +1162,93 @@ export {
 export {
   InMemoryAuthorityMutationRepository,
 } from './serverAuthorityPersistence/InMemoryAuthorityMutationRepository';
+
+export {
+  AUTHORITY_INVOCATION_AUTHORIZATION_PROJECTION_VERSION,
+  AUTHORITY_INVOCATION_AUTHORIZATION_STATUSES,
+  AUTHORITY_INVOCATION_CONTEXT_ERROR_VERSION,
+  AUTHORITY_INVOCATION_CONTEXT_REASON_CODES,
+  AUTHORITY_INVOCATION_CONTEXT_RESULT_STATUSES,
+  AUTHORITY_INVOCATION_CONTEXT_RESULT_VERSION,
+  AUTHORITY_INVOCATION_CONTEXT_RETRY_DISPOSITIONS,
+  AUTHORITY_INVOCATION_CONTEXT_STATUSES,
+  AUTHORITY_INVOCATION_CONTEXT_VERSION,
+  AUTHORITY_INVOCATION_FRESHNESS_VERSION,
+  AUTHORITY_INVOCATION_IDEMPOTENCY_VERSION,
+  AUTHORITY_INVOCATION_OPERATION_BINDING_VERSION,
+  AUTHORITY_INVOCATION_PRINCIPAL_PROJECTION_VERSION,
+  AUTHORITY_INVOCATION_REQUEST_METADATA_VERSION,
+  AUTHORITY_INVOCATION_SCOPE_PROJECTION_VERSION,
+  AUTHORITY_OBLIGATION_SATISFACTION_EVIDENCE_VERSION,
+  AUTHORITY_OBLIGATION_SATISFACTION_STATUSES,
+  AUTHORITY_OBLIGATION_SATISFACTION_SUMMARY_VERSION,
+} from './serverAuthorityInvocationContext/authorityInvocationContextTypes';
+
+export type {
+  AuthorityInvocationAuthorizationProjectionV1,
+  AuthorityInvocationAuthorizationStatus,
+  AuthorityInvocationContextReasonCode,
+  AuthorityInvocationContextResultStatus,
+  AuthorityInvocationContextResultV1,
+  AuthorityInvocationContextRetryDisposition,
+  AuthorityInvocationContextSafeMetadataV1,
+  AuthorityInvocationContextStatus,
+  AuthorityInvocationContextV1,
+  AuthorityInvocationFreshnessV1,
+  AuthorityInvocationIdempotencyV1,
+  AuthorityInvocationOperationBindingV1,
+  AuthorityInvocationPrincipalProjectionV1,
+  AuthorityInvocationRequestMetadataV1,
+  AuthorityInvocationScopeProjectionV1,
+  AuthorityObligationSatisfactionEvidenceV1,
+  AuthorityObligationSatisfactionStatus,
+  AuthorityObligationSatisfactionSummaryV1,
+  AuthorityRepositoryInvocationContextProjectionV1,
+} from './serverAuthorityInvocationContext/authorityInvocationContextTypes';
+
+export {
+  AUTHORITY_INVOCATION_CONTEXT_CONTRACT_ISSUES,
+  AUTHORITY_INVOCATION_CONTEXT_ERROR_CODES,
+  AuthorityInvocationContextContractError,
+  AuthorityInvocationContextProjectionError,
+  AuthorityInvocationContextValidationError,
+} from './serverAuthorityInvocationContext/authorityInvocationContextErrors';
+
+export type {
+  AuthorityInvocationContextContractIssue,
+  AuthorityInvocationContextErrorCode,
+  AuthorityInvocationContextSafeErrorV1,
+} from './serverAuthorityInvocationContext/authorityInvocationContextErrors';
+
+export {
+  validateAuthorityInvocationAuthorizationProjectionV1,
+  validateAuthorityInvocationContextResultV1,
+  validateAuthorityInvocationContextV1,
+  validateAuthorityInvocationFreshnessV1,
+  validateAuthorityInvocationIdempotencyV1,
+  validateAuthorityInvocationOperationBindingV1,
+  validateAuthorityInvocationPrincipalProjectionV1,
+  validateAuthorityInvocationRequestMetadataV1,
+  validateAuthorityInvocationScopeProjectionV1,
+  validateAuthorityObligationSatisfactionEvidenceV1,
+  validateAuthorityObligationSatisfactionSummaryV1,
+  validateAuthorityRepositoryProjectionInputV1,
+} from './serverAuthorityInvocationContext/authorityInvocationContextValidators';
+
+export {
+  createAuthorityInvocationAuthorizationProjectionV1,
+  createAuthorityInvocationContextResultV1,
+  createAuthorityInvocationContextV1,
+  createAuthorityInvocationFreshnessV1,
+  createAuthorityInvocationIdempotencyV1,
+  createAuthorityInvocationOperationBindingV1,
+  createAuthorityInvocationPrincipalProjectionV1,
+  createAuthorityInvocationRequestMetadataV1,
+  createAuthorityInvocationScopeProjectionV1,
+  createAuthorityObligationSatisfactionEvidenceV1,
+  createAuthorityObligationSatisfactionSummaryV1,
+} from './serverAuthorityInvocationContext/authorityInvocationContextFactories';
+
+export {
+  projectAuthorityInvocationContextToRepositoryV1,
+} from './serverAuthorityInvocationContext/authorityInvocationContextProjectors';
