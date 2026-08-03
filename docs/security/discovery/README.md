@@ -17,6 +17,8 @@ Esta carpeta contiene la baseline AI-02H1E.4.1 para el hardening del intake púb
 7. [Public Intake Decision Register v1](PUBLIC_INTAKE_DECISION_REGISTER_V1.md) — decisiones abiertas, roles y RACI.
 8. [Public Intake Hardening Roadmap v1](PUBLIC_INTAKE_HARDENING_ROADMAP_V1.md) — secuencia P2–P10, dependencias y condiciones de detención.
 9. [Atomic Public Rate Limits v1](ATOMIC_PUBLIC_RATE_LIMITS_V1.md) — infraestructura reusable y adapter Firestore implementados por AI-02H1E.4.2.
+10. [Idempotency Retention v1](IDEMPOTENCY_RETENTION_V1.md) — TTL, cardinalidad y recuperación certificable de AI-02H1E.4.3.
+11. [Capability Lifecycle v1](CAPABILITY_LIFECYCLE_V1.md) — EXCHANGE/SESSION/REPORT, revocación y completion exactamente una vez de AI-02H1E.4.4.
 
 ## Cómo interpretar la baseline
 
