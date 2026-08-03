@@ -16,6 +16,7 @@ Esta carpeta contiene la baseline AI-02H1E.4.1 para el hardening del intake púb
 6. [Public Intake Certification Plan v1](PUBLIC_INTAKE_CERTIFICATION_PLAN_V1.md) — 22 pruebas de abuso y gates de emulador.
 7. [Public Intake Decision Register v1](PUBLIC_INTAKE_DECISION_REGISTER_V1.md) — decisiones abiertas, roles y RACI.
 8. [Public Intake Hardening Roadmap v1](PUBLIC_INTAKE_HARDENING_ROADMAP_V1.md) — secuencia P2–P10, dependencias y condiciones de detención.
+9. [Atomic Public Rate Limits v1](ATOMIC_PUBLIC_RATE_LIMITS_V1.md) — infraestructura reusable y adapter Firestore implementados por AI-02H1E.4.2.
 
 ## Cómo interpretar la baseline
 
