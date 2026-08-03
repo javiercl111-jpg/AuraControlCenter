@@ -138,15 +138,27 @@ const tests: readonly TestCase[] = [
   {
     name: "Lead and idempotency completion share one transaction",
     run: () => {
-      const source = readFileSync(
+      const handlerSource = readFileSync(
         resolve(repositoryRoot, "functions/src/discovery/createDiscoveryLead.ts"),
         "utf8"
       );
-      const atomicWrite = source.match(
-        /runTransaction\(async \(transaction\)[\s\S]*?transaction\.set\(docRef, linkPayload\);[\s\S]*?transaction\.update\(idempotencyRef/
+      const adapterSource = readFileSync(
+        resolve(
+          repositoryRoot,
+          "functions/src/infrastructure/firestore/discoveryIntakeIdempotency/" +
+            "FirestoreDiscoveryIntakeIdempotencyRepository.ts"
+        ),
+        "utf8"
       );
-      strictEqual(Boolean(atomicWrite), true);
-      strictEqual(source.includes("processingAttemptId !== transactionResult.processingAttemptId"), true);
+      strictEqual(handlerSource.includes("idempotencyRepository.complete("), true);
+      strictEqual(handlerSource.includes("processingAttemptId,"), true);
+      strictEqual(adapterSource.includes("transaction.create("), true);
+      strictEqual(
+        adapterSource.includes(
+          "serializeDiscoveryIntakeIdempotencyRecordV1(completed)"
+        ),
+        true
+      );
     },
   },
   {

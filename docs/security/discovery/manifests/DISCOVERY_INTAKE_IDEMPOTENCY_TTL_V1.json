@@ -1,0 +1,12 @@
+{
+  "manifestVersion": "FIRESTORE_TTL_TARGET_V1",
+  "status": "TARGET_NOT_APPLIED",
+  "collectionGroup": "discovery_intake_idempotency",
+  "field": "expiresAt",
+  "fieldType": "Firestore Timestamp",
+  "deletionSemantics": "EVENTUAL_PHYSICAL_DELETION_ONLY",
+  "securitySemantics": "CODE_ENFORCED_EXPIRATION",
+  "cleanupFallback": "BOUNDED_INTERNAL_COMPONENT",
+  "remoteVerification": "P9_REQUIRED",
+  "owner": "Aura Intelligence Security"
+}

@@ -5,6 +5,30 @@ export function generateIdempotencyHash(idempotencyKey: string, secretValue: str
   return crypto.createHmac("sha256", secretValue).update(idempotencyKey).digest("hex");
 }
 
+export function generateIdempotencyNamespaceHash(
+  canonicalIdentity: string,
+  secretValue: string,
+): string {
+  return crypto
+    .createHmac("sha256", secretValue)
+    .update(`discovery-intake-namespace:v1:${canonicalIdentity}`)
+    .digest("hex");
+}
+
+export function generateDiscoveryCapabilityToken(
+  idempotencyHash: string,
+  capabilityGenerationId: string,
+  secretValue: string,
+): string {
+  return crypto
+    .createHmac("sha256", secretValue)
+    .update(
+      `discovery-intake-capability:v1:${idempotencyHash}:` +
+      capabilityGenerationId,
+    )
+    .digest("hex");
+}
+
 export function generateRequestHash(payload: Record<string, any>): string {
   // Extract strictly the fields that determine if it's a new request
   const relevantData = {
