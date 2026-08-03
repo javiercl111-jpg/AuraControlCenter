@@ -1,12 +1,44 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateOpaqueToken, generateTokenHash, computeTrustScore, getDiscoverySecurityConfig } from "./discoverySecurityService";
-import { generateIdempotencyHash, generateRequestHash } from "./idempotencyHelper";
+import {
+  generateDiscoveryCapabilityToken,
+  generateIdempotencyHash,
+  generateIdempotencyNamespaceHash,
+  generateRequestHash,
+} from "./idempotencyHelper";
 import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
 import { resolvePlatformPrincipal } from "../auth/resolvePlatformPrincipal";
+import {
+  DISCOVERY_INTAKE_IDEMPOTENCY_POLICY_V1,
+  isDiscoveryIntakeIdempotencyError,
+  type DiscoveryIntakeIdempotencyFailCommandV1,
+  type DiscoveryIntakeIdempotencyRepository,
+} from "./idempotency";
+import {
+  FirestoreDiscoveryIntakeIdempotencyRepository,
+} from "../infrastructure/firestore/discoveryIntakeIdempotency";
 
 const idempotencySecret = defineSecret("IDEMPOTENCY_SECRET");
+
+function toCallerSafeIdempotencyError(error: unknown): HttpsError | null {
+  if (!isDiscoveryIntakeIdempotencyError(error)) return null;
+  if (error.code === "IDEMPOTENCY_REQUEST_CONFLICT") {
+    return new HttpsError("already-exists", error.code);
+  }
+  if (error.code === "IDEMPOTENCY_CARDINALITY_EXCEEDED") {
+    return new HttpsError("resource-exhausted", error.code);
+  }
+  if (
+    error.code === "IDEMPOTENCY_RECORD_EXPIRED" ||
+    error.code === "IDEMPOTENCY_ATTEMPTS_EXCEEDED" ||
+    error.code === "IDEMPOTENCY_LEASE_RECOVERY_EXCEEDED"
+  ) {
+    return new HttpsError("failed-precondition", error.code);
+  }
+  return new HttpsError("internal", error.code);
+}
 
 export const createDiscoveryLead = onCall(
   {
@@ -15,6 +47,8 @@ export const createDiscoveryLead = onCall(
     secrets: [idempotencySecret],
   },
   async (request) => {
+    let idempotencyRepository: DiscoveryIntakeIdempotencyRepository | null = null;
+    let activeAttempt: DiscoveryIntakeIdempotencyFailCommandV1 | null = null;
     try {
       if (request.app == undefined) {
         throw new HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
@@ -78,6 +112,10 @@ export const createDiscoveryLead = onCall(
       }
 
       const idempotencyHash = generateIdempotencyHash(idempotencyKey, idempotencySecret.value());
+      const namespaceHash = generateIdempotencyNamespaceHash(
+        email,
+        idempotencySecret.value(),
+      );
       const requestHash = generateRequestHash({
         ...payload,
         companyName,
@@ -99,7 +137,10 @@ export const createDiscoveryLead = onCall(
       });
 
       const db = admin.firestore();
-      const idempotencyRef = db.collection("discovery_intake_idempotency").doc(idempotencyHash);
+      idempotencyRepository = new FirestoreDiscoveryIntakeIdempotencyRepository(
+        db,
+        DISCOVERY_INTAKE_IDEMPOTENCY_POLICY_V1,
+      );
 
       // 3. Resolve Advisor
       let advisorContext: admin.firestore.DocumentData | null = null;
@@ -126,12 +167,80 @@ export const createDiscoveryLead = onCall(
       const allowedRoles = ["SALES_ADVISOR", "PLATFORM_PARTNER", "SALES_DIRECTOR", "PLATFORM_OWNER", "FOUNDER", "SUPER_ADMIN", "PARTNER"];
       const isAuthorizedCaller = authCaller !== null && allowedRoles.includes(authCaller.role);
 
-      const existingIdempotencySnap = await idempotencyRef.get();
-      const existingIdempotencyData = existingIdempotencySnap.data();
-      const isKnownRetry =
-        existingIdempotencySnap.exists &&
-        existingIdempotencyData?.requestHash === requestHash &&
-        ["PROCESSING", "COMPLETED"].includes(existingIdempotencyData?.status);
+      let acquisition;
+      try {
+        acquisition = await idempotencyRepository.acquire({
+          recordId: idempotencyHash,
+          requestHash,
+          namespaceHash,
+          processingAttemptId: generateOpaqueToken(),
+        });
+      } catch (error: unknown) {
+        throw toCallerSafeIdempotencyError(error) ?? error;
+      }
+
+      if (acquisition.decision === "PROCESSING") {
+        return {
+          status: "PROCESSING",
+          retryAfterSeconds: acquisition.retryAfterSeconds,
+        };
+      }
+
+      if (acquisition.decision === "CACHED") {
+        const cachedResult = acquisition.result;
+        const linkSnap = await db.collection("market_discovery_links")
+          .doc(cachedResult.linkId)
+          .get();
+        if (!linkSnap.exists) {
+          throw new HttpsError("internal", "IDEMPOTENCY_RECORD_CORRUPTED");
+        }
+        const linkData = linkSnap.data()!;
+        if (linkData.usageCount > 0) {
+          return {
+            status: "ERROR",
+            nextAction: "SHOW_REVIEW_PENDING",
+            publicMessage: "Este enlace ya fue consumido. No se generará otro prospecto.",
+          };
+        }
+        const expiresAt = linkData.expiresAt?.toDate?.().getTime();
+        if (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now()) {
+          return {
+            status: "ERROR",
+            nextAction: "SHOW_REVIEW_PENDING",
+            publicMessage: "Este enlace ha expirado.",
+          };
+        }
+        const cachedToken = generateDiscoveryCapabilityToken(
+          idempotencyHash,
+          cachedResult.capabilityGenerationId,
+          idempotencySecret.value(),
+        );
+        if (linkData.tokenHash !== generateTokenHash(cachedToken)) {
+          throw new HttpsError("internal", "IDEMPOTENCY_RECORD_CORRUPTED");
+        }
+        return {
+          status: "SUCCESS",
+          nextAction: "REDIRECT_DISCOVERY",
+          discoveryUrl:
+            `https://controlcenter.auranexus.io/discover/${linkSnap.id}` +
+            `#access=${cachedToken}`,
+          linkId: linkSnap.id,
+          oneTimeToken: cachedToken,
+          advisorDisplayName: cachedResult.advisorDisplayName ?? undefined,
+          organizationProfile: cachedResult.organizationProfile,
+          requiresManualReview: cachedResult.requiresManualReview,
+        };
+      }
+
+      const processingAttemptId = acquisition.processingAttemptId;
+      const isKnownRetry = acquisition.attemptCount > 1;
+      activeAttempt = {
+        recordId: idempotencyHash,
+        requestHash,
+        namespaceHash,
+        processingAttemptId,
+        failureCode: "IDEMPOTENCY_INTERNAL_FAILURE",
+      };
 
       // A retry of an already accepted commercial attempt must not be rejected by
       // a rate limit caused by the original successful creation.
@@ -174,115 +283,15 @@ export const createDiscoveryLead = onCall(
         }
       }
 
-      // 4. Idempotency Transaction
-      let transactionResult:
-        | { type: "CACHED"; idempData: admin.firestore.DocumentData }
-        | { type: "NEW"; processingAttemptId: string };
-      const processingAttemptId = generateOpaqueToken();
-      try {
-        transactionResult = await db.runTransaction(async (t) => {
-          const idempSnap = await t.get(idempotencyRef);
-          
-          if (idempSnap.exists) {
-            const idempData = idempSnap.data()!;
-            
-            if (idempData.requestHash !== requestHash) {
-              throw new Error("IDEMPOTENCY_CONFLICT");
-            }
-
-            if (idempData.status === "PROCESSING") {
-              // Check if lease expired (e.g. 1 minute)
-              const leaseExpired = idempData.processingLeaseExpiresAt && idempData.processingLeaseExpiresAt.toDate() < new Date();
-              if (!leaseExpired) {
-                 throw new Error("PROCESSING");
-              }
-            } else if (idempData.status === "COMPLETED") {
-               // Let's resolve the access
-               return { type: "CACHED", idempData };
-            } else if (idempData.status === "FAILED_FINAL") {
-               throw new Error("FAILED_FINAL");
-            }
-          }
-
-          // Lock for processing
-          t.set(idempotencyRef, {
-            status: "PROCESSING",
-            requestHash,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            processingLeaseExpiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 60000)),
-            processingAttemptId,
-            attemptCount: admin.firestore.FieldValue.increment(1)
-          }, { merge: true });
-
-          return { type: "NEW", processingAttemptId };
-        });
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : "UNKNOWN";
-        if (errorMessage === "IDEMPOTENCY_CONFLICT") {
-          throw new HttpsError("already-exists", "IDEMPOTENCY_CONFLICT");
-        }
-        if (errorMessage === "PROCESSING") {
-          return { status: "PROCESSING", retryAfterSeconds: 3 };
-        }
-        if (errorMessage === "FAILED_FINAL") {
-          throw new HttpsError("internal", "Error procesando solicitud previamente.");
-        }
-        throw error;
-      }
-
-      if (transactionResult.type === "CACHED") {
-        const linkSnap = await db.collection("market_discovery_links").doc(transactionResult.idempData.linkId).get();
-        if (!linkSnap.exists) {
-          throw new HttpsError("internal", "Link no encontrado.");
-        }
-        const linkData = linkSnap.data()!;
-        
-        if (linkData.usageCount > 0) {
-           return {
-             status: "ERROR",
-             nextAction: "SHOW_REVIEW_PENDING",
-             publicMessage: "Este enlace ya fue consumido. No se generará otro prospecto."
-           };
-        }
-
-        // Generate a new opaque token (re-issue controlled) since we don't store the old opaque token
-        const newOneTimeToken = generateOpaqueToken();
-        const newHash = generateTokenHash(newOneTimeToken);
-        const expiresAt = linkData.expiresAt.toDate().getTime();
-
-        if (expiresAt < Date.now()) {
-           return {
-             status: "ERROR",
-             nextAction: "SHOW_REVIEW_PENDING",
-             publicMessage: "Este enlace ha expirado."
-           };
-        }
-
-        await linkSnap.ref.update({
-          tokenHash: newHash,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        const discoveryUrl = `https://controlcenter.auranexus.io/discover/${linkSnap.id}#access=${newOneTimeToken}`;
-
-        return {
-          status: "SUCCESS",
-          nextAction: "REDIRECT_DISCOVERY",
-          discoveryUrl,
-          linkId: linkSnap.id,
-          oneTimeToken: newOneTimeToken,
-          advisorDisplayName: advisorContext ? (advisorContext.displayName || advisorContext.name) : undefined,
-          organizationProfile: "UNKNOWN",
-          requiresManualReview: linkData.trustScore?.decision === "REQUIRE_MANUAL_REVIEW"
-        };
-      }
-
       // 5. Proceed with Creation
 
       const trustScoreResult = await computeTrustScore(email, advisorContext, acquisitionSource);
 
-      const oneTimeToken = generateOpaqueToken();
+      const oneTimeToken = generateDiscoveryCapabilityToken(
+        idempotencyHash,
+        processingAttemptId,
+        idempotencySecret.value(),
+      );
       const tokenHash = generateTokenHash(oneTimeToken);
       const expirationDate = new Date(Date.now() + config.tokenExpirationHours * 60 * 60 * 1000);
 
@@ -347,30 +356,37 @@ export const createDiscoveryLead = onCall(
 
       const docRef = db.collection("market_discovery_links").doc();
 
-      // Persist the lead and complete its idempotency record atomically. A stale
-      // worker cannot create a second lead after another retry acquires the lease.
-      await db.runTransaction(async (transaction) => {
-        const idempSnap = await transaction.get(idempotencyRef);
-        const idempData = idempSnap.data();
-        if (
-          !idempSnap.exists ||
-          idempData?.status !== "PROCESSING" ||
-          idempData?.requestHash !== requestHash ||
-          idempData?.processingAttemptId !== transactionResult.processingAttemptId
-        ) {
-          throw new HttpsError("aborted", "IDEMPOTENCY_LEASE_LOST");
-        }
-
-        transaction.set(docRef, linkPayload);
-        transaction.update(idempotencyRef, {
-          status: "COMPLETED",
-          linkId: docRef.id,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
-          processingLeaseExpiresAt: admin.firestore.FieldValue.delete(),
-          processingAttemptId: admin.firestore.FieldValue.delete(),
-        });
-      });
+      // The adapter creates the lead and closes the fenced idempotency attempt in
+      // the same Firestore transaction. Transaction retries reuse the same doc id.
+      try {
+        await idempotencyRepository.complete(
+          {
+            recordId: idempotencyHash,
+            requestHash,
+            namespaceHash,
+            processingAttemptId,
+            result: {
+              linkId: docRef.id,
+              capabilityGenerationId: processingAttemptId,
+              advisorDisplayName: advisorContext
+                ? (advisorContext.displayName || advisorContext.name || null)
+                : null,
+              organizationProfile: "UNKNOWN",
+              requiresManualReview:
+                trustScoreResult.decision === "REQUIRE_MANUAL_REVIEW",
+            },
+          },
+          {
+            operation: "CREATE",
+            collectionPath: "market_discovery_links",
+            documentId: docRef.id,
+            data: linkPayload,
+          },
+        );
+      } catch (error: unknown) {
+        throw toCallerSafeIdempotencyError(error) ?? error;
+      }
+      activeAttempt = null;
 
       const discoveryUrl = `https://controlcenter.auranexus.io/discover/${docRef.id}#access=${oneTimeToken}`;
 
@@ -385,6 +401,17 @@ export const createDiscoveryLead = onCall(
         requiresManualReview: trustScoreResult.decision === "REQUIRE_MANUAL_REVIEW"
       };
     } catch (error: unknown) {
+      if (idempotencyRepository !== null && activeAttempt !== null) {
+        try {
+          await idempotencyRepository.fail(activeAttempt);
+        } catch (failureError: unknown) {
+          logger.warn("Unable to close Discovery idempotency attempt", {
+            code: isDiscoveryIntakeIdempotencyError(failureError)
+              ? failureError.code
+              : "IDEMPOTENCY_INTERNAL_FAILURE",
+          });
+        }
+      }
       const errorDetails = error instanceof Error
         ? { message: error.message, code: (error as Error & { code?: unknown }).code, stack: error.stack }
         : { message: "UNKNOWN", code: undefined, stack: undefined };
@@ -395,6 +422,10 @@ export const createDiscoveryLead = onCall(
       });
       if (error instanceof HttpsError) {
         throw error;
+      }
+      const callerSafeIdempotencyError = toCallerSafeIdempotencyError(error);
+      if (callerSafeIdempotencyError !== null) {
+        throw callerSafeIdempotencyError;
       }
       throw new HttpsError("internal", "INTERNAL");
     }
