@@ -19,6 +19,7 @@
     "test:firestore-authority-adapter": "vitest run --config functions/tests/vitest.authority.config.ts",
     "test:firestore-authority-emulator": "npm run assert:node20 && npm run stage:intelligence-os:functions && node functions/tests/emulator/runFirestoreAuthorityEmulator.cjs",
     "test:firestore-authority-end-to-end-emulator": "npm run assert:node20 && npm run stage:intelligence-os:functions && node functions/tests/emulator/runAuthorityEndToEndEmulator.cjs",
+    "test:firestore-rate-limit-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestoreRateLimitEmulator.cjs",
     "test:authority-dark-composition": "vitest run --config functions/tests/vitest.authorityDarkComposition.config.ts",
     "test:authority-dark-handler-composition": "vitest run --config functions/tests/vitest.authorityDarkHandlerComposition.config.ts",
     "test:enterprise-model": "vitest run src/modules/intelligence/enterprise-model",
