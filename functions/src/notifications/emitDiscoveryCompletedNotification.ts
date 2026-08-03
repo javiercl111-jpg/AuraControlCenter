@@ -1,6 +1,7 @@
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { GoogleAuth } from "google-auth-library";
 import { projectPlatformInbox, NotificationProjectionInput } from "./projectPlatformInbox";
+import { createHash } from "crypto";
 
 export interface MaintenanceDeliveryResult {
   status?: string;
@@ -117,7 +118,7 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
     // Build Canonical V1 Payload
     const notificationEvent = {
       schemaVersion: "1.0",
-      eventId: `event_${payload.discoverySessionId}_${Date.now()}`,
+      eventId: `event_${createHash("sha256").update(payload.idempotencyKey).digest("hex").slice(0, 40)}`,
       eventType: "discovery.completed",
       sourceModule: "CONTROL_CENTER", // The gateway expects sourceModule
       tenantId: payload.tenantId,

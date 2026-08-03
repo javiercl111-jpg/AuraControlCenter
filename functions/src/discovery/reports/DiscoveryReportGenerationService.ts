@@ -4,6 +4,7 @@ import { BrandingEngine } from "./BrandingEngine";
 import { ReportViewModel, DiscoveryReportMetadata, ReportType, DeliveryLevel } from "./types";
 import { LifecycleEventType } from "../../prospects/types";
 import { buildDiscoveryReportViewModel } from "./DiscoveryReportViewModelBuilder";
+import { hashDiscoveryCapabilityToken } from "../capabilities";
 
 export class DiscoveryReportGenerationService {
   /**
@@ -145,9 +146,10 @@ export class DiscoveryReportGenerationService {
             updatedAt: new Date().toISOString()
           });
 
-          const eventRef = db.collection("platform_events").doc();
+          const eventId = `report_ready_${hashDiscoveryCapabilityToken(reportId).slice(0, 40)}`;
+          const eventRef = db.collection("platform_events").doc(eventId);
           await eventRef.set({
-            eventId: eventRef.id,
+            eventId,
             type: LifecycleEventType.DISCOVERY_REPORT_READY,
             prospectId,
             sessionId,
@@ -155,7 +157,7 @@ export class DiscoveryReportGenerationService {
             actorType: "SYSTEM",
             source: "DiscoveryReportGenerationService",
             metadata: { reportId, reportType, folio }
-          });
+          }, { merge: true });
 
           const finalMetadata = (await metadataRef.get()).data() as DiscoveryReportMetadata;
           return {

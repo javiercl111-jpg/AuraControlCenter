@@ -1,6 +1,9 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { generateOpaqueToken, generateTokenHash } from "./discoverySecurityService";
+import { FirestoreDiscoveryCapabilityRepository } from
+  "../infrastructure/firestore/discoveryCapabilities";
+import { toDiscoveryCapabilityHttpsError } from "./discoveryCapabilityHandlerSupport";
 
 export const exchangeDiscoveryToken = functions.https.onCall(async (request) => {
   if (request.app == undefined) {
@@ -23,41 +26,15 @@ export const exchangeDiscoveryToken = functions.https.onCall(async (request) => 
   }
 
   const db = admin.firestore();
-  const linkRef = db.collection("market_discovery_links").doc(linkId);
   const sessionAccessToken = generateOpaqueToken();
   const sessionTokenHash = generateTokenHash(sessionAccessToken);
-  const linkData = await db.runTransaction(async (transaction) => {
-    const linkSnap = await transaction.get(linkRef);
-    if (!linkSnap.exists) {
-      throw new functions.https.HttpsError("not-found", "Link not found.");
-    }
-
-    const currentLinkData = linkSnap.data()!;
-    if (currentLinkData.status !== "pending") {
-      throw new functions.https.HttpsError("failed-precondition", "Link is no longer pending.");
-    }
-    if (currentLinkData.tokenHash !== generateTokenHash(oneTimeToken)) {
-      throw new functions.https.HttpsError("permission-denied", "Invalid token.");
-    }
-
-    const expiresAt = currentLinkData.expiresAt;
-    if (!expiresAt || typeof expiresAt.toMillis !== "function" || expiresAt.toMillis() <= Date.now()) {
-      throw new functions.https.HttpsError("failed-precondition", "Token has expired.");
-    }
-    if (typeof currentLinkData.usageCount !== "number" || currentLinkData.usageCount !== 0) {
-      throw new functions.https.HttpsError("failed-precondition", "Token already used.");
-    }
-
-    transaction.update(linkRef, {
-      usageCount: 1,
-      usedAt: admin.firestore.FieldValue.serverTimestamp(),
-      sessionTokenHash,
-      sessionTokenExpiresAt: expiresAt,
-      tokenHash: admin.firestore.FieldValue.delete(),
-    });
-
-    return currentLinkData;
-  });
+  let linkData: admin.firestore.DocumentData;
+  try {
+    ({ linkData } = await new FirestoreDiscoveryCapabilityRepository(db)
+      .exchangeLegacyLink({ linkId, exchangeToken: oneTimeToken, sessionTokenHash }));
+  } catch (error: unknown) {
+    throw toDiscoveryCapabilityHttpsError(error);
+  }
 
   return {
     sessionAccessToken,
