@@ -202,22 +202,28 @@ export class FirestoreDiscoveryCapabilityRepository {
   }
 
   async authorizeSession(input: Readonly<{
-    token: string; linkId: string; allowCompleted?: boolean;
+    token: string; linkId?: string; allowCompleted?: boolean;
   }>): Promise<Readonly<{ capability: DiscoveryCapabilityV1; linkData: DocumentData }>> {
     const tokenHash = hashDiscoveryCapabilityToken(input.token);
-    const [capSnap, linkSnap] = await Promise.all([
-      this.db.collection(DISCOVERY_CAPABILITIES_COLLECTION).doc(tokenHash).get(),
-      this.db.collection("market_discovery_links").doc(input.linkId).get(),
-    ]);
-    if (!capSnap.exists || !linkSnap.exists) {
+    const capSnap = await this.db.collection(DISCOVERY_CAPABILITIES_COLLECTION)
+      .doc(tokenHash).get();
+    if (!capSnap.exists) {
+      throw new DiscoveryCapabilityError("CAPABILITY_NOT_FOUND", "Capability unavailable.");
+    }
+    const parsed = parseDiscoveryCapabilityV1(
+      deserializeDiscoveryCapabilityV1(capSnap.data()),
+    );
+    const linkId = input.linkId ?? parsed.linkId;
+    const linkSnap = await this.db.collection("market_discovery_links").doc(linkId).get();
+    if (!linkSnap.exists) {
       throw new DiscoveryCapabilityError("CAPABILITY_NOT_FOUND", "Capability unavailable.");
     }
     const linkData = linkSnap.data()!;
     const capability = authorizeDiscoveryCapabilityV1(
-      deserializeDiscoveryCapabilityV1(capSnap.data()),
+      parsed,
       {
         now: this.clock(), tokenHash, type: "SESSION", purpose: "DISCOVERY_SESSION",
-        linkId: input.linkId,
+        linkId,
         generation: linkData.sessionCapabilityGeneration,
         allowCompletedSession: input.allowCompleted,
       },

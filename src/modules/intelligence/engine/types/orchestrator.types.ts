@@ -32,6 +32,7 @@ export interface ConversationStateSnapshot {
 }
 
 export interface OrchestratorInput {
+  sessionToken?: string;
   engineInput: EngineInput;
   conversationStateSnapshot: ConversationStateSnapshot;
   reflectionState: ReflectionState;
@@ -44,7 +45,9 @@ export type DraftableConversationIntent = Extract<
 >;
 
 export interface ConversationDraftRequest {
-  engineInput: Pick<
+  schemaVersion: "DISCOVERY_CONVERSATION_EVALUATION_V1";
+  sessionToken: string;
+  engineInput: Omit<Pick<
     EngineInput,
     | "companyName"
     | "industry"
@@ -53,7 +56,9 @@ export interface ConversationDraftRequest {
     | "partialDossier"
     | "confidenceLevel"
     | "askedQuestions"
-  > & {
+  >, "conversationHistory" | "partialDossier"> & {
+    conversationHistory: Array<Pick<ConversationMessage, "role" | "content">>;
+    partialDossier: Record<string, string | number | boolean>;
     confirmedFacts: string[];
     pendingHypotheses: string[];
     criticalMissingInformation: string[];

@@ -1,8 +1,8 @@
-# Strict Payload and Cost Bounds V1
+﻿# Strict Payload and Cost Bounds V1
 
-**Slice:** AI-02H1E.4.5  
-**Contract version:** `DISCOVERY_COST_BOUND_POLICY_V1`  
-**Status:** implemented for architectural review  
+**Slice:** AI-02H1E.4.5
+**Contract version:** `DISCOVERY_COST_BOUND_POLICY_V1`
+**Status:** implemented for architectural review
 **Production:** not authorized
 
 ## Scope
