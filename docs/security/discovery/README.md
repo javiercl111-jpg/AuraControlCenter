@@ -20,6 +20,8 @@ Esta carpeta contiene la baseline AI-02H1E.4.1 para el hardening del intake púb
 10. [Idempotency Retention v1](IDEMPOTENCY_RETENTION_V1.md) — TTL, cardinalidad y recuperación certificable de AI-02H1E.4.3.
 11. [Capability Lifecycle v1](CAPABILITY_LIFECYCLE_V1.md) — EXCHANGE/SESSION/REPORT, revocación y completion exactamente una vez de AI-02H1E.4.4.
 
+12. [Strict Payload and Cost Bounds v1](STRICT_PAYLOAD_AND_COST_BOUNDS_V1.md) — esquemas públicos fail-closed, proyección de persistencia y presupuestos atómicos de AI, conversación, reporte y descarga de AI-02H1E.4.5.
+
 ## Cómo interpretar la baseline
 
 - Los documentos describen contratos y mitigaciones objetivo, no garantías del runtime actual.

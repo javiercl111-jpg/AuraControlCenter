@@ -1,18 +1,18 @@
 
-import type { DiscoverySession, SmartBusinessDossier, ExecutiveBriefingDraft, BusinessAssessmentDraft, RadiografiaEmpresarialDraft, SalesAdvisorContext } from "../types/discoveryTypes";
+import type { SmartBusinessDossier, ExecutiveBriefingDraft, BusinessAssessmentDraft, RadiografiaEmpresarialDraft, SalesAdvisorContext } from "../types/discoveryTypes";
 import type { ConversationMessage } from "../../intelligence/engine/types/conversation.types";
 
 /**
  * Construye el SmartBusinessDossier y borradores de diagnóstico basado en el estado final.
  */
 export function buildDossierPayload(
-  linkId: string,
+  _linkId: string,
   companyName: string,
   contactName: string,
   dossierState: Partial<SmartBusinessDossier>,
   conversationHistory: ConversationMessage[],
   conversationStateSnapshot: any
-): Omit<DiscoverySession, "id"> {
+): Record<string, unknown> {
   
   const dossier: SmartBusinessDossier = {
     industry: dossierState.industry || "Otros",
@@ -113,18 +113,27 @@ export function buildDossierPayload(
   };
 
   return {
-    linkId,
-    companyName,
-    contactName,
-    answers: {}, // Legacy
-    conversationHistory,
-    conversationStateSnapshot,
+    conversationHistory: conversationHistory.map(({ role, content }) => ({ role, content })),
+    conversationStateSnapshot: {
+      industry: conversationStateSnapshot.industry,
+      hypotheses: conversationStateSnapshot.hypotheses,
+      confidenceLevel: conversationStateSnapshot.confidenceLevel,
+      usefulResponsesCount: conversationStateSnapshot.usefulResponsesCount,
+      turnCount: conversationStateSnapshot.turnCount,
+      askedIntents: conversationStateSnapshot.askedIntents,
+      askedQuestions: conversationStateSnapshot.askedQuestions,
+      conversationPhase: conversationStateSnapshot.conversationPhase,
+      fallbackConsecutiveCount: conversationStateSnapshot.fallbackConsecutiveCount,
+      ...(conversationStateSnapshot.lastFallbackCode !== undefined ? { lastFallbackCode: conversationStateSnapshot.lastFallbackCode } : {}),
+      ...(conversationStateSnapshot.lastFallbackMessage !== undefined ? { lastFallbackMessage: conversationStateSnapshot.lastFallbackMessage } : {}),
+      llmModeForSession: conversationStateSnapshot.llmModeForSession,
+      ...(conversationStateSnapshot.partialCompletionReason !== undefined ? { partialCompletionReason: conversationStateSnapshot.partialCompletionReason } : {}),
+    },
     dossier,
     executiveBriefingDraft,
     businessAssessmentDraft,
     radiografiaEmpresarialDraft,
     salesAdvisorContext,
-    createdAt: new Date().toISOString(),
   };
 }
 
@@ -133,7 +142,9 @@ import { functions } from "../../../config/firebase";
 
 export interface SaveDiscoverySessionResult {
   sessionId: string;
-  prospectId: string;
+  reportId: string;
+  reportCapabilityToken: string;
+  trustDecision: string;
 }
 
 export async function saveDiscoverySession(
@@ -147,15 +158,25 @@ export async function saveDiscoverySession(
 ): Promise<SaveDiscoverySessionResult> {
   const payload = buildDossierPayload(linkId, companyName, contactName, dossierState, conversationHistory, conversationStateSnapshot);
 
-  const completeFn = httpsCallable<any, { dossierId: string; prospectId: string }>(functions, "completeDiscoverySession");
+  if (!sessionToken) throw new Error("DISCOVERY_SESSION_TOKEN_REQUIRED");
+  const completeFn = httpsCallable<unknown, {
+    dossierId: string;
+    reportId: string;
+    reportCapabilityToken: string;
+    trustDecision: string;
+  }>(functions, "completeDiscoverySession");
   const result = await completeFn({
-    linkId,
+    schemaVersion: "DISCOVERY_COMPLETION_PAYLOAD_V1",
     sessionToken,
-    dossierPayload: payload
+    completion: payload,
   });
 
-  const { dossierId, prospectId } = result.data;
-  return { sessionId: dossierId, prospectId };
+  return {
+    sessionId: result.data.dossierId,
+    reportId: result.data.reportId,
+    reportCapabilityToken: result.data.reportCapabilityToken,
+    trustDecision: result.data.trustDecision,
+  };
 }
 
 const DossierBuilderService = {

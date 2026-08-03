@@ -4,6 +4,8 @@ import { DiscoveryReportGenerationService } from "./DiscoveryReportGenerationSer
 import { ReportType } from "./types";
 import { resolvePlatformPrincipal } from "../../auth/resolvePlatformPrincipal";
 import { authorizeDiscoveryReportSession } from "./requestExecutiveDocument";
+import { parseReportRequestV1 } from "../payloadBounds";
+import { toDiscoveryPayloadHttpsError } from "../discoveryPayloadHandlerSupport";
 
 async function authorizeAuthenticatedReportGeneration(
   db: admin.firestore.Firestore,
@@ -35,7 +37,15 @@ export const generateDiscoveryReport = functions.https.onCall(async (request) =>
     throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
   }
 
-  const { sessionId, prospectId, linkId, sessionToken, isInternalOnly } = request.data;
+  let payload;
+  try {
+    payload = parseReportRequestV1(request.data);
+  } catch (error: unknown) {
+    throw toDiscoveryPayloadHttpsError(error) ?? error;
+  }
+  const {
+    sessionId, prospectId, linkId, reportCapabilityToken, isInternalOnly,
+  } = payload;
 
   // Validation checks
   const isString = typeof sessionId === "string";
@@ -60,13 +70,13 @@ export const generateDiscoveryReport = functions.https.onCall(async (request) =>
   const reportType: ReportType = isInternalOnly ? "INTERNAL_BRIEFING" : "EXTERNAL_RADIOGRAFIA";
   const db = admin.firestore();
 
-  if (sessionToken || linkId) {
+  if (reportCapabilityToken || linkId) {
     if (reportType !== "EXTERNAL_RADIOGRAFIA") {
       throw new functions.https.HttpsError("permission-denied", "Public sessions cannot generate internal reports.");
     }
     await authorizeDiscoveryReportSession(db, {
       linkId,
-      sessionToken,
+      sessionToken: reportCapabilityToken,
       targetSessionId: sessionId,
       targetProspectId: prospectId,
     });
@@ -84,6 +94,8 @@ export const generateDiscoveryReport = functions.https.onCall(async (request) =>
       message: result.message
     };
   } catch (error: unknown) {
+    const payloadError = toDiscoveryPayloadHttpsError(error);
+    if (payloadError) throw payloadError;
     const message = error instanceof Error ? error.message : "DISCOVERY_REPORT_GENERATION_FAILED";
     throw new functions.https.HttpsError("internal", message);
   }

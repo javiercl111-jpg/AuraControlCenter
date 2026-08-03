@@ -56,9 +56,18 @@ export default function DiscoveryLinkGenerator({
         contactName: contactName.trim(),
         email: "asesor@auranexus.io", // Default fallback email if not asked
         phone: "",
-        consent: true, // Advisor generated
+        jobTitle: "",
+        state: "",
+        city: "",
+        employeeRange: "",
+        commercialCode: "",
         origin: "ADVISOR_SHARE",
         acquisitionSource: "DIRECT",
+        privacyConsent: true,
+        diagnosticDeliveryConsent: true,
+        followUpConsent: false,
+        marketingConsent: false,
+        policyVersion: "DISCOVERY_PRIVACY_V1",
         idempotencyKey
       });
 

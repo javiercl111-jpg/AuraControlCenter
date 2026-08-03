@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
 import { selectConsultativeFallback } from "./consultativeFallback";
 import {
   calculateQuestionSimilarity,
@@ -22,6 +23,19 @@ import {
 import {
   AURA_PERSONALITY_VERSION,
 } from "./AuraPersonalityPrompt";
+import {
+  DISCOVERY_COST_BOUND_POLICY_V1,
+  FirestoreDiscoveryCostBudgetRepository,
+  parseConversationEvaluationV1,
+  payloadBytes,
+} from "../discovery/payloadBounds";
+import { FirestoreDiscoveryCapabilityRepository } from
+  "../infrastructure/firestore/discoveryCapabilities";
+import { hashDiscoveryCapabilityToken } from "../discovery/capabilities";
+import { toDiscoveryPayloadHttpsError } from
+  "../discovery/discoveryPayloadHandlerSupport";
+import { toDiscoveryCapabilityHttpsError } from
+  "../discovery/discoveryCapabilityHandlerSupport";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const EXECUTIVE_CONVERSATION_MODE = "EXECUTIVE_CONVERSATION_LAYER";
@@ -251,9 +265,32 @@ export const evaluateConversation = onCall<EvaluateConversationRequest>(
     timeoutSeconds: 15,
   },
   async (request) => {
-    const data = request.data;
+    let data: EvaluateConversationRequest & { sessionToken: string };
+    try {
+      data = parseConversationEvaluationV1(request.data);
+    } catch (error: unknown) {
+      throw toDiscoveryPayloadHttpsError(error) ?? error;
+    }
     validateRequest(data);
 
+    const db = admin.firestore();
+    try {
+      await new FirestoreDiscoveryCapabilityRepository(db).authorizeSession({
+        token: data.sessionToken,
+      });
+    } catch (error: unknown) {
+      throw toDiscoveryCapabilityHttpsError(error);
+    }
+    const sessionCapabilityHash = hashDiscoveryCapabilityToken(data.sessionToken);
+    const budgetRepository = new FirestoreDiscoveryCostBudgetRepository(db);
+    let leaseId: string;
+    try {
+      leaseId = await budgetRepository.reserveConversation(sessionCapabilityHash);
+    } catch (error: unknown) {
+      throw toDiscoveryPayloadHttpsError(error) ?? error;
+    }
+
+    try {
     const startTime = Date.now();
     const currentResponse = data.engineInput.currentResponse.trim();
     const canonicalHypothesis: CanonicalHypothesis = {
@@ -306,7 +343,12 @@ export const evaluateConversation = onCall<EvaluateConversationRequest>(
         context,
         canonicalHypothesis,
         existingQuestions,
-        draftProvider: (prompt) => generateDraft(ai, prompt),
+        draftProvider: (prompt) => {
+          if (payloadBytes(prompt) > DISCOVERY_COST_BOUND_POLICY_V1.maxPromptBytes) {
+            throw new HttpsError("resource-exhausted", "CONVERSATION_BUDGET_EXCEEDED");
+          }
+          return generateDraft(ai, prompt);
+        },
       });
 
       if (!resolution.accepted) {
@@ -354,6 +396,9 @@ export const evaluateConversation = onCall<EvaluateConversationRequest>(
         startTime,
       );
     }
+    } finally {
+      await budgetRepository.releaseConversation(sessionCapabilityHash, leaseId);
+    }
   },
 );
 
@@ -369,6 +414,7 @@ async function generateDraft(
       responseMimeType: "application/json",
       responseSchema: outputSchema,
       temperature: 0.35,
+      maxOutputTokens: DISCOVERY_COST_BOUND_POLICY_V1.maxModelOutputTokens,
     },
   });
 

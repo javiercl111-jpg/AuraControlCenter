@@ -39,6 +39,8 @@ import {
 } from "./discoveryCapabilityHandlerSupport";
 import { DiscoveryReportGenerationService } from
   "./reports/DiscoveryReportGenerationService";
+import { parseDiscoveryCompletionPayloadV1 } from "./payloadBounds";
+import { toDiscoveryPayloadHttpsError } from "./discoveryPayloadHandlerSupport";
 
 const capabilitySecret = defineSecret("IDEMPOTENCY_SECRET");
 
@@ -88,24 +90,14 @@ export const completeDiscoverySession = functions.https.onCall(
     if (request.app == undefined) {
       throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
     }
-    const { linkId, sessionToken, dossierPayload } = request.data ?? {};
-    if (
-      typeof linkId !== "string" || linkId.length === 0 || linkId.length > 128 ||
-      linkId.includes("/") || typeof sessionToken !== "string" ||
-      !/^[a-f0-9]{64}$/i.test(sessionToken) ||
-      !dossierPayload || typeof dossierPayload !== "object" ||
-      Array.isArray(dossierPayload)
-    ) {
-      throw new functions.https.HttpsError("invalid-argument", "INVALID_COMPLETION_REQUEST");
+    let parsedPayload;
+    try {
+      parsedPayload = parseDiscoveryCompletionPayloadV1(request.data);
+    } catch (error: unknown) {
+      throw toDiscoveryPayloadHttpsError(error) ?? error;
     }
-    for (const field of ["dossier", "conversationHistory", "conversationStateSnapshot"]) {
-      if ((dossierPayload as Record<string, unknown>)[field] === undefined) {
-        throw new functions.https.HttpsError("invalid-argument", "INVALID_COMPLETION_REQUEST");
-      }
-    }
-    if (!Array.isArray((dossierPayload as Record<string, unknown>).conversationHistory)) {
-      throw new functions.https.HttpsError("invalid-argument", "INVALID_COMPLETION_REQUEST");
-    }
+    const sessionToken = parsedPayload.sessionToken;
+    const dossierPayload = parsedPayload.completion;
 
     const secret = capabilitySecret.value();
     if (!secret) {
@@ -113,6 +105,16 @@ export const completeDiscoverySession = functions.https.onCall(
     }
     const db = admin.firestore();
     const repository = new FirestoreDiscoveryCapabilityRepository(db);
+    let linkId: string;
+    try {
+      const authorization = await repository.authorizeSession({
+        token: sessionToken,
+        allowCompleted: true,
+      });
+      linkId = authorization.capability.linkId;
+    } catch (error: unknown) {
+      throw toDiscoveryCapabilityHttpsError(error);
+    }
     const sessionId = createDiscoverySessionIdV1(
       linkId, DISCOVERY_CAPABILITY_POLICY_V1.sessionGeneration,
     );
@@ -165,7 +167,13 @@ export const completeDiscoverySession = functions.https.onCall(
           const validatedPayload: Record<string, unknown> = {
             id: dossierId,
             linkId,
-            ...cleanPayload,
+            dossier: cleanPayload.dossier,
+            conversationHistory: cleanPayload.conversationHistory,
+            conversationStateSnapshot: cleanPayload.conversationStateSnapshot,
+            executiveBriefingDraft: finalExecutiveBriefing,
+            businessAssessmentDraft: cleanPayload.businessAssessmentDraft,
+            radiografiaEmpresarialDraft: finalRadiografia,
+            salesAdvisorContext: cleanPayload.salesAdvisorContext,
             companyName: linkData.companyName,
             contactName: linkData.contactName,
             recipientName: linkData.contactName,
@@ -176,8 +184,6 @@ export const completeDiscoverySession = functions.https.onCall(
             evidenceGaps: completion.evidenceGaps,
             conversationMetrics: completion.conversationMetrics,
             conversationDefinitionVersion: completion.conversationDefinitionVersion,
-            executiveBriefingDraft: finalExecutiveBriefing,
-            radiografiaEmpresarialDraft: finalRadiografia,
           };
 
           const mergePayload: MergePayload = {

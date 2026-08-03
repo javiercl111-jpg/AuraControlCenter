@@ -67,6 +67,10 @@ export interface DiscoveryReportMetadata {
   revokedAt?: string | Date;
   
   idempotencyKey: string; // sessionId + reportType + documentVersion
+  generationAttemptCount?: number;
+  forceRegenerationCount?: number;
+  datasetBytes?: number;
+  pdfBytes?: number;
   createdAt: string | Date;
   updatedAt: string | Date;
 }
