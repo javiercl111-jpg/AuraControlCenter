@@ -46,3 +46,11 @@ No iniciar implementación sin aprobar las decisiones necesarias para el slice. 
 ## Versionado
 
 Cambios de superficie, provider, capability, clasificación, retención, cuota, kill switch, trust boundary o ambiente requieren actualizar el threat model, contrato, pruebas, decision register y roadmap bajo una nueva revisión.
+
+## Production Readiness Remediation Program
+
+- [Production Readiness Remediation Program v1](production-remediation/PRODUCTION_READINESS_REMEDIATION_PROGRAM_V1.md) — dominios, slices y estrategias de ambientes, trust root, IAM, deployment, lifecycle, observabilidad y runbooks.
+- [Production Readiness Remediation Matrix v1](production-remediation/PRODUCTION_READINESS_REMEDIATION_MATRIX_V1.json) — especificación ejecutable de 19 slices y trazabilidad 35/35 de controles P9.
+- [Production Readiness Execution Sequence v1](production-remediation/PRODUCTION_READINESS_EXECUTION_SEQUENCE_V1.md) — grafo, waves, ruta crítica, comandos futuros y stop conditions.
+- [Production Readiness RACI v1](production-remediation/PRODUCTION_READINESS_RACI_V1.md) — roles organizacionales, accountability, approvals y escalación.
+- [Production Readiness Gates v1](production-remediation/PRODUCTION_READINESS_GATES_V1.md) — gates acumulativos desde diseño hasta certificación final.
