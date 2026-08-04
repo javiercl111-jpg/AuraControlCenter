@@ -4,6 +4,8 @@ La decisión documental de R1A se encuentra en el [Environment Architecture Deci
 
 El diseño de provisioning R1B se encuentra en el [Environment Provisioning Plan v1](environment/provisioning/ENVIRONMENT_PROVISIONING_PLAN_V1.md), con [naming](environment/provisioning/ENVIRONMENT_RESOURCE_NAMING_V1.md), [IAM/WIF](environment/provisioning/ENVIRONMENT_IAM_AND_IDENTITY_PLAN_V1.md), [command catalog](environment/provisioning/ENVIRONMENT_PROVISIONING_COMMAND_CATALOG_V1.md), [evidence plan](environment/provisioning/ENVIRONMENT_PROVISIONING_EVIDENCE_PLAN_V1.md), [approval packet](environment/provisioning/ENVIRONMENT_PROVISIONING_APPROVAL_PACKET_V1.md) y [provisioning matrix](environment/provisioning/ENVIRONMENT_PROVISIONING_MATRIX_V1.json). Provisioning permanece bloqueado hasta cerrar las aprobaciones externas clasificadas allí.
 
+El diseño R2A se encuentra en la [Non-Production Security Baseline v1](security-baseline/NONPROD_SECURITY_BASELINE_V1.md), con especificaciones separadas para [Firestore Rules](security-baseline/NONPROD_FIRESTORE_RULES_BASELINE_V1.md), [aliases y targeting guards](security-baseline/NONPROD_TARGETING_AND_ALIAS_GUARDS_V1.md), [indexes y TTL](security-baseline/NONPROD_INDEXES_AND_TTL_PLAN_V1.md), [IAM/WIF/secrets](security-baseline/NONPROD_IAM_WIF_AND_SECRETS_BASELINE_V1.md), [App Check](security-baseline/NONPROD_APP_CHECK_BASELINE_V1.md), [execution/rollback/evidence](security-baseline/NONPROD_SECURITY_BASELINE_EXECUTION_PLAN_V1.md) y [matriz validable](security-baseline/NONPROD_SECURITY_BASELINE_MATRIX_V1.json). R2B Preview permanece condicionado a las seis decisiones externas registradas y no habilita Production.
+
 ## 1. Dependency graph
 
 ```mermaid
