@@ -2,6 +2,8 @@
 
 La decisión documental de R1A se encuentra en el [Environment Architecture Decision v1](environment/ENVIRONMENT_ARCHITECTURE_DECISION_V1.md), con su [resource allocation matrix](environment/ENVIRONMENT_RESOURCE_ALLOCATION_MATRIX_V1.json), [promotion model](environment/ENVIRONMENT_PROMOTION_MODEL_V1.md), [external decisions](environment/ENVIRONMENT_EXTERNAL_DECISIONS_V1.md) y [migration strategy](environment/ENVIRONMENT_MIGRATION_STRATEGY_V1.md). Los gates externos pendientes allí registrados deben cerrarse antes de ejecutar R1B.
 
+El diseño de provisioning R1B se encuentra en el [Environment Provisioning Plan v1](environment/provisioning/ENVIRONMENT_PROVISIONING_PLAN_V1.md), con [naming](environment/provisioning/ENVIRONMENT_RESOURCE_NAMING_V1.md), [IAM/WIF](environment/provisioning/ENVIRONMENT_IAM_AND_IDENTITY_PLAN_V1.md), [command catalog](environment/provisioning/ENVIRONMENT_PROVISIONING_COMMAND_CATALOG_V1.md), [evidence plan](environment/provisioning/ENVIRONMENT_PROVISIONING_EVIDENCE_PLAN_V1.md), [approval packet](environment/provisioning/ENVIRONMENT_PROVISIONING_APPROVAL_PACKET_V1.md) y [provisioning matrix](environment/provisioning/ENVIRONMENT_PROVISIONING_MATRIX_V1.json). Provisioning permanece bloqueado hasta cerrar las aprobaciones externas clasificadas allí.
+
 ## 1. Dependency graph
 
 ```mermaid
