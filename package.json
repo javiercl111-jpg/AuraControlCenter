@@ -25,6 +25,8 @@
     "test:discovery-payload-bounds-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestorePayloadBoundsEmulator.cjs",
     "test:discovery-abuse-telemetry-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestoreAbuseTelemetryEmulator.cjs",
     "test:discovery-containment-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestoreContainmentEmulator.cjs",
+    "test:public-intake-abuse-matrix": "npm run assert:node20 && vitest run --config functions/tests/publicIntakeAbuseCertification/vitest.config.ts",
+    "test:public-intake-abuse-certification": "npm run assert:node20 && node functions/tests/emulator/runPublicIntakeAbuseCertification.cjs",
     "test:authority-dark-composition": "vitest run --config functions/tests/vitest.authorityDarkComposition.config.ts",
     "test:authority-dark-handler-composition": "vitest run --config functions/tests/vitest.authorityDarkHandlerComposition.config.ts",
     "test:enterprise-model": "vitest run src/modules/intelligence/enterprise-model",

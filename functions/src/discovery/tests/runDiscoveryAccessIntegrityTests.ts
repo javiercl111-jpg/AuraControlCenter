@@ -186,6 +186,7 @@ const tests: readonly TestCase[] = [
         readFileSync(resolve(repositoryRoot, "firebase.json"), "utf8")
       ) as { functions?: { predeploy?: string[] } };
       deepStrictEqual(firebaseConfig.functions?.predeploy, [
+        'npm --prefix "$PROJECT_DIR" run stage:intelligence-os:functions',
         'npm --prefix "$RESOURCE_DIR" run build',
       ]);
     },
