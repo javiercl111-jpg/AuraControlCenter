@@ -1,240 +1,186 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper to check if request is from authenticated user
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    // Helper to get admin document (prepares migration to UID while maintaining email compatibility)
-    function getAdminData() {
-      let uid = request.auth.uid;
-      let email = request.auth.token.email;
-      let lowerEmail = email != null ? email.lower() : '';
-      let hasUidDoc = exists(/databases/$(database)/documents/platform_global_admins/$(uid));
-      return hasUidDoc
-        ? get(/databases/$(database)/documents/platform_global_admins/$(uid)).data
-        : (lowerEmail != ''
-            ? get(/databases/$(database)/documents/platform_global_admins/$(lowerEmail)).data
-            : {});
+    // Authority is canonical only in a UID-addressed, backend-owned document.
+    // Email documents, custom claims and client payloads never grant authority.
+    function isActivePlatformAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/platform_global_admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/platform_global_admins/$(request.auth.uid)).data.isActive == true &&
+        get(/databases/$(database)/documents/platform_global_admins/$(request.auth.uid)).data.role in [
+          'PLATFORM_OWNER',
+          'PLATFORM_PARTNER',
+          'SUPER_ADMIN',
+          'FOUNDER',
+          'SALES_DIRECTOR',
+          'CONSULTANT',
+          'SALES_ADVISOR',
+          'VIEWER',
+          'ADMIN',
+          'SUPPORT'
+        ];
     }
 
-    // Check if user has an active admin profile in platform_global_admins (supports both isActive boolean/string and status ACTIVE string)
-    function isActiveAdmin() {
-      let uid = request.auth.uid;
-      let email = request.auth.token.email;
-      let lowerEmail = email != null ? email.lower() : '';
-      let hasProfile = exists(/databases/$(database)/documents/platform_global_admins/$(uid)) ||
-                       (lowerEmail != '' && exists(/databases/$(database)/documents/platform_global_admins/$(lowerEmail)));
-      let data = getAdminData();
-      return isAuthenticated() && hasProfile && (
-        data.isActive == true || 
-        data.isActive == 'true' || 
-        data.status == 'ACTIVE' || 
-        data.status == 'active'
-      );
+    // The caller may read only its canonical authority profile. All authority
+    // mutations are performed by an audited Admin SDK path.
+    match /platform_global_admins/{adminId} {
+      allow get: if isActivePlatformAdmin() && adminId == request.auth.uid;
+      allow list, create, update, delete: if false;
     }
 
-    // Helper to extract role from admin data (supports role, roleCode, and type, normalized to uppercase)
-    function getAdminRole() {
-      let data = getAdminData();
-      let rawRole = data.role != null 
-        ? data.role 
-        : (data.roleCode != null ? data.roleCode : data.type);
-      return rawRole != null ? string(rawRole).upper() : 'VIEWER';
-    }
-
-    // Check if user has a specific role
-    function hasRole(role) {
-      return isActiveAdmin() && getAdminRole() == role;
-    }
-
-    // Check if user is platform owner or equivalent
-    function isPlatformOwner() {
-      return isActiveAdmin() && (getAdminRole() == 'PLATFORM_OWNER' || getAdminRole() == 'SUPER_ADMIN');
-    }
-
-    // Check if user is platform partner
-    function isPlatformPartner() {
-      return isActiveAdmin() && getAdminRole() == 'PLATFORM_PARTNER';
-    }
-
-    // Helper for market read capability
-    function hasMarketRead() {
-      return isActiveAdmin() && 
-        (getAdminRole() in ['PLATFORM_OWNER', 'PLATFORM_PARTNER', 'SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'SALES_ADVISOR', 'VIEWER', 'ADMIN', 'SUPPORT']);
-    }
-
-    // Helper for market import capability
-    function hasMarketImport() {
-      return isActiveAdmin() && 
-        (getAdminRole() in ['PLATFORM_OWNER', 'SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'ADMIN']);
-    }
-
-    // Helper for market update capability
-    function hasMarketUpdate() {
-      return isActiveAdmin() && 
-        (getAdminRole() in ['PLATFORM_OWNER', 'PLATFORM_PARTNER', 'SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'SALES_ADVISOR', 'ADMIN', 'SUPPORT']);
-    }
-
-    // Capabilities checks matching rbacService
-    function canReadMarket() {
-      return hasMarketRead();
-    }
-
-    // Capabilities checks matching rbacService for writing/importing
-    function canImportMarket() {
-      return hasMarketImport();
-    }
-
-    // Capabilities checks matching rbacService for updating
-    function canUpdateMarket() {
-      return hasMarketUpdate();
-    }
-
-    function canCreateOrganization() {
-      return isActiveAdmin() && 
-        (getAdminRole() in ['PLATFORM_OWNER', 'SUPER_ADMIN', 'FOUNDER', 'SALES_DIRECTOR', 'CONSULTANT', 'ADMIN']);
-    }
-
-    // --- Aura Control Center Existing Collections Security ---
-
-    // Platform leads collection permissions
-    match /platform_leads/{leadId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    // Platform clients collection permissions
-    match /platform_clients/{clientId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    // Platform tenants collection permissions
+    // Tenant authority is backend-owned. Preview does not expose a direct
+    // tenant-member data path until a versioned membership contract exists.
     match /platform_tenants/{tenantId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isActivePlatformAdmin();
+      allow create, update, delete: if false;
     }
 
-    // Platform subscriptions collection permissions
-    match /platform_subscriptions/{subscriptionId} {
-      allow read, write: if isAuthenticated();
+    match /tenant_memberships/{membershipId} {
+      allow read, write: if false;
     }
 
-    // Platform licenses collection permissions
-    match /platform_licenses/{licenseId} {
-      allow read, write: if isAuthenticated();
+    match /tenant_aliases/{aliasId} {
+      allow read, write: if false;
     }
 
-    // Platform provisioning jobs permissions
-    match /platform_provisioning_jobs/{jobId} {
-      allow read, write: if isAuthenticated();
+    match /authority_idempotency/{recordId} {
+      allow read, write: if false;
     }
 
-    // Platform quotes permissions
-    match /platform_quotes/{quoteId} {
-      allow read, write: if isAuthenticated();
+    match /authority_operation_bindings/{bindingId} {
+      allow read, write: if false;
     }
 
-    // Platform commissions permissions
-    match /platform_commissions/{commissionId} {
-      allow read, write: if isAuthenticated();
+    match /authority_audit_events/{eventId} {
+      allow read, write: if false;
     }
 
-    // Platform sales advisors permissions
-    match /platform_sales_advisors/{advisorId} {
-      allow read: if true; // Public read for resolving commercialCode
-      allow write: if hasRole('PLATFORM_OWNER') || hasRole('SUPER_ADMIN') || hasRole('FOUNDER') || hasRole('SALES_DIRECTOR');
+    match /authority_outbox_events/{eventId} {
+      allow read, write: if false;
     }
 
-    // Platform global admins permissions
-    match /platform_global_admins/{adminEmail} {
-      allow read, write: if isAuthenticated();
+    match /authority_outbox_delivery/{deliveryId} {
+      allow read, write: if false;
     }
 
-    // Check if user has capability to manage platform settings (PLATFORM_OWNER or SUPER_ADMIN)
-    function canManagePlatformSettings() {
-      return isActiveAdmin() && (getAdminRole() == 'PLATFORM_OWNER' || getAdminRole() == 'SUPER_ADMIN');
+    // Public intake infrastructure is backend-owned and never directly
+    // observable or mutable by a Firebase client.
+    match /public_rate_limit_counters_v1/{counterId} {
+      allow read, write: if false;
     }
 
-    // Platform Settings
-    match /platform_settings/{settingId} {
-      allow read: if isAuthenticated();
-      allow write: if canManagePlatformSettings();
+    match /discovery_intake_idempotency/{recordId} {
+      allow read, write: if false;
     }
 
-    // Platform Market State Metadata
-    match /platform_market_state_metadata/{stateCode} {
-      allow read: if hasMarketRead();
-      allow write: if hasMarketImport();
+    match /discovery_intake_idempotency_namespaces_v1/{namespaceId} {
+      allow read, write: if false;
     }
 
-    // --- Aura Market Intelligence & Consulting Collections Security ---
-
-    // Market Companies Metadata
-    match /market_companies_metadata/{docId} {
-      allow read: if canReadMarket();
-      allow write: if canImportMarket();
+    match /discovery_capabilities_v1/{capabilityId} {
+      allow read, write: if false;
     }
 
-    // Market Dataset Metadata
-    match /market_dataset_metadata/{docId} {
-      allow read: if canReadMarket();
-      allow write: if canImportMarket();
+    match /discovery_completions_v1/{completionId} {
+      allow read, write: if false;
     }
 
-    // Market Imports History
-    match /market_imports_history/{docId} {
-      allow read: if canReadMarket();
-      allow write: if canImportMarket();
+    match /discovery_completion_outbox_v1/{outboxId} {
+      allow read, write: if false;
     }
 
-    // Market Import Jobs
-    match /market_import_jobs/{jobId} {
-      allow read: if canReadMarket();
-      allow write: if canImportMarket();
+    match /discovery_conversation_budgets_v1/{budgetId} {
+      allow read, write: if false;
     }
 
-    // Market Companies
-    match /market_companies/{companyId} {
-      allow read: if canReadMarket();
-      allow create: if canImportMarket();
-      allow update: if canUpdateMarket();
-      allow delete: if hasRole('SUPER_ADMIN') || hasRole('FOUNDER');
+    match /discovery_download_budgets_v1/{budgetId} {
+      allow read, write: if false;
     }
 
-    // Platform Organizations (used by Consulting Center and converted prospects)
-    match /platform_organizations/{orgId} {
-      allow read: if isAuthenticated();
-      allow create: if canCreateOrganization();
-      allow update: if isActiveAdmin();
-      allow delete: if hasRole('SUPER_ADMIN') || hasRole('FOUNDER');
+    // Structured telemetry and containment policy are backend-owned.
+    match /discovery_abuse_telemetry_v1/{eventId} {
+      allow read, write: if false;
     }
 
-    // Platform Discovery Requests
-    match /platform_discovery_requests/{requestId} {
-      allow read, write: if isAuthenticated();
+    match /discovery_abuse_metrics_v1/{metricId} {
+      allow read, write: if false;
     }
 
-    // --- Aura Discovery Portal Security ---
+    match /discovery_containment_policies_v1/{policyId} {
+      allow read, write: if false;
+    }
 
-    // market_discovery_links
+    match /discovery_containment_active_v1/{environment} {
+      allow read, write: if false;
+    }
+
+    match /discovery_containment_audit_v1/{auditId} {
+      allow read, write: if false;
+    }
+
+    // Discovery records are written only by Admin SDK runtimes. Public token
+    // and capability paths are callable Functions, never direct Firestore.
     match /market_discovery_links/{linkId} {
-      allow read, write: if canReadMarket();
+      allow read: if isActivePlatformAdmin();
+      allow create, update, delete: if false;
     }
 
-    // discovery_sessions
     match /discovery_sessions/{sessionId} {
-      allow read, write: if canReadMarket();
+      allow read: if isActivePlatformAdmin();
+      allow create, update, delete: if false;
     }
 
-    // platform_inbox
+    match /discovery_reports/{reportId} {
+      allow read: if isActivePlatformAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // Existing administrative and market views remain readable only to a
+    // canonical active administrator. Legacy client writers are intentionally
+    // closed and must migrate to audited backend paths.
+    match /{collection}/{document=**} {
+      allow read: if isActivePlatformAdmin() && collection in [
+        'platform_leads',
+        'platform_clients',
+        'platform_subscriptions',
+        'platform_licenses',
+        'platform_provisioning_jobs',
+        'platform_quotes',
+        'platform_commissions',
+        'platform_sales_advisors',
+        'platform_settings',
+        'platform_market_state_metadata',
+        'market_companies_metadata',
+        'market_dataset_metadata',
+        'market_imports_history',
+        'market_import_jobs',
+        'market_companies',
+        'platform_organizations',
+        'platform_discovery_requests'
+      ];
+      allow create, update, delete: if false;
+    }
+
+    // Inbox content is backend-owned; an authenticated subject may read only
+    // its own inbox and notifications.
     match /platform_inbox/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if isSignedIn() && request.auth.uid == userId;
       allow create, update, delete: if false;
 
       match /notifications/{notificationId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
+        allow read: if isSignedIn() && request.auth.uid == userId;
         allow create, update, delete: if false;
       }
+    }
+
+    // Unknown collections and paths are denied by default.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

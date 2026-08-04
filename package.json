@@ -17,6 +17,8 @@
     "test:intelligence-os:distribution": "npm run stage:intelligence-os:functions && npm run test:distribution --prefix packages/aura-intelligence-os",
     "test:intelligence-os:consumption": "npm run test:intelligence-os-consumption --prefix functions",
     "test:firestore-authority-adapter": "vitest run --config functions/tests/vitest.authority.config.ts",
+    "test:preview-rules-guard": "node --test scripts/tests/preview-rules-target-guard.test.cjs",
+    "test:preview-rules-emulator": "npm run assert:node20 && node functions/tests/emulator/runPreviewRulesEmulator.cjs",
     "test:firestore-authority-emulator": "npm run assert:node20 && npm run stage:intelligence-os:functions && node functions/tests/emulator/runFirestoreAuthorityEmulator.cjs",
     "test:firestore-authority-end-to-end-emulator": "npm run assert:node20 && npm run stage:intelligence-os:functions && node functions/tests/emulator/runAuthorityEndToEndEmulator.cjs",
     "test:firestore-rate-limit-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestoreRateLimitEmulator.cjs",

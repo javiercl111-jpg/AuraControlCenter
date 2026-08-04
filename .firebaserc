@@ -1,6 +1,8 @@
 {
   "projects": {
-    "default": "aura-control-center-debb3"
+    "preview": "aura-intel-preview",
+    "staging": "aura-intel-staging",
+    "production": "aura-control-center-debb3"
   },
   "targets": {},
   "etags": {}
