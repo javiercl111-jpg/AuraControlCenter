@@ -1,7 +1,9 @@
 export const STRUCTURED_ABUSE_TELEMETRY_VERSION =
   "STRUCTURED_ABUSE_TELEMETRY_V1" as const;
+export const STRUCTURED_ABUSE_EVENT_CATALOG_VERSION =
+  "STRUCTURED_ABUSE_EVENT_CATALOG_V2" as const;
 
-export const STRUCTURED_ABUSE_EVENT_TYPES = Object.freeze([
+export const STRUCTURED_ABUSE_EVENT_TYPES_V1 = Object.freeze([
   "intake.accepted", "intake.rejected", "payload.invalid",
   "rateLimit.allowed", "rateLimit.denied",
   "idempotency.replay", "idempotency.expired",
@@ -10,6 +12,22 @@ export const STRUCTURED_ABUSE_EVENT_TYPES = Object.freeze([
   "report.generated", "report.denied",
   "notification.emitted", "notification.skipped",
   "download.authorized", "download.denied",
+] as const);
+
+export const STRUCTURED_ABUSE_CONTAINMENT_EVENT_TYPES_V2 = Object.freeze([
+  "containment.allowed",
+  "containment.denied",
+  "containment.policy_missing",
+  "containment.policy_corrupted",
+  "containment.policy_expired",
+  "containment.selective_block",
+  "containment.emergency_quota_exceeded",
+  "containment.rollback_applied",
+] as const);
+
+export const STRUCTURED_ABUSE_EVENT_TYPES = Object.freeze([
+  ...STRUCTURED_ABUSE_EVENT_TYPES_V1,
+  ...STRUCTURED_ABUSE_CONTAINMENT_EVENT_TYPES_V2,
 ] as const);
 
 export type StructuredAbuseEventType =
@@ -41,6 +59,7 @@ export type StructuredAbuseMeasurementsV1 = Readonly<
 
 export interface StructuredAbuseTelemetryEventV1 {
   readonly version: typeof STRUCTURED_ABUSE_TELEMETRY_VERSION;
+  readonly eventCatalogVersion: typeof STRUCTURED_ABUSE_EVENT_CATALOG_VERSION;
   readonly eventId: string;
   readonly correlationId: string;
   readonly requestId: string;

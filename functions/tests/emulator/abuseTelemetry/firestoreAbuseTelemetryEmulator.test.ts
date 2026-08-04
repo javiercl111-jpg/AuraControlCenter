@@ -108,7 +108,7 @@ afterAll(async () => {
 });
 
 describe("Structured Abuse Telemetry V1", () => {
-  it("1. publishes the complete minimum event inventory", () => {
+  it("1. publishes the versioned P6 plus P7 event inventory", () => {
     expect(STRUCTURED_ABUSE_EVENT_TYPES).toEqual([
       "intake.accepted", "intake.rejected", "payload.invalid",
       "rateLimit.allowed", "rateLimit.denied",
@@ -118,10 +118,14 @@ describe("Structured Abuse Telemetry V1", () => {
       "report.generated", "report.denied",
       "notification.emitted", "notification.skipped",
       "download.authorized", "download.denied",
+      "containment.allowed", "containment.denied",
+      "containment.policy_missing", "containment.policy_corrupted",
+      "containment.policy_expired", "containment.selective_block",
+      "containment.emergency_quota_exceeded", "containment.rollback_applied",
     ]);
   });
 
-  it("2. emits all eighteen event types through the provider-neutral port", async () => {
+  it("2. emits every catalog V2 event through the provider-neutral port", async () => {
     for (const [index, eventType] of STRUCTURED_ABUSE_EVENT_TYPES.entries()) {
       await recorder().record(command(index, {
         eventType,
@@ -131,9 +135,9 @@ describe("Structured Abuse Telemetry V1", () => {
         reasonCode: eventType.replace(/[.]/g, "_").toUpperCase(),
       }));
     }
-    expect((await db.collection(DISCOVERY_ABUSE_TELEMETRY_COLLECTION).get()).size).toBe(18);
+    expect((await db.collection(DISCOVERY_ABUSE_TELEMETRY_COLLECTION).get()).size).toBe(26);
     expect((await repository().readDailyAggregate({ date: DATE, scope: "global" }))?.eventCount)
-      .toBe(18);
+      .toBe(26);
   });
 
   it("3. creates a deterministic event ID independent of timestamp", async () => {

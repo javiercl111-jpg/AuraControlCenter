@@ -1,6 +1,7 @@
 import type { StructuredAbuseTelemetryRepository } from
   "./structuredAbuseTelemetryPorts";
 import {
+  STRUCTURED_ABUSE_EVENT_CATALOG_VERSION,
   STRUCTURED_ABUSE_TELEMETRY_VERSION,
   type StructuredAbuseTelemetryCommandV1,
   type StructuredAbuseTelemetryEventV1,
@@ -32,6 +33,7 @@ export class StructuredAbuseTelemetryRecorder {
     ].join("|"));
     const event = validateStructuredAbuseTelemetryEventV1({
       version: STRUCTURED_ABUSE_TELEMETRY_VERSION,
+      eventCatalogVersion: STRUCTURED_ABUSE_EVENT_CATALOG_VERSION,
       eventId, correlationId, requestId, timestamp,
       eventType: command.eventType,
       severity: command.severity ?? (command.outcome === "REJECTED" || command.outcome === "DENIED" ? "WARN" : "INFO"),

@@ -2,6 +2,7 @@
 
 **Slice:** AI-02H1E.4.6  
 **Contract:** `STRUCTURED_ABUSE_TELEMETRY_V1`  
+**Event catalog:** `STRUCTURED_ABUSE_EVENT_CATALOG_V2` (extended by P7)
 **Status:** implemented for architectural review  
 **Production:** not authorized
 
@@ -40,6 +41,9 @@ There is no arbitrary metadata map. The serializer reconstructs the allowed docu
 | Reports | `report.generated`, `report.denied` |
 | Notifications | `notification.emitted`, `notification.skipped` |
 | Downloads | `download.authorized`, `download.denied` |
+| P7 containment | `containment.allowed`, `containment.denied`, `containment.policy_missing`, `containment.policy_corrupted`, `containment.policy_expired`, `containment.selective_block`, `containment.emergency_quota_exceeded`, `containment.rollback_applied` |
+
+The V1 event envelope remains stable. P7 versions the closed event allowlist separately as catalog V2 so the extension is explicit and testable.
 
 The current instrumentation covers public intake, conversation AI budget reservations, capability exchange/resolution/authorization, completion, PDF generation, document download, and completion notification delivery.
 

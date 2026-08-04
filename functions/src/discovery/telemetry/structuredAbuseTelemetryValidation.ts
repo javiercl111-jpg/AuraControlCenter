@@ -1,5 +1,6 @@
 import { createHash, createHmac } from "crypto";
 import {
+  STRUCTURED_ABUSE_EVENT_CATALOG_VERSION,
   STRUCTURED_ABUSE_EVENT_TYPES,
   STRUCTURED_ABUSE_METRIC_KEYS,
   STRUCTURED_ABUSE_TELEMETRY_VERSION,
@@ -77,6 +78,7 @@ export function validateStructuredAbuseTelemetryEventV1(
   validateNoForbiddenKeys(value);
   if (
     value.version !== STRUCTURED_ABUSE_TELEMETRY_VERSION ||
+    value.eventCatalogVersion !== STRUCTURED_ABUSE_EVENT_CATALOG_VERSION ||
     !ID.test(value.eventId) || !ID.test(value.correlationId) ||
     !ID.test(value.requestId) || !Number.isSafeInteger(value.timestamp) ||
     value.timestamp < 0 || !STRUCTURED_ABUSE_EVENT_TYPES.includes(value.eventType) ||
@@ -108,6 +110,7 @@ export function serializeStructuredAbuseTelemetryEventV1(
   const valid = validateStructuredAbuseTelemetryEventV1(event);
   return {
     version: valid.version, eventId: valid.eventId,
+    eventCatalogVersion: valid.eventCatalogVersion,
     correlationId: valid.correlationId, requestId: valid.requestId,
     timestamp: valid.timestamp, eventType: valid.eventType,
     severity: valid.severity, source: valid.source, outcome: valid.outcome,

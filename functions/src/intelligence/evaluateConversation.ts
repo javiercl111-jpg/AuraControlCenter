@@ -41,6 +41,7 @@ import {
   normalizeTelemetryReasonCodeV1,
   recordDiscoveryTelemetrySafe,
 } from "../discovery/telemetry";
+import { enforceDiscoveryContainmentV1 } from "../discovery/containment";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const EXECUTIVE_CONVERSATION_MODE = "EXECUTIVE_CONVERSATION_LAYER";
@@ -316,6 +317,14 @@ export const evaluateConversation = onCall<EvaluateConversationRequest>(
       });
       throw toDiscoveryCapabilityHttpsError(error);
     }
+    await enforceDiscoveryContainmentV1(db, {
+      surface: "CONVERSATION_AI", source: "evaluateConversation",
+      component: "discovery.ai", correlationKey: sessionCapabilityHash,
+      requestKey: `${sessionCapabilityHash}:conversation:${
+        (data.engineInput.askedQuestions ?? []).length}`,
+      startedAt: telemetryStartedAt,
+      ...(request.app?.appId ? { appId: request.app.appId } : {}),
+    });
     const budgetRepository = new FirestoreDiscoveryCostBudgetRepository(db);
     let leaseId: string;
     try {
