@@ -1,0 +1,295 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "AI-02H1E.5.R2C-P2",
+  "changeId": "AI-02H1E.5.R2C-P2-PREVIEW-TRUST-BINDING-20260804-01",
+  "verdict": "BLOCKED — RUNTIME TRUST BINDING INCOMPLETE",
+  "target": {
+    "environment": "preview",
+    "projectId": "aura-intel-preview",
+    "branch": "security/intelligence-preview-runtime-trust-binding",
+    "head": "5c6e14d7a1587922861f66a15306668f9c99fe31",
+    "originMain": "5c6e14d7a1587922861f66a15306668f9c99fe31"
+  },
+  "changeControl": {
+    "actorRole": "RUNTIME_PROVISIONING_IMPLEMENTER",
+    "approverRoles": ["SECURITY_OWNER", "DEPLOYMENT_APPROVER"],
+    "nominalApproverReceipts": "PENDING",
+    "productionControlState": "REMEDIATION_HOLD"
+  },
+  "handlerTrust": [
+    {
+      "handler": "createDiscoveryLead",
+      "logicalIdentity": "preview-public-intake-runtime",
+      "accountId": "preview-public-intake-runtime",
+      "collections": [
+        "discovery_intake_idempotency",
+        "discovery_intake_idempotency_namespaces_v1",
+        "market_discovery_links",
+        "advisor_commercial_codes",
+        "platform_sales_advisors",
+        "discovery_containment_policies_v1",
+        "discovery_containment_active_v1",
+        "discovery_containment_audit_v1",
+        "discovery_abuse_telemetry_v1",
+        "discovery_abuse_metrics_v1"
+      ],
+      "secrets": ["discovery-idempotency-secret-preview"],
+      "auth": "OPTIONAL_CANONICAL_PRINCIPAL",
+      "appCheck": "DECLARATIVE_AND_MANUAL_REQUIRED",
+      "capability": "ISSUES_ONE_TIME_CAPABILITY",
+      "tenantScope": "canonical principal or resolved advisor/link data; public input grants no authority",
+      "requiredRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+      "prohibited": ["deploy", "global secret access", "Storage", "Tasks", "cross-environment access"]
+    },
+    {
+      "handler": "exchangeDiscoveryToken",
+      "logicalIdentity": "preview-discovery-session-runtime",
+      "accountId": "preview-discovery-session-rt",
+      "collections": ["discovery_capabilities_v1", "market_discovery_links", "discovery_containment_*", "discovery_abuse_*"],
+      "secrets": [],
+      "auth": "CAPABILITY_EXCHANGE",
+      "appCheck": "MANUAL_REQUEST_APP_REQUIRED",
+      "capability": "CONSUME_ONE_TIME_AND_ISSUE_SESSION",
+      "tenantScope": "stored link binding",
+      "requiredRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+      "prohibited": ["secret access", "deploy", "Storage", "Tasks"]
+    },
+    {
+      "handler": "resolveDiscoverySession",
+      "logicalIdentity": "preview-discovery-session-runtime",
+      "accountId": "preview-discovery-session-rt",
+      "collections": ["discovery_capabilities_v1", "market_discovery_links", "discovery_containment_*", "discovery_abuse_*"],
+      "secrets": [],
+      "auth": "SESSION_CAPABILITY",
+      "appCheck": "MANUAL_REQUEST_APP_REQUIRED",
+      "capability": "AUTHORIZE_SESSION_LINK_BINDING",
+      "tenantScope": "stored session/link binding",
+      "requiredRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+      "prohibited": ["secret access", "deploy", "Storage", "Tasks"]
+    },
+    {
+      "handler": "evaluateConversation",
+      "logicalIdentity": "preview-conversation-runtime",
+      "accountId": "preview-conversation-runtime",
+      "collections": ["discovery_capabilities_v1", "market_discovery_links", "discovery_conversation_budgets_v1", "discovery_containment_*", "discovery_abuse_*"],
+      "secrets": ["discovery-gemini-api-key-preview"],
+      "auth": "SESSION_CAPABILITY",
+      "appCheck": "DECLARATIVE_REQUIRED",
+      "capability": "AUTHORIZE_SESSION",
+      "tenantScope": "capability-bound session/link; model has no authority",
+      "requiredRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+      "prohibited": ["other secret access", "deploy", "completion mutation", "Storage", "Tasks"]
+    },
+    {
+      "handler": "completeDiscoverySession",
+      "logicalIdentity": "preview-discovery-completion-runtime",
+      "accountId": "preview-discovery-complete-rt",
+      "collections": [
+        "discovery_capabilities_v1",
+        "discovery_completions_v1",
+        "discovery_completion_outbox_v1",
+        "discovery_sessions",
+        "market_discovery_links",
+        "platform_leads",
+        "prospect_identity_index",
+        "platform_events",
+        "discovery_containment_*",
+        "discovery_abuse_*"
+      ],
+      "secrets": ["discovery-hmac-secret-preview"],
+      "auth": "SESSION_CAPABILITY",
+      "appCheck": "MANUAL_REQUEST_APP_REQUIRED",
+      "capability": "AUTHORIZE_AND_COMPLETE_EXACTLY_ONCE",
+      "tenantScope": "capability-bound link/session and stored tenant context",
+      "requiredRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+      "prohibited": ["other secret access", "deploy", "Storage permissions", "Tasks"]
+    },
+    {
+      "handler": "structured-result",
+      "logicalIdentity": "preview-discovery-completion-runtime",
+      "accountId": "preview-discovery-complete-rt",
+      "collections": ["discovery_completions_v1", "discovery_sessions"],
+      "secrets": [],
+      "auth": "INHERITED_COMPLETION_CAPABILITY",
+      "appCheck": "INHERITED",
+      "capability": "PUBLIC_RESULT_PROJECTION",
+      "tenantScope": "inherited completion binding",
+      "requiredRoles": [],
+      "prohibited": ["PDF", "Storage", "download signing", "notifications", "Tasks"]
+    }
+  ],
+  "identities": [
+    {
+      "logicalIdentity": "preview-public-intake-runtime",
+      "accountId": "preview-public-intake-runtime",
+      "projectRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+      "userManagedKeys": 0,
+      "status": "PROVISIONED_NO_WORKLOAD"
+    },
+    {
+      "logicalIdentity": "preview-discovery-session-runtime",
+      "accountId": "preview-discovery-session-rt",
+      "nameDeviation": "logical name exceeds 30-character account ID limit",
+      "projectRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+      "userManagedKeys": 0,
+      "status": "PROVISIONED_NO_WORKLOAD"
+    },
+    {
+      "logicalIdentity": "preview-conversation-runtime",
+      "accountId": "preview-conversation-runtime",
+      "projectRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+      "userManagedKeys": 0,
+      "status": "PROVISIONED_NO_WORKLOAD"
+    },
+    {
+      "logicalIdentity": "preview-discovery-completion-runtime",
+      "accountId": "preview-discovery-complete-rt",
+      "nameDeviation": "logical name exceeds 30-character account ID limit",
+      "projectRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+      "userManagedKeys": 0,
+      "status": "PROVISIONED_NO_WORKLOAD"
+    },
+    {
+      "logicalIdentity": "preview-deployer",
+      "accountId": "preview-deployer",
+      "projectRoles": [],
+      "serviceAccountPolicyRoles": [],
+      "userManagedKeys": 0,
+      "status": "PARKED_WIF_APPROVAL_REQUIRED"
+    },
+    {
+      "logicalIdentity": "legacy-generic-runtime",
+      "accountId": "preview-functions-runtime",
+      "projectRoles": [],
+      "userManagedKeys": 0,
+      "status": "PARKED_ROLES_REMOVED"
+    },
+    {
+      "logicalIdentity": "legacy-generic-secret-accessor",
+      "accountId": "preview-secret-accessor",
+      "projectRoles": [],
+      "userManagedKeys": 0,
+      "status": "PARKED_NEVER_GRANTED_SECRET_ACCESS"
+    }
+  ],
+  "secrets": [
+    {
+      "name": "discovery-idempotency-secret-preview",
+      "consumers": ["preview-public-intake-runtime"],
+      "versionCount": 0,
+      "status": "BINDING_VERIFIED_VALUE_PENDING"
+    },
+    {
+      "name": "discovery-ip-hash-salt-preview",
+      "consumers": [],
+      "versionCount": 0,
+      "status": "UNBOUND_NO_CONSUMER_IN_AUDITED_FLOW"
+    },
+    {
+      "name": "discovery-hmac-secret-preview",
+      "consumers": ["preview-discovery-complete-rt"],
+      "versionCount": 0,
+      "status": "BINDING_VERIFIED_VALUE_PENDING"
+    },
+    {
+      "name": "discovery-gemini-api-key-preview",
+      "consumers": ["preview-conversation-runtime"],
+      "versionCount": 0,
+      "status": "BINDING_VERIFIED_OPERATOR_KEY_PENDING"
+    }
+  ],
+  "wif": {
+    "pool": "aura-github-preview",
+    "provider": "github-aura-preview",
+    "repository": "javiercl111-jpg/AuraControlCenter",
+    "ref": "refs/heads/security/intelligence-preview-runtime-trust-binding",
+    "environment": "preview",
+    "subject": "repo:javiercl111-jpg/AuraControlCenter:environment:preview",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "audience": "CANONICAL_PROVIDER_RESOURCE",
+    "tokenLifetimeTargetSeconds": 900,
+    "poolCountActual": 0,
+    "providerCountActual": 0,
+    "deployerBindingsActual": 0,
+    "status": "BLOCKED_EXACT_FEDERATION_APPROVAL_REQUIRED"
+  },
+  "appCheck": {
+    "webAppCount": 1,
+    "provider": "NOT_CONFIGURED_BY_THIS_WAVE",
+    "providerReadBack": "UNAVAILABLE",
+    "enforcementMutation": false,
+    "debugTokenCount": 0,
+    "status": "PENDING_SITE_KEY_DOMAINS_CLIENT_AND_APPROVAL"
+  },
+  "observability": {
+    "logMetrics": [
+      "preview_discovery_runtime_errors",
+      "preview_secret_access_denials",
+      "preview_iam_policy_changes",
+      "preview_appcheck_rejections"
+    ],
+    "alertPolicyCount": 0,
+    "alertStatus": "PENDING_APPROVED_THRESHOLDS_AND_CHANNEL",
+    "budgetReadStatus": "FORBIDDEN_403",
+    "approvedCostSignalsUsd": [5, 10],
+    "budgetMutation": false,
+    "rateLimitDenialSignal": "FIRESTORE_TELEMETRY_ONLY",
+    "geminiUsageCostSignal": "PENDING_PROVIDER_AND_APPROVED_SIGNAL"
+  },
+  "blockingFindings": [
+    {
+      "id": "BF-01",
+      "finding": "Preview runtime in production Node mode is classified as telemetry environment PRODUCTION",
+      "requiredAction": "explicit Preview environment classification and tests before deploy"
+    },
+    {
+      "id": "BF-02",
+      "finding": "completeDiscoverySession invokes PDF/Storage report generation",
+      "requiredAction": "remove or feature-gate out-of-scope path before structured-result-only deploy"
+    },
+    {
+      "id": "BF-03",
+      "finding": "function parameter names differ from remote secret resource names",
+      "requiredAction": "approved per-function secret environment mapping"
+    },
+    {
+      "id": "BF-04",
+      "finding": "Firestore IAM cannot enforce collection-level trust boundaries",
+      "requiredAction": "composition inventory and negative cross-handler tests"
+    }
+  ],
+  "readBack": {
+    "enabledApiCount": 50,
+    "sts": "ENABLED",
+    "allPreviewUserManagedKeys": 0,
+    "functions": 0,
+    "cloudRunServices": 0,
+    "storageBuckets": 0,
+    "cloudTasks": 0,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "productionControlState": "REMEDIATION_HOLD",
+    "timestampUtc": "2026-08-04T23:31:23Z"
+  },
+  "rollback": {
+    "status": "NOT_EXECUTED_FOR_SUCCESSFUL_CHANGES",
+    "failedMetricAttempt": "PARTIAL_STATE_REMOVED_BEFORE_RETRY",
+    "secretVersionAttempt": "REJECTED_BEFORE_EXECUTION",
+    "wifAttempt": "REJECTED_BEFORE_EXECUTION",
+    "destructiveRollbackAuthorized": false
+  },
+  "scope": {
+    "previewChanged": true,
+    "sourceCodeChanged": false,
+    "firestoreRulesChanged": false,
+    "functionsDeployed": false,
+    "cloudRunDeployed": false,
+    "storageCreated": false,
+    "cloudTasksCreated": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "commitCreated": false,
+    "pushPerformed": false,
+    "pullRequestCreated": false
+  }
+}
