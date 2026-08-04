@@ -1,5 +1,7 @@
 # Production Readiness Execution Sequence v1
 
+La decisión documental de R1A se encuentra en el [Environment Architecture Decision v1](environment/ENVIRONMENT_ARCHITECTURE_DECISION_V1.md), con su [resource allocation matrix](environment/ENVIRONMENT_RESOURCE_ALLOCATION_MATRIX_V1.json), [promotion model](environment/ENVIRONMENT_PROMOTION_MODEL_V1.md), [external decisions](environment/ENVIRONMENT_EXTERNAL_DECISIONS_V1.md) y [migration strategy](environment/ENVIRONMENT_MIGRATION_STRATEGY_V1.md). Los gates externos pendientes allí registrados deben cerrarse antes de ejecutar R1B.
+
 ## 1. Dependency graph
 
 ```mermaid
@@ -139,4 +141,3 @@ Detener el slice activo y no avanzar dependientes si ocurre cualquiera:
 7. Preservar audit/log evidence y abrir incident review.
 
 TTL y deletes de datos no tienen rollback lógico automático. Su mitigación requiere backups/retention aprobados y validación Staging antes del write Production.
-

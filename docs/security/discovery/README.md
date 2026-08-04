@@ -54,3 +54,11 @@ Cambios de superficie, provider, capability, clasificación, retención, cuota, 
 - [Production Readiness Execution Sequence v1](production-remediation/PRODUCTION_READINESS_EXECUTION_SEQUENCE_V1.md) — grafo, waves, ruta crítica, comandos futuros y stop conditions.
 - [Production Readiness RACI v1](production-remediation/PRODUCTION_READINESS_RACI_V1.md) — roles organizacionales, accountability, approvals y escalación.
 - [Production Readiness Gates v1](production-remediation/PRODUCTION_READINESS_GATES_V1.md) — gates acumulativos desde diseño hasta certificación final.
+
+### R1A — Environment Decision and Resource Allocation
+
+- [Environment Architecture Decision v1](production-remediation/environment/ENVIRONMENT_ARCHITECTURE_DECISION_V1.md) — modelo de cuatro ambientes, alternativa de proyectos, candidato productivo, regiones, datos e identidades.
+- [Environment Resource Allocation Matrix v1](production-remediation/environment/ENVIRONMENT_RESOURCE_ALLOCATION_MATRIX_V1.json) — asignación completa de recursos, estado y ownership por ambiente.
+- [Environment Promotion Model v1](production-remediation/environment/ENVIRONMENT_PROMOTION_MODEL_V1.md) — branches, Preview, Staging, promoción, targeting y rollback.
+- [Environment External Decisions v1](production-remediation/environment/ENVIRONMENT_EXTERNAL_DECISIONS_V1.md) — aprobaciones externas que bloquean provisioning y R1B.
+- [Environment Migration Strategy v1](production-remediation/environment/ENVIRONMENT_MIGRATION_STRATEGY_V1.md) — preserve, migrate, recreate, deprecate y delete-later sin ejecutar cambios.

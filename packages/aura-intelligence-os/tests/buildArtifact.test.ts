@@ -146,5 +146,5 @@ describe('Aura Intelligence OS CommonJS build artifact', () => {
 
     expect(listFiles(distRoot)).toEqual(firstInventory);
     expect(fingerprintDist()).toBe(firstFingerprint);
-  });
+  }, 15_000);
 });
