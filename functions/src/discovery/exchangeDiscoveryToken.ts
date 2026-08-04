@@ -11,6 +11,7 @@ import {
   normalizeTelemetryReasonCodeV1,
   recordDiscoveryTelemetrySafe,
 } from "./telemetry";
+import { enforceDiscoveryContainmentV1 } from "./containment";
 
 export const exchangeDiscoveryToken = functions.https.onCall(async (request) => {
   const startedAt = Date.now();
@@ -36,6 +37,13 @@ export const exchangeDiscoveryToken = functions.https.onCall(async (request) => 
     throw toDiscoveryPayloadHttpsError(error) ?? error;
   }
   const { linkId, oneTimeToken } = payload;
+
+  await enforceDiscoveryContainmentV1(db, {
+    surface: "TOKEN_ISSUANCE", source: "exchangeDiscoveryToken",
+    component: "discovery.capability", correlationKey: linkId,
+    requestKey: `${linkId}:exchange`, startedAt,
+    ...(request.app?.appId ? { appId: request.app.appId } : {}),
+  });
 
   const sessionAccessToken = generateOpaqueToken();
   const sessionTokenHash = generateTokenHash(sessionAccessToken);

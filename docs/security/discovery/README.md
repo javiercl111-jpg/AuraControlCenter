@@ -24,6 +24,8 @@ Esta carpeta contiene la baseline AI-02H1E.4.1 para el hardening del intake púb
 
 13. [Structured Abuse Telemetry v1](STRUCTURED_ABUSE_TELEMETRY_V1.md) — eventos estructurados sin PII, correlación determinista y métricas atómicas de AI-02H1E.4.6.
 
+14. [Kill Switches and Emergency Quotas v1](KILL_SWITCHES_AND_EMERGENCY_QUOTAS_V1.md) — contención backend versionada, bloqueos selectivos, cuotas P2, auditoría y rollback de AI-02H1E.4.7.
+
 ## Cómo interpretar la baseline
 
 - Los documentos describen contratos y mitigaciones objetivo, no garantías del runtime actual.

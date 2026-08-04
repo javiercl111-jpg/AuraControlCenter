@@ -15,6 +15,7 @@ import {
   normalizeTelemetryReasonCodeV1,
   recordDiscoveryTelemetrySafe,
 } from "../telemetry";
+import { enforceDiscoveryContainmentV1 } from "../containment";
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   let handle: ReturnType<typeof setTimeout> | undefined;
@@ -47,6 +48,15 @@ export class DiscoveryReportGenerationService {
     const startedAt = Date.now();
     const db = admin.firestore();
     const storage = admin.storage();
+
+    await enforceDiscoveryContainmentV1(db, {
+      surface: "EXTERNAL_REPORT_GENERATION",
+      source: "DiscoveryReportGenerationService",
+      component: "discovery.report",
+      correlationKey: sessionId,
+      requestKey: `${sessionId}:${reportType}:${forceRegenerate}`,
+      startedAt,
+    });
 
     const sessionDoc = await db.collection("discovery_sessions").doc(sessionId).get();
     if (!sessionDoc.exists) {

@@ -46,6 +46,7 @@ import {
   normalizeTelemetryReasonCodeV1,
   recordDiscoveryTelemetrySafe,
 } from "./telemetry";
+import { enforceDiscoveryContainmentV1 } from "./containment";
 
 const capabilitySecret = defineSecret("IDEMPOTENCY_SECRET");
 
@@ -144,6 +145,18 @@ export const completeDiscoverySession = functions.https.onCall(
       });
       throw toDiscoveryCapabilityHttpsError(error);
     }
+    await enforceDiscoveryContainmentV1(db, {
+      surface: "SESSION_COMPLETION", source: "completeDiscoverySession",
+      component: "discovery.completion", correlationKey: linkId,
+      requestKey: `${linkId}:completion`, startedAt,
+      ...(request.app?.appId ? { appId: request.app.appId } : {}),
+    });
+    await enforceDiscoveryContainmentV1(db, {
+      surface: "TOKEN_ISSUANCE", source: "completeDiscoverySession",
+      component: "discovery.capability", correlationKey: linkId,
+      requestKey: `${linkId}:report-capability`, startedAt,
+      ...(request.app?.appId ? { appId: request.app.appId } : {}),
+    });
     const sessionId = createDiscoverySessionIdV1(
       linkId, DISCOVERY_CAPABILITY_POLICY_V1.sessionGeneration,
     );

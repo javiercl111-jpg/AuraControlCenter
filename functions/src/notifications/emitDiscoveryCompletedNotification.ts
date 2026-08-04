@@ -12,6 +12,7 @@ import {
   normalizeTelemetryReasonCodeV1,
   recordDiscoveryTelemetrySafe,
 } from "../discovery/telemetry";
+import { enforceDiscoveryContainmentV1 } from "../discovery/containment";
 
 export interface MaintenanceDeliveryResult {
   status?: string;
@@ -149,6 +150,20 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
   if (payload.tenantId !== 'aura_root') {
     console.error("Unauthorized notification tenant");
     await skipped("NOTIFICATION_TENANT_DENIED");
+    return;
+  }
+
+  try {
+    await enforceDiscoveryContainmentV1(db, {
+      surface: "NOTIFICATION_FANOUT",
+      source: "emitDiscoveryCompletedNotification",
+      component: "discovery.notification",
+      correlationKey: telemetryKey,
+      requestKey: `${telemetryKey}:notification:${request.retryCount}`,
+      startedAt,
+    });
+  } catch {
+    await skipped("CONTAINMENT_DENIED");
     return;
   }
 

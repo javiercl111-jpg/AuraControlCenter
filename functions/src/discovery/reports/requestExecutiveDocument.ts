@@ -24,6 +24,7 @@ import {
   normalizeTelemetryReasonCodeV1,
   recordDiscoveryTelemetrySafe,
 } from "../telemetry";
+import { enforceDiscoveryContainmentV1 } from "../containment";
 
 export interface DiscoveryReportSessionScopeInput {
   storedSessionTokenHash?: string;
@@ -273,6 +274,13 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
   if (forceRegenerate === true && !shouldForceRegenerate) {
     throw new functions.https.HttpsError("permission-denied", "User is not authorized.");
   }
+
+  await enforceDiscoveryContainmentV1(db, {
+    surface: "DOCUMENT_DOWNLOAD", source: "requestExecutiveDocument",
+    component: "discovery.download", correlationKey: targetSessionId || reportId,
+    requestKey: `${reportId}:download`, startedAt,
+    ...(request.app?.appId ? { appId: request.app.appId } : {}),
+  });
 
   try {
     const reauthorizePublicReport = async (): Promise<void> => {

@@ -11,6 +11,7 @@ import {
   normalizeTelemetryReasonCodeV1,
   recordDiscoveryTelemetrySafe,
 } from "./telemetry";
+import { enforceDiscoveryContainmentV1 } from "./containment";
 
 export const resolveDiscoverySession = functions.https.onCall(async (request) => {
   const startedAt = Date.now();
@@ -33,6 +34,13 @@ export const resolveDiscoverySession = functions.https.onCall(async (request) =>
     throw toDiscoveryPayloadHttpsError(error) ?? error;
   }
   const { linkId, sessionToken } = payload;
+
+  await enforceDiscoveryContainmentV1(db, {
+    surface: "SESSION_RESOLUTION", source: "resolveDiscoverySession",
+    component: "discovery.capability", correlationKey: linkId,
+    requestKey: `${linkId}:resolve`, startedAt,
+    ...(request.app?.appId ? { appId: request.app.appId } : {}),
+  });
 
   let linkData: admin.firestore.DocumentData;
   try {

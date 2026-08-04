@@ -28,6 +28,10 @@ import {
   type StructuredAbuseSubjectV1,
   type StructuredAbuseTelemetryEventV1,
 } from "./telemetry";
+import {
+  deriveBlockedCommercialCodeHashV1,
+  enforceDiscoveryContainmentV1,
+} from "./containment";
 
 const idempotencySecret = defineSecret("IDEMPOTENCY_SECRET");
 
@@ -96,6 +100,34 @@ export const createDiscoveryLead = onCall(
         marketingConsent, policyVersion,
       } = payload;
       let origin = payload.origin;
+
+      const appId = request.app?.appId;
+      const commercialCodeHash = commercialCode
+        ? deriveBlockedCommercialCodeHashV1(
+          commercialCode, idempotencySecret.value(),
+        )
+        : undefined;
+      await enforceDiscoveryContainmentV1(db, {
+        surface: "PUBLIC_INTAKE", source: "createDiscoveryLead",
+        component: "discovery.intake", correlationKey: transportKey,
+        requestKey: transportKey, startedAt,
+        ...(appId ? { appId } : {}),
+        ...(commercialCodeHash ? { commercialCodeHash } : {}),
+      });
+      await enforceDiscoveryContainmentV1(db, {
+        surface: "TOKEN_ISSUANCE", source: "createDiscoveryLead",
+        component: "discovery.capability", correlationKey: transportKey,
+        requestKey: transportKey, startedAt,
+        ...(appId ? { appId } : {}),
+      });
+      if (commercialCodeHash) {
+        await enforceDiscoveryContainmentV1(db, {
+          surface: "ADVISOR_CODE_RESOLUTION", source: "createDiscoveryLead",
+          component: "discovery.advisorResolution", correlationKey: transportKey,
+          requestKey: transportKey, startedAt,
+          ...(appId ? { appId } : {}), commercialCodeHash,
+        });
+      }
 
       const idempotencyHash = generateIdempotencyHash(idempotencyKey, idempotencySecret.value());
       telemetryKey = idempotencyHash;
