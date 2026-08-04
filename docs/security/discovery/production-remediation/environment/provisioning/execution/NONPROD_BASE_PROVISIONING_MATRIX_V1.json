@@ -1,0 +1,180 @@
+{
+  "schemaVersion": "NONPROD_BASE_PROVISIONING_MATRIX_V1",
+  "program": "AI-02H1E.5.0",
+  "slice": "AI-02H1E.5.R1C-B1",
+  "repository": "AuraControlCenter",
+  "capturedAtUtc": "2026-08-04T19:56:16.0054339Z",
+  "mode": "READ_ONLY_METADATA_AND_DOCUMENTATION",
+  "verdict": "NON_PRODUCTION_BASE_PROVISIONING_VERIFIED_READY_FOR_SECURITY_BASELINE_DESIGN",
+  "firebaseMembershipEvidence": {
+    "source": "Operator-provided read-only firebase projects:list --json output",
+    "confirmedProjectIds": [
+      "aura-intel-preview",
+      "aura-intel-staging"
+    ],
+    "fullDumpRetained": false,
+    "sensitiveFieldsRetained": false
+  },
+  "allowedStatuses": [
+    "CREATED_AND_VERIFIED",
+    "NOT_CONFIGURED",
+    "DEFERRED",
+    "UNCHANGED",
+    "BLOCKED",
+    "UNKNOWN"
+  ],
+  "changeRecords": [
+    {
+      "scope": "PREVIEW_PROJECT",
+      "changeId": "AI-02H1E.5.R1C-B-NONPROD-PROVISIONING-20260804-01",
+      "status": "CREATED_AND_VERIFIED",
+      "evidence": "EV-PREVIEW-PROJECT"
+    },
+    {
+      "scope": "STAGING_PROJECT",
+      "changeId": "AI-02H1E.5.R1C-B-NONPROD-PROVISIONING-20260804-02",
+      "status": "CREATED_AND_VERIFIED",
+      "evidence": "EV-STAGING-PROJECT"
+    },
+    {
+      "scope": "PREVIEW_FIRESTORE",
+      "changeId": "AI-02H1E.5.R1C-B-PREVIEW-FIRESTORE-20260804-01",
+      "status": "CREATED_AND_VERIFIED",
+      "evidence": "EV-PREVIEW-FIRESTORE"
+    },
+    {
+      "scope": "STAGING_FIRESTORE",
+      "changeId": "AI-02H1E.5.R1C-B-STAGING-FIRESTORE-20260804-01",
+      "status": "CREATED_AND_VERIFIED",
+      "evidence": "EV-STAGING-FIRESTORE"
+    }
+  ],
+  "commandsExecuted": [
+    "gcloud projects describe <PROJECT_ID>",
+    "gcloud billing projects describe <PROJECT_ID>",
+    "firebase projects:list --json filtered to exact project IDs",
+    "GET firebase.googleapis.com/v1beta1/projects/<PROJECT_ID>",
+    "gcloud firestore databases describe --database=(default) --project=<PROJECT_ID>",
+    "gcloud services list --enabled --project=<PROJECT_ID>",
+    "gcloud storage buckets list --project=<PROJECT_ID>",
+    "gcloud iam service-accounts list --project=<PROJECT_ID>",
+    "gcloud functions list --v2 --regions=us-central1 --project=<PROJECT_ID>",
+    "gcloud run services list --region=us-central1 --project=<PROJECT_ID>",
+    "gcloud tasks queues list --location=us-central1 --project=<PROJECT_ID>"
+  ],
+  "enabledApiBaseline": [
+    "analyticshub.googleapis.com",
+    "appengine.googleapis.com",
+    "bigquery.googleapis.com",
+    "bigqueryconnection.googleapis.com",
+    "bigquerydatapolicy.googleapis.com",
+    "bigquerydatatransfer.googleapis.com",
+    "bigquerymigration.googleapis.com",
+    "bigqueryreservation.googleapis.com",
+    "bigquerystorage.googleapis.com",
+    "cloudapis.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "cloudtrace.googleapis.com",
+    "dataform.googleapis.com",
+    "dataplex.googleapis.com",
+    "datastore.googleapis.com",
+    "fcm.googleapis.com",
+    "firebase.googleapis.com",
+    "firebasehosting.googleapis.com",
+    "firebaseinstallations.googleapis.com",
+    "firebaseremoteconfig.googleapis.com",
+    "firebaseremoteconfigrealtime.googleapis.com",
+    "firebaserules.googleapis.com",
+    "firestore.googleapis.com",
+    "identitytoolkit.googleapis.com",
+    "logging.googleapis.com",
+    "monitoring.googleapis.com",
+    "pubsub.googleapis.com",
+    "runtimeconfig.googleapis.com",
+    "securetoken.googleapis.com",
+    "servicemanagement.googleapis.com",
+    "serviceusage.googleapis.com",
+    "sql-component.googleapis.com",
+    "storage.googleapis.com",
+    "storage-api.googleapis.com",
+    "storage-component.googleapis.com",
+    "telemetry.googleapis.com",
+    "testing.googleapis.com"
+  ],
+  "environments": [
+    {
+      "environment": "PREVIEW",
+      "projectId": "aura-intel-preview",
+      "projectNumber": "REDACTED",
+      "projectCreateTime": "2026-08-04T19:22:51.349Z",
+      "firestoreCreateTime": "2026-08-04T19:47:51.388611Z",
+      "readBackTime": "2026-08-04T19:55:33.7430079Z",
+      "resources": [
+        {"resource":"Project","expected":"ACTIVE project aura-intel-preview","actual":"ACTIVE; display name Aura Intelligence Preview","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-PROJECT","risk":"Low; project number redacted","rollback":"No R1C-B1 write; base-wave abandon procedure applies","nextAction":"Preserve project and review security baseline"},
+        {"resource":"Organization parent","expected":"Approved organization","actual":"organization 876******321","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-PROJECT","risk":"Parent policy still needs baseline review","rollback":"No R1C-B1 write","nextAction":"Read effective policies before IAM wave"},
+        {"resource":"Labels","expected":"Explicit Preview/product/managed labels","actual":"environment=preview; firebase=enabled; firebase-core=disabled; managed-by=readiness-program; product=aura-intelligence","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-PROJECT","risk":"No cost-center label in read-back","rollback":"No R1C-B1 write","nextAction":"Design label remediation; do not apply in evidence slice"},
+        {"resource":"Billing","expected":"Enabled on approved account","actual":"enabled; account 01E**************793","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-BILLING","risk":"Budget not configured/verified","rollback":"No R1C-B1 write; base-wave unlink only under approved abandonment","nextAction":"Security/cost baseline design"},
+        {"resource":"Firebase membership","expected":"Firebase enabled","actual":"Operator-provided sanitized firebase projects:list --json output confirms projectId aura-intel-preview; full dump not retained","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-FIREBASE","risk":"Non-blocking; evidence is limited to the required projectId confirmation","rollback":"No R1C-B1 write","nextAction":"Preserve membership; continue to security baseline design"},
+        {"resource":"Firebase API","expected":"firebase.googleapis.com enabled","actual":"Enabled in 37-service inventory","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-APIS","risk":"Enabled API is not equivalent to membership","rollback":"No R1C-B1 write","nextAction":"Retain as indirect evidence only"},
+        {"resource":"Firestore database","expected":"(default), FIRESTORE_NATIVE, STANDARD","actual":"(default), FIRESTORE_NATIVE, STANDARD","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-FIRESTORE","risk":"No application data authorized","rollback":"Delete protection enabled; no R1C-B1 write","nextAction":"Rules/security baseline design"},
+        {"resource":"Firestore location","expected":"nam5","actual":"nam5","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-FIRESTORE","risk":"Location immutable","rollback":"Not applicable; verified approved value","nextAction":"Preserve"},
+        {"resource":"Firestore delete protection","expected":"Enabled","actual":"DELETE_PROTECTION_ENABLED","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-FIRESTORE","risk":"Low","rollback":"No change","nextAction":"Preserve"},
+        {"resource":"Firestore PITR","expected":"Disabled for base wave","actual":"POINT_IN_TIME_RECOVERY_DISABLED","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-FIRESTORE","risk":"No point-in-time recovery; real data prohibited","rollback":"No change","nextAction":"Decide before data-bearing work"},
+        {"resource":"Enabled APIs","expected":"Base Firebase/Firestore services only","actual":"37 services; see enabledApiBaseline","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-APIS","risk":"Broader platform-default set needs review","rollback":"Do not disable in evidence slice","nextAction":"Classify required versus deferred APIs"},
+        {"resource":"Buckets","expected":"None","actual":"0","status":"NOT_CONFIGURED","evidence":"EV-PREVIEW-RESOURCES","risk":"None; Storage API enabled but no bucket","rollback":"Not required","nextAction":"Defer to approved Storage wave"},
+        {"resource":"Firebase automatic service account","expected":"Platform-created account may exist after Firebase enablement","actual":"firebase-adminsdk-fbsvc; enabled","status":"CREATED_AND_VERIFIED","evidence":"EV-PREVIEW-RESOURCES","risk":"Permissions not reviewed in this slice","rollback":"Do not delete platform account","nextAction":"Include in security/IAM baseline"},
+        {"resource":"Dedicated service accounts","expected":"None in base wave","actual":"0 additional dedicated accounts","status":"NOT_CONFIGURED","evidence":"EV-PREVIEW-RESOURCES","risk":"No runtime identity available","rollback":"Not required","nextAction":"Defer to IAM/WIF wave"},
+        {"resource":"Functions","expected":"None","actual":"Cloud Functions API SERVICE_DISABLED; no resources enumerated","status":"NOT_CONFIGURED","evidence":"EV-PREVIEW-RESOURCES","risk":"None for base wave","rollback":"Not required","nextAction":"Do not enable before authorized wave"},
+        {"resource":"Cloud Run","expected":"None","actual":"Cloud Run API SERVICE_DISABLED; no resources enumerated","status":"NOT_CONFIGURED","evidence":"EV-PREVIEW-RESOURCES","risk":"None for base wave","rollback":"Not required","nextAction":"Do not enable before authorized wave"},
+        {"resource":"Cloud Tasks","expected":"None","actual":"Cloud Tasks API SERVICE_DISABLED; no queues enumerated","status":"NOT_CONFIGURED","evidence":"EV-PREVIEW-RESOURCES","risk":"None for base wave","rollback":"Not required","nextAction":"Defer paused queue to authorized wave"},
+        {"resource":"Rules indexes TTL Auth App Check secrets WIF","expected":"Deferred","actual":"Not verified/created by base evidence scope","status":"DEFERRED","evidence":"EV-PREVIEW-DEFERRED","risk":"Must not infer configuration from enabled APIs","rollback":"Not applicable","nextAction":"Security baseline design only"}
+      ]
+    },
+    {
+      "environment": "STAGING",
+      "projectId": "aura-intel-staging",
+      "projectNumber": "REDACTED",
+      "projectCreateTime": "2026-08-04T19:35:58.750Z",
+      "firestoreCreateTime": "2026-08-04T19:51:08.828981Z",
+      "readBackTime": "2026-08-04T19:55:33.7430079Z",
+      "resources": [
+        {"resource":"Project","expected":"ACTIVE project aura-intel-staging","actual":"ACTIVE; display name Aura Intelligence Staging","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-PROJECT","risk":"Low; project number redacted","rollback":"No R1C-B1 write; base-wave abandon procedure applies","nextAction":"Preserve project and review security baseline"},
+        {"resource":"Organization parent","expected":"Approved organization","actual":"organization 876******321","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-PROJECT","risk":"Parent policy still needs baseline review","rollback":"No R1C-B1 write","nextAction":"Read effective policies before IAM wave"},
+        {"resource":"Labels","expected":"Explicit Staging/product/managed labels","actual":"environment=staging; firebase=enabled; firebase-core=disabled; managed-by=readiness-program; product=aura-intelligence","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-PROJECT","risk":"No cost-center label in read-back","rollback":"No R1C-B1 write","nextAction":"Design label remediation; do not apply in evidence slice"},
+        {"resource":"Billing","expected":"Enabled on approved account","actual":"enabled; account 01E**************793","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-BILLING","risk":"Budget not configured/verified","rollback":"No R1C-B1 write; base-wave unlink only under approved abandonment","nextAction":"Security/cost baseline design"},
+        {"resource":"Firebase membership","expected":"Firebase enabled","actual":"Operator-provided sanitized firebase projects:list --json output confirms projectId aura-intel-staging; full dump not retained","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-FIREBASE","risk":"Non-blocking; evidence is limited to the required projectId confirmation","rollback":"No R1C-B1 write","nextAction":"Preserve membership; continue to security baseline design"},
+        {"resource":"Firebase API","expected":"firebase.googleapis.com enabled","actual":"Enabled in 37-service inventory","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-APIS","risk":"Enabled API is not equivalent to membership","rollback":"No R1C-B1 write","nextAction":"Retain as indirect evidence only"},
+        {"resource":"Firestore database","expected":"(default), FIRESTORE_NATIVE, STANDARD","actual":"(default), FIRESTORE_NATIVE, STANDARD; associated with AI-02H1E.5.R1C-B-STAGING-FIRESTORE-20260804-01","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-FIRESTORE","risk":"No application data authorized","rollback":"Delete protection enabled; no R1C-B1 write","nextAction":"Rules/security baseline design"},
+        {"resource":"Firestore location","expected":"nam5","actual":"nam5","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-FIRESTORE","risk":"Location immutable","rollback":"Not applicable; verified approved value","nextAction":"Preserve"},
+        {"resource":"Firestore delete protection","expected":"Enabled","actual":"DELETE_PROTECTION_ENABLED","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-FIRESTORE","risk":"Low","rollback":"No change","nextAction":"Preserve"},
+        {"resource":"Firestore PITR","expected":"Disabled for base wave","actual":"POINT_IN_TIME_RECOVERY_DISABLED","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-FIRESTORE","risk":"No point-in-time recovery; representative data policy needed","rollback":"No change","nextAction":"Decide before certification data"},
+        {"resource":"Enabled APIs","expected":"Base Firebase/Firestore services only","actual":"37 services; see enabledApiBaseline","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-APIS","risk":"Broader platform-default set needs review","rollback":"Do not disable in evidence slice","nextAction":"Classify required versus deferred APIs"},
+        {"resource":"Buckets","expected":"None","actual":"0","status":"NOT_CONFIGURED","evidence":"EV-STAGING-RESOURCES","risk":"None; Storage API enabled but no bucket","rollback":"Not required","nextAction":"Defer to approved Storage wave"},
+        {"resource":"Firebase automatic service account","expected":"Platform-created account may exist after Firebase enablement","actual":"firebase-adminsdk-fbsvc; enabled","status":"CREATED_AND_VERIFIED","evidence":"EV-STAGING-RESOURCES","risk":"Permissions not reviewed in this slice","rollback":"Do not delete platform account","nextAction":"Include in security/IAM baseline"},
+        {"resource":"Dedicated service accounts","expected":"None in base wave","actual":"0 additional dedicated accounts","status":"NOT_CONFIGURED","evidence":"EV-STAGING-RESOURCES","risk":"No runtime identity available","rollback":"Not required","nextAction":"Defer to IAM/WIF wave"},
+        {"resource":"Functions","expected":"None","actual":"Cloud Functions API SERVICE_DISABLED; no resources enumerated","status":"NOT_CONFIGURED","evidence":"EV-STAGING-RESOURCES","risk":"None for base wave","rollback":"Not required","nextAction":"Do not enable before authorized wave"},
+        {"resource":"Cloud Run","expected":"None","actual":"Cloud Run API SERVICE_DISABLED; no resources enumerated","status":"NOT_CONFIGURED","evidence":"EV-STAGING-RESOURCES","risk":"None for base wave","rollback":"Not required","nextAction":"Do not enable before authorized wave"},
+        {"resource":"Cloud Tasks","expected":"None","actual":"Cloud Tasks API SERVICE_DISABLED; no queues enumerated","status":"NOT_CONFIGURED","evidence":"EV-STAGING-RESOURCES","risk":"None for base wave","rollback":"Not required","nextAction":"Defer paused queue to authorized wave"},
+        {"resource":"Rules indexes TTL Auth App Check secrets WIF","expected":"Deferred","actual":"Not verified/created by base evidence scope","status":"DEFERRED","evidence":"EV-STAGING-DEFERRED","risk":"Must not infer configuration from enabled APIs","rollback":"Not applicable","nextAction":"Security baseline design only"}
+      ]
+    }
+  ],
+  "production": {
+    "projectId": "aura-control-center-debb3",
+    "expected": "Unchanged and REMEDIATION_HOLD",
+    "actual": "Confirmed unchanged by handoff; no R1C-B1 command targeted Production",
+    "status": "UNCHANGED",
+    "evidence": "EV-PRODUCTION-SCOPE",
+    "risk": "Not remotely re-read because scope required only Preview and Staging",
+    "rollback": "Not required",
+    "nextAction": "Keep excluded from non-production waves"
+  },
+  "deviations": [
+    {"id":"DEV-03","status":"DEFERRED","description":"One automatic firebase-adminsdk-fbsvc service account exists per project","nextAction":"Review permissions in security baseline"},
+    {"id":"DEV-04","status":"DEFERRED","description":"37 enabled services include broad Firebase platform defaults","nextAction":"Classify API baseline before later enablement"},
+    {"id":"DEV-05","status":"DEFERRED","description":"PITR disabled on both databases","nextAction":"Approve recovery policy before data-bearing work"},
+    {"id":"DEV-06","status":"DEFERRED","description":"Nominal implementer and approver receipts remain pending governance","nextAction":"Attach sanitized governance receipts when available"}
+  ],
+  "rollbackStatus": "NOT_REQUIRED_NO_WRITES_IN_R1C_B1",
+  "nextAuthorizedWave": "SECURITY_BASELINE_DESIGN_ONLY"
+}
