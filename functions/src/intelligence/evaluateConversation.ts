@@ -36,6 +36,11 @@ import { toDiscoveryPayloadHttpsError } from
   "../discovery/discoveryPayloadHandlerSupport";
 import { toDiscoveryCapabilityHttpsError } from
   "../discovery/discoveryCapabilityHandlerSupport";
+import {
+  deriveTelemetryDerivedSubjectV1,
+  normalizeTelemetryReasonCodeV1,
+  recordDiscoveryTelemetrySafe,
+} from "../discovery/telemetry";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const EXECUTIVE_CONVERSATION_MODE = "EXECUTIVE_CONVERSATION_LAYER";
@@ -265,28 +270,81 @@ export const evaluateConversation = onCall<EvaluateConversationRequest>(
     timeoutSeconds: 15,
   },
   async (request) => {
+    const telemetryStartedAt = Date.now();
+    const db = admin.firestore();
     let data: EvaluateConversationRequest & { sessionToken: string };
     try {
       data = parseConversationEvaluationV1(request.data);
     } catch (error: unknown) {
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "payload.invalid", source: "evaluateConversation",
+        component: "discovery.ai", outcome: "REJECTED",
+        reasonCode: normalizeTelemetryReasonCodeV1(error),
+        durationMs: Date.now() - telemetryStartedAt,
+        correlationKey: `conversation:${telemetryStartedAt}`,
+        requestKey: `conversation:${telemetryStartedAt}:invalid`,
+        measurements: { requests: 1, rejections: 1 },
+      });
       throw toDiscoveryPayloadHttpsError(error) ?? error;
     }
     validateRequest(data);
 
-    const db = admin.firestore();
+    const sessionCapabilityHash = hashDiscoveryCapabilityToken(data.sessionToken);
+    const telemetrySubject = deriveTelemetryDerivedSubjectV1(sessionCapabilityHash);
     try {
       await new FirestoreDiscoveryCapabilityRepository(db).authorizeSession({
         token: data.sessionToken,
       });
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "capability.accepted", source: "evaluateConversation",
+        component: "discovery.ai", outcome: "ACCEPTED",
+        reasonCode: "SESSION_CAPABILITY_ACCEPTED",
+        durationMs: Date.now() - telemetryStartedAt,
+        correlationKey: sessionCapabilityHash,
+        requestKey: `${sessionCapabilityHash}:conversation-authorize`,
+        subject: telemetrySubject,
+      });
     } catch (error: unknown) {
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "capability.rejected", source: "evaluateConversation",
+        component: "discovery.ai", outcome: "REJECTED",
+        reasonCode: normalizeTelemetryReasonCodeV1(error),
+        durationMs: Date.now() - telemetryStartedAt,
+        correlationKey: sessionCapabilityHash,
+        requestKey: `${sessionCapabilityHash}:conversation-authorize`,
+        subject: telemetrySubject, measurements: { rejections: 1 },
+      });
       throw toDiscoveryCapabilityHttpsError(error);
     }
-    const sessionCapabilityHash = hashDiscoveryCapabilityToken(data.sessionToken);
     const budgetRepository = new FirestoreDiscoveryCostBudgetRepository(db);
     let leaseId: string;
     try {
       leaseId = await budgetRepository.reserveConversation(sessionCapabilityHash);
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "rateLimit.allowed", source: "evaluateConversation",
+        component: "discovery.ai", outcome: "ALLOWED",
+        reasonCode: "CONVERSATION_BUDGET_RESERVED",
+        durationMs: Date.now() - telemetryStartedAt,
+        correlationKey: sessionCapabilityHash,
+        requestKey: `${sessionCapabilityHash}:conversation-budget:${(data.engineInput.askedQuestions ?? []).length}`,
+        subject: telemetrySubject,
+        measurements: {
+          requests: 1,
+          aiAttempts: DISCOVERY_COST_BOUND_POLICY_V1.maxGeminiAttemptsPerTurn,
+          aiInputBytes: payloadBytes(data),
+        },
+      });
     } catch (error: unknown) {
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "rateLimit.denied", source: "evaluateConversation",
+        component: "discovery.ai", outcome: "DENIED",
+        reasonCode: normalizeTelemetryReasonCodeV1(error),
+        durationMs: Date.now() - telemetryStartedAt,
+        correlationKey: sessionCapabilityHash,
+        requestKey: `${sessionCapabilityHash}:conversation-budget:${(data.engineInput.askedQuestions ?? []).length}`,
+        subject: telemetrySubject,
+        measurements: { requests: 1, rejections: 1 },
+      });
       throw toDiscoveryPayloadHttpsError(error) ?? error;
     }
 
@@ -386,7 +444,9 @@ export const evaluateConversation = onCall<EvaluateConversationRequest>(
         },
       };
     } catch (error: unknown) {
-      console.error("Executive conversation drafting failed:", error);
+      console.error("Executive conversation drafting failed", {
+        reasonCode: normalizeTelemetryReasonCodeV1(error),
+      });
       return createLLMFailureFallback(
         error,
         data.authoritativeIntent,

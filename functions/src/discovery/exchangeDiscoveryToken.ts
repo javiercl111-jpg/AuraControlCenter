@@ -6,8 +6,15 @@ import { FirestoreDiscoveryCapabilityRepository } from
 import { toDiscoveryCapabilityHttpsError } from "./discoveryCapabilityHandlerSupport";
 import { parseCapabilityExchangeRequestV1 } from "./payloadBounds";
 import { toDiscoveryPayloadHttpsError } from "./discoveryPayloadHandlerSupport";
+import {
+  deriveTelemetryDerivedSubjectV1,
+  normalizeTelemetryReasonCodeV1,
+  recordDiscoveryTelemetrySafe,
+} from "./telemetry";
 
 export const exchangeDiscoveryToken = functions.https.onCall(async (request) => {
+  const startedAt = Date.now();
+  const db = admin.firestore();
   if (request.app == undefined) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -19,11 +26,17 @@ export const exchangeDiscoveryToken = functions.https.onCall(async (request) => 
   try {
     payload = parseCapabilityExchangeRequestV1(request.data);
   } catch (error: unknown) {
+    await recordDiscoveryTelemetrySafe(db, {
+      eventType: "payload.invalid", source: "exchangeDiscoveryToken",
+      component: "discovery.capability", outcome: "REJECTED",
+      reasonCode: normalizeTelemetryReasonCodeV1(error), durationMs: Date.now() - startedAt,
+      correlationKey: `exchange:${startedAt}`, requestKey: `exchange:${startedAt}:invalid`,
+      measurements: { requests: 1, rejections: 1 },
+    });
     throw toDiscoveryPayloadHttpsError(error) ?? error;
   }
   const { linkId, oneTimeToken } = payload;
 
-  const db = admin.firestore();
   const sessionAccessToken = generateOpaqueToken();
   const sessionTokenHash = generateTokenHash(sessionAccessToken);
   let linkData: admin.firestore.DocumentData;
@@ -31,8 +44,25 @@ export const exchangeDiscoveryToken = functions.https.onCall(async (request) => 
     ({ linkData } = await new FirestoreDiscoveryCapabilityRepository(db)
       .exchangeLegacyLink({ linkId, exchangeToken: oneTimeToken, sessionTokenHash }));
   } catch (error: unknown) {
+    await recordDiscoveryTelemetrySafe(db, {
+      eventType: "capability.rejected", source: "exchangeDiscoveryToken",
+      component: "discovery.capability", outcome: "REJECTED",
+      reasonCode: normalizeTelemetryReasonCodeV1(error), durationMs: Date.now() - startedAt,
+      correlationKey: linkId, requestKey: `${linkId}:exchange`,
+      subject: deriveTelemetryDerivedSubjectV1(generateTokenHash(oneTimeToken)),
+      measurements: { requests: 1, rejections: 1 },
+    });
     throw toDiscoveryCapabilityHttpsError(error);
   }
+
+  await recordDiscoveryTelemetrySafe(db, {
+    eventType: "capability.accepted", source: "exchangeDiscoveryToken",
+    component: "discovery.capability", outcome: "ACCEPTED",
+    reasonCode: "EXCHANGE_ACCEPTED", durationMs: Date.now() - startedAt,
+    correlationKey: linkId, requestKey: `${linkId}:exchange`,
+    subject: deriveTelemetryDerivedSubjectV1(generateTokenHash(oneTimeToken)),
+    measurements: { requests: 1 },
+  });
 
   return {
     sessionAccessToken,

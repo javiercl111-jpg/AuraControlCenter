@@ -2,10 +2,16 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { GoogleAuth } from "google-auth-library";
 import { projectPlatformInbox, NotificationProjectionInput } from "./projectPlatformInbox";
 import { createHash } from "crypto";
+import * as admin from "firebase-admin";
 import {
   DISCOVERY_COST_BOUND_POLICY_V1,
   payloadBytes,
 } from "../discovery/payloadBounds";
+import {
+  deriveTelemetryDerivedSubjectV1,
+  normalizeTelemetryReasonCodeV1,
+  recordDiscoveryTelemetrySafe,
+} from "../discovery/telemetry";
 
 export interface MaintenanceDeliveryResult {
   status?: string;
@@ -20,7 +26,7 @@ export function extractMaintenanceDeliveryResult(responseData: unknown): Mainten
     try {
       parsed = JSON.parse(responseData);
     } catch {
-      console.warn("MAINTENANCE_RESPONSE_INVALID_JSON", { responseData });
+      console.warn("MAINTENANCE_RESPONSE_INVALID_JSON", { responseType: "string" });
       return { inboxCreated: 0, idempotentReplay: false };
     }
   }
@@ -75,14 +81,35 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
     maxDoublings: 2
   }
 }, async (request) => {
+  const startedAt = Date.now();
+  const db = admin.firestore();
   const payload = request.data;
+  const telemetryKey = payload && typeof payload === "object" &&
+    typeof payload.idempotencyKey === "string"
+    ? payload.idempotencyKey : `notification:${startedAt}`;
+  const telemetrySubject = payload && typeof payload === "object" &&
+    typeof payload.discoverySessionId === "string"
+    ? deriveTelemetryDerivedSubjectV1(payload.discoverySessionId) : undefined;
+  const skipped = async (reasonCode: string) => recordDiscoveryTelemetrySafe(db, {
+    eventType: "notification.skipped", source: "emitDiscoveryCompletedNotification",
+    component: "discovery.notification", outcome: "SKIPPED", reasonCode,
+    durationMs: Date.now() - startedAt, correlationKey: telemetryKey,
+    requestKey: `${telemetryKey}:notification:${request.retryCount}`,
+    ...(telemetrySubject ? { subject: telemetrySubject } : {}),
+    measurements: {
+      rejections: 1,
+      ...(request.retryCount > 0 ? { retries: 1 } : {}),
+    },
+  });
 
   if (!payload || typeof payload !== 'object') {
-    console.error("Invalid payload structure", payload);
+    console.error("Invalid notification payload structure");
+    await skipped("NOTIFICATION_PAYLOAD_INVALID");
     return; // Non-retryable
   }
   if (payloadBytes(payload) > DISCOVERY_COST_BOUND_POLICY_V1.notificationPayloadMaxBytes) {
     console.error("Payload exceeds notification budget");
+    await skipped("NOTIFICATION_PAYLOAD_TOO_LARGE");
     return;
   }
 
@@ -92,6 +119,7 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
   const unknownKeys = payloadKeys.filter(k => !allowedKeys.includes(k));
   if (unknownKeys.length > 0) {
     console.error("Payload contains unknown keys:", unknownKeys);
+    await skipped("NOTIFICATION_UNKNOWN_FIELDS");
     return;
   }
 
@@ -107,17 +135,20 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
     (typeof payload.companyName === 'string' && Buffer.byteLength(payload.companyName, 'utf8') > 160) ||
     (typeof payload.prospectName === 'string' && Buffer.byteLength(payload.prospectName, 'utf8') > 160)
   ) {
-    console.error("Payload validation failed: type or max length exceeded", payload);
+    console.error("Notification payload validation failed");
+    await skipped("NOTIFICATION_PAYLOAD_INVALID");
     return;
   }
 
   if (payload.idempotencyKey !== `discovery.completed:${payload.discoverySessionId}`) {
     console.error("Payload validation failed: idempotencyKey does not match the expected format or session ID");
+    await skipped("NOTIFICATION_IDEMPOTENCY_MISMATCH");
     return;
   }
 
   if (payload.tenantId !== 'aura_root') {
-    console.error("Unauthorized tenantId:", payload.tenantId);
+    console.error("Unauthorized notification tenant");
+    await skipped("NOTIFICATION_TENANT_DENIED");
     return;
   }
 
@@ -216,16 +247,34 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
         }
       };
       await projectPlatformInbox(projectionInput);
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "notification.emitted", source: "emitDiscoveryCompletedNotification",
+        component: "discovery.notification", outcome: "EMITTED",
+        reasonCode: deliveryResult.idempotentReplay
+          ? "NOTIFICATION_IDEMPOTENT_REPLAY" : "NOTIFICATION_EMITTED",
+        durationMs: Date.now() - startedAt, correlationKey: telemetryKey,
+        requestKey: `${telemetryKey}:notification:${request.retryCount}`,
+        ...(telemetrySubject ? { subject: telemetrySubject } : {}),
+        measurements: {
+          notifications: deliveryResult.idempotentReplay ? 0 : 1,
+          ...(deliveryResult.idempotentReplay ? { replays: 1 } : {}),
+          ...(request.retryCount > 0 ? { retries: 1 } : {}),
+        },
+      });
     } else {
       console.log("PROJECTION_SKIPPED_NO_CANONICAL_DELIVERY", {
         status: deliveryResult.status,
         inboxCreated: deliveryResult.inboxCreated,
         idempotentReplay: deliveryResult.idempotentReplay
       });
+      await skipped("NOTIFICATION_NO_CANONICAL_DELIVERY");
     }
 
   } catch (error: any) {
-    console.error("Error emitting discovery completed notification", error);
+    console.error("Error emitting discovery completed notification", {
+      reasonCode: normalizeTelemetryReasonCodeV1(error),
+    });
+    await skipped(normalizeTelemetryReasonCodeV1(error));
     // If it's an abort error (timeout) or 5xx, we throw to trigger Cloud Tasks retry mechanism
     if (error.name === 'AbortError' || (error.response && error.response.status >= 500)) {
       throw error;
