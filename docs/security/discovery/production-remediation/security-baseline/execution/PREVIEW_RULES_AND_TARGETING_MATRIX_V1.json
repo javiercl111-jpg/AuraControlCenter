@@ -1,0 +1,190 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "AI-02H1E.5.R2B",
+  "changeId": "AI-02H1E.5.R2B-PREVIEW-RULES-20260804-01",
+  "verdict": "CONDITIONAL — PREVIEW MIGRATION GAPS REMAIN",
+  "target": {
+    "environment": "preview",
+    "projectId": "aura-intel-preview",
+    "release": "projects/aura-intel-preview/releases/cloud.firestore",
+    "ruleset": "projects/aura-intel-preview/rulesets/40dd0474-660b-43b6-b145-c85d765dec26",
+    "releaseUpdateTime": "2026-08-04T22:20:18.102177Z",
+    "rulesSha256": "c933a1b80b8cc562aaf25021e6459b679c4eea368a172f285f16070352736145",
+    "artifactSha256": "183b495df7d7301a13c1f960d77f0af83948d3770d69f8aa8cc2de47bfa6c6b4"
+  },
+  "aliases": [
+    {
+      "alias": "preview",
+      "projectId": "aura-intel-preview",
+      "status": "DEPLOYED_RULES_ONLY"
+    },
+    {
+      "alias": "staging",
+      "projectId": "aura-intel-staging",
+      "status": "UNCHANGED"
+    },
+    {
+      "alias": "production",
+      "projectId": "aura-control-center-debb3",
+      "status": "REMEDIATION_HOLD"
+    }
+  ],
+  "migrationMatrix": [
+    {
+      "collection": "platform_global_admins",
+      "currentClientWriter": "none found; legacy client reads UID and email-keyed documents",
+      "requiredBackendPath": "canonical UID authority document managed only through audited Admin SDK operations",
+      "previewImpact": "UID-addressed active admin self-read works; email-keyed fallback is denied",
+      "migrationStatus": "PARTIAL",
+      "deployRisk": "LOW_FOR_EMPTY_PREVIEW; BLOCKS_LEGACY_LOGIN_FALLBACK"
+    },
+    {
+      "collection": "platform_tenants",
+      "currentClientWriter": "platformTenantService, provisioningService, subscriptionLifecycleService",
+      "requiredBackendPath": "versioned Authority application service and audited tenant mutation callable",
+      "previewImpact": "all client mutations denied; global active-admin reads remain available",
+      "migrationStatus": "MISSING_PRODUCTION_COMPOSITION",
+      "deployRisk": "LOW_FOR_EMPTY_PREVIEW; BLOCKS_TRAFFIC_ENABLEMENT"
+    },
+    {
+      "collection": "public_rate_limit_counters_v1",
+      "currentClientWriter": "none",
+      "requiredBackendPath": "FirestoreRateLimitRepository through server handlers",
+      "previewImpact": "no direct client access",
+      "migrationStatus": "BACKEND_PATH_EXISTS",
+      "deployRisk": "LOW"
+    },
+    {
+      "collection": "discovery_intake_idempotency and discovery_intake_idempotency_namespaces_v1",
+      "currentClientWriter": "none",
+      "requiredBackendPath": "FirestoreDiscoveryIntakeIdempotencyRepository through createDiscoveryLead",
+      "previewImpact": "no direct client access",
+      "migrationStatus": "BACKEND_PATH_EXISTS",
+      "deployRisk": "LOW"
+    },
+    {
+      "collection": "discovery_capabilities_v1, discovery_completions_v1, discovery_completion_outbox_v1",
+      "currentClientWriter": "none",
+      "requiredBackendPath": "server capability and exactly-once completion composition",
+      "previewImpact": "all direct client reads and mutations denied",
+      "migrationStatus": "BACKEND_PATH_EXISTS",
+      "deployRisk": "LOW"
+    },
+    {
+      "collection": "discovery_abuse_telemetry_v1, discovery_abuse_metrics_v1, discovery_containment_*",
+      "currentClientWriter": "none",
+      "requiredBackendPath": "structured telemetry and containment repositories",
+      "previewImpact": "all direct client access denied",
+      "migrationStatus": "BACKEND_PATH_EXISTS",
+      "deployRisk": "LOW"
+    },
+    {
+      "collection": "discovery_sessions",
+      "currentClientWriter": "discoverySessionService.updateDiscoverySessionStatus",
+      "requiredBackendPath": "validated callable for the specific allowed state transition",
+      "previewImpact": "admin read works; direct status mutation is denied",
+      "migrationStatus": "PARTIAL",
+      "deployRisk": "LOW_FOR_EMPTY_PREVIEW; BLOCKS_SESSION_ADMIN_FLOW"
+    },
+    {
+      "collection": "market_discovery_links and discovery_reports",
+      "currentClientWriter": "none found for server-owned creation paths",
+      "requiredBackendPath": "existing Discovery callable and report service paths",
+      "previewImpact": "active-admin read only; client mutation denied",
+      "migrationStatus": "BACKEND_PATH_EXISTS",
+      "deployRisk": "LOW"
+    },
+    {
+      "collection": "platform_sales_advisors",
+      "currentClientWriter": "platformSalesAdvisorService.createSalesAdvisor; legacy public Firestore lookup",
+      "requiredBackendPath": "create/provision advisor callables and resolveAdvisorByCode callable",
+      "previewImpact": "active-admin read only; public Firestore lookup and direct creation denied",
+      "migrationStatus": "PARTIAL_NOT_DEPLOYED_TO_PREVIEW",
+      "deployRisk": "LOW_FOR_EMPTY_PREVIEW; BLOCKS_ADVISOR_FLOWS"
+    },
+    {
+      "collection": "platform_clients, platform_subscriptions, platform_licenses, platform_provisioning_jobs, platform_quotes, platform_commissions",
+      "currentClientWriter": "multiple legacy services including provisioning, subscription lifecycle, quote, client, and commission services",
+      "requiredBackendPath": "audited transactional backend application services",
+      "previewImpact": "active-admin read only; all direct mutations denied",
+      "migrationStatus": "MISSING",
+      "deployRisk": "LOW_FOR_EMPTY_PREVIEW; BLOCKS_COMMERCIAL_OPERATIONS"
+    },
+    {
+      "collection": "market_companies, market metadata, market import jobs, platform_organizations, platform_discovery_requests",
+      "currentClientWriter": "marketFirestoreService, backendImportService, MarketIntelligencePage, consultingOrganizationService",
+      "requiredBackendPath": "validated import, organization, conversion, and discovery-request backend services",
+      "previewImpact": "active-admin read only; direct imports and mutations denied",
+      "migrationStatus": "MISSING_OR_PARTIAL",
+      "deployRisk": "LOW_FOR_EMPTY_PREVIEW; BLOCKS_MARKET_OPERATIONS"
+    },
+    {
+      "collection": "platform_inbox",
+      "currentClientWriter": "none; client reads only",
+      "requiredBackendPath": "backend notification projection",
+      "previewImpact": "authenticated subject may read only its own inbox; client writes denied",
+      "migrationStatus": "BACKEND_PATH_EXISTS",
+      "deployRisk": "LOW"
+    },
+    {
+      "collection": "unknown collections",
+      "currentClientWriter": "not applicable",
+      "requiredBackendPath": "explicitly reviewed Rules and backend contract before use",
+      "previewImpact": "all access denied",
+      "migrationStatus": "DENY_BY_DEFAULT",
+      "deployRisk": "LOW"
+    }
+  ],
+  "validation": {
+    "predeploy": {
+      "previewRulesEmulator": "14/14 PASS",
+      "targetingGuard": "15/15 PASS",
+      "p8Matrix": "33/33 PASS",
+      "p2RateLimits": "17/17 PASS",
+      "p3Idempotency": "24/24 PASS",
+      "p4Capabilities": "29/29 PASS",
+      "p5PayloadBounds": "34/34 PASS",
+      "p6Telemetry": "25/25 PASS",
+      "p7Containment": "36/36 PASS",
+      "authorityD9": "40/40 PASS",
+      "darkHandlerD8": "81/81 PASS",
+      "functionsBuild": "PASS",
+      "rootBuild": "PASS",
+      "gitDiffCheck": "PASS"
+    },
+    "postdeploy": {
+      "previewRulesEmulator": "14/14 PASS",
+      "targetingGuard": "15/15 PASS",
+      "adminSdkPositivePath": "PASS",
+      "p8Matrix": "33/33 PASS",
+      "p2RateLimits": "17/17 PASS",
+      "p3Idempotency": "24/24 PASS",
+      "p4Capabilities": "29/29 PASS",
+      "p5PayloadBounds": "34/34 PASS",
+      "p6Telemetry": "25/25 PASS",
+      "p7Containment": "36/36 PASS",
+      "authorityD9": "40/40 PASS",
+      "darkHandlerD8": "81/81 PASS"
+    }
+  },
+  "rollback": {
+    "status": "NOT_EXECUTED_NO_FAILURE",
+    "previousRuleset": null,
+    "previousFailClosedRulesetAvailable": false,
+    "safeAction": "stop and redeploy only the current verified fail-closed artifact under a new guard authorization",
+    "permissiveRollbackForbidden": true
+  },
+  "scope": {
+    "previewRulesChanged": true,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "functionsDeployed": false,
+    "indexesChanged": false,
+    "ttlChanged": false,
+    "iamChanged": false,
+    "secretsChanged": false,
+    "appCheckChanged": false,
+    "storageChanged": false,
+    "tasksChanged": false
+  }
+}
