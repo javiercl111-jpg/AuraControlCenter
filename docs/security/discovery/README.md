@@ -62,3 +62,13 @@ Cambios de superficie, provider, capability, clasificación, retención, cuota, 
 - [Environment Promotion Model v1](production-remediation/environment/ENVIRONMENT_PROMOTION_MODEL_V1.md) — branches, Preview, Staging, promoción, targeting y rollback.
 - [Environment External Decisions v1](production-remediation/environment/ENVIRONMENT_EXTERNAL_DECISIONS_V1.md) — aprobaciones externas que bloquean provisioning y R1B.
 - [Environment Migration Strategy v1](production-remediation/environment/ENVIRONMENT_MIGRATION_STRATEGY_V1.md) — preserve, migrate, recreate, deprecate y delete-later sin ejecutar cambios.
+
+### R1B — Environment Resource Provisioning Design
+
+- [Environment Provisioning Plan v1](production-remediation/environment/provisioning/ENVIRONMENT_PROVISIONING_PLAN_V1.md) — proyectos, APIs, Firebase, datos, plataformas, observabilidad y secuencia futura.
+- [Environment Resource Naming v1](production-remediation/environment/provisioning/ENVIRONMENT_RESOURCE_NAMING_V1.md) — nombres exactos propuestos por ambiente y recurso.
+- [Environment IAM and Identity Plan v1](production-remediation/environment/provisioning/ENVIRONMENT_IAM_AND_IDENTITY_PLAN_V1.md) — service accounts, bindings, WIF, key policy y rollback.
+- [Environment Provisioning Command Catalog v1](production-remediation/environment/provisioning/ENVIRONMENT_PROVISIONING_COMMAND_CATALOG_V1.md) — comandos futuros read-only, writes, rollback y evidencia.
+- [Environment Provisioning Evidence Plan v1](production-remediation/environment/provisioning/ENVIRONMENT_PROVISIONING_EVIDENCE_PLAN_V1.md) — read-back, sanitización y ejercicios de rollback.
+- [Environment Provisioning Approval Packet v1](production-remediation/environment/provisioning/ENVIRONMENT_PROVISIONING_APPROVAL_PACKET_V1.md) — costos, riesgos y sign-offs externos.
+- [Environment Provisioning Matrix v1](production-remediation/environment/provisioning/ENVIRONMENT_PROVISIONING_MATRIX_V1.json) — decisiones, APIs, identidades, recursos, pasos y stop conditions en formato validable.
