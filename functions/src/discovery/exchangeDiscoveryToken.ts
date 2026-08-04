@@ -4,6 +4,8 @@ import { generateOpaqueToken, generateTokenHash } from "./discoverySecurityServi
 import { FirestoreDiscoveryCapabilityRepository } from
   "../infrastructure/firestore/discoveryCapabilities";
 import { toDiscoveryCapabilityHttpsError } from "./discoveryCapabilityHandlerSupport";
+import { parseCapabilityExchangeRequestV1 } from "./payloadBounds";
+import { toDiscoveryPayloadHttpsError } from "./discoveryPayloadHandlerSupport";
 
 export const exchangeDiscoveryToken = functions.https.onCall(async (request) => {
   if (request.app == undefined) {
@@ -13,17 +15,13 @@ export const exchangeDiscoveryToken = functions.https.onCall(async (request) => 
     );
   }
 
-  const { linkId, oneTimeToken } = request.data;
-
-  if (
-    typeof linkId !== "string" ||
-    linkId.length > 128 ||
-    linkId.includes("/") ||
-    typeof oneTimeToken !== "string" ||
-    !/^[a-f0-9]{64}$/i.test(oneTimeToken)
-  ) {
-    throw new functions.https.HttpsError("invalid-argument", "Invalid linkId or oneTimeToken.");
+  let payload;
+  try {
+    payload = parseCapabilityExchangeRequestV1(request.data);
+  } catch (error: unknown) {
+    throw toDiscoveryPayloadHttpsError(error) ?? error;
   }
+  const { linkId, oneTimeToken } = payload;
 
   const db = admin.firestore();
   const sessionAccessToken = generateOpaqueToken();

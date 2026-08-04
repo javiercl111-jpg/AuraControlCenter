@@ -248,14 +248,19 @@ export class ConversationOrchestrator {
     }
 
     const request: ConversationDraftRequest = {
+      schemaVersion: "DISCOVERY_CONVERSATION_EVALUATION_V1",
+      sessionToken: input.sessionToken ?? "0".repeat(64),
       engineInput: {
         companyName: input.engineInput.companyName,
         industry: input.engineInput.industry,
         currentResponse: input.engineInput.currentResponse,
-        conversationHistory: input.engineInput.conversationHistory.slice(-8),
-        partialDossier:
+        conversationHistory: input.engineInput.conversationHistory
+          .slice(-8)
+          .map(({ role, content }) => ({ role, content })),
+        partialDossier: this.projectDossier(
           heuristicOutput.conversationOutput?.updatedDossier ??
           input.engineInput.partialDossier,
+        ),
         confidenceLevel:
           heuristicOutput.conversationOutput?.updatedConfidence ??
           input.engineInput.confidenceLevel,
@@ -325,6 +330,15 @@ export class ConversationOrchestrator {
         : "LLM_NEXT_QUESTION",
       llmFallbackCode: validation.fallbackCode,
     };
+  }
+
+  private projectDossier(value: Record<string, unknown>): Record<string, string | number | boolean> {
+    const allowed = ["industry", "employees", "schedulingMethod", "payrollIncidents", "priority"];
+    return Object.fromEntries(
+      allowed
+        .filter((key) => ["string", "number", "boolean"].includes(typeof value[key]))
+        .map((key) => [key, value[key] as string | number | boolean]),
+    );
   }
 
   private validateConversationDraft(

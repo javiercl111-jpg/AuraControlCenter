@@ -19,6 +19,8 @@ import {
 import {
   FirestoreDiscoveryIntakeIdempotencyRepository,
 } from "../infrastructure/firestore/discoveryIntakeIdempotency";
+import { parsePublicDiscoveryIntakeV1 } from "./payloadBounds";
+import { toDiscoveryPayloadHttpsError } from "./discoveryPayloadHandlerSupport";
 
 const idempotencySecret = defineSecret("IDEMPOTENCY_SECRET");
 
@@ -54,87 +56,27 @@ export const createDiscoveryLead = onCall(
         throw new HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
       }
 
-      const payload = request.data;
-      if (!payload) {
-        throw new HttpsError("invalid-argument", "INVALID_INPUT");
-      }
-      if (JSON.stringify(payload).length > 5000) {
-        throw new HttpsError("out-of-range", "Payload too large.");
-      }
-
-      // 1. Extract & Sanitize
-      const companyName = (payload.companyName || "").substring(0, 100).trim();
-      const contactName = (payload.contactName || "").substring(0, 100).trim();
-      const email = (payload.email || "").toLowerCase().trim();
-      const phone = (payload.phone || "").substring(0, 20).trim();
-      const jobTitle = (payload.jobTitle || payload.role || "").substring(0, 50).trim();
-      const state = (payload.state || payload.location || "").substring(0, 50).trim();
-      const city = (payload.city || "").substring(0, 50).trim();
-      const employeeRange = (payload.employeeRange || "").substring(0, 50).trim();
-      const commercialCode = (payload.commercialCode || "").substring(0, 20).toUpperCase().trim();
-      const idempotencyKey = typeof payload.idempotencyKey === "string" ? payload.idempotencyKey.trim() : "";
-
-      let origin = payload.origin === "WEBSITE" ? "WEBSITE" : "ADVISOR_SHARE";
-      if (payload.origin === "AURA_NEXUS" || payload.origin === "WEBSITE") {
-          origin = payload.origin;
-      }
-      const acquisitionSource = payload.acquisitionSource === "AURA_NEXUS" ? "AURA_NEXUS" : "DIRECT";
-
-      // 2. Validate Consents
-      let privacyConsent = false;
-      let diagnosticDeliveryConsent = false;
-      let followUpConsent = false;
-      let marketingConsent = false;
-      const policyVersion = payload.policyVersion || "legacy-v1";
-
-      if (typeof payload.consent === "boolean" && payload.consent) {
-        privacyConsent = true;
-        diagnosticDeliveryConsent = true;
-        followUpConsent = false;
-        marketingConsent = false;
-      } else {
-        privacyConsent = payload.privacyConsent === true;
-        diagnosticDeliveryConsent = payload.diagnosticDeliveryConsent === true;
-        followUpConsent = payload.followUpConsent === true;
-        marketingConsent = payload.marketingConsent === true;
+      let payload;
+      try {
+        payload = parsePublicDiscoveryIntakeV1(request.data);
+      } catch (error: unknown) {
+        throw toDiscoveryPayloadHttpsError(error) ?? error;
       }
 
-      if (!companyName || !contactName || !email) {
-        throw new HttpsError("invalid-argument", "INVALID_INPUT");
-      }
-
-      if (!privacyConsent || !diagnosticDeliveryConsent) {
-        throw new HttpsError("invalid-argument", "INVALID_INPUT");
-      }
-
-      if (!/^[A-Za-z0-9._:-]{16,100}$/.test(idempotencyKey)) {
-        throw new HttpsError("invalid-argument", "INVALID_INPUT");
-      }
+      const {
+        companyName, contactName, email, phone, jobTitle, state, city,
+        employeeRange, commercialCode, idempotencyKey, acquisitionSource,
+        privacyConsent, diagnosticDeliveryConsent, followUpConsent,
+        marketingConsent, policyVersion,
+      } = payload;
+      let origin = payload.origin;
 
       const idempotencyHash = generateIdempotencyHash(idempotencyKey, idempotencySecret.value());
       const namespaceHash = generateIdempotencyNamespaceHash(
         email,
         idempotencySecret.value(),
       );
-      const requestHash = generateRequestHash({
-        ...payload,
-        companyName,
-        contactName,
-        email,
-        phone,
-        jobTitle,
-        state,
-        city,
-        employeeRange,
-        commercialCode,
-        origin,
-        acquisitionSource,
-        privacyConsent,
-        diagnosticDeliveryConsent,
-        followUpConsent,
-        marketingConsent,
-        policyVersion,
-      });
+      const requestHash = generateRequestHash(payload);
 
       const db = admin.firestore();
       idempotencyRepository = new FirestoreDiscoveryIntakeIdempotencyRepository(
@@ -427,6 +369,8 @@ export const createDiscoveryLead = onCall(
       if (callerSafeIdempotencyError !== null) {
         throw callerSafeIdempotencyError;
       }
+      const callerSafePayloadError = toDiscoveryPayloadHttpsError(error);
+      if (callerSafePayloadError !== null) throw callerSafePayloadError;
       throw new HttpsError("internal", "INTERNAL");
     }
   }

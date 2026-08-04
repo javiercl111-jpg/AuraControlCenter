@@ -5,6 +5,28 @@ import { ReportViewModel, DiscoveryReportMetadata, ReportType, DeliveryLevel } f
 import { LifecycleEventType } from "../../prospects/types";
 import { buildDiscoveryReportViewModel } from "./DiscoveryReportViewModelBuilder";
 import { hashDiscoveryCapabilityToken } from "../capabilities";
+import {
+  DISCOVERY_COST_BOUND_POLICY_V1,
+  DiscoveryPayloadError,
+  payloadBytes,
+} from "../payloadBounds";
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let handle: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        handle = setTimeout(
+          () => reject(new DiscoveryPayloadError("REPORT_BUDGET_EXCEEDED")),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (handle !== undefined) clearTimeout(handle);
+  }
+}
 
 export class DiscoveryReportGenerationService {
   /**
@@ -31,6 +53,10 @@ export class DiscoveryReportGenerationService {
 
     const sessionData = sessionDoc.data()!;
     const dossier = sessionData.dossier || {};
+    const datasetBytes = payloadBytes(sessionData);
+    if (datasetBytes > DISCOVERY_COST_BOUND_POLICY_V1.reportDatasetMaxBytes) {
+      throw new DiscoveryPayloadError("REPORT_BUDGET_EXCEEDED");
+    }
 
     const deliveryLevel = "ALLOW_FULL" as DeliveryLevel; // In real app from DiscoverySecurityLayer
     if (deliveryLevel === "BLOCK_ABUSE") {
@@ -48,12 +74,14 @@ export class DiscoveryReportGenerationService {
 
       if (existingMetadata.exists) {
         const data = existingMetadata.data() as DiscoveryReportMetadata;
+        const generationAttemptCount = data.generationAttemptCount ?? 1;
+        const forceRegenerationCount = data.forceRegenerationCount ?? 0;
         
         if (data.status === "REVOKED") {
           throw new Error("DOCUMENT_REVOKED");
         }
 
-        if (data.status === "GENERATING" && !forceRegenerate) {
+        if (data.status === "GENERATING") {
           return {
             success: true,
             reportId,
@@ -70,7 +98,19 @@ export class DiscoveryReportGenerationService {
             metadata: data
           };
         }
+        if (
+          generationAttemptCount >=
+            DISCOVERY_COST_BOUND_POLICY_V1.reportMaxLogicalAttempts ||
+          (forceRegenerate && forceRegenerationCount >=
+            DISCOVERY_COST_BOUND_POLICY_V1.reportMaxForcedRegenerations)
+        ) {
+          throw new DiscoveryPayloadError("REPORT_BUDGET_EXCEEDED");
+        }
       }
+
+      const previous = existingMetadata.exists
+        ? existingMetadata.data() as DiscoveryReportMetadata
+        : undefined;
 
       // Pre-save metadata as GENERATING
       const metadata: DiscoveryReportMetadata = {
@@ -87,6 +127,10 @@ export class DiscoveryReportGenerationService {
         generatedAt: new Date().toISOString(),
         generatedBy: "SYSTEM",
         idempotencyKey: reportId,
+        generationAttemptCount: (previous?.generationAttemptCount ?? 0) + 1,
+        forceRegenerationCount:
+          (previous?.forceRegenerationCount ?? 0) + (forceRegenerate ? 1 : 0),
+        datasetBytes,
         createdAt: existingMetadata.exists ? existingMetadata.data()!.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -115,9 +159,12 @@ export class DiscoveryReportGenerationService {
           });
 
           if (reportType === "EXTERNAL_RADIOGRAFIA") {
-            pdfBuffer = await ReportPdfGenerator.generateExternalRadiografia(viewModel, branding);
+            pdfBuffer = await withTimeout(
+              ReportPdfGenerator.generateExternalRadiografia(viewModel, branding),
+              DISCOVERY_COST_BOUND_POLICY_V1.reportGenerationTimeoutMs,
+            );
           } else {
-            const internalPdfBuffer = await ReportPdfGenerator.generateInternalBriefing(
+            const internalPdfBuffer = await withTimeout(ReportPdfGenerator.generateInternalBriefing(
               {
                 ...viewModel,
                 prospectId,
@@ -127,8 +174,12 @@ export class DiscoveryReportGenerationService {
                 confidenceLevel: dossier.confidenceLevel || "N/A"
               },
               branding
-            );
+            ), DISCOVERY_COST_BOUND_POLICY_V1.reportGenerationTimeoutMs);
             pdfBuffer = internalPdfBuffer;
+          }
+
+          if (pdfBuffer.byteLength > DISCOVERY_COST_BOUND_POLICY_V1.reportPdfMaxBytes) {
+            throw new DiscoveryPayloadError("REPORT_BUDGET_EXCEEDED");
           }
 
           const bucket = storage.bucket();
@@ -142,6 +193,7 @@ export class DiscoveryReportGenerationService {
 
           await metadataRef.update({
             status: "READY",
+            pdfBytes: pdfBuffer.byteLength,
             readyAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
@@ -174,6 +226,7 @@ export class DiscoveryReportGenerationService {
             updatedAt: new Date().toISOString()
           });
           const message = error instanceof Error ? error.message : "Unknown error";
+          if (error instanceof DiscoveryPayloadError) throw error;
           throw new Error(`Failed to generate PDF: ${message}`, { cause: error });
         }
       }

@@ -33,11 +33,18 @@ export interface CreateDiscoveryLeadRequest {
   contactName: string;
   email: string;
   phone?: string;
-  role?: string;
-  location?: string;
-  consent: boolean;
-  origin?: string;
-  acquisitionSource?: string;
+  jobTitle?: string;
+  state?: string;
+  city?: string;
+  employeeRange?: string;
+  commercialCode?: string;
+  origin: "WEBSITE" | "ADVISOR_SHARE" | "AURA_NEXUS";
+  acquisitionSource: "DIRECT" | "AURA_NEXUS";
+  privacyConsent: boolean;
+  diagnosticDeliveryConsent: boolean;
+  followUpConsent: boolean;
+  marketingConsent: boolean;
+  policyVersion: string;
   idempotencyKey: string;
 }
 
@@ -93,19 +100,27 @@ export async function createDiscoveryLink(
   const createDiscoveryLeadFn = httpsCallable(functions, "createDiscoveryLead");
   
   const payload: Record<string, unknown> = {
+    schemaVersion: "PUBLIC_DISCOVERY_INTAKE_V1",
     companyName: data.companyName,
     contactName: data.contactName,
     email: data.email,
     phone: data.phone || "",
-    role: data.role || "",
-    location: data.location || "",
-    consent: data.consent,
+    jobTitle: data.jobTitle || "",
+    state: data.state || "",
+    city: data.city || "",
+    employeeRange: data.employeeRange || "",
+    commercialCode: data.commercialCode || "",
     origin: data.origin,
-    acquisitionSource: data.acquisitionSource || "DIRECT",
+    acquisitionSource: data.acquisitionSource,
+    privacyConsent: data.privacyConsent,
+    diagnosticDeliveryConsent: data.diagnosticDeliveryConsent,
+    followUpConsent: data.followUpConsent,
+    marketingConsent: data.marketingConsent,
+    policyVersion: data.policyVersion,
     idempotencyKey: data.idempotencyKey
   };
 
-  if (advisorContext) {
+  if (advisorContext && typeof advisorContext.commercialCode === "string") {
     payload.commercialCode = advisorContext.commercialCode;
   }
 
@@ -140,7 +155,11 @@ export function isExchangeDiscoveryTokenResponse(value: unknown): value is Excha
 
 export async function exchangeDiscoveryToken(linkId: string, oneTimeToken: string): Promise<ExchangeDiscoveryTokenResponse> {
   const exchangeFn = httpsCallable(functions, "exchangeDiscoveryToken");
-  const result = await exchangeFn({ linkId, oneTimeToken });
+  const result = await exchangeFn({
+    schemaVersion: "DISCOVERY_CAPABILITY_EXCHANGE_REQUEST_V1",
+    linkId,
+    oneTimeToken,
+  });
 
   if (!isExchangeDiscoveryTokenResponse(result.data)) {
     throw new Error("EXCHANGE_TOKEN_RESPONSE_INVALID");
@@ -162,6 +181,10 @@ export async function resolveDiscoverySession(
   sessionToken: string
 ): Promise<ResolveDiscoverySessionResponse> {
   const resolveFn = httpsCallable(functions, "resolveDiscoverySession");
-  const result = await resolveFn({ linkId, sessionToken });
+  const result = await resolveFn({
+    schemaVersion: "DISCOVERY_SESSION_RESOLUTION_REQUEST_V1",
+    linkId,
+    sessionToken,
+  });
   return result.data as ResolveDiscoverySessionResponse;
 }

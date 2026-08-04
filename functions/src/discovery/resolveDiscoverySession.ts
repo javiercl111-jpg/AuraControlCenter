@@ -3,23 +3,21 @@ import * as admin from "firebase-admin";
 import { FirestoreDiscoveryCapabilityRepository } from
   "../infrastructure/firestore/discoveryCapabilities";
 import { toDiscoveryCapabilityHttpsError } from "./discoveryCapabilityHandlerSupport";
+import { parseSessionResolutionRequestV1 } from "./payloadBounds";
+import { toDiscoveryPayloadHttpsError } from "./discoveryPayloadHandlerSupport";
 
 export const resolveDiscoverySession = functions.https.onCall(async (request) => {
   if (request.app == undefined) {
     throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
   }
 
-  const { linkId, sessionToken } = request.data;
-
-  if (
-    typeof linkId !== "string" ||
-    linkId.length > 128 ||
-    linkId.includes("/") ||
-    typeof sessionToken !== "string" ||
-    !/^[a-f0-9]{64}$/i.test(sessionToken)
-  ) {
-    throw new functions.https.HttpsError("invalid-argument", "Missing linkId or sessionToken.");
+  let payload;
+  try {
+    payload = parseSessionResolutionRequestV1(request.data);
+  } catch (error: unknown) {
+    throw toDiscoveryPayloadHttpsError(error) ?? error;
   }
+  const { linkId, sessionToken } = payload;
 
   const db = admin.firestore();
   let linkData: admin.firestore.DocumentData;

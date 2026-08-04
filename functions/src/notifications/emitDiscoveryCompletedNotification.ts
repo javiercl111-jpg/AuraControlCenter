@@ -2,6 +2,10 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { GoogleAuth } from "google-auth-library";
 import { projectPlatformInbox, NotificationProjectionInput } from "./projectPlatformInbox";
 import { createHash } from "crypto";
+import {
+  DISCOVERY_COST_BOUND_POLICY_V1,
+  payloadBytes,
+} from "../discovery/payloadBounds";
 
 export interface MaintenanceDeliveryResult {
   status?: string;
@@ -65,7 +69,7 @@ export function extractMaintenanceDeliveryResult(responseData: unknown): Mainten
 export const emitDiscoveryCompletedNotification = onTaskDispatched({
   serviceAccount: "aura-control-center-notifier@aura-control-center-debb3.iam.gserviceaccount.com",
   retryConfig: {
-    maxAttempts: 3,
+    maxAttempts: DISCOVERY_COST_BOUND_POLICY_V1.notificationMaxAttempts,
     minBackoffSeconds: 30,
     maxBackoffSeconds: 300,
     maxDoublings: 2
@@ -76,6 +80,10 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
   if (!payload || typeof payload !== 'object') {
     console.error("Invalid payload structure", payload);
     return; // Non-retryable
+  }
+  if (payloadBytes(payload) > DISCOVERY_COST_BOUND_POLICY_V1.notificationPayloadMaxBytes) {
+    console.error("Payload exceeds notification budget");
+    return;
   }
 
   // Strict allowlist of fields to prevent unknown or sensitive data from leaking
@@ -93,7 +101,11 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
     typeof payload.advisorUid !== 'string' || payload.advisorUid.length > 128 ||
     typeof payload.tenantId !== 'string' || payload.tenantId.length > 64 ||
     typeof payload.correlationId !== 'string' || payload.correlationId.length > 128 ||
-    typeof payload.idempotencyKey !== 'string' || payload.idempotencyKey.length > 256
+    typeof payload.idempotencyKey !== 'string' || payload.idempotencyKey.length > 256 ||
+    (payload.companyName !== undefined && typeof payload.companyName !== 'string') ||
+    (payload.prospectName !== undefined && typeof payload.prospectName !== 'string') ||
+    (typeof payload.companyName === 'string' && Buffer.byteLength(payload.companyName, 'utf8') > 160) ||
+    (typeof payload.prospectName === 'string' && Buffer.byteLength(payload.prospectName, 'utf8') > 160)
   ) {
     console.error("Payload validation failed: type or max length exceeded", payload);
     return;
@@ -131,7 +143,7 @@ export const emitDiscoveryCompletedNotification = onTaskDispatched({
           userDomain: "PLATFORM"
         }
       ],
-      channels: ["INBOX", "PUSH"],
+      channels: [...DISCOVERY_COST_BOUND_POLICY_V1.notificationChannels],
       title: "Discovery completado",
       body: `El expediente de ${payload.companyName || 'la empresa'} ha sido generado y está listo para revisión.`,
       templateId: "control_center.discovery.completed.v1",

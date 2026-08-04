@@ -24,24 +24,12 @@ interface SessionLinkInfo {
   contactName: string;
 }
 
-interface GenerateDiscoveryReportRequest {
-  sessionId: string;
-  prospectId: string;
-  linkId: string;
-  sessionToken: string;
-  isInternalOnly?: boolean;
-}
-
-interface GenerateDiscoveryReportResponse {
-  success: boolean;
-  reportId: string;
-  message: string;
-}
-
 interface RequestExecutiveDocumentRequest {
+  schemaVersion: "DISCOVERY_DOCUMENT_DOWNLOAD_V1";
   reportId: string;
   linkId: string;
-  sessionToken: string;
+  reportCapabilityToken: string;
+  forceRegenerate: boolean;
 }
 
 interface RequestExecutiveDocumentResponse {
@@ -63,6 +51,8 @@ type DiscoveryErrorType =
   | "TOKEN_INVALID"
   | "APP_CHECK_REQUIRED"
   | "APP_CHECK_THROTTLED"
+  | "PAYLOAD_REJECTED"
+  | "COST_BUDGET_EXCEEDED"
   | "NETWORK_ERROR"
   | "UNKNOWN";
 
@@ -74,6 +64,17 @@ function mapDiscoveryError(err: unknown): DiscoveryErrorType {
   const details = errorObj.details as Record<string, unknown> | undefined;
   const safeCode = details && typeof details.safeErrorCode === "string" ? details.safeErrorCode : "";
   const messageStr = typeof errorObj.message === "string" ? errorObj.message : "";
+  const normalizedCode = safeCode || messageStr;
+
+  if ([
+    "PAYLOAD_INVALID", "PAYLOAD_TOO_LARGE", "PAYLOAD_TOO_DEEP",
+    "TOO_MANY_FIELDS", "TOO_MANY_ITEMS", "STRING_TOO_LONG",
+    "UNKNOWN_FIELD", "SERVER_OWNED_FIELD",
+  ].some((code) => normalizedCode.includes(code))) return "PAYLOAD_REJECTED";
+  if ([
+    "CONVERSATION_BUDGET_EXCEEDED", "REPORT_BUDGET_EXCEEDED",
+    "DOWNLOAD_LIMIT_EXCEEDED", "COST_BOUND_CONFIGURATION_ERROR",
+  ].some((code) => normalizedCode.includes(code))) return "COST_BUDGET_EXCEEDED";
 
   // SESSION_STARTING
   if (
@@ -87,7 +88,6 @@ function mapDiscoveryError(err: unknown): DiscoveryErrorType {
 
   // APP_CHECK_THROTTLED
   if (
-    fbCode === "functions/resource-exhausted" ||
     messageStr.includes("throttled") ||
     (messageStr.includes("403") && messageStr.includes("AppCheck"))
   ) {
@@ -170,7 +170,7 @@ export default function DiscoverPage() {
   const [location, setLocation] = useState("");
   const [consent, setConsent] = useState(false);
   const [creatingLink, setCreatingLink] = useState(false);
-  const [acquisitionSource, setAcquisitionSource] = useState("DIRECT");
+  const [acquisitionSource, setAcquisitionSource] = useState<"DIRECT" | "AURA_NEXUS">("DIRECT");
   const [manualAdvisorCode, setManualAdvisorCode] = useState("");
   const preformAttemptRef = useRef<{ signature: string; idempotencyKey: string } | null>(null);
 
@@ -346,21 +346,34 @@ export default function DiscoverPage() {
       }
 
       const newLink = await createDiscoveryLink({
-        companyName,
-        contactName,
-        email,
-        phone,
-        role,
-        location,
-        consent,
+        companyName: companyName.trim(),
+        contactName: contactName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        jobTitle: role.trim(),
+        state: location.trim(),
+        city: "",
+        employeeRange: "",
+        commercialCode: manualAdvisorCode.trim(),
+        origin: finalAdvisorContext ? "ADVISOR_SHARE" : "WEBSITE",
         acquisitionSource,
+        privacyConsent: consent,
+        diagnosticDeliveryConsent: consent,
+        followUpConsent: false,
+        marketingConsent: false,
+        policyVersion: "DISCOVERY_PRIVACY_V1",
         idempotencyKey: preformAttemptRef.current.idempotencyKey,
       }, finalAdvisorContext || undefined);
 
       navigate(getDiscoveryNavigationTarget(newLink), { replace: true });
     } catch (err) {
       console.error(err);
-      alert("Error al iniciar sesión de descubrimiento.");
+      const mapped = mapDiscoveryError(err);
+      alert(mapped === "PAYLOAD_REJECTED"
+        ? "Revisa los campos: alguno supera los límites permitidos o no es válido."
+        : mapped === "COST_BUDGET_EXCEEDED"
+          ? "Se alcanzó un límite temporal. Intenta nuevamente más tarde."
+          : "Error al iniciar sesión de descubrimiento.");
       setCreatingLink(false);
     }
   }
@@ -446,6 +459,7 @@ export default function DiscoverPage() {
 
       // Build Orchestrator Input
       const input = {
+        sessionToken: sessionStorage.getItem(`discovery_session_token_${linkInfo.linkId}`) ?? undefined,
         engineInput,
         conversationStateSnapshot: stateRef.current.getSnapshot(),
         reflectionState: reflectionStateRef.current,
@@ -531,6 +545,7 @@ export default function DiscoverPage() {
   // State for report generation
   const [reportStatus, setReportStatus] = useState<"IDLE" | "GENERATING" | "READY" | "REVOKED" | "ERROR">("IDLE");
   const [generatedReportId, setGeneratedReportId] = useState<string | null>(null);
+  const [reportCapabilityToken, setReportCapabilityToken] = useState<string | null>(null);
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [downloadError, setDownloadError] = useState("");
 
@@ -553,7 +568,7 @@ export default function DiscoverPage() {
         return;
       }
 
-      const { sessionId, prospectId } = await DossierBuilderService.saveDiscoverySession(
+      const completion = await DossierBuilderService.saveDiscoverySession(
         linkInfo.linkId,
         linkInfo.companyName,
         linkInfo.contactName,
@@ -563,26 +578,13 @@ export default function DiscoverPage() {
         sessionToken
       );
 
-      // Request PDF Generation
-      try {
-        const generateReportFn = httpsCallable<GenerateDiscoveryReportRequest, GenerateDiscoveryReportResponse>(
-          functions,
-          "generateDiscoveryReport"
-        );
-        const res = await generateReportFn({
-          sessionId,
-          prospectId: prospectId || "UNKNOWN",
-          linkId: linkInfo.linkId,
-          sessionToken,
-          isInternalOnly: false
-        });
-        console.log("Report generated:", res.data.reportId);
-        setGeneratedReportId(res.data.reportId);
-        setReportStatus("READY");
-      } catch (pdfErr) {
-        console.error("Error generating PDF:", pdfErr);
-        setReportStatus("ERROR");
-      }
+      setGeneratedReportId(completion.reportId);
+      setReportCapabilityToken(completion.reportCapabilityToken);
+      sessionStorage.setItem(
+        `discovery_report_capability_${completion.reportId}`,
+        completion.reportCapabilityToken,
+      );
+      setReportStatus("GENERATING");
 
       setTimeout(() => {
         setScreen("completed");
@@ -599,8 +601,9 @@ export default function DiscoverPage() {
 
   async function handleDownloadReport() {
     if (!generatedReportId || !linkInfo) return;
-    const sessionToken = sessionStorage.getItem(`discovery_session_token_${linkInfo.linkId}`);
-    if (!sessionToken) {
+    const capabilityToken = reportCapabilityToken ??
+      sessionStorage.getItem(`discovery_report_capability_${generatedReportId}`);
+    if (!capabilityToken) {
       setDownloadError("Sesión expirada. Por favor recargue la página e ingrese nuevamente.");
       return;
     }
@@ -613,7 +616,13 @@ export default function DiscoverPage() {
         functions,
         "requestExecutiveDocument"
       );
-      const res = await requestDocFn({ reportId: generatedReportId, linkId: linkInfo.linkId, sessionToken });
+      const res = await requestDocFn({
+        schemaVersion: "DISCOVERY_DOCUMENT_DOWNLOAD_V1",
+        reportId: generatedReportId,
+        linkId: linkInfo.linkId,
+        reportCapabilityToken: capabilityToken,
+        forceRegenerate: false,
+      });
 
       const data = res.data;
       if (data.status === "READY" && data.downloadUrl) {
@@ -675,6 +684,12 @@ export default function DiscoverPage() {
       showRetry = true;
     } else if (error === "APP_CHECK_THROTTLED") {
       displayMessage = "La validación de seguridad está temporalmente bloqueada después de varios intentos fallidos. Inténtalo más tarde.";
+      showRetry = true;
+    } else if (error === "PAYLOAD_REJECTED") {
+      displayMessage = "Revisa el tamaño y formato de los datos enviados.";
+      showRetry = true;
+    } else if (error === "COST_BUDGET_EXCEEDED") {
+      displayMessage = "Se alcanzó un límite temporal. Espera antes de volver a intentarlo.";
       showRetry = true;
     } else if (error === "TOKEN_ALREADY_USED") {
       displayMessage = "Este enlace ya fue utilizado en una sesión anterior. Solicita uno nuevo a tu asesor.";
@@ -809,38 +824,38 @@ export default function DiscoverPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Nombre de la Empresa *</label>
-                  <input required value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                  <input required maxLength={160} value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Tu Nombre *</label>
-                  <input required value={contactName} onChange={e => setContactName(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                  <input required maxLength={160} value={contactName} onChange={e => setContactName(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Correo Electrónico *</label>
-                  <input required type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                  <input required type="email" maxLength={254} value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Teléfono (Opcional)</label>
-                  <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                  <input maxLength={32} value={phone} onChange={e => setPhone(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Cargo (Opcional)</label>
-                  <input value={role} onChange={e => setRole(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                  <input maxLength={100} value={role} onChange={e => setRole(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Estado / Ciudad (Opcional)</label>
-                  <input value={location} onChange={e => setLocation(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                  <input maxLength={100} value={location} onChange={e => setLocation(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
                 </div>
 
                 {!advisorContext && (
                   <>
                     <div>
                       <label className="block text-xs text-slate-400 mb-1">¿Algún asesor de Aura te invitó? (Código)</label>
-                      <input value={manualAdvisorCode} onChange={e => setManualAdvisorCode(e.target.value)} placeholder="Ej. ADV123 (Opcional)" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
+                      <input maxLength={32} value={manualAdvisorCode} onChange={e => setManualAdvisorCode(e.target.value)} placeholder="Ej. ADV123 (Opcional)" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white" />
                     </div>
                     <div>
                       <label className="block text-xs text-slate-400 mb-1">¿Cómo nos conociste?</label>
-                      <select value={acquisitionSource} onChange={e => setAcquisitionSource(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white appearance-none">
+                      <select value={acquisitionSource} onChange={e => setAcquisitionSource(e.target.value === "AURA_NEXUS" ? "AURA_NEXUS" : "DIRECT")} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white appearance-none">
                         <option value="DIRECT">Directo / Búsqueda web</option>
                         <option value="GOOGLE">Búsqueda en Google</option>
                         <option value="LINKEDIN">LinkedIn</option>
@@ -1041,6 +1056,7 @@ export default function DiscoverPage() {
                     <input
                       type="text"
                       value={inputValue}
+                      maxLength={2048}
                       onChange={(e) => setInputValue(e.target.value)}
                       disabled={isAuraTyping || telemetry.intent === "SUMMARIZE"}
                       placeholder={isAuraTyping ? "Aura está procesando..." : "Escribe tu respuesta aquí..."}

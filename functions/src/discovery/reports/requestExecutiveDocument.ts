@@ -13,6 +13,12 @@ import { FirestoreDiscoveryCapabilityRepository } from
   "../../infrastructure/firestore/discoveryCapabilities";
 import { toDiscoveryCapabilityHttpsError } from
   "../discoveryCapabilityHandlerSupport";
+import {
+  FirestoreDiscoveryCostBudgetRepository,
+  parseDocumentDownloadRequestV1,
+} from "../payloadBounds";
+import { toDiscoveryPayloadHttpsError } from
+  "../discoveryPayloadHandlerSupport";
 
 export interface DiscoveryReportSessionScopeInput {
   storedSessionTokenHash?: string;
@@ -151,19 +157,17 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
   if (request.app == undefined) {
     throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
   }
-  const {
-    reportId, linkId, reportCapabilityToken, sessionToken, forceRegenerate,
-  } = request.data ?? {};
-  if (
-    typeof reportId !== "string" || reportId.length === 0 ||
-    reportId.length > 384 || reportId.includes("/")
-  ) {
-    throw new functions.https.HttpsError("invalid-argument", "INVALID_REPORT_ID");
+  let payload;
+  try {
+    payload = parseDocumentDownloadRequestV1(request.data);
+  } catch (error: unknown) {
+    throw toDiscoveryPayloadHttpsError(error) ?? error;
   }
+  const { reportId, linkId, reportCapabilityToken, forceRegenerate } = payload;
 
   const db = admin.firestore();
-  const publicToken = reportCapabilityToken ?? sessionToken;
-  const publicRequest = publicToken !== undefined || linkId !== undefined;
+  const publicToken = reportCapabilityToken;
+  const publicRequest = publicToken !== "" || linkId !== "";
   let isProspect = false;
   let allowedReportTypes: ReportType[];
   let userContext: string;
@@ -172,7 +176,7 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
   let targetReportType: ReportType;
 
   if (publicRequest) {
-    if (typeof publicToken !== "string" || typeof linkId !== "string") {
+    if (!publicToken || !linkId) {
       throw new functions.https.HttpsError("permission-denied", "REPORT_CAPABILITY_REQUIRED");
     }
     const parsed = parseReportId(reportId);
@@ -280,6 +284,15 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
       }
     }
     await reauthorizePublicReport();
+    const downloadBudgetKey = isProspect
+      ? `capability:${hashDiscoveryCapabilityToken(publicToken)}`
+      : `platform:${reportId}:${userContext}`;
+    try {
+      await new FirestoreDiscoveryCostBudgetRepository(db)
+        .consumeDownload(downloadBudgetKey);
+    } catch (error: unknown) {
+      throw toDiscoveryPayloadHttpsError(error) ?? error;
+    }
 
     let ttlMinutes: number = DISCOVERY_CAPABILITY_POLICY_V1.documentSignedUrlTtlMinutes;
     if (!isProspect) {
@@ -324,6 +337,8 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
     };
   } catch (error: unknown) {
     if (error instanceof functions.https.HttpsError) throw error;
+    const payloadError = toDiscoveryPayloadHttpsError(error);
+    if (payloadError !== null) throw payloadError;
     const capabilityError = toDiscoveryCapabilityHttpsError(error);
     if (capabilityError.message !== "COMPLETION_INTERNAL_FAILURE") throw capabilityError;
     const message = error instanceof Error ? error.message : "EXECUTIVE_DOCUMENT_REQUEST_FAILED";

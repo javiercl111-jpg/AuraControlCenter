@@ -38,13 +38,16 @@ export default function ExecutiveIntakeSmokeTestPage() {
     try {
       const createLeadFn = httpsCallable(functions, 'createDiscoveryLead');
       const payload = {
+        schemaVersion: "PUBLIC_DISCOVERY_INTAKE_V1",
         companyName: alterPayload ? "Aura QA Executive Intake ALTERED" : "Aura QA Executive Intake",
         contactName: "Prospecto de Prueba",
         jobTitle: "Dirección General",
         email: "test.qa@auranexus.io",
+        phone: "",
         state: "Querétaro",
         city: "Querétaro",
         employeeRange: "11-50",
+        commercialCode: "",
         origin: "WEBSITE",
         acquisitionSource: "AURA_NEXUS",
         privacyConsent: true,

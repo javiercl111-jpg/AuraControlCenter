@@ -5,8 +5,11 @@ import { httpsCallable } from "firebase/functions";
 import { functions } from "../../../config/firebase";
 
 interface RequestExecutiveDocumentRequest {
+  schemaVersion: "DISCOVERY_DOCUMENT_DOWNLOAD_V1";
   reportId: string;
-  sessionToken?: string;
+  linkId: string;
+  reportCapabilityToken: string;
+  forceRegenerate: boolean;
 }
 
 interface RequestExecutiveDocumentResponse {
@@ -151,7 +154,13 @@ export default function ExecutiveBriefingDrawer({
         functions,
         "requestExecutiveDocument"
       );
-      const res = await requestDocFn({ reportId });
+      const res = await requestDocFn({
+        schemaVersion: "DISCOVERY_DOCUMENT_DOWNLOAD_V1",
+        reportId,
+        linkId: "",
+        reportCapabilityToken: "",
+        forceRegenerate: false,
+      });
 
       const data = res.data;
       if (data.status === "READY" && data.downloadUrl) {
