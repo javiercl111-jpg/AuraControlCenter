@@ -23,6 +23,7 @@
     "test:firestore-idempotency-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestoreIdempotencyEmulator.cjs",
     "test:firestore-capability-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestoreCapabilityEmulator.cjs",
     "test:discovery-payload-bounds-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestorePayloadBoundsEmulator.cjs",
+    "test:discovery-abuse-telemetry-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestoreAbuseTelemetryEmulator.cjs",
     "test:authority-dark-composition": "vitest run --config functions/tests/vitest.authorityDarkComposition.config.ts",
     "test:authority-dark-handler-composition": "vitest run --config functions/tests/vitest.authorityDarkHandlerComposition.config.ts",
     "test:enterprise-model": "vitest run src/modules/intelligence/enterprise-model",

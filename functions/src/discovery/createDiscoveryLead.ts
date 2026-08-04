@@ -21,6 +21,13 @@ import {
 } from "../infrastructure/firestore/discoveryIntakeIdempotency";
 import { parsePublicDiscoveryIntakeV1 } from "./payloadBounds";
 import { toDiscoveryPayloadHttpsError } from "./discoveryPayloadHandlerSupport";
+import {
+  deriveTelemetryDerivedSubjectV1,
+  normalizeTelemetryReasonCodeV1,
+  recordDiscoveryTelemetrySafe,
+  type StructuredAbuseSubjectV1,
+  type StructuredAbuseTelemetryEventV1,
+} from "./telemetry";
 
 const idempotencySecret = defineSecret("IDEMPOTENCY_SECRET");
 
@@ -49,6 +56,24 @@ export const createDiscoveryLead = onCall(
     secrets: [idempotencySecret],
   },
   async (request) => {
+    const startedAt = Date.now();
+    const db = admin.firestore();
+    const transportKey = request.rawRequest.get("function-execution-id") ||
+      request.rawRequest.get("x-cloud-trace-context") ||
+      `intake-${startedAt}`;
+    let telemetryKey = transportKey;
+    let telemetrySubject: StructuredAbuseSubjectV1 | undefined;
+    const emit = async (
+      eventType: StructuredAbuseTelemetryEventV1["eventType"],
+      outcome: StructuredAbuseTelemetryEventV1["outcome"],
+      reasonCode: string,
+      measurements: StructuredAbuseTelemetryEventV1["measurements"] = {},
+    ) => recordDiscoveryTelemetrySafe(db, {
+      eventType, source: "createDiscoveryLead", component: "discovery.intake",
+      outcome, reasonCode, durationMs: Math.max(0, Date.now() - startedAt),
+      correlationKey: telemetryKey, requestKey: `${telemetryKey}:${eventType}`,
+      ...(telemetrySubject ? { subject: telemetrySubject } : {}), measurements,
+    });
     let idempotencyRepository: DiscoveryIntakeIdempotencyRepository | null = null;
     let activeAttempt: DiscoveryIntakeIdempotencyFailCommandV1 | null = null;
     try {
@@ -60,6 +85,7 @@ export const createDiscoveryLead = onCall(
       try {
         payload = parsePublicDiscoveryIntakeV1(request.data);
       } catch (error: unknown) {
+        await emit("payload.invalid", "REJECTED", normalizeTelemetryReasonCodeV1(error));
         throw toDiscoveryPayloadHttpsError(error) ?? error;
       }
 
@@ -72,13 +98,14 @@ export const createDiscoveryLead = onCall(
       let origin = payload.origin;
 
       const idempotencyHash = generateIdempotencyHash(idempotencyKey, idempotencySecret.value());
+      telemetryKey = idempotencyHash;
+      telemetrySubject = deriveTelemetryDerivedSubjectV1(idempotencyHash);
       const namespaceHash = generateIdempotencyNamespaceHash(
         email,
         idempotencySecret.value(),
       );
       const requestHash = generateRequestHash(payload);
 
-      const db = admin.firestore();
       idempotencyRepository = new FirestoreDiscoveryIntakeIdempotencyRepository(
         db,
         DISCOVERY_INTAKE_IDEMPOTENCY_POLICY_V1,
@@ -122,6 +149,12 @@ export const createDiscoveryLead = onCall(
       }
 
       if (acquisition.decision === "PROCESSING") {
+        await emit("idempotency.replay", "REPLAYED", "IDEMPOTENCY_PROCESSING", {
+          replays: 1, retries: 1,
+        });
+        await emit("intake.accepted", "ACCEPTED", "IDEMPOTENCY_PROCESSING", {
+          requests: 1, replays: 1,
+        });
         return {
           status: "PROCESSING",
           retryAfterSeconds: acquisition.retryAfterSeconds,
@@ -129,6 +162,9 @@ export const createDiscoveryLead = onCall(
       }
 
       if (acquisition.decision === "CACHED") {
+        await emit("idempotency.replay", "REPLAYED", "IDEMPOTENCY_CACHED", {
+          replays: 1, retries: 1,
+        });
         const cachedResult = acquisition.result;
         const linkSnap = await db.collection("market_discovery_links")
           .doc(cachedResult.linkId)
@@ -138,6 +174,9 @@ export const createDiscoveryLead = onCall(
         }
         const linkData = linkSnap.data()!;
         if (linkData.usageCount > 0) {
+          await emit("intake.rejected", "REJECTED", "CAPABILITY_ALREADY_CONSUMED", {
+            requests: 1, rejections: 1,
+          });
           return {
             status: "ERROR",
             nextAction: "SHOW_REVIEW_PENDING",
@@ -146,6 +185,10 @@ export const createDiscoveryLead = onCall(
         }
         const expiresAt = linkData.expiresAt?.toDate?.().getTime();
         if (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now()) {
+          await emit("idempotency.expired", "EXPIRED", "IDEMPOTENCY_RECORD_EXPIRED");
+          await emit("intake.rejected", "REJECTED", "IDEMPOTENCY_RECORD_EXPIRED", {
+            requests: 1, rejections: 1,
+          });
           return {
             status: "ERROR",
             nextAction: "SHOW_REVIEW_PENDING",
@@ -160,6 +203,9 @@ export const createDiscoveryLead = onCall(
         if (linkData.tokenHash !== generateTokenHash(cachedToken)) {
           throw new HttpsError("internal", "IDEMPOTENCY_RECORD_CORRUPTED");
         }
+        await emit("intake.accepted", "ACCEPTED", "IDEMPOTENCY_CACHED", {
+          requests: 1, replays: 1,
+        });
         return {
           status: "SUCCESS",
           nextAction: "REDIRECT_DISCOVERY",
@@ -204,6 +250,7 @@ export const createDiscoveryLead = onCall(
           });
 
           if (recentCount >= config.maxLinksPerAdvisorPerDay) {
+            await emit("rateLimit.denied", "DENIED", "ADVISOR_DAILY_LIMIT");
             throw new HttpsError("resource-exhausted", "RATE_LIMITED");
           }
         } else {
@@ -220,9 +267,11 @@ export const createDiscoveryLead = onCall(
           });
 
           if (recentCount >= config.maxSessionsPerEmail) {
+            await emit("rateLimit.denied", "DENIED", "EMAIL_DAILY_LIMIT");
             throw new HttpsError("resource-exhausted", "RATE_LIMITED");
           }
         }
+        await emit("rateLimit.allowed", "ALLOWED", "RATE_LIMIT_ALLOWED");
       }
 
       // 5. Proceed with Creation
@@ -332,6 +381,7 @@ export const createDiscoveryLead = onCall(
 
       const discoveryUrl = `https://controlcenter.auranexus.io/discover/${docRef.id}#access=${oneTimeToken}`;
 
+      await emit("intake.accepted", "ACCEPTED", "INTAKE_CREATED", { requests: 1 });
       return {
         status: "SUCCESS",
         nextAction: "REDIRECT_DISCOVERY",
@@ -343,6 +393,13 @@ export const createDiscoveryLead = onCall(
         requiresManualReview: trustScoreResult.decision === "REQUIRE_MANUAL_REVIEW"
       };
     } catch (error: unknown) {
+      const telemetryReasonCode = normalizeTelemetryReasonCodeV1(error);
+      if (telemetryReasonCode === "IDEMPOTENCY_RECORD_EXPIRED") {
+        await emit("idempotency.expired", "EXPIRED", telemetryReasonCode);
+      }
+      await emit("intake.rejected", "REJECTED", telemetryReasonCode, {
+        requests: 1, rejections: 1,
+      });
       if (idempotencyRepository !== null && activeAttempt !== null) {
         try {
           await idempotencyRepository.fail(activeAttempt);
@@ -354,13 +411,8 @@ export const createDiscoveryLead = onCall(
           });
         }
       }
-      const errorDetails = error instanceof Error
-        ? { message: error.message, code: (error as Error & { code?: unknown }).code, stack: error.stack }
-        : { message: "UNKNOWN", code: undefined, stack: undefined };
       logger.error("Unhandled error in createDiscoveryLead", { 
-        message: errorDetails.message,
-        code: errorDetails.code,
-        stack: errorDetails.stack,
+        reasonCode: telemetryReasonCode,
       });
       if (error instanceof HttpsError) {
         throw error;

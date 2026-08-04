@@ -22,6 +22,8 @@ Esta carpeta contiene la baseline AI-02H1E.4.1 para el hardening del intake púb
 
 12. [Strict Payload and Cost Bounds v1](STRICT_PAYLOAD_AND_COST_BOUNDS_V1.md) — esquemas públicos fail-closed, proyección de persistencia y presupuestos atómicos de AI, conversación, reporte y descarga de AI-02H1E.4.5.
 
+13. [Structured Abuse Telemetry v1](STRUCTURED_ABUSE_TELEMETRY_V1.md) — eventos estructurados sin PII, correlación determinista y métricas atómicas de AI-02H1E.4.6.
+
 ## Cómo interpretar la baseline
 
 - Los documentos describen contratos y mitigaciones objetivo, no garantías del runtime actual.

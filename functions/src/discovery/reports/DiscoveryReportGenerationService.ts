@@ -10,6 +10,11 @@ import {
   DiscoveryPayloadError,
   payloadBytes,
 } from "../payloadBounds";
+import {
+  deriveTelemetryDerivedSubjectV1,
+  normalizeTelemetryReasonCodeV1,
+  recordDiscoveryTelemetrySafe,
+} from "../telemetry";
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   let handle: ReturnType<typeof setTimeout> | undefined;
@@ -39,6 +44,7 @@ export class DiscoveryReportGenerationService {
     reportType: ReportType,
     forceRegenerate: boolean = false
   ): Promise<{ success: boolean; reportId: string; message: string; metadata?: DiscoveryReportMetadata }> {
+    const startedAt = Date.now();
     const db = admin.firestore();
     const storage = admin.storage();
 
@@ -55,6 +61,14 @@ export class DiscoveryReportGenerationService {
     const dossier = sessionData.dossier || {};
     const datasetBytes = payloadBytes(sessionData);
     if (datasetBytes > DISCOVERY_COST_BOUND_POLICY_V1.reportDatasetMaxBytes) {
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "report.denied", source: "DiscoveryReportGenerationService",
+        component: "discovery.report", outcome: "DENIED",
+        reasonCode: "REPORT_DATASET_TOO_LARGE", durationMs: Date.now() - startedAt,
+        correlationKey: sessionId, requestKey: `${sessionId}:${reportType}`,
+        subject: deriveTelemetryDerivedSubjectV1(sessionId),
+        measurements: { rejections: 1 },
+      });
       throw new DiscoveryPayloadError("REPORT_BUDGET_EXCEEDED");
     }
 
@@ -212,6 +226,14 @@ export class DiscoveryReportGenerationService {
           }, { merge: true });
 
           const finalMetadata = (await metadataRef.get()).data() as DiscoveryReportMetadata;
+          await recordDiscoveryTelemetrySafe(db, {
+            eventType: "report.generated", source: "DiscoveryReportGenerationService",
+            component: "discovery.report", outcome: "COMPLETED",
+            reasonCode: "REPORT_GENERATED", durationMs: Date.now() - startedAt,
+            correlationKey: sessionId, requestKey: reportId,
+            subject: deriveTelemetryDerivedSubjectV1(reportId),
+            measurements: { pdfs: 1, pdfBytes: pdfBuffer.byteLength },
+          });
           return {
             success: true,
             reportId,
@@ -220,10 +242,20 @@ export class DiscoveryReportGenerationService {
           };
 
         } catch (error: unknown) {
-          console.error("[DiscoveryReportGenerationService] Error generating report", error);
+          console.error("[DiscoveryReportGenerationService] Error generating report", {
+            reasonCode: normalizeTelemetryReasonCodeV1(error),
+          });
           await metadataRef.update({
             status: "ERROR",
             updatedAt: new Date().toISOString()
+          });
+          await recordDiscoveryTelemetrySafe(db, {
+            eventType: "report.denied", source: "DiscoveryReportGenerationService",
+            component: "discovery.report", outcome: "DENIED",
+            reasonCode: normalizeTelemetryReasonCodeV1(error),
+            durationMs: Date.now() - startedAt, correlationKey: sessionId,
+            requestKey: reportId, subject: deriveTelemetryDerivedSubjectV1(reportId),
+            measurements: { rejections: 1 },
           });
           const message = error instanceof Error ? error.message : "Unknown error";
           if (error instanceof DiscoveryPayloadError) throw error;

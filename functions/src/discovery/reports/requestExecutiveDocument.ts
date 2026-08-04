@@ -19,6 +19,11 @@ import {
 } from "../payloadBounds";
 import { toDiscoveryPayloadHttpsError } from
   "../discoveryPayloadHandlerSupport";
+import {
+  deriveTelemetryDerivedSubjectV1,
+  normalizeTelemetryReasonCodeV1,
+  recordDiscoveryTelemetrySafe,
+} from "../telemetry";
 
 export interface DiscoveryReportSessionScopeInput {
   storedSessionTokenHash?: string;
@@ -154,6 +159,8 @@ function parseReportId(reportId: string): { sessionId: string; reportType: Repor
 }
 
 export const requestExecutiveDocument = functions.https.onCall(async (request) => {
+  const startedAt = Date.now();
+  const db = admin.firestore();
   if (request.app == undefined) {
     throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
   }
@@ -161,11 +168,17 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
   try {
     payload = parseDocumentDownloadRequestV1(request.data);
   } catch (error: unknown) {
+    await recordDiscoveryTelemetrySafe(db, {
+      eventType: "payload.invalid", source: "requestExecutiveDocument",
+      component: "discovery.download", outcome: "REJECTED",
+      reasonCode: normalizeTelemetryReasonCodeV1(error), durationMs: Date.now() - startedAt,
+      correlationKey: `download:${startedAt}`, requestKey: `download:${startedAt}:invalid`,
+      measurements: { requests: 1, rejections: 1 },
+    });
     throw toDiscoveryPayloadHttpsError(error) ?? error;
   }
   const { reportId, linkId, reportCapabilityToken, forceRegenerate } = payload;
 
-  const db = admin.firestore();
   const publicToken = reportCapabilityToken;
   const publicRequest = publicToken !== "" || linkId !== "";
   let isProspect = false;
@@ -182,7 +195,24 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
     const parsed = parseReportId(reportId);
     const capabilityScope = await new FirestoreDiscoveryCapabilityRepository(db)
       .authorizeReport({ token: publicToken, reportId, linkId })
-      .catch((error: unknown) => { throw toDiscoveryCapabilityHttpsError(error); });
+      .catch(async (error: unknown) => {
+        await recordDiscoveryTelemetrySafe(db, {
+          eventType: "capability.rejected", source: "requestExecutiveDocument",
+          component: "discovery.download", outcome: "REJECTED",
+          reasonCode: normalizeTelemetryReasonCodeV1(error), durationMs: Date.now() - startedAt,
+          correlationKey: reportId, requestKey: `${reportId}:authorize`,
+          subject: deriveTelemetryDerivedSubjectV1(hashDiscoveryCapabilityToken(publicToken)),
+        });
+        await recordDiscoveryTelemetrySafe(db, {
+          eventType: "download.denied", source: "requestExecutiveDocument",
+          component: "discovery.download", outcome: "DENIED",
+          reasonCode: normalizeTelemetryReasonCodeV1(error), durationMs: Date.now() - startedAt,
+          correlationKey: reportId, requestKey: `${reportId}:denied`,
+          subject: deriveTelemetryDerivedSubjectV1(reportId),
+          measurements: { requests: 1, rejections: 1 },
+        });
+        throw toDiscoveryCapabilityHttpsError(error);
+      });
     targetSessionId = capabilityScope.capability.sessionId!;
     targetProspectId = String(capabilityScope.sessionData.prospectId || "");
     targetReportType = parsed.reportType;
@@ -306,6 +336,14 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
       promptSaveAs: `${targetReportType.toLowerCase()}.pdf`,
     });
     const actorKey = isProspect ? `public:${linkId}` : userContext;
+    await recordDiscoveryTelemetrySafe(db, {
+      eventType: "download.authorized", source: "requestExecutiveDocument",
+      component: "discovery.download", outcome: "ALLOWED",
+      reasonCode: "SIGNED_URL_AUTHORIZED", durationMs: Date.now() - startedAt,
+      correlationKey: targetSessionId, requestKey: `${reportId}:${actorKey}`,
+      subject: deriveTelemetryDerivedSubjectV1(reportId),
+      measurements: { requests: 1, downloads: 1 },
+    });
     const eventId = `report_delivered_${hashDiscoveryCapabilityToken(
       `${reportId}:${actorKey}`,
     ).slice(0, 40)}`;
@@ -336,12 +374,19 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
       generatedAt: metadata.generatedAt,
     };
   } catch (error: unknown) {
+    await recordDiscoveryTelemetrySafe(db, {
+      eventType: "download.denied", source: "requestExecutiveDocument",
+      component: "discovery.download", outcome: "DENIED",
+      reasonCode: normalizeTelemetryReasonCodeV1(error), durationMs: Date.now() - startedAt,
+      correlationKey: targetSessionId || reportId, requestKey: `${reportId}:denied`,
+      subject: deriveTelemetryDerivedSubjectV1(reportId),
+      measurements: { requests: 1, rejections: 1 },
+    });
     if (error instanceof functions.https.HttpsError) throw error;
     const payloadError = toDiscoveryPayloadHttpsError(error);
     if (payloadError !== null) throw payloadError;
     const capabilityError = toDiscoveryCapabilityHttpsError(error);
     if (capabilityError.message !== "COMPLETION_INTERNAL_FAILURE") throw capabilityError;
-    const message = error instanceof Error ? error.message : "EXECUTIVE_DOCUMENT_REQUEST_FAILED";
     const eventId = `report_failed_${hashDiscoveryCapabilityToken(reportId).slice(0, 40)}`;
     await db.collection("platform_events").doc(eventId).set({
       eventId,
@@ -351,7 +396,7 @@ export const requestExecutiveDocument = functions.https.onCall(async (request) =
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       actorType: isProspect ? "PROSPECT" : "ADVISOR_ADMIN",
       source: "requestExecutiveDocument",
-      metadata: { reportId, error: message },
+      metadata: { reportId, reasonCode: normalizeTelemetryReasonCodeV1(error) },
     }, { merge: true });
     throw new functions.https.HttpsError("internal", "EXECUTIVE_DOCUMENT_REQUEST_FAILED");
   }

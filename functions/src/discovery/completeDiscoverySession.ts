@@ -41,6 +41,11 @@ import { DiscoveryReportGenerationService } from
   "./reports/DiscoveryReportGenerationService";
 import { parseDiscoveryCompletionPayloadV1 } from "./payloadBounds";
 import { toDiscoveryPayloadHttpsError } from "./discoveryPayloadHandlerSupport";
+import {
+  deriveTelemetryDerivedSubjectV1,
+  normalizeTelemetryReasonCodeV1,
+  recordDiscoveryTelemetrySafe,
+} from "./telemetry";
 
 const capabilitySecret = defineSecret("IDEMPOTENCY_SECRET");
 
@@ -87,6 +92,8 @@ function validateFirestorePayload(value: unknown, path = "payload"): void {
 export const completeDiscoverySession = functions.https.onCall(
   { secrets: [capabilitySecret] },
   async (request) => {
+    const startedAt = Date.now();
+    const db = admin.firestore();
     if (request.app == undefined) {
       throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
     }
@@ -94,6 +101,13 @@ export const completeDiscoverySession = functions.https.onCall(
     try {
       parsedPayload = parseDiscoveryCompletionPayloadV1(request.data);
     } catch (error: unknown) {
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "payload.invalid", source: "completeDiscoverySession",
+        component: "discovery.completion", outcome: "REJECTED",
+        reasonCode: normalizeTelemetryReasonCodeV1(error), durationMs: Date.now() - startedAt,
+        correlationKey: `completion:${startedAt}`, requestKey: `completion:${startedAt}:invalid`,
+        measurements: { requests: 1, rejections: 1 },
+      });
       throw toDiscoveryPayloadHttpsError(error) ?? error;
     }
     const sessionToken = parsedPayload.sessionToken;
@@ -103,7 +117,6 @@ export const completeDiscoverySession = functions.https.onCall(
     if (!secret) {
       throw new functions.https.HttpsError("internal", "COMPLETION_INTERNAL_FAILURE");
     }
-    const db = admin.firestore();
     const repository = new FirestoreDiscoveryCapabilityRepository(db);
     let linkId: string;
     try {
@@ -112,7 +125,23 @@ export const completeDiscoverySession = functions.https.onCall(
         allowCompleted: true,
       });
       linkId = authorization.capability.linkId;
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "capability.accepted", source: "completeDiscoverySession",
+        component: "discovery.completion", outcome: "ACCEPTED",
+        reasonCode: "SESSION_CAPABILITY_ACCEPTED", durationMs: Date.now() - startedAt,
+        correlationKey: linkId, requestKey: `${linkId}:completion-authorize`,
+        subject: deriveTelemetryDerivedSubjectV1(hashDiscoveryCapabilityToken(sessionToken)),
+      });
     } catch (error: unknown) {
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "capability.rejected", source: "completeDiscoverySession",
+        component: "discovery.completion", outcome: "REJECTED",
+        reasonCode: normalizeTelemetryReasonCodeV1(error), durationMs: Date.now() - startedAt,
+        correlationKey: hashDiscoveryCapabilityToken(sessionToken),
+        requestKey: `${hashDiscoveryCapabilityToken(sessionToken)}:completion-authorize`,
+        subject: deriveTelemetryDerivedSubjectV1(hashDiscoveryCapabilityToken(sessionToken)),
+        measurements: { rejections: 1 },
+      });
       throw toDiscoveryCapabilityHttpsError(error);
     }
     const sessionId = createDiscoverySessionIdV1(
@@ -124,6 +153,13 @@ export const completeDiscoverySession = functions.https.onCall(
     const requestHash = hashDiscoveryCompletionRequestV1({ linkId, dossierPayload });
 
     try {
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: "completion.started", source: "completeDiscoverySession",
+        component: "discovery.completion", outcome: "ACCEPTED",
+        reasonCode: "COMPLETION_STARTED", durationMs: Date.now() - startedAt,
+        correlationKey: sessionId, requestKey: requestHash,
+        subject: deriveTelemetryDerivedSubjectV1(sessionId), measurements: { requests: 1 },
+      });
       const result = await repository.completeWithEffect({
         sessionToken,
         linkId,
@@ -248,7 +284,7 @@ export const completeDiscoverySession = functions.https.onCall(
         } catch (error: unknown) {
           console.error("DISCOVERY_REPORT_GENERATION_DEFERRED", {
             completionId: result.completion.completionId,
-            error: error instanceof Error ? error.message : "UNKNOWN",
+            reasonCode: normalizeTelemetryReasonCodeV1(error),
           });
         }
       }
@@ -287,6 +323,18 @@ export const completeDiscoverySession = functions.https.onCall(
           });
         }
       }
+
+      await recordDiscoveryTelemetrySafe(db, {
+        eventType: result.kind === "REPLAY"
+          ? "completion.replayed" : "completion.completed",
+        source: "completeDiscoverySession", component: "discovery.completion",
+        outcome: result.kind === "REPLAY" ? "REPLAYED" : "COMPLETED",
+        reasonCode: result.kind === "REPLAY" ? "COMPLETION_REPLAYED" : "COMPLETION_COMPLETED",
+        durationMs: Date.now() - startedAt, correlationKey: result.completion.sessionId,
+        requestKey: requestHash,
+        subject: deriveTelemetryDerivedSubjectV1(result.completion.sessionId),
+        measurements: result.kind === "REPLAY" ? { replays: 1 } : {},
+      });
 
       return createDiscoveryCompletionPublicResultV1(
         result.completion, reportCapabilityToken,
