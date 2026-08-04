@@ -1,0 +1,280 @@
+{
+  "schemaVersion": "NONPROD_SECURITY_BASELINE_MATRIX_V1",
+  "program": "AI-02H1E.5.0",
+  "slice": "AI-02H1E.5.R2A",
+  "mode": "DOCUMENTATION_DESIGN_ONLY",
+  "verdict": "CONDITIONAL_SECURITY_OWNERSHIP_DECISIONS_REQUIRED",
+  "classifications": [
+    "EXISTS",
+    "PARTIAL",
+    "MISSING",
+    "UNSAFE",
+    "LEGACY",
+    "NOT_APPLICABLE"
+  ],
+  "environments": {
+    "preview": {
+      "projectId": "aura-intel-preview",
+      "firebase": "CREATED_AND_VERIFIED",
+      "firestore": "CREATED_AND_VERIFIED",
+      "dataPolicy": "SYNTHETIC_ONLY",
+      "traffic": "DISABLED_UNTIL_GATE"
+    },
+    "staging": {
+      "projectId": "aura-intel-staging",
+      "firebase": "CREATED_AND_VERIFIED",
+      "firestore": "CREATED_AND_VERIFIED",
+      "dataPolicy": "SYNTHETIC_OR_EXPLICITLY_APPROVED_REPRESENTATIVE",
+      "traffic": "DISABLED_UNTIL_GATE"
+    },
+    "production": {
+      "projectId": "aura-control-center-debb3",
+      "status": "UNCHANGED_REMEDIATION_HOLD",
+      "authorized": false,
+      "targetableByNonprodWaves": false
+    }
+  },
+  "inventory": [
+    {
+      "control": "FIRESTORE_RULES",
+      "classification": "UNSAFE",
+      "evidence": "Authenticated clients can write authority and administrative collections in repository rules",
+      "target": "DENY_BY_DEFAULT_SERVER_OWNED",
+      "stopCondition": "Any remaining client writer or cross-tenant allow"
+    },
+    {
+      "control": "FIRESTORE_RULES_EMULATOR",
+      "classification": "PARTIAL",
+      "evidence": "Test-only deny-all rules validate Admin SDK adapters but not candidate repository rules",
+      "target": "CANDIDATE_RULESET_CLIENT_AND_ADMIN_CERTIFICATION",
+      "stopCondition": "Candidate rules not loaded by suite"
+    },
+    {
+      "control": "FIREBASE_ALIASES",
+      "classification": "UNSAFE",
+      "evidence": "Only default alias points to Production",
+      "target": "PREVIEW_STAGING_PRODUCTION_EXPLICIT_NO_DEFAULT",
+      "stopCondition": "Default or ambiguous alias"
+    },
+    {
+      "control": "TARGETING_GUARD",
+      "classification": "MISSING",
+      "evidence": "No pre-write branch actor digest change approval hold guard",
+      "target": "FAIL_CLOSED_MANIFEST_GUARD",
+      "stopCondition": "Any guard input missing or mismatched"
+    },
+    {
+      "control": "FUNCTIONS_DEPLOY_SCRIPT",
+      "classification": "UNSAFE",
+      "evidence": "Functions deploy script omits explicit project",
+      "target": "GUARDED_EXPLICIT_PROJECT_ONLY",
+      "stopCondition": "Command depends on active alias"
+    },
+    {
+      "control": "FIRESTORE_INDEX_MANIFEST",
+      "classification": "MISSING",
+      "evidence": "No firestore.indexes.json",
+      "target": "FIVE_QUERY_MAPPED_COMPOSITE_INDEXES",
+      "stopCondition": "Index lacks concrete query source"
+    },
+    {
+      "control": "IDEMPOTENCY_TTL",
+      "classification": "PARTIAL",
+      "evidence": "Versioned target exists but is not applied",
+      "target": "EXPIRES_AT_ACTIVE_PREVIEW_THEN_STAGING",
+      "stopCondition": "Semantic expiry or recovery gate fails"
+    },
+    {
+      "control": "CAPABILITY_TTL",
+      "classification": "MISSING",
+      "evidence": "Timestamp field exists without TTL manifest",
+      "target": "EXPIRES_AT_AFTER_RETENTION_APPROVAL",
+      "stopCondition": "EXCHANGE or SESSION retention unresolved"
+    },
+    {
+      "control": "RATE_LIMIT_TTL",
+      "classification": "LEGACY",
+      "evidence": "Only numeric windowEndsAtMs exists",
+      "target": "NOT_CONFIGURED_UNTIL_TIMESTAMP_CONTRACT",
+      "stopCondition": "Attempt to enable TTL on numeric field"
+    },
+    {
+      "control": "TELEMETRY_TTL",
+      "classification": "PARTIAL",
+      "evidence": "Events have Timestamp expiresAt and 30-day local retention without manifest",
+      "target": "EVENT_TTL_AFTER_PRIVACY_APPROVAL",
+      "stopCondition": "Retention or metrics evidence unavailable"
+    },
+    {
+      "control": "SERVICE_ACCOUNTS",
+      "classification": "PARTIAL",
+      "evidence": "Names and roles designed; only automatic Firebase account exists remotely",
+      "target": "DEDICATED_PER_BOUNDARY_PER_ENVIRONMENT_ZERO_KEYS",
+      "stopCondition": "Default compute broad role or user-managed key"
+    },
+    {
+      "control": "IAM",
+      "classification": "PARTIAL",
+      "evidence": "Layered design exists; effective minimum bindings not implemented",
+      "target": "RESOURCE_SCOPED_LEAST_PRIVILEGE",
+      "stopCondition": "Owner Editor wildcard cross-environment or lockout risk"
+    },
+    {
+      "control": "WIF",
+      "classification": "PARTIAL",
+      "evidence": "Pools providers and conditions designed; no resources exist",
+      "target": "SEPARATE_EXACT_REPOSITORY_REF_ENVIRONMENT_900S",
+      "stopCondition": "Wildcard missing claim or audience mismatch"
+    },
+    {
+      "control": "SECRETS",
+      "classification": "PARTIAL",
+      "evidence": "Code has three legacy secret references; seven target purposes are designed",
+      "target": "PER_ENVIRONMENT_PER_CONSUMER_RESOURCE_BINDING",
+      "stopCondition": "Value in evidence or generic accessor"
+    },
+    {
+      "control": "APP_CHECK",
+      "classification": "UNSAFE",
+      "evidence": "Client can continue without provider; debug and Function enforcement are inconsistent",
+      "target": "ENTERPRISE_PROVIDER_UNIFORM_ENFORCEMENT_ZERO_STAGING_DEBUG",
+      "stopCondition": "Provider mapping ambiguous metrics missing or Staging debug present"
+    },
+    {
+      "control": "ROLLBACK",
+      "classification": "PARTIAL",
+      "evidence": "Procedures exist but R2A executes no rehearsal",
+      "target": "PER_COMPONENT_SAFE_CLOSED_VERIFIED",
+      "stopCondition": "Rollback would reopen Rules or require Production"
+    }
+  ],
+  "firestoreCollections": [
+    {"collection":"platform_global_admins","clientRead":"SELF_MINIMUM_OR_APPROVED_GLOBAL_ADMIN","clientWrite":"DENY","owner":"AUTHORITY_BACKEND"},
+    {"collection":"platform_tenants","clientRead":"SAME_TENANT_MEMBERSHIP_OR_GLOBAL_ADMIN","clientWrite":"DENY","owner":"AUTHORITY_BACKEND"},
+    {"collection":"tenant_memberships","clientRead":"SELF_OR_GLOBAL_ADMIN","clientWrite":"DENY","owner":"AUTHORITY_BACKEND"},
+    {"collection":"public_rate_limit_counters_v1","clientRead":"DENY","clientWrite":"DENY","owner":"INTAKE_RUNTIME"},
+    {"collection":"discovery_intake_idempotency","clientRead":"DENY","clientWrite":"DENY","owner":"INTAKE_RUNTIME"},
+    {"collection":"discovery_intake_idempotency_namespaces_v1","clientRead":"DENY","clientWrite":"DENY","owner":"INTAKE_RUNTIME_CLEANUP"},
+    {"collection":"discovery_capabilities_v1","clientRead":"DENY","clientWrite":"DENY","owner":"SESSION_RUNTIME"},
+    {"collection":"discovery_completions_v1","clientRead":"DENY","clientWrite":"DENY","owner":"COMPLETION_RUNTIME"},
+    {"collection":"discovery_completion_outbox_v1","clientRead":"DENY","clientWrite":"DENY","owner":"COMPLETION_NOTIFICATION_RUNTIME"},
+    {"collection":"discovery_sessions","clientRead":"SCOPED_TRUSTED_PRINCIPAL","clientWrite":"DENY","owner":"SESSION_COMPLETION_RUNTIME"},
+    {"collection":"market_discovery_links","clientRead":"SCOPED_TRUSTED_PRINCIPAL","clientWrite":"DENY","owner":"INTAKE_SESSION_RUNTIME"},
+    {"collection":"discovery_reports","clientRead":"SCOPED_TRUSTED_PRINCIPAL","clientWrite":"DENY","owner":"REPORT_RUNTIME"},
+    {"collection":"discovery_abuse_telemetry_v1","clientRead":"DENY","clientWrite":"DENY","owner":"TELEMETRY_WRITER"},
+    {"collection":"platform_inbox","clientRead":"SELF_ONLY","clientWrite":"DENY","owner":"NOTIFICATION_RUNTIME"},
+    {"collection":"UNLISTED","clientRead":"DENY","clientWrite":"DENY","owner":"NONE"}
+  ],
+  "aliases": {
+    "preview": "aura-intel-preview",
+    "staging": "aura-intel-staging",
+    "production": "aura-control-center-debb3",
+    "defaultAllowed": false
+  },
+  "targetingGuard": {
+    "requiredInputs": [
+      "branchOrRef",
+      "alias",
+      "projectId",
+      "environment",
+      "actorRole",
+      "artifactDigest",
+      "changeId",
+      "approvalReceipt",
+      "productionHold"
+    ],
+    "failBeforeWrite": true,
+    "productionAlwaysDeniedInNonprodWaves": true
+  },
+  "indexes": [
+    {"id":"IDX-01","collectionGroup":"platform_sales_advisors","fields":["commercialCode:ASC","advisorStatus:ASC"],"source":"src/modules/discovery/services/discoveryLinkService.ts"},
+    {"id":"IDX-02","collectionGroup":"market_import_jobs","fields":["createdBy:ASC","status:ASC"],"source":"src/modules/market-intelligence/services/backendImportService.ts"},
+    {"id":"IDX-03","collectionGroup":"market_import_jobs","fields":["fingerprint:ASC","status:ASC"],"source":"src/pages/MarketIntelligencePage.tsx"},
+    {"id":"IDX-04","collectionGroup":"commercial_pipeline_assignments","fields":["advisorId:ASC","status:ASC"],"source":"functions/src/prospects/replenishAdvisorPipeline.ts"},
+    {"id":"IDX-05","collectionGroup":"market_companies","fields":["status:ASC","opportunityScore:DESC"],"source":"functions/src/prospects/replenishAdvisorPipeline.ts"}
+  ],
+  "ttlTargets": [
+    {"id":"TTL-01","collectionGroup":"discovery_intake_idempotency","field":"expiresAt","fieldType":"FIRESTORE_TIMESTAMP","retention":"PROCESSING_24H_COMPLETED_7D_FAILED_FINAL_24H","decision":"READY_FOR_APPROVAL"},
+    {"id":"TTL-02","collectionGroup":"discovery_capabilities_v1","field":"expiresAt","fieldType":"FIRESTORE_TIMESTAMP","retention":"BY_CAPABILITY_TYPE","decision":"BLOCKED_RETENTION_DECISION"},
+    {"id":"TTL-03","collectionGroup":"public_rate_limit_counters_v1","field":"expiresAt","fieldType":"MISSING","retention":"UNDEFINED","decision":"BLOCKED_CODE_CONTRACT"},
+    {"id":"TTL-04","collectionGroup":"discovery_abuse_telemetry_v1","field":"expiresAt","fieldType":"FIRESTORE_TIMESTAMP","retention":"30_DAYS","decision":"READY_FOR_APPROVAL"},
+    {"id":"TTL-05","collectionGroup":"discovery_capabilities_v1","field":"expiresAt","fieldType":"FIRESTORE_TIMESTAMP","retention":"SESSION_TYPE_BY_TTL_02","decision":"COVERED_BY_TTL_02"},
+    {"id":"TTL-06","collectionGroup":null,"field":null,"fieldType":null,"retention":"CLEANUP_JOURNAL_NOT_PRESENT","decision":"NOT_APPLICABLE"}
+  ],
+  "serviceAccounts": {
+    "preview": ["ai-prev-fn-intake","ai-prev-fn-session","ai-prev-fn-ai","ai-prev-fn-complete","ai-prev-fn-report","ai-prev-fn-signer","ai-prev-fn-notify","ai-prev-tasks-caller","ai-prev-telemetry","ai-prev-deployer","ai-prev-monitor","ai-prev-incident"],
+    "staging": ["ai-stg-fn-intake","ai-stg-fn-session","ai-stg-fn-ai","ai-stg-fn-complete","ai-stg-fn-report","ai-stg-fn-signer","ai-stg-fn-notify","ai-stg-tasks-caller","ai-stg-telemetry","ai-stg-deployer","ai-stg-monitor","ai-stg-incident"],
+    "keyPolicy": "USER_MANAGED_ZERO",
+    "crossEnvironmentImpersonation": false
+  },
+  "wif": {
+    "preview":{"pool":"aura-github-preview","provider":"github-aura-preview","deployer":"ai-prev-deployer","environment":"preview"},
+    "staging":{"pool":"aura-github-staging","provider":"github-aura-staging","deployer":"ai-stg-deployer","environment":"staging"},
+    "repository":"APPROVAL_REQUIRED_EXACT_ORG_AURACONTROLCENTER",
+    "tokenLifetimeSeconds":900,
+    "wildcardsAllowed":false
+  },
+  "secretPurposes": [
+    {"purpose":"HMAC","consumer":"SESSION_RUNTIME","rotation":"90D_WITH_CAPABILITY_OVERLAP"},
+    {"purpose":"IDEMPOTENCY","consumer":"INTAKE_RUNTIME","rotation":"90D_WITH_7D_OVERLAP"},
+    {"purpose":"IP_HASH_SALT","consumer":"INTAKE_RUNTIME","rotation":"90D_POLICY_VERSION_BOUNDARY"},
+    {"purpose":"GEMINI","consumer":"AI_RUNTIME","rotation":"MAX_90D"},
+    {"purpose":"NOTIFICATIONS","consumer":"NOTIFICATION_RUNTIME","rotation":"MAX_90D_QUEUE_PAUSED"},
+    {"purpose":"SIGNING","consumer":"SIGNER_RUNTIME","rotation":"MAX_90D_DOWNLOADS_OFF"},
+    {"purpose":"APP_CHECK_SERVER_CONFIG","consumer":"APPROVED_SERVER_RUNTIME","rotation":"180D_OR_PROVIDER_CHANGE"}
+  ],
+  "appCheck": {
+    "provider":"RECAPTCHA_ENTERPRISE",
+    "previewDebug":"EXPLICIT_APPROVAL_AND_EXPIRY_ONLY",
+    "stagingDebug":"ZERO",
+    "functions":"EXPLICIT_SURFACE_CLASSIFICATION_AND_ENFORCEMENT",
+    "firestore":"AFTER_RULES_AND_VALID_CLIENT_METRICS",
+    "storage":"BEFORE_BUCKET_USE",
+    "production":"OUT_OF_SCOPE"
+  },
+  "emulatorCertification": [
+    "UNAUTHENTICATED_DENIED",
+    "ORDINARY_AUTHENTICATED_DENIED",
+    "FORGED_SUPER_ADMIN_DENIED",
+    "PLATFORM_TENANTS_WRITE_DENIED",
+    "COUNTERS_DENIED",
+    "IDEMPOTENCY_DENIED",
+    "CAPABILITY_MUTATION_DENIED",
+    "SERVER_OWNED_FIELDS_DENIED",
+    "CROSS_TENANT_DENIED",
+    "ADMIN_SDK_ALLOWED",
+    "EXACTLY_ONCE_PRESERVED",
+    "RATE_LIMITS_PRESERVED",
+    "ROLLBACK_RULES_CLOSED"
+  ],
+  "waves": [
+    {"order":1,"environment":"LOCAL_DEMO","action":"ALIASES_GUARDS_RULES_MANIFESTS_AND_EMULATOR","externalWrites":false},
+    {"order":2,"environment":"PREVIEW","action":"RULES_READBACK_NEGATIVE_POSITIVE_EVIDENCE_STOP","externalWrites":"FUTURE_CHANGE_ID_REQUIRED"},
+    {"order":3,"environment":"PREVIEW","action":"SEPARATE_INDEX_TTL_IAM_WIF_SECRETS_APPCHECK_WAVES","externalWrites":"SEPARATE_APPROVALS_REQUIRED"},
+    {"order":4,"environment":"STAGING","action":"SAME_ARTIFACT_CONTROLLED_REPLICATION_AND_EVIDENCE_STOP","externalWrites":"FUTURE_CHANGE_ID_REQUIRED"},
+    {"order":5,"environment":"PRODUCTION","action":"DENY","externalWrites":false}
+  ],
+  "externalDecisions": [
+    {"id":"R2A-DEC-01","decision":"Nominal security implementation and approval roles","status":"OPEN_EXTERNAL_APPROVAL"},
+    {"id":"R2A-DEC-02","decision":"Exact repository owner and GitHub environments","status":"OPEN_EXTERNAL_APPROVAL"},
+    {"id":"R2A-DEC-03","decision":"Custom runtime roles versus standard roles","status":"OPEN_EXTERNAL_APPROVAL"},
+    {"id":"R2A-DEC-04","decision":"PITR recovery and capability telemetry retention","status":"OPEN_EXTERNAL_APPROVAL"},
+    {"id":"R2A-DEC-05","decision":"Web Apps provider keys and Preview debug policy","status":"OPEN_EXTERNAL_APPROVAL"},
+    {"id":"R2A-DEC-06","decision":"Migrate retire or separately contract legacy client writers","status":"OPEN_EXTERNAL_APPROVAL"}
+  ],
+  "evidenceRequirements": [
+    "RULES_HASH_AND_RULESET_RELEASE",
+    "ALIAS_MAPPING_AND_GUARD_OUTPUT",
+    "INDEX_MANIFEST_AND_READY_STATE",
+    "TTL_FIELD_POLICY_AND_LAG",
+    "SERVICE_ACCOUNT_AND_ZERO_KEY_INVENTORY",
+    "IAM_SCOPE_AND_NEGATIVE_TESTS",
+    "WIF_MAPPING_CONDITION_AUDIENCE_HASHES",
+    "SECRET_METADATA_WITHOUT_VALUES",
+    "APP_CHECK_PROVIDER_ENFORCEMENT_DEBUG_COUNT",
+    "EMULATOR_RESULTS",
+    "DEPLOY_AND_ROLLBACK_RECEIPTS"
+  ],
+  "nextSlice": "R2B_PREVIEW_RULES_AND_TARGETING_IMPLEMENTATION_AFTER_EXTERNAL_DECISIONS",
+  "externalChangesPerformedByR2A": false
+}

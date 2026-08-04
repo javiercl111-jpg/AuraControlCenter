@@ -72,3 +72,14 @@ Cambios de superficie, provider, capability, clasificación, retención, cuota, 
 - [Environment Provisioning Evidence Plan v1](production-remediation/environment/provisioning/ENVIRONMENT_PROVISIONING_EVIDENCE_PLAN_V1.md) — read-back, sanitización y ejercicios de rollback.
 - [Environment Provisioning Approval Packet v1](production-remediation/environment/provisioning/ENVIRONMENT_PROVISIONING_APPROVAL_PACKET_V1.md) — costos, riesgos y sign-offs externos.
 - [Environment Provisioning Matrix v1](production-remediation/environment/provisioning/ENVIRONMENT_PROVISIONING_MATRIX_V1.json) — decisiones, APIs, identidades, recursos, pasos y stop conditions en formato validable.
+
+### R2A — Non-Production Security Baseline Design
+
+- [Non-Production Security Baseline v1](production-remediation/security-baseline/NONPROD_SECURITY_BASELINE_V1.md) — inventario local, invariantes, orden de implementación, riesgos y decisiones externas.
+- [Non-Production Firestore Rules Baseline v1](production-remediation/security-baseline/NONPROD_FIRESTORE_RULES_BASELINE_V1.md) — trust root fail-closed, acceso por colección, migración, Emulator y rollback.
+- [Non-Production Targeting and Alias Guards v1](production-remediation/security-baseline/NONPROD_TARGETING_AND_ALIAS_GUARDS_V1.md) — aliases explícitos, manifest, guard pre-write y artifact build-once.
+- [Non-Production Indexes and TTL Plan v1](production-remediation/security-baseline/NONPROD_INDEXES_AND_TTL_PLAN_V1.md) — índices mapeados a queries, TTL, cleanup, verificación y mitigación.
+- [Non-Production IAM, WIF and Secrets Baseline v1](production-remediation/security-baseline/NONPROD_IAM_WIF_AND_SECRETS_BASELINE_V1.md) — identities por frontera, bindings mínimos, federation y rotación.
+- [Non-Production App Check Baseline v1](production-remediation/security-baseline/NONPROD_APP_CHECK_BASELINE_V1.md) — apps, provider, debug gate, enforcement, métricas y rollback.
+- [Non-Production Security Baseline Execution Plan v1](production-remediation/security-baseline/NONPROD_SECURITY_BASELINE_EXECUTION_PLAN_V1.md) — Emulator, waves Preview/Staging, stop conditions y evidence plan.
+- [Non-Production Security Baseline Matrix v1](production-remediation/security-baseline/NONPROD_SECURITY_BASELINE_MATRIX_V1.json) — inventario, targets, waves, external decisions y evidencia en formato validable.
