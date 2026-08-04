@@ -39,6 +39,10 @@ Esta carpeta contiene la baseline AI-02H1E.4.1 para el hardening del intake púb
 
 No iniciar implementación sin aprobar las decisiones necesarias para el slice. No reanudar D.10S hasta cerrar P2–P9, mantener D.9 Authority verde, ejecutar 22/22 pruebas en emuladores, verificar configuración efectiva y demostrar cero PII/tokens en logs.
 
+## Public Intake Emulator Abuse Certification
+
+[Public Intake Emulator Abuse Certification v1](PUBLIC_INTAKE_EMULATOR_ABUSE_CERTIFICATION_V1.md) documenta el harness cerrado, la matriz CT-01 a CT-22, el seam App Check, la evidencia P2-P7 y las regresiones de AI-02H1E.4.8.
+
 ## Versionado
 
 Cambios de superficie, provider, capability, clasificación, retención, cuota, kill switch, trust boundary o ambiente requieren actualizar el threat model, contrato, pruebas, decision register y roadmap bajo una nueva revisión.
