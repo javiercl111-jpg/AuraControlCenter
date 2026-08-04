@@ -1,0 +1,317 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "AI-02H1E.5.R2C-P",
+  "changeReference": "AI-02H1E.5.R2C-P",
+  "distinctOperatorChangeId": null,
+  "verdict": "CONDITIONAL — RUNTIME SECRETS OR APP CHECK PENDING",
+  "target": {
+    "environment": "preview",
+    "projectId": "aura-intel-preview",
+    "region": "us-central1",
+    "billingEnabled": true,
+    "firebaseMembership": "VERIFIED"
+  },
+  "gate": {
+    "branch": "ops/intelligence-preview-secure-runtime-provisioning",
+    "head": "64e2408567473c9ef12ac945cde21cc0f608c9b7",
+    "originMain": "64e2408567473c9ef12ac945cde21cc0f608c9b7",
+    "worktree": "CLEAN_AT_GATE",
+    "node": "v20.20.2",
+    "npm": "10.8.2",
+    "productionControlState": "REMEDIATION_HOLD",
+    "status": "PASS"
+  },
+  "apis": [
+    {
+      "resource": "cloudfunctions.googleapis.com",
+      "expected": "enabled for later backend migration control plane",
+      "actual": "ENABLED",
+      "status": "ENABLED_AND_VERIFIED",
+      "evidence": "Service Usage final read-back",
+      "risk": "API availability does not authorize workload deployment",
+      "rollback": "disable only under separate change after dependency review",
+      "nextAction": "retain; deploy no Function in this wave"
+    },
+    {
+      "resource": "run.googleapis.com",
+      "expected": "enabled dependency with zero services",
+      "actual": "ENABLED; 0 services",
+      "status": "ENABLED_AND_VERIFIED",
+      "evidence": "Service Usage and Cloud Run read-back",
+      "risk": "public service creation remains possible to privileged operators",
+      "rollback": "disable only after dependency review",
+      "nextAction": "keep traffic and services absent"
+    },
+    {
+      "resource": "cloudbuild.googleapis.com",
+      "expected": "enabled for later build plane",
+      "actual": "ENABLED",
+      "status": "ENABLED_AND_VERIFIED",
+      "evidence": "Service Usage final read-back",
+      "risk": "no build authorization or deployer binding exists",
+      "rollback": "disable only after dependency review",
+      "nextAction": "define exact deploy manifest and WIF first"
+    },
+    {
+      "resource": "artifactregistry.googleapis.com",
+      "expected": "enabled for later immutable artifacts",
+      "actual": "ENABLED",
+      "status": "ENABLED_AND_VERIFIED",
+      "evidence": "Service Usage final read-back",
+      "risk": "repository and retention policy are not configured",
+      "rollback": "disable only after dependency review",
+      "nextAction": "authorize repository in migration wave if required"
+    },
+    {
+      "resource": "secretmanager.googleapis.com",
+      "expected": "enabled with empty metadata-only resources",
+      "actual": "ENABLED; 4 resources; 0 versions",
+      "status": "ENABLED_AND_VERIFIED",
+      "evidence": "Service Usage plus per-secret metadata/version read-back",
+      "risk": "runtime is intentionally nonfunctional until secure injection",
+      "rollback": "remove unused resources only under destructive rollback approval",
+      "nextAction": "approve consumers and inject values through secure channel"
+    },
+    {
+      "resource": "firebaseappcheck.googleapis.com",
+      "expected": "enabled with app registered and enforcement off",
+      "actual": "ENABLED; provider NOT_CONFIGURED; enforcement NOT_CONFIGURED",
+      "status": "CONDITIONAL",
+      "evidence": "Service Usage, Firebase app list, debug-token list",
+      "risk": "no certified App Check client exists",
+      "rollback": "preserve enforcement off; remove app only under separate approval",
+      "nextAction": "approve Preview reCAPTCHA Enterprise key/domains and certify client"
+    },
+    {
+      "resource": "iamcredentials.googleapis.com",
+      "expected": "enable only when WIF or approved impersonation requires it",
+      "actual": "ENABLED as an observed IAM dependency; no WIF or impersonation binding",
+      "status": "DEVIATION_RECORDED",
+      "evidence": "disabled pre-state and enabled final Service Usage read-back; audit attribution unavailable",
+      "risk": "API is available but no target binding or token role was added",
+      "rollback": "dependency analysis before any disablement",
+      "nextAction": "reconcile attribution and WIF design during architecture review"
+    },
+    {
+      "resource": "sts.googleapis.com",
+      "expected": "deferred until exact federation trust is approved",
+      "actual": "DISABLED",
+      "status": "DEFERRED",
+      "evidence": "Service Usage final read-back",
+      "risk": "keyless deploy cannot operate yet",
+      "rollback": "not applicable",
+      "nextAction": "approve repository/ref/environment/audience and provider"
+    },
+    {
+      "resource": "logging.googleapis.com",
+      "expected": "enabled",
+      "actual": "ENABLED from pre-state",
+      "status": "UNCHANGED",
+      "evidence": "pre/post Service Usage read-back",
+      "risk": "PII-safe logging contract still requires workload tests",
+      "rollback": "retain",
+      "nextAction": "add bounded structured log tests"
+    },
+    {
+      "resource": "monitoring.googleapis.com",
+      "expected": "enabled",
+      "actual": "ENABLED from pre-state",
+      "status": "UNCHANGED",
+      "evidence": "pre/post Service Usage read-back",
+      "risk": "alerts and routing are not configured",
+      "rollback": "retain",
+      "nextAction": "approve thresholds, channel, owner, and runbook"
+    },
+    {
+      "resource": "errorreporting.googleapis.com",
+      "expected": "evaluate and enable only if valid",
+      "actual": "INVALID_SERVICE_NAME; initial batch rejected atomically",
+      "status": "BLOCKED",
+      "evidence": "Service Usage catalog error and post-failure no-change read-back",
+      "risk": "no Error Reporting API from the requested identifier",
+      "rollback": "not applicable; no change occurred",
+      "nextAction": "approve a corrected service identifier before enablement"
+    }
+  ],
+  "identities": [
+    {
+      "resource": "preview-functions-runtime",
+      "expected": "dedicated runtime identity with no broad privileges",
+      "actual": "PRESENT; logging.logWriter + monitoring.metricWriter; no workload; 0 user-managed keys",
+      "status": "PARKED_PENDING_ARCHITECTURE",
+      "evidence": "service-account, key, and IAM read-back",
+      "risk": "generic runtime conflicts with R2A per-path identities",
+      "rollback": "remove exact bindings before account removal under separate approval",
+      "nextAction": "map to one approved boundary or replace with per-path identities"
+    },
+    {
+      "resource": "preview-deployer",
+      "expected": "keyless deploy identity backed by exact WIF trust",
+      "actual": "PRESENT; no roles; no WIF; 0 user-managed keys",
+      "status": "DEFERRED",
+      "evidence": "service-account, key, IAM, and WIF read-back",
+      "risk": "deployment is unavailable by design",
+      "rollback": "remove unused account only under separate approval",
+      "nextAction": "approve trust conditions and exact actAs targets"
+    },
+    {
+      "resource": "preview-secret-accessor",
+      "expected": "no generic secret access under R2A",
+      "actual": "PRESENT; no roles; no secret bindings; 0 user-managed keys",
+      "status": "PARKED_BASELINE_CONFLICT",
+      "evidence": "service-account, key, IAM, and secret-policy disposition",
+      "risk": "granting access would violate consumer-specific least privilege",
+      "rollback": "remove unused account under separate approval if architecture rejects it",
+      "nextAction": "use consumer-specific access instead of a generic accessor"
+    },
+    {
+      "resource": "preview-telemetry-writer",
+      "expected": "observability-only identity",
+      "actual": "PRESENT; logging.logWriter + monitoring.metricWriter; no workload; 0 user-managed keys",
+      "status": "PROVISIONED_AND_VERIFIED",
+      "evidence": "service-account, key, and IAM read-back",
+      "risk": "no effective workload test exists yet",
+      "rollback": "remove exact bindings then account under separate approval",
+      "nextAction": "bind only an approved telemetry workload and run negative tests"
+    }
+  ],
+  "secrets": [
+    {
+      "resource": "discovery-idempotency-secret-preview",
+      "expected": "empty Preview resource",
+      "actual": "PRESENT; automatic replication; 0 versions; no accessor",
+      "status": "CREATED_EMPTY",
+      "evidence": "metadata and versions read-back",
+      "risk": "intake cannot run until consumer/value approval",
+      "rollback": "delete only under separately approved destructive rollback",
+      "nextAction": "secure injection and consumer-specific binding"
+    },
+    {
+      "resource": "discovery-ip-hash-salt-preview",
+      "expected": "empty Preview resource",
+      "actual": "PRESENT; automatic replication; 0 versions; no accessor",
+      "status": "CREATED_EMPTY",
+      "evidence": "metadata and versions read-back",
+      "risk": "IP hashing cannot run until consumer/value approval",
+      "rollback": "delete only under separately approved destructive rollback",
+      "nextAction": "secure injection and consumer-specific binding"
+    },
+    {
+      "resource": "discovery-hmac-secret-preview",
+      "expected": "empty Preview resource",
+      "actual": "PRESENT; automatic replication; 0 versions; no accessor",
+      "status": "CREATED_EMPTY",
+      "evidence": "metadata and versions read-back",
+      "risk": "capability signing cannot run until consumer/value approval",
+      "rollback": "delete only under separately approved destructive rollback",
+      "nextAction": "secure injection and consumer-specific binding"
+    },
+    {
+      "resource": "discovery-gemini-api-key-preview",
+      "expected": "empty Preview resource",
+      "actual": "PRESENT; automatic replication; 0 versions; no accessor",
+      "status": "CREATED_EMPTY",
+      "evidence": "metadata and versions read-back",
+      "risk": "AI evaluation cannot run until provider/value approval",
+      "rollback": "delete only under separately approved destructive rollback",
+      "nextAction": "secure injection and consumer-specific binding"
+    }
+  ],
+  "appCheck": {
+    "resource": "Aura Intelligence Preview Web",
+    "expected": "one Preview Web app, provider prepared without premature enforcement",
+    "actual": "PRESENT; app ID stored only as SHA-256 fingerprint; provider NOT_CONFIGURED; enforcement NOT_CONFIGURED; debug tokens 0",
+    "appIdFingerprint": "sha256:dbdeed4c9993004032dfa45b44e37ae53e70be1416dc19edf826b968a386d321",
+    "status": "CONDITIONAL",
+    "evidence": "Firebase app and debug-token read-back",
+    "risk": "site key/domains and certified client are absent",
+    "rollback": "keep enforcement off; destructive app removal requires separate approval",
+    "nextAction": "configure exclusive Preview reCAPTCHA Enterprise provider after approval"
+  },
+  "wif": {
+    "resource": "Preview WIF",
+    "expected": "keyless exact repository/ref/environment trust",
+    "actual": "0 pools; 0 providers; 0 impersonation bindings; STS disabled",
+    "status": "DEFERRED",
+    "evidence": "WIF and IAM read-back",
+    "risk": "no deploy capability; permanent-key fallback prohibited",
+    "rollback": "not applicable",
+    "nextAction": "supply and approve exact trust attributes and owners"
+  },
+  "storage": {
+    "decision": "A. DEFERRED — certify structured results without documents first",
+    "bucketCount": 0,
+    "status": "DEFERRED",
+    "sourceBucketCaveat": "a later Functions deployment must not implicitly create or use a bucket without explicit review"
+  },
+  "runtimeLimits": {
+    "deploymentState": "DESIGN_ONLY_NO_WORKLOAD",
+    "region": "us-central1",
+    "minInstances": 0,
+    "maxInstancesPerSurface": 2,
+    "maxConcurrency": 5,
+    "timeoutsSeconds": {
+      "intake": 15,
+      "session": 30,
+      "ai": 60,
+      "completion": 60
+    },
+    "memoryMiB": {
+      "intake": 256,
+      "session": 256,
+      "ai": 512,
+      "completion": 512
+    },
+    "automaticPublicTraffic": false,
+    "piiInLogs": false,
+    "budgetAndAlertState": "NOT_CONFIGURED_PENDING_AMOUNT_CHANNEL_OWNER"
+  },
+  "resourceCounts": {
+    "enabledApis": 49,
+    "dedicatedServiceAccounts": 4,
+    "userManagedKeysAcrossDedicatedAccounts": 0,
+    "secretResources": 4,
+    "secretVersions": 0,
+    "firebaseWebApps": 1,
+    "appCheckDebugTokens": 0,
+    "wifPools": 0,
+    "functions": 0,
+    "cloudRunServices": 0,
+    "storageBuckets": 0,
+    "cloudTasks": 0
+  },
+  "environmentSafety": [
+    {
+      "environment": "staging",
+      "projectId": "aura-intel-staging",
+      "actual": "ACTIVE; Firestore nam5/native/delete protection enabled/PITR disabled; 1 automatic service account; 0 Functions; 0 Cloud Run services; 0 buckets; never targeted by a write",
+      "status": "UNCHANGED"
+    },
+    {
+      "environment": "production",
+      "projectId": "aura-control-center-debb3",
+      "actual": "ACTIVE; never targeted by a write; repository control state REMEDIATION_HOLD",
+      "status": "UNCHANGED"
+    }
+  ],
+  "scope": {
+    "previewExternalChanges": true,
+    "sourceCodeChanged": false,
+    "firestoreRulesChanged": false,
+    "functionsDeployed": false,
+    "cloudRunServicesCreated": false,
+    "storageBucketsCreated": false,
+    "cloudTasksCreated": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "commitCreated": false,
+    "pushPerformed": false,
+    "pullRequestCreated": false
+  },
+  "rollback": {
+    "status": "NOT_EXECUTED_NO_FAILURE",
+    "authorization": "NOT_GRANTED_FOR_DESTRUCTIVE_ROLLBACK",
+    "safeOrderIfLaterApproved": "remove exact bindings, remove unused resources, then evaluate API disablement dependencies"
+  },
+  "finalReadBackUtc": "2026-08-04T23:04:23Z"
+}
