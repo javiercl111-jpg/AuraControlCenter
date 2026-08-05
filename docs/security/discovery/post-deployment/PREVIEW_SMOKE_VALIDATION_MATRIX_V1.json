@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "1.0",
+  "changeId": "AI-02H1E.7-PREVIEW-SMOKE-VALIDATION-20260805-01",
+  "program": "AI-02H1E.5.0",
+  "phase": "AI-02H1E.7",
+  "verdict": "BLOCKED — PREVIEW VALIDATION FAILED",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "productionAuthorized": false
+  },
+  "gate": {
+    "branch": "audit/intelligence-preview-smoke-validation",
+    "head": "ad4986aaffc278c2c949488bde86f9a253e4e7a5",
+    "originMain": "ad4986aaffc278c2c949488bde86f9a253e4e7a5",
+    "initialWorktreeClean": true,
+    "firebaseAlias": "aura-intel-preview",
+    "gcpProject": "aura-intel-preview",
+    "node": "v20.20.2",
+    "status": "PASS"
+  },
+  "readBack": {
+    "functions": {
+      "expected": 5,
+      "actual": 5,
+      "active": 5,
+      "failed": 0,
+      "runtimeIdentitiesExact": true
+    },
+    "cloudRun": {
+      "expected": 5,
+      "actual": 5,
+      "ready": 5,
+      "publicInvokerBindings": 0,
+      "invokerStatus": "BLOCKING"
+    },
+    "secretManager": {
+      "resources": 3,
+      "enabledVersionsPerResource": 1,
+      "exactResourceLevelAccessors": true,
+      "projectLevelAccessorBindings": 0,
+      "valuesRead": false
+    },
+    "artifactRegistry": {
+      "repository": "gcf-artifacts",
+      "format": "DOCKER",
+      "cleanupPolicyCount": 1,
+      "cleanupPolicyActive": true
+    },
+    "storage": {
+      "applicationSurface": false,
+      "triggerCount": 0,
+      "googleManagedCloudFunctionsBuckets": 2
+    },
+    "tasks": {
+      "apiEnabled": false,
+      "triggerCount": 0
+    }
+  },
+  "liveProbes": {
+    "total": 20,
+    "businessDataWritten": false,
+    "tokensCreated": false,
+    "preflight": {
+      "count": 5,
+      "httpStatus": 403
+    },
+    "missingAppCheck": {
+      "count": 5,
+      "httpStatus": 403,
+      "evaluationLayer": "CLOUD_RUN_IAM"
+    },
+    "invalidAppCheck": {
+      "count": 5,
+      "httpStatus": 403,
+      "evaluationLayer": "CLOUD_RUN_IAM"
+    },
+    "invalidAuthentication": {
+      "count": 5,
+      "httpStatus": 401,
+      "evaluationLayer": "CLOUD_RUN_IAM"
+    }
+  },
+  "functionalCases": {
+    "validRequest": "BLOCKED_NOT_REACHED",
+    "invalidRequest": "BLOCKED_NOT_REACHED",
+    "missingParameters": "BLOCKED_NOT_REACHED",
+    "missingAppCheck": "PLATFORM_DENIED_NOT_APP_CHECK_EVALUATED",
+    "invalidAuthentication": "PLATFORM_DENIED",
+    "wrongTenant": "BLOCKED_NOT_REACHED",
+    "replay": "BLOCKED_NOT_REACHED",
+    "idempotency": "BLOCKED_NOT_REACHED",
+    "timeout": "BLOCKED_NOT_REACHED",
+    "rateLimit": "BLOCKED_NOT_REACHED"
+  },
+  "security": {
+    "platformFailClosed": true,
+    "applicationFailClosedLiveVerified": false,
+    "applicationPiiMarkers": 0,
+    "applicationSecretOrTokenMarkers": 0,
+    "exactFunctionExports": 5,
+    "storageExports": 0,
+    "taskExports": 0,
+    "pdfExports": 0,
+    "notificationExports": 0,
+    "productionUrlReferences": 2,
+    "productionUrlRequirement": "FAIL"
+  },
+  "telemetry": {
+    "platformRequestLogging": true,
+    "runtimeReached": false,
+    "window": "24h",
+    "correlationEntries": 0,
+    "durationEntries": 0,
+    "safeErrorEntries": 0,
+    "measurementEntries": 0,
+    "tokensLogged": false
+  },
+  "previewClient": {
+    "providerKeyCount": 1,
+    "webAppCount": 1,
+    "publishedClientFirebaseInitialization": "FAILED_CONFIGURATION_MISSING",
+    "functionalAttestationFlowAvailable": false
+  },
+  "scope": {
+    "codeModified": false,
+    "infrastructureModified": false,
+    "firebaseModified": false,
+    "vercelModified": false,
+    "stagingModified": false,
+    "productionModified": false,
+    "deployExecuted": false,
+    "commitCreated": false,
+    "pushExecuted": false,
+    "pullRequestCreated": false
+  }
+}
