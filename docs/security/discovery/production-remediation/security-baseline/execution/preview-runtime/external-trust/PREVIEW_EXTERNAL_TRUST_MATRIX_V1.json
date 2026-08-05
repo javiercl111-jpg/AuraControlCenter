@@ -1,0 +1,141 @@
+{
+  "version": "PREVIEW_EXTERNAL_TRUST_MATRIX_V1",
+  "changeId": "AI-02H1E.5.R2C-P5-PREVIEW-EXTERNAL-TRUST-20260805-01",
+  "recordedAt": "2026-08-04T19:49:08-06:00",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "stagingMutation": false,
+    "productionMutation": false
+  },
+  "status": "BLOCKED",
+  "secrets": [
+    {
+      "resource": "discovery-idempotency-secret-preview",
+      "versionCount": 0,
+      "versionState": "ABSENT",
+      "accessors": ["preview-public-intake-runtime"],
+      "status": "INTERNAL_VERSION_BLOCKED_BY_EXECUTION_CONTROL"
+    },
+    {
+      "resource": "discovery-hmac-secret-preview",
+      "versionCount": 0,
+      "versionState": "ABSENT",
+      "accessors": ["preview-discovery-complete-rt"],
+      "status": "INTERNAL_VERSION_BLOCKED_BY_EXECUTION_CONTROL"
+    },
+    {
+      "resource": "discovery-gemini-api-key-preview",
+      "versionCount": 0,
+      "versionState": "ABSENT",
+      "accessors": ["preview-conversation-runtime"],
+      "status": "GEMINI_PENDING_SECURE_OPERATOR_CHANNEL"
+    },
+    {
+      "resource": "discovery-ip-hash-salt-preview",
+      "versionCount": 0,
+      "versionState": "ABSENT",
+      "accessors": [],
+      "status": "DEFERRED"
+    }
+  ],
+  "secretIam": {
+    "projectLevelAccessorBindings": 0,
+    "crossRuntimeBindings": 0,
+    "defaultComputeAccessors": 0,
+    "deployerAccessors": 0
+  },
+  "wif": {
+    "poolId": "preview-github-pool",
+    "poolState": "ACTIVE",
+    "providerId": "preview-github-provider",
+    "providerState": "ACTIVE",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "allowedAudienceMode": "CANONICAL_PROVIDER_RESOURCE_DEFAULT",
+    "attributeMapping": [
+      "google.subject=assertion.sub",
+      "attribute.repository=assertion.repository",
+      "attribute.repository_owner=assertion.repository_owner",
+      "attribute.ref=assertion.ref",
+      "attribute.environment=assertion.environment",
+      "attribute.event_name=assertion.event_name"
+    ],
+    "condition": {
+      "repository": "javiercl111-jpg/AuraControlCenter",
+      "repositoryOwner": "javiercl111-jpg",
+      "ref": "refs/heads/main",
+      "environment": "preview",
+      "eventName": "push",
+      "subject": "repo:javiercl111-jpg/AuraControlCenter:environment:preview"
+    },
+    "targetServiceAccount": "preview-deployer",
+    "bindingRole": "roles/iam.workloadIdentityUser",
+    "bindingScope": "REPOSITORY_ATTRIBUTE_PRINCIPAL_SET",
+    "tokenLifetimeTargetSeconds": 900,
+    "forksAllowed": false,
+    "pullRequestsAllowed": false,
+    "featureBranchesAllowed": false,
+    "tagsAllowed": false,
+    "status": "CREATED_AND_VERIFIED"
+  },
+  "appCheck": {
+    "webAppDisplayName": "Aura Intelligence Preview Web",
+    "platform": "WEB",
+    "appIdSuffix": "b3328604d97b6386af2449",
+    "providerTarget": "RECAPTCHA_ENTERPRISE",
+    "recaptchaEnterpriseApiEnabled": false,
+    "providerReadback": "UNKNOWN_403",
+    "enforcement": "INHERITED_OFF_NOT_API_VERIFIED",
+    "debugTokenCount": 0,
+    "siteKeyConfiguredByChange": false,
+    "status": "PENDING_PERMISSION_DOMAIN_AND_SITE_KEY"
+  },
+  "vercel": {
+    "candidateProject": "aura-control-center",
+    "repositoryLinkPresent": false,
+    "targetingStatus": "AMBIGUOUS_NO_WRITE",
+    "previewVariableNamesObserved": [
+      "VITE_RECAPTCHA_SITE_KEY",
+      "VITE_FIREBASE_API_KEY",
+      "VITE_FIREBASE_AUTH_DOMAIN",
+      "VITE_FIREBASE_PROJECT_ID",
+      "VITE_FIREBASE_MESSAGING_SENDER_ID",
+      "VITE_FIREBASE_APP_ID"
+    ],
+    "observedScope": ["production", "preview"],
+    "requiredPreviewOnlyVariablesCreated": [],
+    "productionVariablesModified": false
+  },
+  "observability": {
+    "logBasedMetrics": [
+      "preview_appcheck_rejections",
+      "preview_discovery_runtime_errors",
+      "preview_iam_policy_changes",
+      "preview_secret_access_denials"
+    ],
+    "alertPolicyCount": 0,
+    "notificationChannelReadback": "PENDING",
+    "ownerApproval": "PENDING",
+    "alertsCreatedByChange": 0,
+    "budgets": {
+      "usd5": "PENDING_PERMISSION_OR_API",
+      "usd10": "PENDING_PERMISSION_OR_API",
+      "createdByChange": 0
+    }
+  },
+  "keyInventory": {
+    "serviceAccountCount": 11,
+    "userManagedKeyCount": 0,
+    "jsonKeysCreated": 0,
+    "runtimeProjectRoles": ["roles/datastore.user", "roles/logging.logWriter"],
+    "deployerProjectRoles": []
+  },
+  "infrastructure": {
+    "functions": 0,
+    "cloudRunServices": 0,
+    "storageBuckets": 0,
+    "cloudTasksApiEnabled": false,
+    "functionDeployPerformed": false,
+    "cloudRunDeployPerformed": false
+  }
+}
