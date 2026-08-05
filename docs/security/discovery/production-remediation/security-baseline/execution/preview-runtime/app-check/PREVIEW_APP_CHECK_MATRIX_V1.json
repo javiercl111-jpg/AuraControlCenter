@@ -1,0 +1,124 @@
+{
+  "version": "PREVIEW_APP_CHECK_MATRIX_V1",
+  "program": "AI-02H1E.5.0",
+  "slice": "AI-02H1E.5.R2C-P5B",
+  "changeId": "AI-02H1E.5.R2C-P5B-PREVIEW-APP-CHECK-20260805-01",
+  "recordedOn": "2026-08-05",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "branch": "ops/intelligence-preview-appcheck",
+    "certifiedBase": "6bd724fa1a3bfc1ba075a9aa4228f94c4fc2d998"
+  },
+  "gate": {
+    "status": "PASS",
+    "headEqualsOriginMain": true,
+    "worktreeCleanBeforeChange": true,
+    "nodeVersion": "v20.20.2",
+    "npmVersion": "10.8.2",
+    "targetVerified": true
+  },
+  "status": "CONDITIONAL_RECAPTCHA_ENTERPRISE_REQUIRES_MANUAL_APPROVAL",
+  "productionAuthorized": false,
+  "firebaseWebApp": {
+    "count": 1,
+    "displayName": "Aura Intelligence Preview Web",
+    "platform": "WEB",
+    "state": "ACTIVE",
+    "appIdSuffix": "b3328604d97b6386af2449",
+    "createdByChange": false,
+    "classification": "READY"
+  },
+  "apis": [
+    {
+      "service": "firebase.googleapis.com",
+      "before": "ENABLED",
+      "after": "ENABLED",
+      "changedByChange": false
+    },
+    {
+      "service": "firebaseappcheck.googleapis.com",
+      "before": "ENABLED",
+      "after": "ENABLED",
+      "changedByChange": false
+    },
+    {
+      "service": "recaptchaenterprise.googleapis.com",
+      "before": "DISABLED",
+      "after": "ENABLED",
+      "changedByChange": true
+    }
+  ],
+  "recaptchaEnterprise": {
+    "keyCount": 0,
+    "keyCreatedByChange": false,
+    "integrationTarget": "SCORE_BASED_WEB",
+    "previewHostingSite": "aura-intel-preview",
+    "previewDomainCandidate": "aura-intel-preview.web.app",
+    "localhostConfigured": false,
+    "productionDomainsConfigured": false,
+    "classification": "MISSING_MANUAL_APPROVAL"
+  },
+  "appCheck": {
+    "provider": "RECAPTCHA_ENTERPRISE",
+    "providerStatus": "UNKNOWN_READBACK_403_NO_SITE_KEY_AVAILABLE",
+    "providerCreatedByChange": false,
+    "enforcement": "INHERITED_OFF_NOT_API_VERIFIED",
+    "enforcementChangedByChange": false,
+    "debugTokenCount": 0,
+    "debugTokenCountVerified": true,
+    "debugTokenCreatedByChange": false,
+    "classification": "PARTIAL"
+  },
+  "client": {
+    "projectTarget": "aura-intel-preview",
+    "environmentTarget": "PREVIEW",
+    "provider": "RECAPTCHA_ENTERPRISE",
+    "siteKeyVariable": "VITE_FIREBASE_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY",
+    "automaticRefresh": true,
+    "debugEnabled": false,
+    "runtimeSiteKeyStatus": "PENDING_REMOTE_SITE_KEY",
+    "contractTestCommand": "test:preview-trust-completion",
+    "contractTestsPassed": 20,
+    "contractTestsFailed": 0,
+    "codeModified": false
+  },
+  "infrastructure": {
+    "functions": 0,
+    "cloudRunServices": 0,
+    "storageBuckets": 0,
+    "cloudTasksResources": 0,
+    "functionDeployPerformed": false
+  },
+  "scopeControl": {
+    "rulesMutation": false,
+    "secretMutation": false,
+    "vercelMutation": false,
+    "storageMutation": false,
+    "tasksMutation": false,
+    "stagingState": "UNCHANGED",
+    "productionState": "UNCHANGED_REMEDIATION_HOLD"
+  },
+  "externalWrites": [
+    {
+      "resource": "recaptchaenterprise.googleapis.com",
+      "action": "ENABLE_API",
+      "target": "aura-intel-preview",
+      "readBack": "ENABLED"
+    }
+  ],
+  "manualCompletionRequirements": [
+    "CONFIRM_FINAL_PREVIEW_DOMAIN",
+    "CREATE_PREVIEW_ONLY_SCORE_BASED_SITE_KEY",
+    "REGISTER_SITE_KEY_WITH_EXISTING_WEB_APP",
+    "KEEP_ENFORCEMENT_OFF",
+    "VERIFY_PROVIDER_AND_SITE_KEY_METADATA",
+    "VERIFY_DEBUG_TOKEN_COUNT_ZERO"
+  ],
+  "rollback": {
+    "api": "DISABLE_RECAPTCHA_ENTERPRISE_API_ONLY_AFTER_CONFIRMING_ZERO_DEPENDENT_RESOURCES",
+    "futureInvalidKey": "DELETE_ONLY_THE_INVALID_PREVIEW_KEY",
+    "futureInvalidProvider": "REMOVE_ONLY_THE_INVALID_PREVIEW_PROVIDER_ASSOCIATION",
+    "productionMutationAllowed": false
+  }
+}
