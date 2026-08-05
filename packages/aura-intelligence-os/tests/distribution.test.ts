@@ -241,7 +241,10 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
     );
 
     expect(manifest.scripts.prebuild).toBe(
-      'npm run verify:intelligence-os-distribution'
+      'npm run prepare:intelligence-os-distribution && npm run verify:intelligence-os-distribution'
+    );
+    expect(manifest.scripts['prepare:intelligence-os-distribution']).toBe(
+      'npm --prefix .. run stage:intelligence-os:functions'
     );
     expect(manifest.scripts['verify:intelligence-os-distribution']).toBe(
       'node scripts/verifyIntelligenceOsDistribution.cjs'

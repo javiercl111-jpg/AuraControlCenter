@@ -17,12 +17,15 @@ The staged package contains only `dist/`, this README, and a reduced private
 manifest with a deterministic content fingerprint. It has no build scripts,
 development dependencies, source files, tests, `node_modules`, or lockfile.
 
-From a clean checkout, the reproducible order is:
+From a clean checkout, the self-contained Functions build order is:
 
 1. `npm ci`
-2. `npm run stage:intelligence-os:functions`
-3. `npm ci --prefix functions`
-4. `npm run build --prefix functions`
+2. `npm ci --prefix functions`
+3. `npm run build --prefix functions`
+
+The Functions `prebuild` lifecycle runs the canonical staging command and then
+the distribution verifier. Running `npm run stage:intelligence-os:functions`
+explicitly remains supported for CI jobs and distribution-only validation.
 
 Firebase predeploy runs the staging command before the verified Functions
 build. The Firebase ignore contract retains its default exclusions without

@@ -2,7 +2,8 @@
   "name": "functions",
   "scripts": {
     "lint": "eslint src",
-    "prebuild": "npm run verify:intelligence-os-distribution",
+    "prebuild": "npm run prepare:intelligence-os-distribution && npm run verify:intelligence-os-distribution",
+    "prepare:intelligence-os-distribution": "npm --prefix .. run stage:intelligence-os:functions",
     "build": "tsc && node copyAssets.js",
     "verify:intelligence-os-distribution": "node scripts/verifyIntelligenceOsDistribution.cjs",
     "test:intelligence-os-consumption": "node tests/intelligenceOsConsumption.cjs",

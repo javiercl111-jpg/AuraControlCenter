@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "1.0",
+  "changeId": "AI-02H1E.5.R3C1-INTELLIGENCE-OS-DISTRIBUTION-20260805-01",
+  "date": "2026-08-05",
+  "branch": "ops/intelligence-os-distribution-certification",
+  "base": "origin/main",
+  "certifiedSha": "57154de233ad1f51acc925730eae872edf6b8a18",
+  "futureTargetProject": "aura-intel-preview",
+  "productionState": "REMEDIATION_HOLD",
+  "verdict": "INTELLIGENCE OS DISTRIBUTION CERTIFIED — READY TO RESUME PREVIEW DEPLOYMENT",
+  "deploymentExecuted": false,
+  "officialWorkflow": [
+    "npm ci",
+    "npm ci --prefix functions",
+    "npm run build --prefix functions"
+  ],
+  "prebuildWorkflow": [
+    "npm --prefix .. run stage:intelligence-os:functions",
+    "npm run verify:intelligence-os-distribution"
+  ],
+  "artifact": {
+    "path": "functions/.generated/aura-intelligence-os",
+    "ignoredByGit": true,
+    "trackedFiles": 0,
+    "totalFiles": 204,
+    "distFiles": 202,
+    "additionalFiles": [
+      "README.md",
+      "package.json"
+    ],
+    "manifestDistSha256": "b1d625329c3847eeb4121a8bda84ba15172967b14604aff97a882cc5295c0275",
+    "aggregateFingerprint": "7110ddb228b8c4c803b67ccafe6c14f32404f554561db36745511d369bfc4a6a",
+    "secondBuildFingerprint": "7110ddb228b8c4c803b67ccafe6c14f32404f554561db36745511d369bfc4a6a",
+    "inventoryIdentical": true,
+    "fingerprintIdentical": true,
+    "exports": [
+      "@aura/intelligence-os/server"
+    ]
+  },
+  "securityChecks": {
+    "environmentFiles": 0,
+    "credentialPatterns": 0,
+    "absolutePathPatterns": 0,
+    "productionProjectIds": 0,
+    "nodeEnvTargeting": 0,
+    "forbiddenSurfacePaths": 0,
+    "forbiddenRuntimeImports": 0,
+    "additionalHandlers": 0,
+    "allowlistChanged": false
+  },
+  "workflowAssessment": {
+    "canonicalStageCommandIdentified": true,
+    "deterministic": true,
+    "generatedDirectoryMustRemainIgnored": true,
+    "functionsBuildMustStageAutomatically": true,
+    "ciAlreadyStagesExplicitly": true,
+    "localCiDivergenceBeforeChange": true,
+    "localCiDivergenceAfterChange": false
+  },
+  "validations": [
+    { "name": "root-npm-ci", "status": "PASS" },
+    { "name": "functions-npm-ci", "status": "PASS" },
+    { "name": "distribution-verifier", "status": "PASS" },
+    { "name": "distribution-suite", "passed": 7, "total": 7 },
+    { "name": "functions-build", "status": "PASS" },
+    { "name": "deployment-unit", "passed": 15, "total": 15 },
+    { "name": "runtime-contracts", "passed": 18, "total": 18 },
+    { "name": "preview-trust-completion", "passed": 20, "total": 20 },
+    { "name": "typescript-noemit", "status": "PASS" },
+    { "name": "preview-guard", "status": "PASS" },
+    { "name": "preview-dry-run", "status": "PASS", "deploymentExecuted": false },
+    { "name": "git-diff-check", "status": "PASS" }
+  ],
+  "repositoryChanges": [
+    "functions/package.json",
+    "packages/aura-intelligence-os/README.md",
+    "packages/aura-intelligence-os/tests/distribution.test.ts",
+    "docs/security/discovery/production-remediation/deployment-readiness/distribution"
+  ],
+  "externalChanges": {
+    "firebase": false,
+    "gcp": false,
+    "vercel": false,
+    "staging": false,
+    "production": false
+  },
+  "gitActions": {
+    "commit": false,
+    "push": false,
+    "pullRequest": false
+  }
+}
+
