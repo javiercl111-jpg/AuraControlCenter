@@ -9,7 +9,7 @@ import {
 } from "./idempotencyHelper";
 import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
-import { resolvePlatformPrincipal } from "../auth/resolvePlatformPrincipal";
+import { resolveDiscoveryPrincipalV1 } from "./runtimeContracts";
 import {
   DISCOVERY_INTAKE_IDEMPOTENCY_POLICY_V1,
   isDiscoveryIntakeIdempotencyError,
@@ -161,9 +161,9 @@ export const createDiscoveryLead = onCall(
 
       const config = await getDiscoverySecurityConfig();
 
-      let authCaller: Awaited<ReturnType<typeof resolvePlatformPrincipal>> | null = null;
+      let authCaller: Awaited<ReturnType<typeof resolveDiscoveryPrincipalV1>> | null = null;
       if (request.auth) {
-        authCaller = await resolvePlatformPrincipal(db, request.auth);
+        authCaller = await resolveDiscoveryPrincipalV1(db, request.auth);
       }
       const allowedRoles = ["SALES_ADVISOR", "PLATFORM_PARTNER", "SALES_DIRECTOR", "PLATFORM_OWNER", "FOUNDER", "SUPER_ADMIN", "PARTNER"];
       const isAuthorizedCaller = authCaller !== null && allowedRoles.includes(authCaller.role);

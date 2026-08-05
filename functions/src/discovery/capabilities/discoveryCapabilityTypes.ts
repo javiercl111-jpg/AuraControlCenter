@@ -75,6 +75,22 @@ export interface DiscoveryCompletionPublicResultV1 {
   readonly trustDecision: string;
 }
 
+export interface DiscoveryStructuredCompletionPublicResultV1 {
+  readonly dossierId: string;
+  readonly trustDecision: string;
+  readonly structuredResultAvailable: true;
+}
+
+export function createDiscoveryStructuredCompletionPublicResultV1(
+  completion: DiscoveryCompletionRecordV1,
+): DiscoveryStructuredCompletionPublicResultV1 {
+  return Object.freeze({
+    dossierId: completion.dossierId,
+    trustDecision: completion.trustDecision,
+    structuredResultAvailable: true,
+  });
+}
+
 export function createDiscoveryCompletionPublicResultV1(
   completion: DiscoveryCompletionRecordV1,
   reportCapabilityToken: string,

@@ -90,7 +90,7 @@ function policy(
   return {
     version: DISCOVERY_CONTAINMENT_POLICY_SCHEMA_VERSION,
     policyVersion,
-    environment: "TEST",
+    environment: "LOCAL_DEMO",
     publicIntakeEnabled: true,
     advisorCodeResolutionEnabled: true,
     tokenIssuanceEnabled: true,
@@ -143,7 +143,7 @@ async function activate(value: DiscoveryContainmentPolicyV1) {
   });
 }
 
-function evaluator(environment: DiscoveryContainmentEnvironment = "TEST") {
+function evaluator(environment: DiscoveryContainmentEnvironment = "LOCAL_DEMO") {
   const clock = { nowEpochMilliseconds: () => BASE_TIME };
   const core = new DefaultDiscoveryContainmentEvaluator(
     new FirestoreDiscoveryContainmentPolicyProvider(db),
@@ -289,12 +289,12 @@ describe("Discovery Containment Policy V1", () => {
   });
 
   it("16. corrupted policy fails closed", async () => {
-    await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION).doc("TEST").set({
-      version: "DISCOVERY_CONTAINMENT_ACTIVE_V1", environment: "TEST",
+    await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION).doc("LOCAL_DEMO").set({
+      version: "DISCOVERY_CONTAINMENT_ACTIVE_V1", environment: "LOCAL_DEMO",
       policyVersion: "corrupt",
     });
     await db.collection(DISCOVERY_CONTAINMENT_POLICIES_COLLECTION)
-      .doc(buildDiscoveryContainmentPolicyDocumentId("TEST", "corrupt"))
+      .doc(buildDiscoveryContainmentPolicyDocumentId("LOCAL_DEMO", "corrupt"))
       .set({ version: "CORRUPT" });
     expect((await evaluator()("CONVERSATION_AI")).code)
       .toBe("CONTAINMENT_POLICY_CORRUPTED");
@@ -359,7 +359,7 @@ describe("Discovery Containment Policy V1", () => {
     await activate(policy("test-off", { publicIntakeEnabled: false }));
     const staging = policy("staging-on", { environment: "STAGING" });
     await activate(staging);
-    expect((await evaluator("TEST")("PUBLIC_INTAKE")).decision).toBe("DENY");
+    expect((await evaluator("LOCAL_DEMO")("PUBLIC_INTAKE")).decision).toBe("DENY");
     expect((await evaluator("STAGING")("PUBLIC_INTAKE")).decision).toBe("ALLOW");
   });
 
@@ -373,7 +373,7 @@ describe("Discovery Containment Policy V1", () => {
       updatedAt: BASE_TIME - 3_000,
     }));
     const result = await new FirestoreDiscoveryContainmentRepository(db).rollback({
-      environment: "TEST", actorRole: "SECURITY_OPERATOR",
+      environment: "LOCAL_DEMO", actorRole: "SECURITY_OPERATOR",
       approverRole: "SECURITY_APPROVER", reasonCode: "EMERGENCY_ROLLBACK",
       timestamp: BASE_TIME,
     });
@@ -384,12 +384,12 @@ describe("Discovery Containment Policy V1", () => {
   it("24. missing rollback target fails closed", async () => {
     const invalid = policy("rollback-missing", { rollbackVersion: "missing-v1" });
     await writeRawPolicy(invalid);
-    await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION).doc("TEST").set({
-      version: "DISCOVERY_CONTAINMENT_ACTIVE_V1", environment: "TEST",
+    await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION).doc("LOCAL_DEMO").set({
+      version: "DISCOVERY_CONTAINMENT_ACTIVE_V1", environment: "LOCAL_DEMO",
       policyVersion: invalid.policyVersion,
     });
     await expect(new FirestoreDiscoveryContainmentRepository(db).rollback({
-      environment: "TEST", actorRole: invalid.ownerRole,
+      environment: "LOCAL_DEMO", actorRole: invalid.ownerRole,
       approverRole: invalid.approvedByRole, reasonCode: "EMERGENCY_ROLLBACK",
       timestamp: BASE_TIME,
     })).rejects.toMatchObject({ code: "CONTAINMENT_ROLLBACK_INVALID" });
@@ -400,12 +400,12 @@ describe("Discovery Containment Policy V1", () => {
     const b = policy("cycle-b", { rollbackVersion: "cycle-a" });
     await writeRawPolicy(a);
     await writeRawPolicy(b);
-    await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION).doc("TEST").set({
-      version: "DISCOVERY_CONTAINMENT_ACTIVE_V1", environment: "TEST",
+    await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION).doc("LOCAL_DEMO").set({
+      version: "DISCOVERY_CONTAINMENT_ACTIVE_V1", environment: "LOCAL_DEMO",
       policyVersion: b.policyVersion,
     });
     await expect(new FirestoreDiscoveryContainmentRepository(db).rollback({
-      environment: "TEST", actorRole: b.ownerRole,
+      environment: "LOCAL_DEMO", actorRole: b.ownerRole,
       approverRole: b.approvedByRole, reasonCode: "EMERGENCY_ROLLBACK",
       timestamp: BASE_TIME,
     })).rejects.toMatchObject({ code: "CONTAINMENT_ROLLBACK_INVALID" });
@@ -489,7 +489,7 @@ describe("Discovery Containment Policy V1", () => {
       consume: async () => ({ allowed: true, remaining: 1, retryAfterSeconds: 0 }),
     }, { nowEpochMilliseconds: () => BASE_TIME });
     expect((await core.evaluate({
-      surface: "PUBLIC_INTAKE", environment: "TEST",
+      surface: "PUBLIC_INTAKE", environment: "LOCAL_DEMO",
     })).decision).toBe("ALLOW");
   });
 

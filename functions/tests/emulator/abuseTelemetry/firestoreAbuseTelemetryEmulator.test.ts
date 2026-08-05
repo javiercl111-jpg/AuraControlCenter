@@ -76,7 +76,7 @@ function command(
     outcome: "ACCEPTED",
     reasonCode: "INTAKE_ACCEPTED",
     durationMs: 25,
-    environment: "TEST",
+    environment: "LOCAL_DEMO",
     correlationKey: "correlation-one",
     requestKey: `request-${index}`,
     subject: deriveTelemetrySubjectHashV1(`user-${index}@example.test`, "test-secret"),

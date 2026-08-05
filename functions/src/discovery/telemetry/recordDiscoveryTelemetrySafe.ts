@@ -4,6 +4,10 @@ import { FirestoreStructuredAbuseTelemetryRepository } from
   "../../infrastructure/firestore/discoveryTelemetry";
 import { StructuredAbuseTelemetryRecorder } from
   "./StructuredAbuseTelemetryRecorder";
+import {
+  isRuntimeEnvironmentErrorV1,
+  resolveRuntimeEnvironmentV1,
+} from "../runtimeContracts";
 import type {
   StructuredAbuseEnvironment,
   StructuredAbuseTelemetryCommandV1,
@@ -15,11 +19,7 @@ type RuntimeTelemetryCommand = Omit<
 > & { readonly environment?: StructuredAbuseEnvironment };
 
 export function resolveStructuredAbuseEnvironmentV1(): StructuredAbuseEnvironment {
-  const project = process.env.GCLOUD_PROJECT ?? process.env.GOOGLE_CLOUD_PROJECT ?? "";
-  if (process.env.FIRESTORE_EMULATOR_HOST || project.startsWith("demo-")) return "TEST";
-  if (/staging|sandbox|test/i.test(project)) return "STAGING";
-  if (!project || process.env.NODE_ENV !== "production") return "DEVELOPMENT";
-  return "PRODUCTION";
+  return resolveRuntimeEnvironmentV1();
 }
 
 export async function recordDiscoveryTelemetrySafe(
@@ -35,7 +35,8 @@ export async function recordDiscoveryTelemetrySafe(
       environment: command.environment ?? resolveStructuredAbuseEnvironmentV1(),
     });
     return result.decision;
-  } catch {
+  } catch (error: unknown) {
+    if (isRuntimeEnvironmentErrorV1(error)) throw error;
     logger.warn("DISCOVERY_TELEMETRY_WRITE_FAILED", {
       reasonCode: "TELEMETRY_WRITE_FAILED",
       component: command.component,

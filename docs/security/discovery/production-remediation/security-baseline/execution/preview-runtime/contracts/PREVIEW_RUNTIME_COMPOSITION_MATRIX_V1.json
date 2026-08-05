@@ -1,0 +1,58 @@
+{
+  "version": "PREVIEW_RUNTIME_COMPOSITION_MATRIX_V1",
+  "recordedAt": "2026-08-04T18:07:42-06:00",
+  "targetEnvironment": "PREVIEW",
+  "targetProjectId": "aura-intel-preview",
+  "compositions": [
+    {
+      "boundary": "PUBLIC_INTAKE",
+      "runtimeIdentity": "preview-public-intake-runtime",
+      "source": "functions/src/discovery/runtimeCompositions/publicIntakeRuntimeComposition.ts",
+      "exports": ["createDiscoveryLead"],
+      "secrets": ["discovery-idempotency-secret-preview"],
+      "crossBoundaryExports": [],
+      "status": "CONTRACT_VERIFIED"
+    },
+    {
+      "boundary": "SESSION",
+      "runtimeIdentity": "preview-discovery-session-runtime",
+      "source": "functions/src/discovery/runtimeCompositions/sessionRuntimeComposition.ts",
+      "exports": ["exchangeDiscoveryToken", "resolveDiscoverySession"],
+      "secrets": [],
+      "crossBoundaryExports": [],
+      "status": "CONTRACT_VERIFIED"
+    },
+    {
+      "boundary": "CONVERSATION",
+      "runtimeIdentity": "preview-conversation-runtime",
+      "source": "functions/src/discovery/runtimeCompositions/conversationRuntimeComposition.ts",
+      "exports": ["evaluateConversation"],
+      "secrets": ["discovery-gemini-api-key-preview"],
+      "crossBoundaryExports": [],
+      "status": "CONTRACT_VERIFIED"
+    },
+    {
+      "boundary": "COMPLETION",
+      "runtimeIdentity": "preview-discovery-completion-runtime",
+      "source": "functions/src/discovery/runtimeCompositions/completionRuntimeComposition.ts",
+      "exports": ["completeDiscoverySession"],
+      "secrets": ["discovery-hmac-secret-preview"],
+      "crossBoundaryExports": [],
+      "status": "CONTRACT_VERIFIED"
+    }
+  ],
+  "previewFeatureGates": {
+    "structuredResultEnabled": true,
+    "pdfGenerationEnabled": false,
+    "storageEnabled": false,
+    "signedUrlsEnabled": false,
+    "notificationsEnabled": false,
+    "cloudTasksEnabled": false
+  },
+  "excludedHandlers": [
+    "requestExecutiveDocument",
+    "generateDiscoveryReport",
+    "emitDiscoveryCompletedNotification"
+  ],
+  "deploymentPerformed": false
+}
