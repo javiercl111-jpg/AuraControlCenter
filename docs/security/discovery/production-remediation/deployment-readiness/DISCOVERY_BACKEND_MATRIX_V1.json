@@ -1,0 +1,173 @@
+{
+  "version": "DISCOVERY_BACKEND_MATRIX_V1",
+  "program": "AI-02H1E.5.0",
+  "slice": "AI-02H1E.5.R3A",
+  "changeId": "AI-02H1E.5.R3A-DISCOVERY-BACKEND-READINESS-20260805-01",
+  "recordedOn": "2026-08-05",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "branch": "ops/intelligence-preview-backend-readiness",
+    "certifiedBase": "55be95c658536db48196f728d435670e4ee0c5f9"
+  },
+  "gate": {
+    "status": "PASS",
+    "headEqualsOriginMain": true,
+    "worktreeCleanBeforeAudit": true,
+    "nodeVersion": "v20.20.2",
+    "npmVersion": "10.8.2"
+  },
+  "verdict": "BLOCKED_DEPLOYMENT_NOT_SAFE",
+  "productionAuthorized": false,
+  "handlers": [
+    {
+      "name": "createDiscoveryLead",
+      "generation": "V2",
+      "runtimeIdentityContract": "preview-public-intake-runtime",
+      "runtimeIdentityWired": false,
+      "secretResource": "discovery-idempotency-secret-preview",
+      "secretEnvironmentName": "IDEMPOTENCY_SECRET",
+      "secretDeclaredInFunctionOptions": true,
+      "firestore": "ADMIN_SDK",
+      "appCheck": "DECLARATIVE_AND_EXPLICIT",
+      "environmentGuard": false,
+      "projectTargetGuard": false,
+      "logging": "SAFE_REASON_CODES",
+      "telemetry": "STRUCTURED",
+      "status": "BLOCKED"
+    },
+    {
+      "name": "exchangeDiscoveryToken",
+      "generation": "V1",
+      "runtimeIdentityContract": "preview-discovery-session-rt",
+      "runtimeIdentityWired": false,
+      "secretResource": null,
+      "secretEnvironmentName": null,
+      "secretDeclaredInFunctionOptions": false,
+      "firestore": "ADMIN_SDK",
+      "appCheck": "EXPLICIT_VERIFIED_CONTEXT_REQUIRED",
+      "environmentGuard": false,
+      "projectTargetGuard": false,
+      "logging": "STRUCTURED_TELEMETRY_ONLY",
+      "telemetry": "STRUCTURED",
+      "status": "BLOCKED"
+    },
+    {
+      "name": "resolveDiscoverySession",
+      "generation": "V1",
+      "runtimeIdentityContract": "preview-discovery-session-rt",
+      "runtimeIdentityWired": false,
+      "secretResource": null,
+      "secretEnvironmentName": null,
+      "secretDeclaredInFunctionOptions": false,
+      "firestore": "ADMIN_SDK",
+      "appCheck": "EXPLICIT_VERIFIED_CONTEXT_REQUIRED",
+      "environmentGuard": false,
+      "projectTargetGuard": false,
+      "logging": "STRUCTURED_TELEMETRY_ONLY",
+      "telemetry": "STRUCTURED",
+      "status": "BLOCKED"
+    },
+    {
+      "name": "evaluateConversation",
+      "generation": "V2",
+      "runtimeIdentityContract": "preview-conversation-runtime",
+      "runtimeIdentityWired": false,
+      "secretResource": "discovery-gemini-api-key-preview",
+      "secretEnvironmentName": "GEMINI_API_KEY",
+      "secretDeclaredInFunctionOptions": true,
+      "firestore": "ADMIN_SDK",
+      "appCheck": "DECLARATIVE",
+      "environmentGuard": false,
+      "projectTargetGuard": false,
+      "logging": "SAFE_APPLICATION_LOGGING",
+      "telemetry": "STRUCTURED",
+      "status": "BLOCKED"
+    },
+    {
+      "name": "completeDiscoverySession",
+      "generation": "V1",
+      "runtimeIdentityContract": "preview-discovery-completion-runtime",
+      "certifiedSecretAccessor": "preview-discovery-complete-rt",
+      "runtimeIdentityNameMatch": false,
+      "runtimeIdentityWired": false,
+      "secretResource": "discovery-hmac-secret-preview",
+      "secretEnvironmentName": "DISCOVERY_HMAC_SECRET",
+      "secretDeclaredInFunctionOptions": true,
+      "firestore": "ADMIN_SDK",
+      "appCheck": "EXPLICIT_VERIFIED_CONTEXT_REQUIRED",
+      "environmentGuard": true,
+      "projectTargetGuard": true,
+      "logging": "SAFE_APPLICATION_LOGGING",
+      "telemetry": "STRUCTURED",
+      "optionalEffects": "STRUCTURED_RESULT_ONLY",
+      "status": "BLOCKED"
+    }
+  ],
+  "deploymentUnit": {
+    "packageEntrypoint": "functions/lib/index.js",
+    "sourceEntrypoint": "functions/src/index.ts",
+    "exportCount": 19,
+    "authorizedHandlerCount": 5,
+    "runtimeCompositionEntrypointWired": false,
+    "firebaseCodebasesConfigured": false,
+    "deployScript": "firebase deploy --only functions",
+    "explicitProjectTarget": false,
+    "handlerAllowlist": false,
+    "status": "NOT_ISOLATED"
+  },
+  "runtimeEnvironment": {
+    "contractVariable": "AURA_RUNTIME_ENVIRONMENT",
+    "functionsEnvironmentBindingPresent": false,
+    "handlersUsingContract": ["completeDiscoverySession"],
+    "handlersMissingContract": [
+      "createDiscoveryLead",
+      "exchangeDiscoveryToken",
+      "resolveDiscoverySession",
+      "evaluateConversation"
+    ],
+    "nodeEnvUsedForTargeting": false,
+    "adminInitialization": "DEFAULT_APPLICATION_CREDENTIALS_PROJECT",
+    "status": "INCOMPLETE"
+  },
+  "residuals": {
+    "productionProjectReferencesPresent": true,
+    "productionServiceAccountExportPresent": true,
+    "trackedRootEnvTargetsProduction": true,
+    "defaultFirebaseAliasPresent": false,
+    "emailAuthorityFallbackPresent": false,
+    "clientFirestoreWriterPresent": true,
+    "storageCodeExported": true,
+    "cloudTasksHandlerExported": true,
+    "documentGenerationExported": true,
+    "notificationOutboxCodePresent": true,
+    "geminiClientConfigurationPresent": false
+  },
+  "previewFeatureGates": {
+    "structuredResultEnabled": true,
+    "pdfGenerationEnabled": false,
+    "storageEnabled": false,
+    "signedUrlsEnabled": false,
+    "notificationsEnabled": false,
+    "cloudTasksEnabled": false
+  },
+  "validation": {
+    "runtimeContractTests": { "passed": 18, "failed": 0 },
+    "previewTrustCompletionTests": { "passed": 20, "failed": 0 },
+    "functionsTypecheckNoEmit": "PASS",
+    "codeModified": false,
+    "infrastructureModified": false,
+    "deploymentPerformed": false
+  },
+  "blockers": [
+    "RUNTIME_IDENTITIES_NOT_WIRED",
+    "HMAC_RUNTIME_IDENTITY_NAME_CONFLICT",
+    "FOUR_HANDLERS_MISSING_ENVIRONMENT_AND_PROJECT_GUARD",
+    "FUNCTIONS_ENVIRONMENT_BINDING_MISSING",
+    "DEPLOY_PROJECT_NOT_PINNED",
+    "DEPLOY_HANDLER_ALLOWLIST_MISSING",
+    "ENTRYPOINT_EXPORTS_OUT_OF_SCOPE_SURFACES",
+    "PRODUCTION_SERVICE_ACCOUNT_PRESENT_IN_DEPLOYMENT_UNIT",
+    "TRACKED_ROOT_ENV_TARGETS_PRODUCTION"
+  ]
+}
