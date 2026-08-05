@@ -4,6 +4,7 @@
   },
   "functions": {
     "source": "functions",
+    "codebase": "preview-discovery",
     "runtime": "nodejs20",
     "ignore": [
       ".git",
