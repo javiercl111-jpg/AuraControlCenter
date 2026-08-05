@@ -16,7 +16,7 @@ import {
   resolveDiscoverySession,
 } from "../modules/discovery/services/discoveryLinkService";
 import { httpsCallable } from "firebase/functions";
-import { functions } from "../config/firebase";
+import { appCheck, functions } from "../config/firebase";
 
 interface SessionLinkInfo {
   linkId: string;
@@ -296,7 +296,7 @@ export default function DiscoverPage() {
             hasAccessFragment: new URLSearchParams(window.location.hash.slice(1)).has("access"),
             hasSessionToken: !!sessionStorage.getItem(`discovery_session_token_${linkId}`),
             safeErrorCode: mappedError,
-            appCheckConfigured: !!import.meta.env.VITE_RECAPTCHA_SITE_KEY
+            appCheckConfigured: appCheck !== null
           });
         }
         setError(mappedError);
