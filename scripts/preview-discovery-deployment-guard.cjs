@@ -2,6 +2,9 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  assertPreviewParameterConfiguration,
+} = require("./preview-discovery-parameter-guard.cjs");
 
 const repositoryRoot = path.resolve(__dirname, "..");
 const functionsRoot = path.join(repositoryRoot, "functions");
@@ -46,13 +49,17 @@ if (firebase.functions?.codebase !== exactCodebase) {
   fail("PREVIEW_GUARD_CODEBASE_MISMATCH");
 }
 
-const environmentLines = read("functions/.env.aura-intel-preview")
-  .split(/\r?\n/)
-  .map((line) => line.trim())
-  .filter((line) => line && !line.startsWith("#"));
-if (!equalSet(environmentLines, ["AURA_RUNTIME_ENVIRONMENT=PREVIEW"])) {
-  fail("PREVIEW_GUARD_FUNCTIONS_ENVIRONMENT_MISMATCH");
-}
+const projectEnvironmentPath = "functions/.env.aura-intel-preview";
+const otherEnvironmentFiles = Object.fromEntries(
+  fs.readdirSync(functionsRoot)
+    .filter((name) => name.startsWith(".env") && name !== ".env.aura-intel-preview")
+    .map((name) => [`functions/${name}`, read(`functions/${name}`)]),
+);
+const parameterBindings = assertPreviewParameterConfiguration({
+  projectEnvPath: projectEnvironmentPath,
+  projectEnvContent: read(projectEnvironmentPath),
+  otherEnvironmentFiles,
+});
 
 const contractPath = path.join(
   functionsRoot,
@@ -179,5 +186,6 @@ process.stdout.write(JSON.stringify({
   secretBindings: Object.fromEntries(Object.entries(handlers).map(
     ([handler, metadata]) => [handler, metadata.secretBindings],
   )),
+  parameterBindings,
   deploymentExecuted: false,
 }) + "\n");
