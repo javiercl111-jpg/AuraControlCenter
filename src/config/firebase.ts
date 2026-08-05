@@ -14,10 +14,13 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
+import {
+  PreviewAppCheckContractErrorV1,
+  resolvePreviewAppCheckConfigurationV1,
+} from "./previewAppCheckContractV1";
 
 declare global {
   interface Window {
-    FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string;
     __AURA_APP_CHECK__?: AppCheck;
   }
 }
@@ -71,25 +74,16 @@ function initializeAuraAppCheck(): AppCheck | null {
     return null;
   }
 
-  const siteKey = (
-    import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined
-  )?.trim();
-
-  if (!siteKey) {
-    console.warn(
-      "[Aura Control Center] APP_CHECK_CONFIGURATION_REQUIRED: " +
-      "VITE_RECAPTCHA_SITE_KEY is missing.",
-    );
-    return null;
-  }
-
-  if (import.meta.env.DEV) {
-    const debugToken = (
+  const configuration = resolvePreviewAppCheckConfigurationV1({
+    VITE_AURA_RUNTIME_ENVIRONMENT:
+      import.meta.env.VITE_AURA_RUNTIME_ENVIRONMENT,
+    VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    VITE_FIREBASE_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY:
       import.meta.env
-        .VITE_FIREBASE_APPCHECK_DEBUG_TOKEN as string | undefined
-    )?.trim();
-
-    window.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken || true;
+        .VITE_FIREBASE_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY,
+  });
+  if (!configuration.enabled) {
+    return null;
   }
 
   if (window.__AURA_APP_CHECK__) {
@@ -98,18 +92,16 @@ function initializeAuraAppCheck(): AppCheck | null {
 
   try {
     const instance = initializeAppCheck(firebaseApp, {
-      provider: new ReCaptchaEnterpriseProvider(siteKey),
+      provider: new ReCaptchaEnterpriseProvider(configuration.siteKey),
       isTokenAutoRefreshEnabled: true,
     });
 
     window.__AURA_APP_CHECK__ = instance;
     return instance;
-  } catch (error) {
-    console.error(
-      "[Aura Control Center] Failed to initialize App Check.",
-      error,
+  } catch {
+    throw new PreviewAppCheckContractErrorV1(
+      "APP_CHECK_INITIALIZATION_FAILED",
     );
-    return null;
   }
 }
 

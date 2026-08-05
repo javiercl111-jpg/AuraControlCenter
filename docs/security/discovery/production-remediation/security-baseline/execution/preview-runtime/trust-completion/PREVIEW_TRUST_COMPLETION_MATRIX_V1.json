@@ -1,0 +1,147 @@
+{
+  "version": "PREVIEW_TRUST_COMPLETION_MATRIX_V1",
+  "changeId": "AI-02H1E.5.R2C-P4-PREVIEW-TRUST-COMPLETION-20260804-01",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "stagingMutation": false,
+    "productionMutation": false
+  },
+  "status": "BLOCKED",
+  "identities": [
+    {
+      "boundary": "PUBLIC_INTAKE",
+      "handlers": ["createDiscoveryLead"],
+      "runtimeIdentity": "preview-public-intake-runtime",
+      "secrets": ["discovery-idempotency-secret-preview"]
+    },
+    {
+      "boundary": "SESSION",
+      "handlers": ["exchangeDiscoveryToken", "resolveDiscoverySession"],
+      "runtimeIdentity": "preview-discovery-session-rt",
+      "secrets": []
+    },
+    {
+      "boundary": "CONVERSATION",
+      "handlers": ["evaluateConversation"],
+      "runtimeIdentity": "preview-conversation-runtime",
+      "secrets": ["discovery-gemini-api-key-preview"]
+    },
+    {
+      "boundary": "COMPLETION",
+      "handlers": ["completeDiscoverySession"],
+      "runtimeIdentity": "preview-discovery-complete-rt",
+      "secrets": ["discovery-hmac-secret-preview"]
+    },
+    {
+      "boundary": "DEPLOYER",
+      "handlers": [],
+      "runtimeIdentity": "preview-deployer",
+      "secrets": [],
+      "runtimeExecution": false
+    }
+  ],
+  "secretManager": {
+    "projectLevelSecretAccessorBindings": 0,
+    "secrets": [
+      {
+        "resource": "discovery-idempotency-secret-preview",
+        "versionCount": 0,
+        "versionState": "ABSENT",
+        "accessors": ["preview-public-intake-runtime"],
+        "status": "VERSION_PENDING"
+      },
+      {
+        "resource": "discovery-hmac-secret-preview",
+        "versionCount": 0,
+        "versionState": "ABSENT",
+        "accessors": ["preview-discovery-complete-rt"],
+        "status": "VERSION_PENDING"
+      },
+      {
+        "resource": "discovery-gemini-api-key-preview",
+        "versionCount": 0,
+        "versionState": "ABSENT",
+        "accessors": ["preview-conversation-runtime"],
+        "status": "OPERATOR_VALUE_PENDING"
+      },
+      {
+        "resource": "discovery-ip-hash-salt-preview",
+        "versionCount": 0,
+        "versionState": "ABSENT",
+        "accessors": [],
+        "status": "DEFERRED"
+      }
+    ],
+    "crossRuntimeBindings": 0,
+    "defaultComputeAccessors": 0,
+    "deployerAccessors": 0
+  },
+  "wif": {
+    "actual": {
+      "poolCount": 0,
+      "providerCount": 0,
+      "deployerImpersonationBindings": 0,
+      "status": "NOT_CONFIGURED"
+    },
+    "approvedDesign": {
+      "repository": "javiercl111-jpg/AuraControlCenter",
+      "repositoryOwner": "javiercl111-jpg",
+      "issuer": "https://token.actions.githubusercontent.com",
+      "environment": "Preview",
+      "subject": "repo:javiercl111-jpg/AuraControlCenter:environment:Preview",
+      "event": "push",
+      "branchRef": null,
+      "branchRefStatus": "PENDING_OPERATOR_APPROVAL",
+      "tokenLifetimeSeconds": 900,
+      "providerEnabled": false,
+      "impersonationBindingCreated": false,
+      "rejectForks": true,
+      "rejectPullRequests": true,
+      "rejectOtherRepositories": true,
+      "rejectOtherEnvironments": true
+    }
+  },
+  "appCheck": {
+    "firebaseWebApp": {
+      "displayName": "Aura Intelligence Preview Web",
+      "platform": "WEB",
+      "appIdSuffix": "b3328604d97b6386af2449",
+      "status": "VERIFIED"
+    },
+    "provider": "RECAPTCHA_ENTERPRISE",
+    "providerStatus": "UNKNOWN_READBACK_403",
+    "siteKeyMetadataPresent": "UNKNOWN",
+    "enforcement": "INHERITED_OFF_NOT_API_VERIFIED",
+    "debugTokenCount": 0,
+    "clientContract": "IMPLEMENTED_LOCAL_NOT_DEPLOYED"
+  },
+  "observability": {
+    "logBasedMetrics": [
+      "preview_appcheck_rejections",
+      "preview_discovery_runtime_errors",
+      "preview_iam_policy_changes",
+      "preview_secret_access_denials"
+    ],
+    "alertPolicyCount": 0,
+    "alertsStatus": "PENDING_APPROVED_THRESHOLDS_CHANNEL_AND_OWNER",
+    "budgets": {
+      "usd5": "UNKNOWN_READBACK_BLOCKED",
+      "usd10": "UNKNOWN_READBACK_BLOCKED",
+      "reason": "BUDGET_API_DISABLED_OR_PERMISSION_DENIED"
+    }
+  },
+  "keyInventory": {
+    "serviceAccountCount": 11,
+    "userManagedKeyCount": 0,
+    "jsonKeysCreated": 0
+  },
+  "resources": {
+    "functions": 0,
+    "cloudRunServices": 0,
+    "storageBuckets": 0,
+    "cloudTasksApiEnabled": false,
+    "functionDeployPerformed": false,
+    "cloudRunDeployPerformed": false
+  }
+}
