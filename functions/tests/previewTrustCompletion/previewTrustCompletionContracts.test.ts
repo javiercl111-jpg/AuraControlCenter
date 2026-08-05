@@ -128,16 +128,19 @@ describe("Inherited runtime identity and secret boundary", () => {
         handler: "createDiscoveryLead",
         runtimeIdentity: "preview-public-intake-runtime",
         secretResource: "discovery-idempotency-secret-preview",
+        secretParamName: "discovery-idempotency-secret-preview",
       }),
       expect.objectContaining({
         handler: "completeDiscoverySession",
         runtimeIdentity: "preview-discovery-complete-rt",
         secretResource: "discovery-hmac-secret-preview",
+        secretParamName: "discovery-hmac-secret-preview",
       }),
       expect.objectContaining({
         handler: "evaluateConversation",
         runtimeIdentity: "preview-conversation-runtime",
         secretResource: "discovery-gemini-api-key-preview",
+        secretParamName: "discovery-gemini-api-key-preview",
       }),
     ]);
   });

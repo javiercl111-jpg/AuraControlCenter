@@ -53,7 +53,7 @@ import {
   assertPreviewDiscoveryRuntimeV1,
 } from "./deployment/previewDiscoveryDeploymentUnitV1";
 
-const capabilitySecret = defineSecret("DISCOVERY_HMAC_SECRET");
+const capabilitySecret = defineSecret("discovery-hmac-secret-preview");
 
 const SHADOW_CONTROLLED_FIELDS = [
   "legacyDiagnosis", "shadowDiagnosis", "shadowMetadata", "shadowExecution",

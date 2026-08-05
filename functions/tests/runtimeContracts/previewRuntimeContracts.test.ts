@@ -135,19 +135,19 @@ describe("Preview secret and runtime compositions", () => {
         handler: "createDiscoveryLead",
         runtimeIdentity: "preview-public-intake-runtime",
         secretResource: "discovery-idempotency-secret-preview",
-        runtimeEnvName: "IDEMPOTENCY_SECRET",
+        secretParamName: "discovery-idempotency-secret-preview",
       }),
       expect.objectContaining({
         handler: "completeDiscoverySession",
         runtimeIdentity: "preview-discovery-complete-rt",
         secretResource: "discovery-hmac-secret-preview",
-        runtimeEnvName: "DISCOVERY_HMAC_SECRET",
+        secretParamName: "discovery-hmac-secret-preview",
       }),
       expect.objectContaining({
         handler: "evaluateConversation",
         runtimeIdentity: "preview-conversation-runtime",
         secretResource: "discovery-gemini-api-key-preview",
-        runtimeEnvName: "GEMINI_API_KEY",
+        secretParamName: "discovery-gemini-api-key-preview",
       }),
     ]);
     expect(PREVIEW_RUNTIME_SECRET_MANIFEST_V1.secretlessHandlers)
