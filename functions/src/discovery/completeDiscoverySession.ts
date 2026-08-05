@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { defineSecret } from "firebase-functions/params";
 
@@ -48,6 +48,10 @@ import {
   assertStructuredResultOnlyContractV1,
   resolveDiscoveryRuntimeContractV1,
 } from "./runtimeContracts";
+import {
+  PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1,
+  assertPreviewDiscoveryRuntimeV1,
+} from "./deployment/previewDiscoveryDeploymentUnitV1";
 
 const capabilitySecret = defineSecret("DISCOVERY_HMAC_SECRET");
 
@@ -91,15 +95,19 @@ function validateFirestorePayload(value: unknown, path = "payload"): void {
   }
 }
 
-export const completeDiscoverySession = functions.https.onCall(
-  { secrets: [capabilitySecret] },
+export const completeDiscoverySession = onCall(
+  {
+    ...PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.completeDiscoverySession,
+    secrets: [capabilitySecret],
+  },
   async (request) => {
+    assertPreviewDiscoveryRuntimeV1();
     const startedAt = Date.now();
     const db = admin.firestore();
     const runtimeContract = resolveDiscoveryRuntimeContractV1();
     assertStructuredResultOnlyContractV1(runtimeContract);
     if (request.app == undefined) {
-      throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
+      throw new HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
     }
     let parsedPayload;
     try {
@@ -119,7 +127,7 @@ export const completeDiscoverySession = functions.https.onCall(
 
     const secret = capabilitySecret.value();
     if (!secret) {
-      throw new functions.https.HttpsError("internal", "COMPLETION_INTERNAL_FAILURE");
+      throw new HttpsError("internal", "COMPLETION_INTERNAL_FAILURE");
     }
     const repository = new FirestoreDiscoveryCapabilityRepository(db);
     let linkId: string;
@@ -187,7 +195,7 @@ export const completeDiscoverySession = functions.https.onCall(
         effect: async ({ transaction, linkData, dossierId }) => {
           const completion = validateDiscoveryCompletion({ dossierPayload, linkData });
           if (!completion.valid) {
-            throw new functions.https.HttpsError(
+            throw new HttpsError(
               "failed-precondition", "DISCOVERY_REQUIRED_FIELDS_MISSING", completion,
             );
           }
@@ -343,7 +351,7 @@ export const completeDiscoverySession = functions.https.onCall(
         result.completion,
       );
     } catch (error: unknown) {
-      if (error instanceof functions.https.HttpsError) throw error;
+      if (error instanceof HttpsError) throw error;
       throw toDiscoveryCapabilityHttpsError(error);
     }
   },

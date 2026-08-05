@@ -139,7 +139,7 @@ describe("Preview secret and runtime compositions", () => {
       }),
       expect.objectContaining({
         handler: "completeDiscoverySession",
-        runtimeIdentity: "preview-discovery-completion-runtime",
+        runtimeIdentity: "preview-discovery-complete-rt",
         secretResource: "discovery-hmac-secret-preview",
         runtimeEnvName: "DISCOVERY_HMAC_SECRET",
       }),

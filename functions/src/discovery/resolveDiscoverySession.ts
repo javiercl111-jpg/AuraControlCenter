@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { FirestoreDiscoveryCapabilityRepository } from
   "../infrastructure/firestore/discoveryCapabilities";
@@ -12,12 +12,19 @@ import {
   recordDiscoveryTelemetrySafe,
 } from "./telemetry";
 import { enforceDiscoveryContainmentV1 } from "./containment";
+import {
+  PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1,
+  assertPreviewDiscoveryRuntimeV1,
+} from "./deployment/previewDiscoveryDeploymentUnitV1";
 
-export const resolveDiscoverySession = functions.https.onCall(async (request) => {
+export const resolveDiscoverySession = onCall(
+  PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.resolveDiscoverySession,
+  async (request) => {
+  assertPreviewDiscoveryRuntimeV1();
   const startedAt = Date.now();
   const db = admin.firestore();
   if (request.app == undefined) {
-    throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
+    throw new HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
   }
 
   let payload;

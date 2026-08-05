@@ -10,7 +10,7 @@ export const PREVIEW_RUNTIME_SECRET_MANIFEST_V1 = Object.freeze({
     }),
     Object.freeze({
       handler: "completeDiscoverySession",
-      runtimeIdentity: "preview-discovery-completion-runtime",
+      runtimeIdentity: "preview-discovery-complete-rt",
       secretResource: "discovery-hmac-secret-preview",
       runtimeEnvName: "DISCOVERY_HMAC_SECRET",
       status: "REQUIRED",

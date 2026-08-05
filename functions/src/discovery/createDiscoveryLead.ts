@@ -32,6 +32,10 @@ import {
   deriveBlockedCommercialCodeHashV1,
   enforceDiscoveryContainmentV1,
 } from "./containment";
+import {
+  PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1,
+  assertPreviewDiscoveryRuntimeV1,
+} from "./deployment/previewDiscoveryDeploymentUnitV1";
 
 const idempotencySecret = defineSecret("IDEMPOTENCY_SECRET");
 
@@ -55,11 +59,11 @@ function toCallerSafeIdempotencyError(error: unknown): HttpsError | null {
 
 export const createDiscoveryLead = onCall(
   {
-    region: "us-central1",
-    enforceAppCheck: true,
+    ...PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.createDiscoveryLead,
     secrets: [idempotencySecret],
   },
   async (request) => {
+    assertPreviewDiscoveryRuntimeV1();
     const startedAt = Date.now();
     const db = admin.firestore();
     const transportKey = request.rawRequest.get("function-execution-id") ||

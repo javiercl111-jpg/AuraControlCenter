@@ -24,7 +24,8 @@ export const PUBLIC_INTAKE_ABUSE_CERTIFICATION_MATRIX_V1 = Object.freeze([
     test: "App Check seam denies before state and cost",
     runner: "test:public-intake-abuse-matrix",
     evidence: [
-      { file: "functions/src/discovery/createDiscoveryLead.ts", contains: ["enforceAppCheck: true", "request.app == undefined"] },
+      { file: "functions/src/discovery/createDiscoveryLead.ts", contains: ["PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.createDiscoveryLead", "request.app == undefined"] },
+      { file: "functions/src/discovery/deployment/previewDiscoveryDeploymentUnitV1.ts", contains: ["enforceAppCheck: true"] },
       { file: "functions/tests/publicIntakeAbuseCertification/publicIntakeAbuseHarness.ts", contains: ["APP_CHECK_REQUIRED", "APP_CHECK_INVALID", "APP_CHECK_REPLAYED"] },
     ], expected: "Safe denial and zero state, quota, or downstream calls", blocking: true,
   },
