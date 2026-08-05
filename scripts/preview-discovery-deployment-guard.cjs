@@ -7,6 +7,8 @@ const repositoryRoot = path.resolve(__dirname, "..");
 const functionsRoot = path.join(repositoryRoot, "functions");
 const exactProject = "aura-intel-preview";
 const exactEnvironment = "PREVIEW";
+const exactCodebase = "preview-discovery";
+const exactDeployTarget = "functions:preview-discovery";
 
 function fail(code) {
   throw new Error(code);
@@ -40,7 +42,7 @@ const firebase = json("firebase.json");
 if (functionsPackage.main !== "lib/previewDiscoveryIndex.js") {
   fail("PREVIEW_GUARD_MAIN_MISMATCH");
 }
-if (firebase.functions?.codebase !== "preview-discovery") {
+if (firebase.functions?.codebase !== exactCodebase) {
   fail("PREVIEW_GUARD_CODEBASE_MISMATCH");
 }
 
@@ -79,20 +81,17 @@ for (const handler of allowlist) {
     enforceAppCheck:
       contract.PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1[handler].enforceAppCheck === true,
     secretBindings: (endpoint.secretEnvironmentVariables || [])
-      .map((secret) => ({ key: secret.key, secret: secret.secret })),
+      .map((secret) => ({
+        secretParamName: secret.key,
+        secretResource: secret.secret ?? secret.key,
+      })),
   };
 }
-contract.assertPreviewDiscoveryDeploymentCandidateV1({
-  projectId,
-  environment,
-  exports: exportsFound,
-  handlers,
-});
 
 const loadedUnitModules = Object.keys(require.cache)
   .filter((modulePath) => modulePath.startsWith(path.join(functionsRoot, "lib")));
 if (loadedUnitModules.some((modulePath) =>
-  /[\\/](reports|notifications)[\\/]|processMarketImportJob|generateDiscoveryReport|requestExecutiveDocument/i
+  /[\\/](reports|pdf|notifications)[\\/]|processMarketImportJob|generateDiscoveryReport|requestExecutiveDocument/i
     .test(modulePath))) {
   fail("PREVIEW_GUARD_FORBIDDEN_MODULE_LOADED");
 }
@@ -105,9 +104,28 @@ if (
 ) {
   fail("PREVIEW_GUARD_DEPLOY_COMMAND_NOT_PINNED");
 }
-const commandFunctions = [...deployCommand.matchAll(/functions:([A-Za-z0-9_]+)/g)]
+const onlyTargets = [...deployCommand.matchAll(/--only\s+([^\s]+)/g)]
   .map((match) => match[1]);
-if (!equalSet(commandFunctions, allowlist)) fail("PREVIEW_GUARD_DEPLOY_ALLOWLIST_MISMATCH");
+if (!equalSet(onlyTargets, [exactDeployTarget])) {
+  fail("PREVIEW_GUARD_DEPLOY_TARGET_MISMATCH");
+}
+const buildIndex = deployCommand.indexOf("npm run build");
+const guardIndex = deployCommand.indexOf("npm run guard:preview-discovery");
+const firebaseIndex = deployCommand.indexOf("firebase deploy");
+if (
+  buildIndex < 0 || guardIndex <= buildIndex || firebaseIndex <= guardIndex
+) {
+  fail("PREVIEW_GUARD_DEPLOY_ORDER_MISMATCH");
+}
+
+contract.assertPreviewDiscoveryDeploymentCandidateV1({
+  projectId,
+  environment,
+  codebase: firebase.functions.codebase,
+  deployTarget: onlyTargets[0],
+  exports: exportsFound,
+  handlers,
+});
 
 const sourceFiles = [
   "functions/src/previewDiscoveryIndex.ts",
@@ -119,7 +137,7 @@ const sourceFiles = [
   "functions/src/discovery/discoveryCapabilityHandlerSupport.ts",
 ];
 const deploymentSource = sourceFiles.map(read).join("\n");
-if (/aura-control-center-debb3|firebase-admin\/functions|taskQueue\s*\(|admin\.storage\s*\(|getSignedUrl\s*\(/i.test(deploymentSource)) {
+if (/aura-control-center-debb3|firebase-admin\/functions|taskQueue\s*\(|admin\.storage\s*\(|getSignedUrl\s*\(|generateDiscoveryReport|requestExecutiveDocument|emitDiscoveryCompletedNotification/i.test(deploymentSource)) {
   fail("PREVIEW_GUARD_FORBIDDEN_RUNTIME_REFERENCE");
 }
 if (/export\s+\{\s*(generateDiscoveryReport|requestExecutiveDocument|emitDiscoveryCompletedNotification)/i.test(deploymentSource)) {
@@ -136,6 +154,20 @@ for (const handler of allowlist) {
   if (!handlerSource.includes(`PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.${handler}`)) {
     fail(`PREVIEW_GUARD_OPTIONS_BINDING_MISSING:${handler}`);
   }
+  const declaredSecretParams = [...handlerSource.matchAll(
+    /defineSecret\(["']([^"']+)["']\)/g,
+  )].map((match) => match[1]);
+  const expectedSecretParams = contract.PREVIEW_DISCOVERY_SECRET_BINDINGS_V1[handler]
+    .map(({ secretParamName }) => secretParamName);
+  if (!equalSet(declaredSecretParams, expectedSecretParams)) {
+    fail(`PREVIEW_GUARD_SECRET_PARAM_MISMATCH:${handler}`);
+  }
+}
+if (/\b(?:IDEMPOTENCY_SECRET|GEMINI_API_KEY|DISCOVERY_HMAC_SECRET)\b/.test(deploymentSource)) {
+  fail("PREVIEW_GUARD_LOGICAL_SECRET_ALIAS_FORBIDDEN");
+}
+if (/discovery-ip-hash-salt-preview|defineSecret\(["']IP_HASH_SALT["']\)/i.test(deploymentSource)) {
+  fail("PREVIEW_GUARD_IP_SALT_CONSUMER_FORBIDDEN");
 }
 
 process.stdout.write(JSON.stringify({
@@ -144,5 +176,8 @@ process.stdout.write(JSON.stringify({
   environment,
   codebase: firebase.functions.codebase,
   exports: exportsFound,
+  secretBindings: Object.fromEntries(Object.entries(handlers).map(
+    ([handler, metadata]) => [handler, metadata.secretBindings],
+  )),
   deploymentExecuted: false,
 }) + "\n");

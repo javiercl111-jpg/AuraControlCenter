@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1,
+  PREVIEW_DISCOVERY_CODEBASE_V1,
+  PREVIEW_DISCOVERY_DEPLOY_TARGET_V1,
   PREVIEW_DISCOVERY_ENVIRONMENT_V1,
   PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1,
   PREVIEW_DISCOVERY_PROJECT_ID_V1,
@@ -24,6 +26,8 @@ function validCandidate(): PreviewDiscoveryDeploymentCandidateV1 {
   return {
     projectId: PREVIEW_DISCOVERY_PROJECT_ID_V1,
     environment: PREVIEW_DISCOVERY_ENVIRONMENT_V1,
+    codebase: PREVIEW_DISCOVERY_CODEBASE_V1,
+    deployTarget: PREVIEW_DISCOVERY_DEPLOY_TARGET_V1,
     exports: [...PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1],
     handlers: Object.fromEntries(PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1.map(
       (handler) => [handler, {
@@ -95,8 +99,8 @@ describe("Preview Discovery deployment unit", () => {
     expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
       (candidate) => Object.assign(candidate.handlers.evaluateConversation, {
         secretBindings: [{
-          key: "GEMINI_API_KEY",
-          secret: "discovery-hmac-secret-preview",
+          secretParamName: "discovery-hmac-secret-preview",
+          secretResource: "discovery-hmac-secret-preview",
         }],
       }),
     ))).toThrowError("PREVIEW_DEPLOYMENT_SECRET_MAPPING_MISMATCH");
@@ -140,7 +144,6 @@ describe("Preview Discovery deployment unit", () => {
     const entrypoint = source("functions/src/previewDiscoveryIndex.ts");
     for (const handler of PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1) {
       expect(entrypoint).toContain(`export const ${handler}`);
-      expect(entrypoint).toContain(`\n  "${handler}",`);
     }
     expect(entrypoint).not.toMatch(
       /Storage|task|report|pdf|notification|generateDiscoveryReport|requestExecutiveDocument/i,
@@ -157,17 +160,89 @@ describe("Preview Discovery deployment unit", () => {
     const deploy = functionsPackage.scripts["deploy:preview-discovery"] as string;
     expect(deploy).toContain("--project aura-intel-preview");
     expect(deploy).toContain("--non-interactive");
-    for (const handler of PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1) {
-      expect(deploy).toContain(`functions:${handler}`);
-    }
+    expect(deploy).toContain("--only functions:preview-discovery");
+    expect(deploy).not.toMatch(/functions:(?:create|exchange|resolve|evaluate|complete)/);
     expect(Object.values(PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1).every(
       (options) => options.enforceAppCheck === true,
     )).toBe(true);
-    expect(PREVIEW_DISCOVERY_SECRET_BINDINGS_V1.createDiscoveryLead[0].secret)
+    expect(PREVIEW_DISCOVERY_SECRET_BINDINGS_V1.createDiscoveryLead[0].secretResource)
       .toBe("discovery-idempotency-secret-preview");
-    expect(PREVIEW_DISCOVERY_SECRET_BINDINGS_V1.evaluateConversation[0].secret)
+    expect(PREVIEW_DISCOVERY_SECRET_BINDINGS_V1.evaluateConversation[0].secretResource)
       .toBe("discovery-gemini-api-key-preview");
-    expect(PREVIEW_DISCOVERY_SECRET_BINDINGS_V1.completeDiscoverySession[0].secret)
+    expect(PREVIEW_DISCOVERY_SECRET_BINDINGS_V1.completeDiscoverySession[0].secretResource)
       .toBe("discovery-hmac-secret-preview");
+  });
+
+  it("16 rejects a logical uppercase SecretParam alias", () => {
+    expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
+      (candidate) => Object.assign(candidate.handlers.createDiscoveryLead, {
+        secretBindings: [{
+          secretParamName: "IDEMPOTENCY_SECRET",
+          secretResource: "discovery-idempotency-secret-preview",
+        }],
+      }),
+    ))).toThrowError("PREVIEW_DEPLOYMENT_SECRET_MAPPING_MISMATCH");
+  });
+
+  it("17 rejects an incorrect Preview secret resource", () => {
+    expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
+      (candidate) => Object.assign(candidate.handlers.evaluateConversation, {
+        secretBindings: [{
+          secretParamName: "discovery-gemini-api-key-preview-wrong",
+          secretResource: "discovery-gemini-api-key-preview-wrong",
+        }],
+      }),
+    ))).toThrowError("PREVIEW_DEPLOYMENT_SECRET_MAPPING_MISMATCH");
+  });
+
+  it("18 rejects a secret on a session runtime", () => {
+    expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
+      (candidate) => Object.assign(candidate.handlers.exchangeDiscoveryToken, {
+        secretBindings: [{
+          secretParamName: "discovery-hmac-secret-preview",
+          secretResource: "discovery-hmac-secret-preview",
+        }],
+      }),
+    ))).toThrowError("PREVIEW_DEPLOYMENT_SECRET_MAPPING_MISMATCH");
+  });
+
+  it("19 rejects activation of the deferred IP salt", () => {
+    expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
+      (candidate) => Object.assign(candidate.handlers.resolveDiscoverySession, {
+        secretBindings: [{
+          secretParamName: "discovery-ip-hash-salt-preview",
+          secretResource: "discovery-ip-hash-salt-preview",
+        }],
+      }),
+    ))).toThrowError("PREVIEW_DEPLOYMENT_SECRET_MAPPING_MISMATCH");
+  });
+
+  it("20 rejects a codebase other than preview-discovery", () => {
+    expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
+      (candidate) => Object.assign(candidate, { codebase: "default" }),
+    ))).toThrowError("PREVIEW_DEPLOYMENT_CODEBASE_MISMATCH");
+  });
+
+  it("21 rejects an individual handler deployment filter", () => {
+    expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
+      (candidate) => Object.assign(candidate, {
+        deployTarget: "functions:createDiscoveryLead",
+      }),
+    ))).toThrowError("PREVIEW_DEPLOYMENT_TARGET_MISMATCH");
+  });
+
+  it("22 declares only exact Preview SecretParams in handler source", () => {
+    const declarations = [
+      ["functions/src/discovery/createDiscoveryLead.ts", "discovery-idempotency-secret-preview"],
+      ["functions/src/intelligence/evaluateConversation.ts", "discovery-gemini-api-key-preview"],
+      ["functions/src/discovery/completeDiscoverySession.ts", "discovery-hmac-secret-preview"],
+    ] as const;
+    for (const [path, secret] of declarations) {
+      expect(source(path)).toContain(`defineSecret("${secret}")`);
+    }
+    const deployedHandlers = declarations.map(([path]) => source(path)).join("\n");
+    expect(deployedHandlers).not.toMatch(
+      /defineSecret\(["'](?:IDEMPOTENCY_SECRET|GEMINI_API_KEY|DISCOVERY_HMAC_SECRET)["']\)/,
+    );
   });
 });

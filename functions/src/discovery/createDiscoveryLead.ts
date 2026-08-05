@@ -37,7 +37,7 @@ import {
   assertPreviewDiscoveryRuntimeV1,
 } from "./deployment/previewDiscoveryDeploymentUnitV1";
 
-const idempotencySecret = defineSecret("IDEMPOTENCY_SECRET");
+const idempotencySecret = defineSecret("discovery-idempotency-secret-preview");
 
 function toCallerSafeIdempotencyError(error: unknown): HttpsError | null {
   if (!isDiscoveryIntakeIdempotencyError(error)) return null;

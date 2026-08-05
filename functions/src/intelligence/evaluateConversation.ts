@@ -47,7 +47,7 @@ import {
   assertPreviewDiscoveryRuntimeV1,
 } from "../discovery/deployment/previewDiscoveryDeploymentUnitV1";
 
-const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
+const geminiApiKeySecret = defineSecret("discovery-gemini-api-key-preview");
 const EXECUTIVE_CONVERSATION_MODE = "EXECUTIVE_CONVERSATION_LAYER";
 export const EXECUTIVE_CONVERSATION_MODEL = "gemini-3.6-flash" as const;
 export const EXECUTIVE_CONVERSATION_PROMPT_VERSION = "DISC-CONV-03B";
@@ -270,7 +270,7 @@ export async function requestNovelConversationDraft(
 export const evaluateConversation = onCall<EvaluateConversationRequest>(
   {
     ...PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.evaluateConversation,
-    secrets: [GEMINI_API_KEY],
+    secrets: [geminiApiKeySecret],
     cors: true,
     timeoutSeconds: 15,
   },
@@ -396,7 +396,7 @@ export const evaluateConversation = onCall<EvaluateConversationRequest>(
       });
     }
 
-    const apiKey = GEMINI_API_KEY.value();
+    const apiKey = geminiApiKeySecret.value();
     if (!apiKey) {
       return consultativeFallbackResponse({
         reason: "No API key available",
