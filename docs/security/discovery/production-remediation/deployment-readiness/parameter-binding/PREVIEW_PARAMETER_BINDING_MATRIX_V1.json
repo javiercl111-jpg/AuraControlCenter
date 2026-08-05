@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "1.0",
+  "changeId": "AI-02H1E.5.R3E-PREVIEW-PARAMETER-BINDING-20260805-01",
+  "program": "AI-02H1E.5.0",
+  "slice": "R3E",
+  "verdict": "PREVIEW PARAMETER BINDING REMEDIATED — READY TO RETRY CONTROLLED DEPLOYMENT",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "codebase": "preview-discovery",
+    "productionAuthorized": false,
+    "deploymentExecuted": false
+  },
+  "gate": {
+    "branch": "fix/intelligence-preview-parameter-binding",
+    "head": "459e4d0acf4a3bd0fd11df87631cbfe12b42d18d",
+    "originMain": "459e4d0acf4a3bd0fd11df87631cbfe12b42d18d",
+    "initialWorktreeClean": true,
+    "firebaseAlias": "aura-intel-preview",
+    "gcpProject": "aura-intel-preview",
+    "node": "v20.20.2",
+    "npm": "10.8.2"
+  },
+  "configuration": {
+    "file": "functions/.env.aura-intel-preview",
+    "AURA_RUNTIME_ENVIRONMENT": "PREVIEW",
+    "DISCOVERY_SHADOW_EVALUATION": false,
+    "DISCOVERY_PRIMARY_EVALUATION": false,
+    "EXECUTIVE_DISCOVERY_TIMEOUT_MS": 10000,
+    "EXECUTIVE_DISCOVERY_ENDPOINT": "",
+    "remoteEndpointAuthorized": false,
+    "globalEnvConfiguration": false,
+    "stagingConfiguration": false,
+    "productionConfiguration": false
+  },
+  "cliAnalysis": {
+    "firebaseCliVersion": "15.25.1",
+    "manifestSpecVersion": "v1alpha1",
+    "emptyEndpointRepresentationAccepted": true,
+    "nonInteractive": true,
+    "promptRequired": false,
+    "resolvedNonSecretParameterCount": 4,
+    "secretValuesRead": false
+  },
+  "manifest": {
+    "exports": [
+      "completeDiscoverySession",
+      "createDiscoveryLead",
+      "evaluateConversation",
+      "exchangeDiscoveryToken",
+      "resolveDiscoverySession"
+    ],
+    "secretResources": [
+      "discovery-gemini-api-key-preview",
+      "discovery-hmac-secret-preview",
+      "discovery-idempotency-secret-preview"
+    ],
+    "unexpectedExports": 0,
+    "productiveEndpointPresent": false
+  },
+  "failClosed": {
+    "shadowResult": "SKIPPED_DISABLED",
+    "adapterFactoryCalls": 0,
+    "httpClientConstructed": false,
+    "endpointInvoked": false,
+    "tokenRequested": false,
+    "legacyCompletionChanged": false
+  },
+  "tests": {
+    "parameterGuard": "15/15 PASS",
+    "distribution": "7/7 PASS",
+    "deploymentUnit": "22/22 PASS",
+    "runtimeContracts": "18/18 PASS",
+    "trustCompletion": "20/20 PASS",
+    "rules": "14/14 PASS",
+    "targetingGuard": "15/15 PASS",
+    "shadowIntegration": "15/15 PASS",
+    "functionsBuild": "PASS",
+    "typescriptNoEmit": "PASS",
+    "previewGuard": "PASS",
+    "dryRun": "PASS",
+    "rootBuild": "PASS",
+    "manifestAnalysis": "PASS",
+    "nonInteractiveResolution": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "cloudReadBack": {
+    "functions": 0,
+    "cloudRunServices": 0,
+    "secretsExisting": 3,
+    "enabledVersionsPerSecret": 1,
+    "resourceLevelAccessorBindingsPerSecret": 1,
+    "projectLevelSecretAccessorBindings": 0,
+    "secretValuesRead": false,
+    "cloudMutations": false,
+    "stagingMutations": false,
+    "productionMutations": false
+  },
+  "separateDebt": [
+    "Node 20 runtime update",
+    "firebase-functions 6.x dependency update"
+  ]
+}
