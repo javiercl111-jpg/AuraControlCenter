@@ -1,3 +1,5 @@
+import type { RuntimeEnvironmentV1 } from "../runtimeContracts";
+
 export const STRUCTURED_ABUSE_TELEMETRY_VERSION =
   "STRUCTURED_ABUSE_TELEMETRY_V1" as const;
 export const STRUCTURED_ABUSE_EVENT_CATALOG_VERSION =
@@ -36,8 +38,7 @@ export type StructuredAbuseSeverity = "INFO" | "WARN" | "ERROR" | "CRITICAL";
 export type StructuredAbuseOutcome =
   | "ACCEPTED" | "REJECTED" | "ALLOWED" | "DENIED"
   | "COMPLETED" | "REPLAYED" | "EXPIRED" | "EMITTED" | "SKIPPED";
-export type StructuredAbuseEnvironment =
-  "DEVELOPMENT" | "TEST" | "STAGING" | "PRODUCTION";
+export type StructuredAbuseEnvironment = RuntimeEnvironmentV1;
 
 export const STRUCTURED_ABUSE_METRIC_KEYS = Object.freeze([
   "requests", "rejections", "retries", "replays",

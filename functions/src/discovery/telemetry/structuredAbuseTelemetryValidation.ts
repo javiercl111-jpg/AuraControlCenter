@@ -87,7 +87,7 @@ export function validateStructuredAbuseTelemetryEventV1(
     !["ACCEPTED", "REJECTED", "ALLOWED", "DENIED", "COMPLETED", "REPLAYED", "EXPIRED", "EMITTED", "SKIPPED"].includes(value.outcome) ||
     !REASON.test(value.reasonCode) || !Number.isSafeInteger(value.durationMs) ||
     value.durationMs < 0 || value.durationMs > 3_600_000 ||
-    !["DEVELOPMENT", "TEST", "STAGING", "PRODUCTION"].includes(value.environment) ||
+    !["LOCAL_DEMO", "PREVIEW", "STAGING", "PRODUCTION"].includes(value.environment) ||
     !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= value.timestamp
   ) throw new StructuredAbuseTelemetryError("TELEMETRY_INVALID");
   if (value.subject && (

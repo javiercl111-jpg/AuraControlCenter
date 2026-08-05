@@ -17,6 +17,7 @@ const childEnvironment = {
   ...process.env,
   GCLOUD_PROJECT: PROJECT_ID,
   GOOGLE_CLOUD_PROJECT: PROJECT_ID,
+  AURA_RUNTIME_ENVIRONMENT: "LOCAL_DEMO",
   FIREBASE_CONFIG: JSON.stringify({ projectId: PROJECT_ID }),
 };
 delete childEnvironment.GOOGLE_APPLICATION_CREDENTIALS;
@@ -37,4 +38,3 @@ const result = spawnSync(npxExecutable, [
 
 if (result.error !== undefined) throw result.error;
 process.exitCode = result.status ?? 1;
-

@@ -58,6 +58,7 @@ export interface DiscoveryCapabilityCompletionInput {
   readonly linkId: string;
   readonly requestHash: string;
   readonly reportCapabilityHash: string;
+  readonly notificationOutboxEnabled?: boolean;
   readonly effect: (context: Readonly<{
     transaction: Transaction;
     linkData: DocumentData;

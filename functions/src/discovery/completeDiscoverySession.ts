@@ -25,7 +25,7 @@ import {
 import { validateDiscoveryCompletion } from "./discoveryCompletionValidation";
 import {
   DISCOVERY_CAPABILITY_POLICY_V1,
-  createDiscoveryCompletionPublicResultV1,
+  createDiscoveryStructuredCompletionPublicResultV1,
   createDiscoverySessionIdV1,
   deriveDiscoveryReportCapabilityTokenV1,
   hashDiscoveryCapabilityToken,
@@ -34,11 +34,8 @@ import {
 import { FirestoreDiscoveryCapabilityRepository } from
   "../infrastructure/firestore/discoveryCapabilities";
 import {
-  dispatchDiscoveryCompletionOutbox,
   toDiscoveryCapabilityHttpsError,
 } from "./discoveryCapabilityHandlerSupport";
-import { DiscoveryReportGenerationService } from
-  "./reports/DiscoveryReportGenerationService";
 import { parseDiscoveryCompletionPayloadV1 } from "./payloadBounds";
 import { toDiscoveryPayloadHttpsError } from "./discoveryPayloadHandlerSupport";
 import {
@@ -47,8 +44,12 @@ import {
   recordDiscoveryTelemetrySafe,
 } from "./telemetry";
 import { enforceDiscoveryContainmentV1 } from "./containment";
+import {
+  assertStructuredResultOnlyContractV1,
+  resolveDiscoveryRuntimeContractV1,
+} from "./runtimeContracts";
 
-const capabilitySecret = defineSecret("IDEMPOTENCY_SECRET");
+const capabilitySecret = defineSecret("DISCOVERY_HMAC_SECRET");
 
 const SHADOW_CONTROLLED_FIELDS = [
   "legacyDiagnosis", "shadowDiagnosis", "shadowMetadata", "shadowExecution",
@@ -95,6 +96,8 @@ export const completeDiscoverySession = functions.https.onCall(
   async (request) => {
     const startedAt = Date.now();
     const db = admin.firestore();
+    const runtimeContract = resolveDiscoveryRuntimeContractV1();
+    assertStructuredResultOnlyContractV1(runtimeContract);
     if (request.app == undefined) {
       throw new functions.https.HttpsError("failed-precondition", "APP_CHECK_REQUIRED");
     }
@@ -178,6 +181,9 @@ export const completeDiscoverySession = functions.https.onCall(
         linkId,
         requestHash,
         reportCapabilityHash: hashDiscoveryCapabilityToken(reportCapabilityToken),
+        notificationOutboxEnabled:
+          runtimeContract.features.notificationsEnabled &&
+          runtimeContract.features.cloudTasksEnabled,
         effect: async ({ transaction, linkData, dossierId }) => {
           const completion = validateDiscoveryCompletion({ dossierPayload, linkData });
           if (!completion.valid) {
@@ -286,22 +292,6 @@ export const completeDiscoverySession = functions.https.onCall(
         },
       });
 
-      await dispatchDiscoveryCompletionOutbox(db, result.completion);
-      if (result.completion.prospectId) {
-        try {
-          await DiscoveryReportGenerationService.generateReport(
-            result.completion.sessionId,
-            result.completion.prospectId,
-            "EXTERNAL_RADIOGRAFIA",
-          );
-        } catch (error: unknown) {
-          console.error("DISCOVERY_REPORT_GENERATION_DEFERRED", {
-            completionId: result.completion.completionId,
-            reasonCode: normalizeTelemetryReasonCodeV1(error),
-          });
-        }
-      }
-
       if (result.kind === "NEW" && result.shadowEvaluationContext) {
         const correlationId = `shadow_${result.completion.completionId}`;
         const startedAt = Date.now();
@@ -349,8 +339,8 @@ export const completeDiscoverySession = functions.https.onCall(
         measurements: result.kind === "REPLAY" ? { replays: 1 } : {},
       });
 
-      return createDiscoveryCompletionPublicResultV1(
-        result.completion, reportCapabilityToken,
+      return createDiscoveryStructuredCompletionPublicResultV1(
+        result.completion,
       );
     } catch (error: unknown) {
       if (error instanceof functions.https.HttpsError) throw error;

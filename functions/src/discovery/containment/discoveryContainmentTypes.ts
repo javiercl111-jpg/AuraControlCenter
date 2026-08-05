@@ -1,3 +1,5 @@
+import type { RuntimeEnvironmentV1 } from "../runtimeContracts";
+
 export const DISCOVERY_CONTAINMENT_POLICY_SCHEMA_VERSION =
   "DISCOVERY_CONTAINMENT_POLICY_V1" as const;
 export const DISCOVERY_CONTAINMENT_DECISION_SCHEMA_VERSION =
@@ -28,8 +30,7 @@ export const DISCOVERY_EMERGENCY_QUOTA_OPERATIONS = Object.freeze([
 export type DiscoveryEmergencyQuotaOperation =
   (typeof DISCOVERY_EMERGENCY_QUOTA_OPERATIONS)[number];
 
-export type DiscoveryContainmentEnvironment =
-  "DEVELOPMENT" | "TEST" | "STAGING" | "PRODUCTION";
+export type DiscoveryContainmentEnvironment = RuntimeEnvironmentV1;
 export type DiscoveryContainmentPolicyStatus =
   "ACTIVE" | "EXPIRED" | "REVOKED" | "INVALID";
 
@@ -118,4 +119,3 @@ export interface DiscoveryContainmentAuditRecordV1 {
   readonly rollbackVersion: string | null;
   readonly result: DiscoveryContainmentAuditResult;
 }
-
