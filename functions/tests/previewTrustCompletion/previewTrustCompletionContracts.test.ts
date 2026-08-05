@@ -131,7 +131,7 @@ describe("Inherited runtime identity and secret boundary", () => {
       }),
       expect.objectContaining({
         handler: "completeDiscoverySession",
-        runtimeIdentity: "preview-discovery-completion-runtime",
+        runtimeIdentity: "preview-discovery-complete-rt",
         secretResource: "discovery-hmac-secret-preview",
       }),
       expect.objectContaining({

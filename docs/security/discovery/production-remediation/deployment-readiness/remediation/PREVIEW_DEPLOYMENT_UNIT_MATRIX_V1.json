@@ -1,0 +1,128 @@
+{
+  "schemaVersion": "1.0",
+  "changeId": "AI-02H1E.5.R3B-PREVIEW-DEPLOYMENT-UNIT-20260805-01",
+  "date": "2026-08-05",
+  "branch": "fix/intelligence-preview-deployment-unit",
+  "targetProject": "aura-intel-preview",
+  "region": "us-central1",
+  "productionState": "REMEDIATION_HOLD",
+  "verdict": "PREVIEW DISCOVERY DEPLOYMENT UNIT READY — DEPLOYMENT STILL NOT EXECUTED",
+  "deploymentExecuted": false,
+  "codebase": "preview-discovery",
+  "entrypoint": "functions/src/previewDiscoveryIndex.ts",
+  "handlers": [
+    {
+      "name": "createDiscoveryLead",
+      "runtimeIdentity": "preview-public-intake-runtime",
+      "appCheckEnforced": true,
+      "secretBindings": [
+        {
+          "environmentKey": "IDEMPOTENCY_SECRET",
+          "secretResource": "discovery-idempotency-secret-preview"
+        }
+      ],
+      "status": "READY"
+    },
+    {
+      "name": "exchangeDiscoveryToken",
+      "runtimeIdentity": "preview-discovery-session-rt",
+      "appCheckEnforced": true,
+      "secretBindings": [],
+      "status": "READY"
+    },
+    {
+      "name": "resolveDiscoverySession",
+      "runtimeIdentity": "preview-discovery-session-rt",
+      "appCheckEnforced": true,
+      "secretBindings": [],
+      "status": "READY"
+    },
+    {
+      "name": "evaluateConversation",
+      "runtimeIdentity": "preview-conversation-runtime",
+      "appCheckEnforced": true,
+      "secretBindings": [
+        {
+          "environmentKey": "GEMINI_API_KEY",
+          "secretResource": "discovery-gemini-api-key-preview"
+        }
+      ],
+      "status": "READY"
+    },
+    {
+      "name": "completeDiscoverySession",
+      "runtimeIdentity": "preview-discovery-complete-rt",
+      "appCheckEnforced": true,
+      "secretBindings": [
+        {
+          "environmentKey": "DISCOVERY_HMAC_SECRET",
+          "secretResource": "discovery-hmac-secret-preview"
+        }
+      ],
+      "status": "READY"
+    }
+  ],
+  "failClosedGates": {
+    "exactProject": true,
+    "previewEnvironmentRequired": true,
+    "exactExportAllowlist": true,
+    "exactServiceAccounts": true,
+    "exactSecretResourceMapping": true,
+    "appCheckRequired": true,
+    "productionIdentityRejected": true,
+    "forbiddenModulesRejected": true,
+    "nonInteractiveDeployCommand": true
+  },
+  "isolatedSurfaces": [
+    "production index exports",
+    "Storage",
+    "Tasks",
+    "PDF and report generation",
+    "notifications",
+    "Production runtime identity"
+  ],
+  "validations": [
+    { "name": "deployment-unit", "passed": 15, "total": 15 },
+    { "name": "runtime-contracts", "passed": 18, "total": 18 },
+    { "name": "preview-trust-completion", "passed": 20, "total": 20 },
+    { "name": "rules-emulator", "passed": 14, "total": 14 },
+    { "name": "rules-guard", "passed": 15, "total": 15 },
+    { "name": "P8", "passed": 33, "total": 33 },
+    { "name": "P2", "passed": 17, "total": 17 },
+    { "name": "P3", "passed": 24, "total": 24 },
+    { "name": "P4", "passed": 29, "total": 29 },
+    { "name": "P5", "passed": 34, "total": 34 },
+    { "name": "P6", "passed": 25, "total": 25 },
+    { "name": "P7", "passed": 36, "total": 36 },
+    { "name": "D.9", "passed": 40, "total": 40 },
+    { "name": "D.8", "passed": 81, "total": 81 }
+  ],
+  "builds": {
+    "functions": "PASS",
+    "root": "PASS",
+    "typescriptNoEmit": "PASS",
+    "dryRunGuard": "PASS"
+  },
+  "retainedClientWriter": {
+    "path": "src/modules/discovery/services/discoverySessionService.ts",
+    "caller": "src/pages/CrmPage.tsx",
+    "reason": "The removal condition was not met; the writer is outside the Functions deployment unit.",
+    "followUpRequired": true
+  },
+  "externalChanges": {
+    "cloudResources": false,
+    "firebaseDeploy": false,
+    "firestoreRules": false,
+    "vercel": false,
+    "staging": false,
+    "production": false,
+    "storage": false,
+    "tasks": false
+  },
+  "gitActions": {
+    "commit": false,
+    "push": false,
+    "pullRequest": false
+  }
+}
+

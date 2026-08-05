@@ -9,12 +9,14 @@
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
-    "deploy": "firebase deploy --only functions"
+    "guard:preview-discovery": "node ../scripts/preview-discovery-deployment-guard.cjs --project aura-intel-preview --environment PREVIEW",
+    "dry-run:preview-discovery": "npm run build && npm run guard:preview-discovery",
+    "deploy:preview-discovery": "npm run build && npm run guard:preview-discovery && firebase deploy --project aura-intel-preview --only functions:createDiscoveryLead,functions:exchangeDiscoveryToken,functions:resolveDiscoverySession,functions:evaluateConversation,functions:completeDiscoverySession --non-interactive"
   },
   "engines": {
     "node": "20"
   },
-  "main": "lib/index.js",
+  "main": "lib/previewDiscoveryIndex.js",
   "dependencies": {
     "@aura/intelligence-os": "file:.generated/aura-intelligence-os",
     "@google/genai": "^2.11.0",

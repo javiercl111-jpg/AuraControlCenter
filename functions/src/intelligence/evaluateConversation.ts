@@ -42,6 +42,10 @@ import {
   recordDiscoveryTelemetrySafe,
 } from "../discovery/telemetry";
 import { enforceDiscoveryContainmentV1 } from "../discovery/containment";
+import {
+  PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1,
+  assertPreviewDiscoveryRuntimeV1,
+} from "../discovery/deployment/previewDiscoveryDeploymentUnitV1";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const EXECUTIVE_CONVERSATION_MODE = "EXECUTIVE_CONVERSATION_LAYER";
@@ -265,12 +269,13 @@ export async function requestNovelConversationDraft(
 
 export const evaluateConversation = onCall<EvaluateConversationRequest>(
   {
-    enforceAppCheck: true,
+    ...PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.evaluateConversation,
     secrets: [GEMINI_API_KEY],
     cors: true,
     timeoutSeconds: 15,
   },
   async (request) => {
+    assertPreviewDiscoveryRuntimeV1();
     const telemetryStartedAt = Date.now();
     const db = admin.firestore();
     let data: EvaluateConversationRequest & { sessionToken: string };
