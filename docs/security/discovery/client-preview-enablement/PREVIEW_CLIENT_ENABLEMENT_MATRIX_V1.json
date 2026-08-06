@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "PREVIEW_CLIENT_ENABLEMENT_MATRIX_V1",
+  "changeId": "AI-02H2.1-PREVIEW-CLIENT-ENABLEMENT-20260805-01",
+  "slice": "AI-02H2.1",
+  "verdict": "PREVIEW CLIENT ENABLEMENT CERTIFIED — READY FOR CONTROLLED END-TO-END HAPPY PATH",
+  "productionAuthorized": false,
+  "target": {
+    "firebaseProject": "aura-intel-preview",
+    "vercelProject": "aura-control-center-preview",
+    "domain": "preview-controlcenter.auranexus.io",
+    "stagingChanged": false,
+    "productionChanged": false
+  },
+  "gate": {
+    "branchExact": true,
+    "headMatchesOriginMain": true,
+    "initialWorktreeClean": true,
+    "nodeVersion": "v20.20.2",
+    "npmVersion": "10.8.2",
+    "firebaseAliasPreview": true,
+    "gcpProjectExact": true,
+    "vercelAuthenticated": true
+  },
+  "clientContract": {
+    "requiredVariableCount": 7,
+    "requiredVariables": [
+      "VITE_AURA_RUNTIME_ENVIRONMENT",
+      "VITE_FIREBASE_API_KEY",
+      "VITE_FIREBASE_AUTH_DOMAIN",
+      "VITE_FIREBASE_PROJECT_ID",
+      "VITE_FIREBASE_MESSAGING_SENDER_ID",
+      "VITE_FIREBASE_APP_ID",
+      "VITE_RECAPTCHA_SITE_KEY"
+    ],
+    "environment": "PREVIEW",
+    "functionsRegion": "us-central1",
+    "exactPreviewHostRequired": true,
+    "missingVariableFailsClosed": true,
+    "projectMismatchFailsClosed": true,
+    "environmentMismatchFailsClosed": true,
+    "authDomainMismatchFailsClosed": true,
+    "silentFallbackCount": 0,
+    "debugConfigurationCount": 0,
+    "valuesRecorded": false
+  },
+  "productionDomainIsolation": {
+    "clientExecutableProductionUrlCount": 0,
+    "directCloudRunUrlCount": 0,
+    "serverResponseOriginTrusted": false,
+    "relativeNavigationBoundary": true,
+    "mainDiscoveryFlowCovered": true,
+    "developmentSmokeFlowCovered": true,
+    "backendModified": false,
+    "functionsDeployed": false
+  },
+  "vercel": {
+    "framework": "vite",
+    "rootDirectory": ".",
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "nodeVersion": "24.x",
+    "productionBranch": "main",
+    "repository": "AuraControlCenter",
+    "projectVariableCount": 7,
+    "variableTargets": [
+      "preview",
+      "production"
+    ],
+    "sharedVariableCount": 0,
+    "branchOverrideCount": 0,
+    "deploymentTarget": "production",
+    "deploymentState": "READY",
+    "previewDomainAssociated": true,
+    "realProductionDeploymentCount": 0
+  },
+  "readBack": {
+    "pageLoaded": true,
+    "loginSurfaceVisible": true,
+    "configurationErrorVisible": false,
+    "consoleErrorCount": 0,
+    "recaptchaEnterpriseAssetsObserved": true,
+    "productionRequestCount": 0,
+    "directCloudRunRequestCount": 0,
+    "happyPathExecuted": false
+  },
+  "validation": {
+    "npmCi": "PASS",
+    "clientConfigurationTests": "16/16 PASS",
+    "clientEnablementGuardTests": "23/23 PASS",
+    "previewTrustCompletion": "20/20 PASS",
+    "runtimeContracts": "18/18 PASS",
+    "previewDeploymentUnit": "22/22 PASS",
+    "invocationBoundary": "13/13 PASS",
+    "sourceGuard": "PASS",
+    "liveGuard": "PASS",
+    "typescriptNoEmit": "PASS",
+    "rootBuild": "PASS",
+    "bundleAudit": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "prohibitedActions": {
+    "functionsDeploy": false,
+    "firebaseMutation": false,
+    "iamMutation": false,
+    "secretManagerMutation": false,
+    "rulesMutation": false,
+    "appCheckEnforcementMutation": false,
+    "stagingMutation": false,
+    "productionMutation": false,
+    "commit": false,
+    "push": false,
+    "pullRequest": false
+  }
+}
+
