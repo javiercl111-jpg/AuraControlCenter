@@ -712,6 +712,14 @@ export function validateGovernedRequest(request: unknown): GovernedExecutionRequ
     throw new GovernedBoundaryError('INVALID_REQUEST', `Invalid payload: ${payloadCheck.reason}`, false);
   }
 
+  if (req.capability !== undefined && typeof req.capability !== 'string') {
+    throw new GovernedBoundaryError('INVALID_REQUEST', 'capability must be a string if provided', false);
+  }
+
+  if (req.operation !== undefined && typeof req.operation !== 'string') {
+    throw new GovernedBoundaryError('INVALID_REQUEST', 'operation must be a string if provided', false);
+  }
+
   if (req.metadata !== undefined) {
     if (!isPlainObject(req.metadata)) {
       throw new GovernedBoundaryError('INVALID_REQUEST', 'metadata must be a plain object', false);
@@ -812,6 +820,12 @@ export function validateGovernedRequest(request: unknown): GovernedExecutionRequ
       : {}),
     ...(req.timeoutMs !== undefined
       ? { timeoutMs: req.timeoutMs }
+      : {}),
+    ...(req.capability !== undefined
+      ? { capability: req.capability as string }
+      : {}),
+    ...(req.operation !== undefined
+      ? { operation: req.operation as string }
       : {}),
     ...(req.cancellationSignal !== undefined
       ? {

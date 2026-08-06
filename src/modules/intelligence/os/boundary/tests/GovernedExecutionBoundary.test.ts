@@ -6,6 +6,7 @@ import type {
   BoundaryExecutionPort,
   ShadowComparisonPort,
   BoundaryAuditPort,
+  BoundarySemanticProjectionContextV1,
   EffectiveBoundaryPolicy,
   InternalExecutionInput,
   InternalExecutionResult,
@@ -1133,7 +1134,7 @@ describe('GovernedExecutionBoundary', () => {
       const boundary = new GovernedExecutionBoundary({
         clockPort: createMockClock(),
         featurePolicyPort: createMockPolicyPort(),
-        executionPort: createMockExecutionPort({ rawData: { stageResults: { internal: true } } }),
+        executionPort: createMockExecutionPort({ rawData: { stageResults: { internal: true } } as unknown }),
       });
       const res = await executeBoundary(boundary, createValidRequest());
       expect(JSON.stringify(res)).not.toContain('stageResults');
@@ -1156,6 +1157,33 @@ describe('GovernedExecutionBoundary', () => {
       const res1 = await executeBoundary(boundary, req);
       const res2 = await executeBoundary(boundary, req);
       expect(res1.semanticProjection).toEqual(res2.semanticProjection);
+    });
+
+    it('25. Propagates capability and operation to semantic projection context', async () => {
+      let capturedContext: BoundarySemanticProjectionContextV1 | undefined;
+      const projector = {
+        project: (_rawData: unknown, context: BoundarySemanticProjectionContextV1) => {
+          capturedContext = context;
+          return { projected: true };
+        }
+      };
+
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort({ rawData: { result: 'ok' } }),
+        semanticProjectionPort: projector,
+      });
+
+      const req = createValidRequest() as unknown as Record<string, unknown>;
+      req.capability = 'GROWTH_INTELLIGENCE_V1';
+      req.operation = 'ANALYZE_CAMPAIGN';
+
+      await executeBoundary(boundary, req);
+
+      expect(capturedContext).toBeDefined();
+      expect(capturedContext?.capability).toBe('GROWTH_INTELLIGENCE_V1');
+      expect(capturedContext?.operation).toBe('ANALYZE_CAMPAIGN');
     });
   });
 });

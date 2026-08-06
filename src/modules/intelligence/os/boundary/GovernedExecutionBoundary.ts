@@ -531,6 +531,8 @@ export class GovernedExecutionBoundary {
             actorId: context.actor.actorId,
             mode: effectiveMode,
             source: context.source,
+            capability: request.capability,
+            operation: request.operation,
           });
 
           if (projected === internalResult.rawData) {

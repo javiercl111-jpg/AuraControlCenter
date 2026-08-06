@@ -181,6 +181,8 @@ export interface GovernedExecutionRequest {
   readonly requestedMode: BoundaryExecutionMode;
   readonly payload: unknown;
   readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly capability?: string;
+  readonly operation?: string;
   readonly timeoutMs?: number;
   readonly cancellationSignal?: AbortSignal;
 }

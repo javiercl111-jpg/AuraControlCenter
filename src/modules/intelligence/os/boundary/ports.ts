@@ -89,6 +89,8 @@ export interface BoundarySemanticProjectionContextV1 {
   readonly actorId: string;
   readonly mode: BoundaryExecutionMode;
   readonly source: string;
+  readonly capability?: string;
+  readonly operation?: string;
 }
 
 /**
