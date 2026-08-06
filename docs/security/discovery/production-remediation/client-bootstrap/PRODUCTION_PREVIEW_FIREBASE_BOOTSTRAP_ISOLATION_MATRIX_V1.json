@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "1.0",
+  "changeId": "PROD-UI-01R1-PRODUCTION-PREVIEW-FIREBASE-BOOTSTRAP-ISOLATION-20260806-01",
+  "date": "2026-08-06",
+  "branch": "fix/production-preview-firebase-bootstrap-isolation",
+  "base": "origin/main",
+  "baseSha": "6c58f6c525887cc447693fbc8eaaf89eb5b424c6",
+  "verdict": "CONDITIONAL — BOOTSTRAP ISOLATED WITH REMAINING CONFIGURATION GAP",
+  "rootCause": {
+    "introducingCommit": "04a16e0ed5d71d945dc25a0266aa87b78c41ae17",
+    "integrationCommit": "03c750a693fda41d56890d1f42f4ebbe951bfa4e",
+    "error": "PREVIEW_CLIENT_VARIABLE_MISSING",
+    "phase": "CLIENT_MODULE_BOOTSTRAP_BEFORE_REACT",
+    "previewContractPreviouslyGlobal": true
+  },
+  "environmentSelection": {
+    "variable": "VITE_AURA_RUNTIME_ENVIRONMENT",
+    "allowedValues": [
+      "PREVIEW",
+      "PRODUCTION"
+    ],
+    "hostnameInference": false,
+    "silentFallback": false,
+    "missingEnvironmentFailsClosed": true,
+    "unknownEnvironmentFailsClosed": true
+  },
+  "production": {
+    "projectId": "aura-control-center-debb3",
+    "authDomain": "aura-control-center-debb3.firebaseapp.com",
+    "clientDomain": "controlcenter.auranexus.io",
+    "functionsRegion": "us-central1",
+    "appCheckEnabled": false,
+    "previewResolverExecuted": false,
+    "currentVercelEnvironmentVariablePresent": false,
+    "configurationGap": "VITE_AURA_RUNTIME_ENVIRONMENT must be configured as PRODUCTION before deployment"
+  },
+  "preview": {
+    "projectId": "aura-intel-preview",
+    "authDomain": "aura-intel-preview.firebaseapp.com",
+    "clientDomain": "preview-controlcenter.auranexus.io",
+    "functionsRegion": "us-central1",
+    "requiredVariableCount": 7,
+    "appCheckEnabled": true,
+    "appCheckProvider": "RECAPTCHA_ENTERPRISE",
+    "appCheckDebugEnabled": false,
+    "contractChanged": false
+  },
+  "validations": [
+    { "name": "package-lock-dry-run", "status": "PASS" },
+    { "name": "bootstrap-and-preview-tests", "passed": 47, "total": 47 },
+    { "name": "preview-client-enablement-guard", "passed": 23, "total": 23 },
+    { "name": "preview-client-source-guard", "status": "PASS" },
+    { "name": "preview-trust-completion", "passed": 20, "total": 20 },
+    { "name": "typescript-noemit", "status": "PASS" },
+    { "name": "production-root-build", "status": "PASS", "syntheticMetadata": true },
+    { "name": "preview-root-build", "status": "PASS", "syntheticMetadata": true },
+    { "name": "production-active-value-isolation", "status": "PASS" },
+    { "name": "preview-active-value-isolation", "status": "PASS" },
+    { "name": "preview-debug-global-assignment", "present": false },
+    { "name": "generated-artifacts-tracked", "count": 0 }
+  ],
+  "repositoryChanges": [
+    ".env.example",
+    "package.json",
+    "src/config/firebase.ts",
+    "src/config/clientFirebaseBootstrapV1.ts",
+    "src/config/clientFirebaseBootstrapV1.test.ts",
+    "src/config/firebaseProductionBootstrapV1.test.ts",
+    "src/config/productionClientConfigurationV1.ts",
+    "src/config/productionClientConfigurationV1.test.ts",
+    "docs/security/discovery/production-remediation/client-bootstrap"
+  ],
+  "externalChanges": {
+    "vercel": false,
+    "firebase": false,
+    "functions": false,
+    "authority": false,
+    "secretManager": false,
+    "productionDeployment": false,
+    "previewDeployment": false
+  },
+  "gitActions": {
+    "commit": false,
+    "push": false,
+    "pullRequest": false
+  }
+}
