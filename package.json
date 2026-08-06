@@ -35,6 +35,7 @@
     "test:preview-parameter-binding": "node --test scripts/tests/preview-discovery-parameter-guard.test.cjs",
     "test:preview-invocation-boundary": "node --test scripts/tests/preview-invocation-boundary-guard.test.cjs",
     "test:preview-client-configuration": "vitest run src/config/previewClientConfigurationV1.test.ts",
+    "test:client-bootstrap-isolation": "vitest run src/config/previewClientConfigurationV1.test.ts src/config/productionClientConfigurationV1.test.ts src/config/clientFirebaseBootstrapV1.test.ts src/config/firebaseProductionBootstrapV1.test.ts",
     "test:preview-client-enablement-guard": "node --test scripts/tests/preview-client-enablement-guard.test.cjs",
     "test:preview-authority-provisioning": "vitest run src/modules/intelligence/serverAuthorityProvisioning/tests/authorityProvisioning.test.ts",
     "test:preview-authority-provisioning-adapter": "npm run stage:intelligence-os:functions && vitest run --config functions/tests/vitest.authorityProvisioning.config.ts",
