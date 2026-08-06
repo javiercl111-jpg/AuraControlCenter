@@ -1,0 +1,196 @@
+{
+  "schemaVersion": "PREVIEW_CONTAINMENT_POLICY_READINESS_MATRIX_V1",
+  "changeId": "AI-02H2.2E-R1-PREVIEW-CONTAINMENT-POLICY-READINESS-20260806-01",
+  "verdict": "CONDITIONAL — CONTAINMENT IMPLEMENTATION EXISTS BUT REQUIRES CERTIFICATION",
+  "readinessClassification": "IMPLEMENTATION_REQUIRES_CERTIFICATION",
+  "gate": {
+    "branch": "audit/intelligence-preview-containment-policy-readiness",
+    "headShort": "182be2ea52e1",
+    "headMatchesOriginMain": true,
+    "cleanAtStart": true,
+    "node": "v20.20.2",
+    "firebaseAlias": "preview",
+    "gcpTarget": "aura-intel-preview",
+    "functionsActive": 5,
+    "cloudRunReady": 5
+  },
+  "liveReadback": {
+    "activePointers": 0,
+    "policies": 0,
+    "auditRecords": 0,
+    "handlerInvocations": 0,
+    "cloudWrites": 0
+  },
+  "architecture": {
+    "policyContract": "DiscoveryContainmentPolicyV1",
+    "decisionContract": "DiscoveryContainmentDecisionV1",
+    "auditContract": "DiscoveryContainmentAuditRecordV1",
+    "evaluator": "DefaultDiscoveryContainmentEvaluator",
+    "runtimeIntegration": "enforceDiscoveryContainmentV1",
+    "policyProvider": "FirestoreDiscoveryContainmentPolicyProvider",
+    "repository": "FirestoreDiscoveryContainmentRepository",
+    "emergencyQuotaAdapter": "P2DiscoveryEmergencyQuotaConsumer",
+    "storage": "FIRESTORE",
+    "publicAdminEndpoint": false
+  },
+  "collections": {
+    "policies": "discovery_containment_policies_v1",
+    "active": "discovery_containment_active_v1",
+    "audit": "discovery_containment_audit_v1"
+  },
+  "createDiscoveryLeadTrace": [
+    "APP_CHECK",
+    "PAYLOAD_VALIDATION",
+    "PUBLIC_INTAKE_CONTAINMENT",
+    "TOKEN_ISSUANCE_CONTAINMENT",
+    "OPTIONAL_ADVISOR_CONTAINMENT",
+    "IDEMPOTENCY",
+    "BUSINESS_WRITES"
+  ],
+  "missingPolicyResolution": {
+    "pointerDocument": "PREVIEW",
+    "pointerVersion": "DISCOVERY_CONTAINMENT_ACTIVE_V1",
+    "policyDocumentId": "DERIVED_FROM_ENVIRONMENT_AND_POLICY_VERSION",
+    "error": "CONTAINMENT_POLICY_NOT_FOUND",
+    "failClosed": true
+  },
+  "model": {
+    "policyIdField": false,
+    "policyVersion": true,
+    "environment": true,
+    "status": true,
+    "surfaceSwitches": 9,
+    "blockedAppIds": true,
+    "blockedCommercialCodeHashes": true,
+    "emergencyQuotaOperations": 6,
+    "ownerRole": true,
+    "approvedByRole": true,
+    "createdAt": true,
+    "updatedAt": true,
+    "expiresAt": true,
+    "rollbackVersion": true,
+    "tenantConstraint": false,
+    "fingerprint": false,
+    "iamPrincipal": false,
+    "activationMetadata": false,
+    "rejectsUnexpectedTopLevelFields": false,
+    "serverOwnedTimestamps": false
+  },
+  "activePointer": {
+    "publicInterface": false,
+    "documentPerEnvironment": true,
+    "fieldsWritten": [
+      "version",
+      "environment",
+      "policyVersion",
+      "updatedAt"
+    ],
+    "atomicWithPolicyAndAudit": true,
+    "expectedVersionCompareAndSet": false,
+    "closedValidator": false
+  },
+  "creationPath": {
+    "classification": "IMPLEMENTATION_EXISTS_BUT_NOT_CERTIFIED",
+    "adapterMethod": "activatePolicy",
+    "createsImmutablePolicy": true,
+    "createsActivePointer": true,
+    "createsAudit": true,
+    "transactional": true,
+    "applicationService": false,
+    "provisioningService": false,
+    "adminScript": false,
+    "cli": false,
+    "migration": false,
+    "bootstrap": false,
+    "dryRun": false,
+    "projectExplicitGuard": false
+  },
+  "activationPath": {
+    "classification": "IMPLEMENTATION_EXISTS_BUT_NOT_CERTIFIED",
+    "singlePointerByEnvironment": true,
+    "immutableVersions": true,
+    "deterministicAuditId": true,
+    "basicReplay": true,
+    "rollback": true,
+    "environmentSeparation": true,
+    "staleOperatorRejection": false,
+    "iamActorBinding": false,
+    "independentApproverEnforced": false,
+    "mandatoryRollbackForUpdates": false,
+    "auditReplayContentValidation": false
+  },
+  "minimumPreviewPolicy": {
+    "environment": "PREVIEW",
+    "status": "ACTIVE",
+    "switches": {
+      "publicIntakeEnabled": true,
+      "advisorCodeResolutionEnabled": false,
+      "tokenIssuanceEnabled": true,
+      "sessionResolutionEnabled": true,
+      "sessionCompletionEnabled": true,
+      "conversationAiEnabled": true,
+      "externalReportGenerationEnabled": false,
+      "documentDownloadEnabled": false,
+      "notificationFanoutEnabled": false
+    },
+    "quotaValuesInvented": false,
+    "rolesInvented": false,
+    "timestampsInvented": false,
+    "versionInvented": false,
+    "activationReady": false
+  },
+  "tests": {
+    "containmentCasesDefined": 36,
+    "containmentCasesExecuted": 0,
+    "containmentExecutionBlocker": "VITEST_NOT_INSTALLED_IN_WORKTREE",
+    "requiredCoverage": {
+      "covered": 7,
+      "partial": 3,
+      "missing": 5,
+      "total": 15
+    },
+    "rulesBaselineCasesDefined": 14,
+    "rulesGuardCasesDefined": 15,
+    "rulesGuardPass": 15,
+    "containmentSpecificRulesCases": 0
+  },
+  "rules": {
+    "policiesClientRead": false,
+    "policiesClientWrite": false,
+    "activeClientRead": false,
+    "activeClientWrite": false,
+    "auditClientRead": false,
+    "auditClientWrite": false,
+    "adminSdkRequired": true,
+    "browserCanActivate": false
+  },
+  "certificationGaps": [
+    "NO_TRUSTED_CONTROL_PLANE",
+    "NO_IAM_ACTOR_APPROVER_BINDING",
+    "NO_EXPECTED_VERSION_CAS",
+    "CALLER_OWNED_TIMESTAMPS",
+    "NO_POLICY_FINGERPRINT",
+    "UNEXPECTED_FIELDS_NOT_REJECTED",
+    "NO_TENANT_SCOPE",
+    "ROLLBACK_NOT_MANDATORY_FOR_UPDATE",
+    "AUDIT_REPLAY_NOT_CONTENT_VALIDATED",
+    "MISSING_REQUIRED_TEST_FIXTURES",
+    "NO_CONTAINMENT_SPECIFIC_RULES_TEST"
+  ],
+  "prohibitedActions": {
+    "policyCreated": false,
+    "policyActivated": false,
+    "activePointerModified": false,
+    "createDiscoveryLeadInvoked": false,
+    "browserUsed": false,
+    "deploy": false,
+    "iamModified": false,
+    "secretManagerModified": false,
+    "rulesModified": false,
+    "stagingTouched": false,
+    "productionTouched": false,
+    "commit": false,
+    "push": false,
+    "pullRequest": false
+  }
+}
