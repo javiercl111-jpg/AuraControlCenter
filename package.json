@@ -27,6 +27,8 @@
     "test:discovery-payload-bounds-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestorePayloadBoundsEmulator.cjs",
     "test:discovery-abuse-telemetry-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestoreAbuseTelemetryEmulator.cjs",
     "test:discovery-containment-emulator": "npm run assert:node20 && node functions/tests/emulator/runFirestoreContainmentEmulator.cjs",
+    "test:preview-containment-control-plane-guard": "node --test scripts/tests/preview-containment-activation-guard.test.cjs",
+    "guard:preview-containment-control-plane": "node scripts/preview-containment-activation-guard.cjs --project=aura-intel-preview --environment=PREVIEW --region=us-central1",
     "test:public-intake-abuse-matrix": "npm run assert:node20 && vitest run --config functions/tests/publicIntakeAbuseCertification/vitest.config.ts",
     "test:public-intake-abuse-certification": "npm run assert:node20 && node functions/tests/emulator/runPublicIntakeAbuseCertification.cjs",
     "test:preview-runtime-contracts": "npm run assert:node20 && vitest run --config functions/tests/runtimeContracts/vitest.config.ts",

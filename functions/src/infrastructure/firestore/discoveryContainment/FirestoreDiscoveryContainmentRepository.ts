@@ -54,7 +54,9 @@ function policyRef(
     .doc(buildDiscoveryContainmentPolicyDocumentId(environment, policyVersion));
 }
 
-function serializePolicy(policy: DiscoveryContainmentPolicyV1): Record<string, unknown> {
+export function serializeDiscoveryContainmentPolicyDocumentV1(
+  policy: DiscoveryContainmentPolicyV1,
+): Record<string, unknown> {
   return {
     ...policy,
     blockedAppIds: [...policy.blockedAppIds],
@@ -67,7 +69,9 @@ function serializePolicy(policy: DiscoveryContainmentPolicyV1): Record<string, u
   };
 }
 
-function deserializePolicy(value: unknown): DiscoveryContainmentPolicyV1 {
+export function deserializeDiscoveryContainmentPolicyDocumentV1(
+  value: unknown,
+): DiscoveryContainmentPolicyV1 {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new DiscoveryContainmentError("CONTAINMENT_POLICY_CORRUPTED");
   }
@@ -137,7 +141,7 @@ implements DiscoveryContainmentPolicyProvider {
   }>): Promise<DiscoveryContainmentPolicyV1 | null> {
     const snapshot = await policyRef(this.db, input.environment, input.policyVersion).get();
     if (!snapshot.exists) return null;
-    const policy = deserializePolicy(snapshot.data());
+    const policy = deserializeDiscoveryContainmentPolicyDocumentV1(snapshot.data());
     if (policy.environment !== input.environment ||
         policy.policyVersion !== input.policyVersion) {
       throw new DiscoveryContainmentError("CONTAINMENT_POLICY_CORRUPTED");
@@ -188,7 +192,7 @@ implements DiscoveryContainmentAuditRepository {
         if (!rollbackSnapshot.exists) {
           throw new DiscoveryContainmentError("CONTAINMENT_CONFIGURATION_ERROR");
         }
-        rollbackTarget = deserializePolicy(rollbackSnapshot.data());
+        rollbackTarget = deserializeDiscoveryContainmentPolicyDocumentV1(rollbackSnapshot.data());
         if (rollbackTarget.environment !== policy.environment ||
             rollbackTarget.policyVersion !== policy.rollbackVersion ||
             rollbackTarget.createdAt > policy.createdAt ||
@@ -197,7 +201,7 @@ implements DiscoveryContainmentAuditRepository {
         }
       }
       if (versionSnapshot.exists) {
-        const existing = deserializePolicy(versionSnapshot.data());
+        const existing = deserializeDiscoveryContainmentPolicyDocumentV1(versionSnapshot.data());
         if (!policiesEqual(existing, policy)) {
           throw new DiscoveryContainmentError("CONTAINMENT_CONFIGURATION_ERROR");
         }
@@ -229,7 +233,9 @@ implements DiscoveryContainmentAuditRepository {
         timestamp: policy.updatedAt, expiresAt: policy.expiresAt,
         rollbackVersion: policy.rollbackVersion, result: "APPLIED",
       });
-      if (!versionSnapshot.exists) transaction.create(versionRef, serializePolicy(policy));
+      if (!versionSnapshot.exists) transaction.create(
+        versionRef, serializeDiscoveryContainmentPolicyDocumentV1(policy),
+      );
       transaction.set(activeRef, {
         version: ACTIVE_POINTER_VERSION,
         environment: policy.environment,
@@ -275,7 +281,8 @@ implements DiscoveryContainmentAuditRepository {
         policyRef(this.db, policy.environment, previousPolicyVersion),
       );
       if (!previousSnapshot.exists ||
-          deserializePolicy(previousSnapshot.data()).status !== "ACTIVE") {
+          deserializeDiscoveryContainmentPolicyDocumentV1(previousSnapshot.data()).status !==
+            "ACTIVE") {
         throw new DiscoveryContainmentError("CONTAINMENT_CONFIGURATION_ERROR");
       }
       const auditId = buildDiscoveryContainmentAuditId({
@@ -289,7 +296,9 @@ implements DiscoveryContainmentAuditRepository {
       const auditSnapshot = await transaction.get(auditRef);
       if (auditSnapshot.exists) {
         if (!versionSnapshot.exists ||
-            !policiesEqual(deserializePolicy(versionSnapshot.data()), policy)) {
+            !policiesEqual(
+              deserializeDiscoveryContainmentPolicyDocumentV1(versionSnapshot.data()), policy,
+            )) {
           throw new DiscoveryContainmentError("CONTAINMENT_CONFIGURATION_ERROR");
         }
         return Object.freeze({ decision: "REPLAY" as const, auditId });
@@ -312,7 +321,7 @@ implements DiscoveryContainmentAuditRepository {
         rollbackVersion: policy.rollbackVersion,
         result: "APPLIED",
       });
-      transaction.create(versionRef, serializePolicy(policy));
+      transaction.create(versionRef, serializeDiscoveryContainmentPolicyDocumentV1(policy));
       transaction.set(activeRef, {
         version: ACTIVE_POINTER_VERSION,
         environment: policy.environment,
@@ -349,7 +358,9 @@ implements DiscoveryContainmentAuditRepository {
       if (!activePolicySnapshot.exists) {
         throw new DiscoveryContainmentError("CONTAINMENT_ROLLBACK_INVALID");
       }
-      const activePolicy = deserializePolicy(activePolicySnapshot.data());
+      const activePolicy = deserializeDiscoveryContainmentPolicyDocumentV1(
+        activePolicySnapshot.data(),
+      );
       const targetVersion = activePolicy.rollbackVersion;
       if (!targetVersion || targetVersion === activeVersion) {
         throw new DiscoveryContainmentError("CONTAINMENT_ROLLBACK_INVALID");
@@ -367,7 +378,7 @@ implements DiscoveryContainmentAuditRepository {
         if (!snapshot.exists) {
           throw new DiscoveryContainmentError("CONTAINMENT_ROLLBACK_INVALID");
         }
-        const policy = deserializePolicy(snapshot.data());
+        const policy = deserializeDiscoveryContainmentPolicyDocumentV1(snapshot.data());
         if (policy.environment !== input.environment) {
           throw new DiscoveryContainmentError("CONTAINMENT_ROLLBACK_INVALID");
         }
