@@ -4,6 +4,7 @@ import type {
   AuthoritativeBoundaryPolicyDenialReasonCodeV1,
   BoundaryInvocationContextV1,
   BoundaryPublicError,
+  BoundaryPublicWarning,
   BoundaryStatus,
   GovernedExecutionRequest,
   GovernedExecutionResponse,
@@ -17,6 +18,7 @@ import type {
   BoundaryAuditPort,
   BoundaryClockPort,
   BoundaryExecutionPort,
+  BoundarySemanticProjectionPortV1,
   FeaturePolicyPort,
   InternalExecutionInput,
   ShadowComparisonPort,
@@ -48,6 +50,7 @@ export interface GovernedExecutionBoundaryConfig {
   readonly executionPort: BoundaryExecutionPort;
   readonly shadowComparisonPort?: ShadowComparisonPort;
   readonly auditPort?: BoundaryAuditPort;
+  readonly semanticProjectionPort?: BoundarySemanticProjectionPortV1;
 }
 
 interface AuthorityConflict {
@@ -75,6 +78,7 @@ export class GovernedExecutionBoundary {
   private readonly executionPort: BoundaryExecutionPort;
   private readonly shadowComparisonPort?: ShadowComparisonPort;
   private readonly auditPort?: BoundaryAuditPort;
+  private readonly semanticProjectionPort?: BoundarySemanticProjectionPortV1;
 
   constructor(config: GovernedExecutionBoundaryConfig) {
     this.featurePolicyPort = config.featurePolicyPort;
@@ -82,6 +86,7 @@ export class GovernedExecutionBoundary {
     this.executionPort = config.executionPort;
     this.shadowComparisonPort = config.shadowComparisonPort;
     this.auditPort = config.auditPort;
+    this.semanticProjectionPort = config.semanticProjectionPort;
   }
 
   public async execute(
@@ -514,6 +519,32 @@ export class GovernedExecutionBoundary {
         }
       }
 
+      let semanticProjection: Readonly<Record<string, unknown>> | undefined;
+      let projectionFailed = false;
+
+      if (this.semanticProjectionPort && internalResult.rawData !== undefined) {
+        try {
+          const projected = this.semanticProjectionPort.project(internalResult.rawData, {
+            requestId: context.requestId,
+            correlationId: context.correlationId,
+            tenantId: context.tenantId,
+            actorId: context.actor.actorId,
+            mode: effectiveMode,
+            source: context.source,
+          });
+
+          if (projected === internalResult.rawData) {
+            projectionFailed = true;
+            semanticProjection = undefined;
+          } else {
+            semanticProjection = projected;
+          }
+        } catch {
+          projectionFailed = true;
+          semanticProjection = undefined;
+        }
+      }
+
       const responseStatus: BoundaryStatus =
         internalResult.status === 'SUCCEEDED' ||
         internalResult.status === 'SUCCESS' ||
@@ -528,6 +559,17 @@ export class GovernedExecutionBoundary {
       for (const error of internalResult.errors ?? []) {
         errors.push(sanitizePublicError(new Error(error.message)));
       }
+      const warnings: BoundaryPublicWarning[] = (internalResult.warnings ?? []).map((warning) => ({
+        code: 'WARN',
+        message: warning,
+      }));
+      if (projectionFailed) {
+        warnings.push({
+          code: 'WARN',
+          message: 'Semantic projection failed or returned invalid reference',
+        });
+      }
+
       const response = this.buildResponse({
         requestId: context.requestId,
         correlationId: context.correlationId,
@@ -541,10 +583,8 @@ export class GovernedExecutionBoundary {
         ),
         resultSummary,
         comparisonSummary,
-        warnings: (internalResult.warnings ?? []).map((warning) => ({
-          code: 'WARN',
-          message: warning,
-        })),
+        semanticProjection,
+        warnings,
         errors,
       });
       this.tryAuditLog('BOUNDARY_EXECUTION_COMPLETED', {
@@ -1068,6 +1108,7 @@ export class GovernedExecutionBoundary {
     readonly durationMs: number;
     readonly resultSummary?: Record<string, unknown>;
     readonly comparisonSummary?: Record<string, unknown>;
+    readonly semanticProjection?: Readonly<Record<string, unknown>>;
     readonly warnings: GovernedExecutionResponse['warnings'];
     readonly errors: GovernedExecutionResponse['errors'];
   }): GovernedExecutionResponse {
@@ -1084,6 +1125,9 @@ export class GovernedExecutionBoundary {
         : {}),
       ...(params.comparisonSummary
         ? { comparisonSummary: params.comparisonSummary }
+        : {}),
+      ...(params.semanticProjection !== undefined
+        ? { semanticProjection: params.semanticProjection }
         : {}),
       warnings: params.warnings,
       errors: params.errors,

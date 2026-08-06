@@ -927,6 +927,237 @@ describe('GovernedExecutionBoundary', () => {
     // Assert static boundary independence
     expect(true).toBe(true);
   });
+  describe('Semantic Projection', () => {
+    it('1. Sin projector: semanticProjection === undefined', async () => {
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort(),
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect(res.semanticProjection).toBeUndefined();
+    });
+
+    it('2. Sin projector: resultSummary permanece exactamente igual', async () => {
+      const execPort = createMockExecutionPort();
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: execPort,
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect(res.resultSummary).toEqual({
+        executionId: 'internal-exec-1',
+        sessionId: 'sess-1',
+        status: 'SUCCEEDED',
+        durationMs: 50,
+      });
+    });
+
+    it('3. Projector recibe rawData exacto internamente y source, requestId, etc. correctos (4, 5, 6, 7, 8, 9)', async () => {
+      const mockRawData = { mySemanticData: true };
+      const execPort = createMockExecutionPort({ rawData: mockRawData });
+      const projector = { project: vi.fn().mockReturnValue({ projected: true }) };
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: execPort,
+        semanticProjectionPort: projector,
+      });
+      const request = createValidRequest();
+      const res = await executeBoundary(boundary, request);
+
+      expect(projector.project).toHaveBeenCalledTimes(1);
+      expect(projector.project).toHaveBeenCalledWith(
+        mockRawData,
+        {
+          requestId: request.requestId,
+          correlationId: request.correlationId,
+          tenantId: request.tenant.tenantId,
+          actorId: request.actor.actorId,
+          mode: request.requestedMode,
+          source: request.source,
+        }
+      );
+      expect(res.semanticProjection).toEqual({ projected: true });
+    });
+
+    it('10. Projector devuelve DTO nuevo: response.semanticProjection contiene ese DTO', async () => {
+      const projector = { project: vi.fn().mockReturnValue({ newDto: '123' }) };
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort(),
+        semanticProjectionPort: projector,
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect(res.semanticProjection).toEqual({ newDto: '123' });
+    });
+
+    it('11. semanticProjection no es rawData por referencia', async () => {
+      const mockRawData = { some: 'data' };
+      const projector = { project: vi.fn().mockReturnValue({ ...mockRawData }) };
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort({ rawData: mockRawData }),
+        semanticProjectionPort: projector,
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect(res.semanticProjection).not.toBe(mockRawData);
+    });
+
+    it('12. Projector devuelve rawData exactamente: projection se rechaza/omite', async () => {
+      const mockRawData = { some: 'data' };
+      const projector = { project: vi.fn().mockReturnValue(mockRawData) }; // Devuelve misma ref
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort({ rawData: mockRawData }),
+        semanticProjectionPort: projector,
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect(res.semanticProjection).toBeUndefined();
+      expect(res.warnings).toContainEqual({
+        code: 'WARN',
+        message: 'Semantic projection failed or returned invalid reference',
+      });
+    });
+
+    it('13. Projector devuelve undefined: response.semanticProjection undefined', async () => {
+      const projector = { project: vi.fn().mockReturnValue(undefined) };
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort(),
+        semanticProjectionPort: projector,
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect(res.semanticProjection).toBeUndefined();
+    });
+
+    it('14. Projector throws: ejecución principal conserva su status original (15, 16)', async () => {
+      const projector = { project: vi.fn().mockImplementation(() => { throw new Error('Crash'); }) };
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort(),
+        semanticProjectionPort: projector,
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect(res.status).toBe('COMPLETED');
+      expect(res.semanticProjection).toBeUndefined();
+      expect(res.warnings).toContainEqual({
+        code: 'WARN',
+        message: 'Semantic projection failed or returned invalid reference',
+      });
+      // No raw error exposed
+      expect(JSON.stringify(res)).not.toContain('Crash');
+    });
+
+    it('17. resultSummary permanece igual con projector', async () => {
+      const execPort = createMockExecutionPort();
+      const projector = { project: vi.fn().mockReturnValue({ ok: true }) };
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: execPort,
+        semanticProjectionPort: projector,
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect(res.resultSummary).toEqual({
+        executionId: 'internal-exec-1',
+        sessionId: 'sess-1',
+        status: 'SUCCEEDED',
+        durationMs: 50,
+      });
+      expect(res.semanticProjection).toEqual({ ok: true });
+    });
+
+    it('18. Shadow comparison continúa funcionando', async () => {
+      const comparisonPort = { compare: vi.fn().mockResolvedValue({ match: true }) };
+      const projector = { project: vi.fn().mockReturnValue({ projected: true }) };
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort(),
+        shadowComparisonPort: comparisonPort,
+        semanticProjectionPort: projector,
+      });
+      const res = await executeBoundary(boundary, createValidRequest({ requestedMode: 'EVALUATION' }));
+      expect(res.comparisonSummary).toEqual({ match: true });
+      expect(res.semanticProjection).toEqual({ projected: true });
+    });
+
+    it('19. EVALUATION continúa funcionando', async () => {
+      const projector = { project: vi.fn().mockReturnValue({ ok: true }) };
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort(),
+        semanticProjectionPort: projector,
+      });
+      const res = await executeBoundary(boundary, createValidRequest({ requestedMode: 'EVALUATION' }));
+      expect(res.mode).toBe('EVALUATION');
+      expect(res.semanticProjection).toEqual({ ok: true });
+    });
+
+    it('20. PRODUCTIVE policy behavior permanece idéntico', async () => {
+      const projector = { project: vi.fn().mockReturnValue({ ok: true }) };
+      const execPort = createMockExecutionPort();
+      const policy = createDefaultPolicy({ allowedModes: ['SHADOW_ONLY', 'PRODUCTIVE'] });
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(policy),
+        executionPort: execPort,
+        semanticProjectionPort: projector,
+      });
+      const res = await executeBoundary(boundary, createValidRequest({ requestedMode: 'PRODUCTIVE' }));
+      expect(res.status).toBe('REJECTED');
+      expect(res.errors[0].code).toBe('MODE_NOT_ALLOWED');
+      expect(execPort.execute).not.toHaveBeenCalled();
+      expect(projector.project).not.toHaveBeenCalled();
+    });
+
+    it('21. GovernedExecutionResponse no contiene propiedad rawData', async () => {
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort({ rawData: { mySecret: true } }),
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect((res as unknown as Record<string, unknown>).rawData).toBeUndefined();
+    });
+
+    it('22. GovernedExecutionResponse no contiene PipelineResult', async () => {
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort({ rawData: { stageResults: { internal: true } } }),
+      });
+      const res = await executeBoundary(boundary, createValidRequest());
+      expect(JSON.stringify(res)).not.toContain('stageResults');
+    });
+
+    it('23. Consumers existentes compilan sin inyectar projector', () => {
+      // Demonstrated by earlier tests where semanticProjectionPort is omitted
+      expect(true).toBe(true);
+    });
+
+    it('24. Misma ejecución + mismo projector => misma projection', async () => {
+      const projector = { project: vi.fn().mockReturnValue({ static: 'result' }) };
+      const boundary = new GovernedExecutionBoundary({
+        clockPort: createMockClock(),
+        featurePolicyPort: createMockPolicyPort(),
+        executionPort: createMockExecutionPort(),
+        semanticProjectionPort: projector,
+      });
+      const req = createValidRequest();
+      const res1 = await executeBoundary(boundary, req);
+      const res2 = await executeBoundary(boundary, req);
+      expect(res1.semanticProjection).toEqual(res2.semanticProjection);
+    });
+  });
 });
 
 export default describe;

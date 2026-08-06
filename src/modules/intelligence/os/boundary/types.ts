@@ -207,6 +207,7 @@ export interface GovernedExecutionResponse {
   readonly durationMs: number;
   readonly resultSummary?: Readonly<Record<string, unknown>>;
   readonly comparisonSummary?: Readonly<Record<string, unknown>>;
+  readonly semanticProjection?: Readonly<Record<string, unknown>>;
   readonly warnings: readonly BoundaryPublicWarning[];
   readonly errors: readonly BoundaryPublicError[];
 }

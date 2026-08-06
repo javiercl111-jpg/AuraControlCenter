@@ -82,5 +82,25 @@ export interface ShadowComparisonPort {
   compare(legacyResult: unknown, shadowResult: unknown): Promise<Record<string, unknown>>;
 }
 
+export interface BoundarySemanticProjectionContextV1 {
+  readonly requestId: string;
+  readonly correlationId: string;
+  readonly tenantId: string;
+  readonly actorId: string;
+  readonly mode: BoundaryExecutionMode;
+  readonly source: string;
+}
+
+/**
+ * BoundarySemanticProjectionPortV1 implementors MUST construct a new,
+ * allowlisted public DTO and MUST NOT spread/copy rawData indiscriminately.
+ */
+export interface BoundarySemanticProjectionPortV1 {
+  project(
+    rawData: unknown,
+    context: BoundarySemanticProjectionContextV1
+  ): Readonly<Record<string, unknown>> | undefined;
+}
+
 const DEFAULT_BOUNDARY_PORTS = {};
 export default DEFAULT_BOUNDARY_PORTS;
