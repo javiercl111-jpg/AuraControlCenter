@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "PREVIEW_AUTHORITY_PROVISIONING_MATRIX_V1",
+  "changeId": "AI-02H2.2C-PREVIEW-AUTHORITY-PROVISIONING-CAPABILITY-20260806-01",
+  "program": "AI-02H2",
+  "slice": "AI-02H2.2C",
+  "verdict": "PREVIEW_AUTHORITY_PROVISIONING_CAPABILITY_CERTIFIED_READY_FOR_CONTROLLED_CLOUD_PROVISIONING",
+  "gate": {
+    "branch": "feature/intelligence-preview-authority-provisioning",
+    "head": "0f2d21559e33ce530707fb7a6bcd6ad5ef10b68a",
+    "originMainMatched": true,
+    "initialWorktreeClean": true,
+    "node": "v20.20.2",
+    "firebaseAlias": "preview",
+    "gcpProject": "aura-intel-preview"
+  },
+  "model": {
+    "principal": "PlatformPrincipalV1",
+    "tenant": "PlatformTenantV1",
+    "membership": "TenantMembershipV1",
+    "environment": "PREVIEW",
+    "schemasClosed": true,
+    "emailAuthority": false,
+    "claimsSoleAuthority": false,
+    "clientTenantAuthority": false
+  },
+  "application": {
+    "service": "AuthorityProvisioningServiceV1",
+    "methods": [
+      "provisionSyntheticIdentityAuthority",
+      "resolveAuthority",
+      "inspectAuthority"
+    ],
+    "logicalExactlyOnce": true,
+    "transactional": true,
+    "deterministicIds": true,
+    "sanitizedResponses": true
+  },
+  "persistence": {
+    "principalCollection": "platform_global_admins",
+    "tenantCollection": "platform_tenants",
+    "membershipCollection": "tenant_memberships",
+    "auditCollection": "authority_audit_events",
+    "snapshotsEscaped": false,
+    "clientWritesEnabled": false
+  },
+  "capabilities": {
+    "allowlist": [],
+    "globalPrivileges": [],
+    "rationale": "Discovery uses public intake and server-issued session capabilities; no tenant administrative capability is required."
+  },
+  "retention": {
+    "policyVersion": "PREVIEW_SYNTHETIC_AUTHORITY_RETENTION_POLICY_V1",
+    "principal": "PERMANENT_PREVIEW_FIXTURE",
+    "tenant": "PERMANENT_PREVIEW_FIXTURE",
+    "membership": "PREVIEW_ENVIRONMENT_LIFETIME",
+    "happyPathDataDays": 30,
+    "cleanup": "VERSIONED_AUTHORIZED_PROCEDURE"
+  },
+  "validation": {
+    "authorityProvisioning": { "passed": 25, "total": 25 },
+    "guardNegative": { "passed": 17, "total": 17 },
+    "firestoreProvisioningAdapter": { "passed": 8, "total": 8 },
+    "intelligenceOsArchitecture": { "passed": 17, "total": 17 },
+    "authorityApplicationAndTenantScope": { "passed": 395, "total": 395 },
+    "d8": { "passed": 81, "total": 81 },
+    "d9": { "passed": 40, "total": 40 },
+    "runtimeContracts": { "passed": 18, "total": 18 },
+    "deploymentUnit": { "passed": 22, "total": 22 },
+    "firestoreAuthorityAdapter": { "passed": 30, "total": 30 },
+    "typescriptNoEmit": "PASS",
+    "functionsBuild": "PASS",
+    "rootBuild": "PASS"
+  },
+  "externalEffects": {
+    "authUsersCreated": 0,
+    "authorityDocumentsCreated": 0,
+    "functionsInvoked": 0,
+    "deploys": 0,
+    "cloudChanges": 0,
+    "stagingChanges": 0,
+    "productionChanges": 0
+  },
+  "authorization": {
+    "controlledCloudProvisioning": "READY_FOR_SEPARATE_AUTHORIZATION",
+    "production": "NOT_AUTHORIZED"
+  }
+}
