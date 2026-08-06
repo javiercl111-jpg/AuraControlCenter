@@ -1,0 +1,165 @@
+{
+  "schemaVersion": "1.0",
+  "changeId": "AI-02H1E.8-PREVIEW-INVOCATION-BOUNDARY-20260805-01",
+  "program": "AI-02H1E.5.0",
+  "slice": "AI-02H1E.8",
+  "verdict": "PREVIEW INVOCATION BOUNDARY REMEDIATED — READY TO RESUME FUNCTIONAL SMOKE VALIDATION",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "region": "us-central1",
+    "productionAuthorized": false
+  },
+  "gate": {
+    "branch": "fix/intelligence-preview-invocation-boundary",
+    "head": "ce788f6f8ff05ae535df62e62e70438cf599eb2e",
+    "originMain": "ce788f6f8ff05ae535df62e62e70438cf599eb2e",
+    "initialWorktreeClean": true,
+    "firebaseTarget": "aura-intel-preview",
+    "gcpProject": "aura-intel-preview",
+    "node": "v20.20.2",
+    "status": "PASS"
+  },
+  "certification": {
+    "manifest": "scripts/manifests/preview-invocation-boundary-v1.json",
+    "guard": "scripts/preview-invocation-boundary-guard.cjs",
+    "tests": 13,
+    "testsPassed": 13,
+    "negativeCasesRequired": 12,
+    "negativeCasesPassed": 12,
+    "guardResult": "PASS"
+  },
+  "bindingContract": {
+    "scope": "CLOUD_RUN_SERVICE",
+    "member": "allUsers",
+    "role": "roles/run.invoker",
+    "condition": null,
+    "projectLevel": false
+  },
+  "services": [
+    {
+      "functionName": "createDiscoveryLead",
+      "serviceName": "creatediscoverylead",
+      "state": "ACTIVE",
+      "ready": true,
+      "revisionBefore": "creatediscoverylead-00001-yuv",
+      "revisionAfter": "creatediscoverylead-00001-yuv",
+      "runtimeIdentity": "preview-public-intake-runtime",
+      "secretResources": ["discovery-idempotency-secret-preview"],
+      "invokerBefore": 0,
+      "invokerAfter": ["allUsers:roles/run.invoker"]
+    },
+    {
+      "functionName": "exchangeDiscoveryToken",
+      "serviceName": "exchangediscoverytoken",
+      "state": "ACTIVE",
+      "ready": true,
+      "revisionBefore": "exchangediscoverytoken-00001-jaj",
+      "revisionAfter": "exchangediscoverytoken-00001-jaj",
+      "runtimeIdentity": "preview-discovery-session-rt",
+      "secretResources": [],
+      "invokerBefore": 0,
+      "invokerAfter": ["allUsers:roles/run.invoker"]
+    },
+    {
+      "functionName": "resolveDiscoverySession",
+      "serviceName": "resolvediscoverysession",
+      "state": "ACTIVE",
+      "ready": true,
+      "revisionBefore": "resolvediscoverysession-00001-nep",
+      "revisionAfter": "resolvediscoverysession-00001-nep",
+      "runtimeIdentity": "preview-discovery-session-rt",
+      "secretResources": [],
+      "invokerBefore": 0,
+      "invokerAfter": ["allUsers:roles/run.invoker"]
+    },
+    {
+      "functionName": "evaluateConversation",
+      "serviceName": "evaluateconversation",
+      "state": "ACTIVE",
+      "ready": true,
+      "revisionBefore": "evaluateconversation-00001-zuk",
+      "revisionAfter": "evaluateconversation-00001-zuk",
+      "runtimeIdentity": "preview-conversation-runtime",
+      "secretResources": ["discovery-gemini-api-key-preview"],
+      "invokerBefore": 0,
+      "invokerAfter": ["allUsers:roles/run.invoker"]
+    },
+    {
+      "functionName": "completeDiscoverySession",
+      "serviceName": "completediscoverysession",
+      "state": "ACTIVE",
+      "ready": true,
+      "revisionBefore": "completediscoverysession-00001-tav",
+      "revisionAfter": "completediscoverysession-00001-tav",
+      "runtimeIdentity": "preview-discovery-complete-rt",
+      "secretResources": ["discovery-hmac-secret-preview"],
+      "invokerBefore": 0,
+      "invokerAfter": ["allUsers:roles/run.invoker"]
+    }
+  ],
+  "iamReadBack": {
+    "servicePoliciesExact": true,
+    "projectLevelRunInvokerBefore": 0,
+    "projectLevelRunInvokerAfter": 0,
+    "allAuthenticatedUsersBindings": 0,
+    "broadRoleBindingsAdded": 0,
+    "extraServicesModified": 0
+  },
+  "probes": {
+    "authoritativeTotal": 30,
+    "businessWrites": 0,
+    "happyPathRequests": 0,
+    "platformIamDenials": 0,
+    "transportErrors": 0,
+    "cases": {
+      "preflight": {"count": 5, "http": 204},
+      "missingAppCheck": {"count": 5, "http": 401, "safeCode": "UNAUTHENTICATED"},
+      "wrongContentType": {"count": 5, "http": 400, "safeCode": "INVALID_ARGUMENT"},
+      "emptyBody": {"count": 5, "http": 400, "safeCode": "INVALID_ARGUMENT"},
+      "wrongMethod": {"count": 5, "http": 400, "safeCode": "INVALID_ARGUMENT"},
+      "missingAuthWithInvalidAppCheck": {"count": 5, "http": 401, "safeCode": "UNAUTHENTICATED"}
+    }
+  },
+  "telemetry": {
+    "windowStart": "2026-08-06T00:06:20Z",
+    "windowEnd": "2026-08-06T00:06:35.803897Z",
+    "servicesObserved": 5,
+    "requestEntries": 25,
+    "latencyPresent": 25,
+    "runtimeStdoutStderrEntries": 45,
+    "appCheckRejectionMarkersPresent": true,
+    "customCorrelationMarkers": 0,
+    "customDurationMarkers": 0,
+    "customSafeErrorMarkers": 0,
+    "customFieldsApplicability": "NOT_APPLICABLE_PRE_HANDLER_REJECTION",
+    "piiEmailMarkers": 0,
+    "jwtMarkers": 0,
+    "apiKeyMarkers": 0,
+    "secretValueMarkers": 0
+  },
+  "preservation": {
+    "functionRevisionsUnchanged": true,
+    "functionUpdateTimesUnchanged": true,
+    "runtimeIdentitiesUnchanged": true,
+    "secretBindingsUnchanged": true,
+    "secretValuesRead": false,
+    "appCheckConfigurationUnchanged": true,
+    "stagingUnchanged": true,
+    "productionUnchanged": true
+  },
+  "scope": {
+    "cloudIamModified": true,
+    "functionDeployExecuted": false,
+    "functionRevisionModified": false,
+    "vercelModified": false,
+    "firebaseRulesModified": false,
+    "appCheckEnforcementModified": false,
+    "storageModified": false,
+    "tasksModified": false,
+    "commitCreated": false,
+    "pushExecuted": false,
+    "pullRequestCreated": false
+  },
+  "nextStep": "AI-02H1E.7 — Preview Functional Smoke Validation"
+}

@@ -33,6 +33,8 @@
     "test:preview-trust-completion": "npm run assert:node20 && vitest run --config functions/tests/previewTrustCompletion/vitest.config.ts",
     "test:preview-deployment-unit": "npm run assert:node20 && vitest run --config functions/tests/previewDeploymentUnit/vitest.config.ts",
     "test:preview-parameter-binding": "node --test scripts/tests/preview-discovery-parameter-guard.test.cjs",
+    "test:preview-invocation-boundary": "node --test scripts/tests/preview-invocation-boundary-guard.test.cjs",
+    "guard:preview-invocation-boundary": "node scripts/preview-invocation-boundary-guard.cjs --project=aura-intel-preview --region=us-central1",
     "guard:preview-deployment-unit": "npm run guard:preview-discovery --prefix functions",
     "dry-run:preview-discovery-deploy": "npm run dry-run:preview-discovery --prefix functions",
     "deploy:preview-discovery": "npm run deploy:preview-discovery --prefix functions",
