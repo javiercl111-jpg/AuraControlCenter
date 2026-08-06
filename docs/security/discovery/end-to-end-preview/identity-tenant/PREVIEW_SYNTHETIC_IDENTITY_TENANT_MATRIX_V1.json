@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "PREVIEW_SYNTHETIC_IDENTITY_TENANT_MATRIX_V1",
+  "changeId": "AI-02H2.2A-PREVIEW-SYNTHETIC-IDENTITY-TENANT-20260806-01",
+  "program": "AI-02H2",
+  "slice": "AI-02H2.2A",
+  "target": {
+    "projectId": "aura-intel-preview",
+    "region": "us-central1",
+    "approvedUse": "CONTROLLED_PREVIEW_HAPPY_PATH",
+    "productionAuthorized": false,
+    "stagingInScope": false
+  },
+  "verdict": "CONTROLLED PREPARATION REQUIRED — IDENTITY OR TENANT MUST BE CREATED",
+  "gate": {
+    "branchExact": "PASS",
+    "headEqualsOriginMain": "PASS",
+    "initialWorktreeClean": "PASS",
+    "firebaseAlias": "PASS",
+    "gcpProject": "PASS",
+    "nodeVersion": "PASS",
+    "functionsActive": 5,
+    "functionsInactive": 0,
+    "cloudRunReady": 5,
+    "vercelPreviewReady": true
+  },
+  "identityInventory": {
+    "authControlPlaneStatus": "CONFIGURATION_NOT_FOUND",
+    "userInventoryStatus": "NOT_ENUMERABLE",
+    "selectableCandidates": 0,
+    "canonicalPrincipalCollection": "platform_global_admins",
+    "canonicalPrincipalCount": 0,
+    "selectedClassification": "NOT_ELIGIBLE",
+    "syntheticIdentityLocator": "NOT_ASSIGNED"
+  },
+  "tenantInventory": {
+    "authoritativeCollection": "platform_tenants",
+    "tenantCount": 0,
+    "membershipCollection": "tenant_memberships",
+    "membershipCount": 0,
+    "aliasCollection": "tenant_aliases",
+    "aliasCount": 0,
+    "selectedClassification": "NOT_ELIGIBLE",
+    "previewTenantLocator": "NOT_ASSIGNED"
+  },
+  "relation": {
+    "relationType": "NOT_ESTABLISHED",
+    "authoritySource": "UID_ADDRESSED_PRINCIPAL_AND_CANONICAL_MEMBERSHIP_REQUIRED",
+    "emailAcceptedAsAuthority": false,
+    "customClaimsAcceptedAsSoleAuthority": false,
+    "clientTenantAcceptedAsSoleAuthority": false,
+    "crossTenantAccess": "NOT_EVALUABLE_NO_RELATION",
+    "productionScope": 0,
+    "stagingScope": 0
+  },
+  "handlerReadiness": [
+    {
+      "handler": "createDiscoveryLead",
+      "status": "NOT_READY_IDENTITY_ABSENT",
+      "invoked": false
+    },
+    {
+      "handler": "exchangeDiscoveryToken",
+      "status": "NOT_EVALUATED_NO_CERTIFIED_CASE",
+      "invoked": false
+    },
+    {
+      "handler": "resolveDiscoverySession",
+      "status": "NOT_EVALUATED_NO_CERTIFIED_CASE",
+      "invoked": false
+    },
+    {
+      "handler": "evaluateConversation",
+      "status": "NOT_EVALUATED_NO_CERTIFIED_CASE",
+      "invoked": false
+    },
+    {
+      "handler": "completeDiscoverySession",
+      "status": "NOT_EVALUATED_NO_CERTIFIED_CASE",
+      "invoked": false
+    }
+  ],
+  "plannedMinimumScope": {
+    "platformRole": "VIEWER",
+    "tenantRole": "TENANT_MEMBER",
+    "administrativeClaims": 0,
+    "additionalTenantMemberships": 0,
+    "bootstrapPrivilegeMustBeRemoved": true
+  },
+  "retention": {
+    "status": "RETENTION_POLICY_REQUIRED",
+    "identityProposal": "PERMANENT_PREVIEW_SYNTHETIC_FIXTURE",
+    "tenantProposal": "PERMANENT_PREVIEW_FIXTURE",
+    "happyPathDataMaximumDaysProposed": 30,
+    "cleanup": "PROJECT_EXPLICIT_ALLOWLISTED_AUDITED_BY_TEST_RUN_ID",
+    "adHocDestructiveScriptsAllowed": false
+  },
+  "prohibitedUse": [
+    "STAGING",
+    "PRODUCTION",
+    "LOAD_TEST",
+    "PENTEST",
+    "PERSONAL_DATA"
+  ],
+  "mutations": {
+    "firebaseAuth": 0,
+    "firestore": 0,
+    "functionsCalls": 0,
+    "discoveryTokens": 0,
+    "deployments": 0,
+    "externalConfigurationChanges": 0
+  }
+}
