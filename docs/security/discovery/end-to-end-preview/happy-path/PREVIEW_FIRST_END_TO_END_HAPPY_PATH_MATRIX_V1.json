@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "PREVIEW_FIRST_END_TO_END_HAPPY_PATH_MATRIX_V1",
+  "changeId": "AI-02H2.2E-PREVIEW-FIRST-END-TO-END-HAPPY-PATH-20260806-FINAL-01",
+  "testRunId": "AI02H2-2E-PREVIEW-HAPPY-PATH-20260806-FINAL-01",
+  "verdict": "BLOCKED — PREVIEW END-TO-END HAPPY PATH FAILED",
+  "repository": {
+    "branch": "audit/intelligence-preview-first-happy-path",
+    "headShort": "2defd876d2b6",
+    "headMatchesOriginMain": true,
+    "cleanAtGate": true
+  },
+  "target": {
+    "environment": "PREVIEW",
+    "cloudProject": "aura-intel-preview",
+    "vercelProject": "aura-control-center-preview",
+    "publicDomain": "preview-controlcenter.auranexus.io",
+    "productionAuthorized": false
+  },
+  "gate": {
+    "functionsActive": 5,
+    "functionsExpected": 5,
+    "cloudRunReady": 5,
+    "cloudRunExpected": 5,
+    "failedRevisions": 0,
+    "vercelDeploymentState": "READY",
+    "appCheckDebugTokens": 0,
+    "initialConsoleErrors": 0,
+    "initialConsoleWarnings": 0,
+    "recaptchaEnterpriseLoaded": true,
+    "productionHostRequests": 0,
+    "directCloudRunRequests": 0
+  },
+  "baseline": {
+    "marketDiscoveryLinks": 0,
+    "platformLeads": 0,
+    "discoverySessions": 0,
+    "capabilityMetadata": 0,
+    "completions": 0,
+    "completionOutbox": 0,
+    "idempotencyRecords": 0,
+    "idempotencyNamespaces": 0,
+    "conversationBudgets": 0,
+    "abuseTelemetry": 2,
+    "platformEvents": 0,
+    "discoveryReports": 0,
+    "functionalStorageBuckets": 0,
+    "functionalStorageObjects": 0,
+    "buildArtifactObjects": 8,
+    "cloudTasksSurface": "API_DISABLED"
+  },
+  "execution": {
+    "createDiscoveryLead": {
+      "status": "REJECTED",
+      "effectiveRequests": 2,
+      "successfulRequests": 0,
+      "businessWrites": 0,
+      "eventType": "containment.policy_missing",
+      "outcome": "DENIED",
+      "reasonCode": "CONTAINMENT_POLICY_NOT_FOUND",
+      "callerSafeOutcome": "UNAVAILABLE"
+    },
+    "exchangeDiscoveryToken": "NOT_EXECUTED",
+    "resolveDiscoverySession": "NOT_EXECUTED",
+    "evaluateConversation": "NOT_EXECUTED",
+    "completeDiscoverySession": "NOT_EXECUTED",
+    "secondaryBrowserAppCheck": {
+      "status": "REJECTED_BEFORE_FUNCTION",
+      "httpStatus": 403,
+      "clientState": "INITIAL_THROTTLE_24H",
+      "debugBypassUsed": false
+    }
+  },
+  "containment": {
+    "activePointers": 0,
+    "policies": 0,
+    "auditRecords": 0,
+    "failClosedObserved": true
+  },
+  "postReadback": {
+    "marketDiscoveryLinks": 0,
+    "platformLeads": 0,
+    "discoverySessions": 0,
+    "capabilityMetadata": 0,
+    "completions": 0,
+    "completionOutbox": 0,
+    "idempotencyRecords": 0,
+    "idempotencyNamespaces": 0,
+    "conversationBudgets": 0,
+    "abuseTelemetry": 6,
+    "abuseTelemetryDelta": 4,
+    "platformEvents": 0,
+    "discoveryReports": 0,
+    "functionalStorageObjects": 0
+  },
+  "network": {
+    "observedHosts": [
+      "preview-controlcenter.auranexus.io",
+      "www.google.com",
+      "www.gstatic.com",
+      "content-firebaseappcheck.googleapis.com"
+    ],
+    "productionHostRequests": 0,
+    "directCloudRunRequests": 0
+  },
+  "findings": [
+    {
+      "id": "HP-B01",
+      "severity": "BLOCKER",
+      "finding": "Preview containment policy, active pointer and audit state are absent."
+    },
+    {
+      "id": "HP-B02",
+      "severity": "BLOCKER",
+      "finding": "A secondary controlled browser received HTTP 403 during reCAPTCHA Enterprise token exchange and entered App Check throttle."
+    },
+    {
+      "id": "HP-B03",
+      "severity": "BLOCKER",
+      "finding": "The createDiscoveryLead response constructs a Production-host discoveryUrl even though the client navigates relatively."
+    },
+    {
+      "id": "HP-B04",
+      "severity": "CONTROL_GAP",
+      "finding": "Two rejected createDiscoveryLead requests occurred; exactly-once was not certified."
+    }
+  ],
+  "finalHealth": {
+    "functionsActive": 5,
+    "cloudRunReady": 5,
+    "failedRevisions": 0,
+    "vercelPreviewState": "READY",
+    "stagingChanged": false,
+    "productionChanged": false
+  },
+  "prohibitedActions": {
+    "replay": false,
+    "fuzzing": false,
+    "loadOrStress": false,
+    "codeChange": false,
+    "infrastructureChange": false,
+    "deploy": false,
+    "commit": false,
+    "push": false,
+    "pullRequest": false
+  }
+}
