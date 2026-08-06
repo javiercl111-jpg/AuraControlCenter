@@ -32,14 +32,14 @@ describe("Preview App Check client contract", () => {
     expect(PREVIEW_APP_CHECK_ENVIRONMENT_VARIABLE_V1)
       .toBe("VITE_AURA_RUNTIME_ENVIRONMENT");
     expect(PREVIEW_APP_CHECK_SITE_KEY_VARIABLE_V1)
-      .toBe("VITE_FIREBASE_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY");
+      .toBe("VITE_RECAPTCHA_SITE_KEY");
   });
 
   it("enables App Check only for the exact Preview project", () => {
     expect(resolvePreviewAppCheckConfigurationV1({
       VITE_AURA_RUNTIME_ENVIRONMENT: "PREVIEW",
       VITE_FIREBASE_PROJECT_ID: "aura-intel-preview",
-      VITE_FIREBASE_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY: "site-key-metadata",
+      VITE_RECAPTCHA_SITE_KEY: "site-key-metadata",
     })).toEqual({
       enabled: true,
       environment: "PREVIEW",
@@ -55,18 +55,18 @@ describe("Preview App Check client contract", () => {
     })).toThrowError("APP_CHECK_RUNTIME_ENVIRONMENT_MISSING");
   });
 
-  it("fails closed for unknown environment", () => {
+  it("fails closed for any non-Preview environment", () => {
     expect(() => resolvePreviewAppCheckConfigurationV1({
       VITE_AURA_RUNTIME_ENVIRONMENT: "DEVELOPMENT",
       VITE_FIREBASE_PROJECT_ID: "aura-intel-preview",
-    })).toThrowError("APP_CHECK_RUNTIME_ENVIRONMENT_UNKNOWN");
+    })).toThrowError("APP_CHECK_RUNTIME_ENVIRONMENT_NOT_PREVIEW");
   });
 
   it("fails closed for Preview project mismatch", () => {
     expect(() => resolvePreviewAppCheckConfigurationV1({
       VITE_AURA_RUNTIME_ENVIRONMENT: "PREVIEW",
       VITE_FIREBASE_PROJECT_ID: "aura-intel-staging",
-      VITE_FIREBASE_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY: "site-key-metadata",
+      VITE_RECAPTCHA_SITE_KEY: "site-key-metadata",
     })).toThrowError("APP_CHECK_RUNTIME_PROJECT_MISMATCH");
   });
 
@@ -77,17 +77,16 @@ describe("Preview App Check client contract", () => {
     })).toThrowError("APP_CHECK_PREVIEW_SITE_KEY_MISSING");
   });
 
-  it.each([
-    ["STAGING", "aura-intel-staging"],
-    ["PRODUCTION", "aura-control-center-debb3"],
-    ["LOCAL_DEMO", "demo-aura-preview"],
-  ] as const)("does not apply Preview configuration to %s", (environment, projectId) => {
-    expect(resolvePreviewAppCheckConfigurationV1({
+  it.each(["STAGING", "PRODUCTION", "LOCAL_DEMO"] as const)(
+    "does not apply Preview configuration to %s",
+    (environment) => {
+      expect(() => resolvePreviewAppCheckConfigurationV1({
       VITE_AURA_RUNTIME_ENVIRONMENT: environment,
-      VITE_FIREBASE_PROJECT_ID: projectId,
-      VITE_FIREBASE_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY: "preview-only-key",
-    })).toEqual({ enabled: false, environment });
-  });
+      VITE_FIREBASE_PROJECT_ID: "aura-intel-preview",
+      VITE_RECAPTCHA_SITE_KEY: "preview-only-key",
+      })).toThrowError("APP_CHECK_RUNTIME_ENVIRONMENT_NOT_PREVIEW");
+    },
+  );
 
   it("keeps debug disabled and never reads a debug token", () => {
     const contract = source("src/config/previewAppCheckContractV1.ts");
