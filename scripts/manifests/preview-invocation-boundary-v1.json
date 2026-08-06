@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1.0",
+  "changeId": "AI-02H1E.8-PREVIEW-INVOCATION-BOUNDARY-20260805-01",
+  "projectId": "aura-intel-preview",
+  "environment": "PREVIEW",
+  "region": "us-central1",
+  "binding": {
+    "scope": "CLOUD_RUN_SERVICE",
+    "role": "roles/run.invoker",
+    "member": "allUsers",
+    "projectLevel": false
+  },
+  "services": [
+    {
+      "functionName": "createDiscoveryLead",
+      "serviceName": "creatediscoverylead",
+      "runtimeServiceAccount": "preview-public-intake-runtime@aura-intel-preview.iam.gserviceaccount.com"
+    },
+    {
+      "functionName": "exchangeDiscoveryToken",
+      "serviceName": "exchangediscoverytoken",
+      "runtimeServiceAccount": "preview-discovery-session-rt@aura-intel-preview.iam.gserviceaccount.com"
+    },
+    {
+      "functionName": "resolveDiscoverySession",
+      "serviceName": "resolvediscoverysession",
+      "runtimeServiceAccount": "preview-discovery-session-rt@aura-intel-preview.iam.gserviceaccount.com"
+    },
+    {
+      "functionName": "evaluateConversation",
+      "serviceName": "evaluateconversation",
+      "runtimeServiceAccount": "preview-conversation-runtime@aura-intel-preview.iam.gserviceaccount.com"
+    },
+    {
+      "functionName": "completeDiscoverySession",
+      "serviceName": "completediscoverysession",
+      "runtimeServiceAccount": "preview-discovery-complete-rt@aura-intel-preview.iam.gserviceaccount.com"
+    }
+  ],
+  "preservation": {
+    "runtimeServiceAccountsUnchanged": true,
+    "appCheckEnforcementMutation": false,
+    "secretMutation": false,
+    "functionRevisionMutation": false,
+    "stagingMutation": false,
+    "productionMutation": false
+  },
+  "prohibited": {
+    "allAuthenticatedUsers": true,
+    "projectLevelBinding": true,
+    "broadRole": true,
+    "extraService": true,
+    "deployment": true
+  }
+}
