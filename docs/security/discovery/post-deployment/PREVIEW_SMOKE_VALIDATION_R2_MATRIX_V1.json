@@ -1,0 +1,221 @@
+{
+  "schemaVersion": "1.0",
+  "changeId": "AI-02H1E.7-R2-PREVIEW-SMOKE-VALIDATION-20260805-01",
+  "program": "AI-02H1E.5.0",
+  "phase": "AI-02H1E.7-R2",
+  "verdict": "PREVIEW SERVER-SIDE SMOKE VALIDATION CERTIFIED — READY FOR CLIENT PREVIEW REMEDIATION AND CONTROLLED HAPPY PATH",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "region": "us-central1",
+    "productionAuthorized": false
+  },
+  "gate": {
+    "branch": "audit/intelligence-preview-smoke-validation-r2",
+    "head": "1fac4c4ab65feab1cef957fc61ffb1286aea1657",
+    "originMain": "1fac4c4ab65feab1cef957fc61ffb1286aea1657",
+    "initialWorktreeClean": true,
+    "firebaseAlias": "aura-intel-preview",
+    "gcpProject": "aura-intel-preview",
+    "node": "v20.20.2",
+    "npm": "10.8.2",
+    "firebaseCli": "15.25.1",
+    "status": "PASS"
+  },
+  "continuity": {
+    "priorVerdict": "BLOCKED — PREVIEW FUNCTIONAL VALIDATION FAILED",
+    "priorState": "BLOCKED_NOT_REACHED",
+    "remediationReference": "AI-02H1E.8",
+    "blockedNotReachedClosed": true
+  },
+  "commonFunctionConfiguration": {
+    "runtime": "nodejs20",
+    "ingress": "ALLOW_ALL",
+    "memory": "256Mi",
+    "minInstances": null,
+    "maxInstances": null,
+    "parameters": {
+      "AURA_RUNTIME_ENVIRONMENT": "PREVIEW",
+      "DISCOVERY_SHADOW_EVALUATION": "false",
+      "DISCOVERY_PRIMARY_EVALUATION": "false",
+      "EXECUTIVE_DISCOVERY_TIMEOUT_MS": "10000",
+      "EXECUTIVE_DISCOVERY_ENDPOINT": ""
+    }
+  },
+  "functions": [
+    {"name":"createDiscoveryLead","state":"ACTIVE","service":"creatediscoverylead","ready":true,"revision":"creatediscoverylead-00001-yuv","runtimeIdentity":"preview-public-intake-runtime","timeoutSeconds":60,"secretBindings":["discovery-idempotency-secret-preview:3"],"invoker":"allUsers:roles/run.invoker"},
+    {"name":"exchangeDiscoveryToken","state":"ACTIVE","service":"exchangediscoverytoken","ready":true,"revision":"exchangediscoverytoken-00001-jaj","runtimeIdentity":"preview-discovery-session-rt","timeoutSeconds":60,"secretBindings":[],"invoker":"allUsers:roles/run.invoker"},
+    {"name":"resolveDiscoverySession","state":"ACTIVE","service":"resolvediscoverysession","ready":true,"revision":"resolvediscoverysession-00001-nep","runtimeIdentity":"preview-discovery-session-rt","timeoutSeconds":60,"secretBindings":[],"invoker":"allUsers:roles/run.invoker"},
+    {"name":"evaluateConversation","state":"ACTIVE","service":"evaluateconversation","ready":true,"revision":"evaluateconversation-00001-zuk","runtimeIdentity":"preview-conversation-runtime","timeoutSeconds":15,"secretBindings":["discovery-gemini-api-key-preview:2"],"invoker":"allUsers:roles/run.invoker"},
+    {"name":"completeDiscoverySession","state":"ACTIVE","service":"completediscoverysession","ready":true,"revision":"completediscoverysession-00001-tav","runtimeIdentity":"preview-discovery-complete-rt","timeoutSeconds":60,"secretBindings":["discovery-hmac-secret-preview:2"],"invoker":"allUsers:roles/run.invoker"}
+  ],
+  "infrastructure": {
+    "activeFunctions": 5,
+    "failedFunctions": 0,
+    "readyCloudRunServices": 5,
+    "projectLevelRunInvokerBindings": 0,
+    "artifactCleanup": {"active":true,"olderThanSeconds":604800,"tagState":"ANY"},
+    "cloudTasksApiEnabled": false,
+    "functionalStorageSurface": false,
+    "managedFunctionsBuckets": 2,
+    "appCheck": {
+      "controlPlaneEnforcement": "INHERITED_OFF_NOT_API_VERIFIED",
+      "callableEnforceAppCheck": true,
+      "debugTokenCount": 0,
+      "webAppCount": 1,
+      "recaptchaEnterpriseKeyCount": 1,
+      "allowedDomains": ["localhost", "preview-controlcenter.auranexus.io"]
+    }
+  },
+  "probeDefinitions": [
+    {"id":"PREFLIGHT","method":"OPTIONS","contentType":"NONE","appCheck":"ABSENT","auth":"ABSENT","payload":"NONE","expectedMutation":"NO"},
+    {"id":"GET_INVALID","method":"GET","contentType":"NONE","appCheck":"ABSENT","auth":"ABSENT","payload":"NONE","expectedMutation":"NO"},
+    {"id":"POST_NO_JSON","method":"POST","contentType":"NONE","appCheck":"ABSENT","auth":"ABSENT","payload":"NONE","expectedMutation":"NO"},
+    {"id":"WRONG_CONTENT_TYPE","method":"POST","contentType":"text/plain","appCheck":"ABSENT","auth":"ABSENT","payload":"SYNTHETIC_TEXT","expectedMutation":"NO"},
+    {"id":"JSON_NO_CALLABLE_ENVELOPE","method":"POST","contentType":"application/json","appCheck":"ABSENT","auth":"ABSENT","payload":"SYNTHETIC_EMPTY_OBJECT","expectedMutation":"NO"},
+    {"id":"EMPTY_BODY","method":"POST","contentType":"application/json","appCheck":"ABSENT","auth":"ABSENT","payload":"EMPTY","expectedMutation":"NO"},
+    {"id":"APP_CHECK_ABSENT","method":"POST","contentType":"application/json","appCheck":"ABSENT","auth":"ABSENT","payload":"VALID_CALLABLE_EMPTY_DATA","expectedMutation":"NO"}
+  ],
+  "probeObservations": [
+    {"handler":"createDiscoveryLead","probeId":"PREFLIGHT","http":204,"callableCode":null,"safeErrorCode":null,"requestIdPresent":true,"durationMs":1485.98,"mutationObserved":"NO"},
+    {"handler":"createDiscoveryLead","probeId":"GET_INVALID","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":152.73,"mutationObserved":"NO"},
+    {"handler":"createDiscoveryLead","probeId":"POST_NO_JSON","http":411,"callableCode":null,"safeErrorCode":"LENGTH_REQUIRED","requestIdPresent":false,"durationMs":195.11,"mutationObserved":"NO"},
+    {"handler":"createDiscoveryLead","probeId":"WRONG_CONTENT_TYPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":138.44,"mutationObserved":"NO"},
+    {"handler":"createDiscoveryLead","probeId":"JSON_NO_CALLABLE_ENVELOPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":153.01,"mutationObserved":"NO"},
+    {"handler":"createDiscoveryLead","probeId":"EMPTY_BODY","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":126.66,"mutationObserved":"NO"},
+    {"handler":"createDiscoveryLead","probeId":"APP_CHECK_ABSENT","http":401,"callableCode":"UNAUTHENTICATED","safeErrorCode":"UNAUTHENTICATED","requestIdPresent":true,"durationMs":127.24,"mutationObserved":"NO"},
+    {"handler":"exchangeDiscoveryToken","probeId":"PREFLIGHT","http":204,"callableCode":null,"safeErrorCode":null,"requestIdPresent":true,"durationMs":1809.95,"mutationObserved":"NO"},
+    {"handler":"exchangeDiscoveryToken","probeId":"GET_INVALID","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":135.08,"mutationObserved":"NO"},
+    {"handler":"exchangeDiscoveryToken","probeId":"POST_NO_JSON","http":411,"callableCode":null,"safeErrorCode":"LENGTH_REQUIRED","requestIdPresent":false,"durationMs":193.85,"mutationObserved":"NO"},
+    {"handler":"exchangeDiscoveryToken","probeId":"WRONG_CONTENT_TYPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":145.06,"mutationObserved":"NO"},
+    {"handler":"exchangeDiscoveryToken","probeId":"JSON_NO_CALLABLE_ENVELOPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":125.99,"mutationObserved":"NO"},
+    {"handler":"exchangeDiscoveryToken","probeId":"EMPTY_BODY","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":121.35,"mutationObserved":"NO"},
+    {"handler":"exchangeDiscoveryToken","probeId":"APP_CHECK_ABSENT","http":401,"callableCode":"UNAUTHENTICATED","safeErrorCode":"UNAUTHENTICATED","requestIdPresent":true,"durationMs":146.08,"mutationObserved":"NO"},
+    {"handler":"resolveDiscoverySession","probeId":"PREFLIGHT","http":204,"callableCode":null,"safeErrorCode":null,"requestIdPresent":true,"durationMs":1472.72,"mutationObserved":"NO"},
+    {"handler":"resolveDiscoverySession","probeId":"GET_INVALID","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":184.60,"mutationObserved":"NO"},
+    {"handler":"resolveDiscoverySession","probeId":"POST_NO_JSON","http":411,"callableCode":null,"safeErrorCode":"LENGTH_REQUIRED","requestIdPresent":false,"durationMs":190.33,"mutationObserved":"NO"},
+    {"handler":"resolveDiscoverySession","probeId":"WRONG_CONTENT_TYPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":178.04,"mutationObserved":"NO"},
+    {"handler":"resolveDiscoverySession","probeId":"JSON_NO_CALLABLE_ENVELOPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":133.83,"mutationObserved":"NO"},
+    {"handler":"resolveDiscoverySession","probeId":"EMPTY_BODY","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":145.88,"mutationObserved":"NO"},
+    {"handler":"resolveDiscoverySession","probeId":"APP_CHECK_ABSENT","http":401,"callableCode":"UNAUTHENTICATED","safeErrorCode":"UNAUTHENTICATED","requestIdPresent":true,"durationMs":146.38,"mutationObserved":"NO"},
+    {"handler":"evaluateConversation","probeId":"PREFLIGHT","http":204,"callableCode":null,"safeErrorCode":null,"requestIdPresent":true,"durationMs":1692.74,"mutationObserved":"NO"},
+    {"handler":"evaluateConversation","probeId":"GET_INVALID","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":145.46,"mutationObserved":"NO"},
+    {"handler":"evaluateConversation","probeId":"POST_NO_JSON","http":411,"callableCode":null,"safeErrorCode":"LENGTH_REQUIRED","requestIdPresent":false,"durationMs":171.74,"mutationObserved":"NO"},
+    {"handler":"evaluateConversation","probeId":"WRONG_CONTENT_TYPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":151.54,"mutationObserved":"NO"},
+    {"handler":"evaluateConversation","probeId":"JSON_NO_CALLABLE_ENVELOPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":130.90,"mutationObserved":"NO"},
+    {"handler":"evaluateConversation","probeId":"EMPTY_BODY","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":128.46,"mutationObserved":"NO"},
+    {"handler":"evaluateConversation","probeId":"APP_CHECK_ABSENT","http":401,"callableCode":"UNAUTHENTICATED","safeErrorCode":"UNAUTHENTICATED","requestIdPresent":true,"durationMs":121.17,"mutationObserved":"NO"},
+    {"handler":"completeDiscoverySession","probeId":"PREFLIGHT","http":204,"callableCode":null,"safeErrorCode":null,"requestIdPresent":true,"durationMs":1830.63,"mutationObserved":"NO"},
+    {"handler":"completeDiscoverySession","probeId":"GET_INVALID","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":150.18,"mutationObserved":"NO"},
+    {"handler":"completeDiscoverySession","probeId":"POST_NO_JSON","http":411,"callableCode":null,"safeErrorCode":"LENGTH_REQUIRED","requestIdPresent":false,"durationMs":182.46,"mutationObserved":"NO"},
+    {"handler":"completeDiscoverySession","probeId":"WRONG_CONTENT_TYPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":147.18,"mutationObserved":"NO"},
+    {"handler":"completeDiscoverySession","probeId":"JSON_NO_CALLABLE_ENVELOPE","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":143.50,"mutationObserved":"NO"},
+    {"handler":"completeDiscoverySession","probeId":"EMPTY_BODY","http":400,"callableCode":"INVALID_ARGUMENT","safeErrorCode":"INVALID_ARGUMENT","requestIdPresent":true,"durationMs":158.26,"mutationObserved":"NO"},
+    {"handler":"completeDiscoverySession","probeId":"APP_CHECK_ABSENT","http":401,"callableCode":"UNAUTHENTICATED","safeErrorCode":"UNAUTHENTICATED","requestIdPresent":true,"durationMs":122.67,"mutationObserved":"NO"}
+  ],
+  "probeSummary": {
+    "total": 35,
+    "transportErrors": 0,
+    "iamDenials": 0,
+    "preflight204": 5,
+    "invalidArgument400": 20,
+    "lengthRequired411": 5,
+    "unauthenticated401": 5,
+    "businessMutations": 0
+  },
+  "contractOnlyValidation": {
+    "firebaseAuth": "NOT_APPLICABLE_AS_UNIFORM_HANDLER_REQUIREMENT",
+    "tenantAndPayload": "VERIFIED_BY_CONTRACT",
+    "replayAndIdempotency": "VERIFIED_BY_CONTRACT",
+    "remoteTimeoutAndDisabledEvaluation": "VERIFIED_BY_CONFIGURATION_AND_CONTRACT",
+    "rateLimit": "VERIFIED_BY_CONTRACT_WITHOUT_THRESHOLD_ABUSE"
+  },
+  "automatedTests": {
+    "total": 273,
+    "passed": 273,
+    "failed": 0,
+    "suites": [
+      {"name":"invocation-boundary","passed":13},
+      {"name":"deployment-unit","passed":22},
+      {"name":"parameter-binding","passed":15},
+      {"name":"runtime-contracts","passed":18},
+      {"name":"trust-completion","passed":20},
+      {"name":"public-intake-app-check","passed":33},
+      {"name":"idempotency","passed":24},
+      {"name":"rate-limit","passed":17},
+      {"name":"payload-bounds","passed":34},
+      {"name":"capabilities-replay","passed":29},
+      {"name":"shadow-integration","passed":15},
+      {"name":"authority-tenant","passed":19},
+      {"name":"preview-rules","passed":14}
+    ]
+  },
+  "noMutation": {
+    "firestoreCollectionsCounted": 13,
+    "allBefore": 0,
+    "allAfter": 0,
+    "managedBucketObjectsBefore": [5,3],
+    "managedBucketObjectsAfter": [5,3],
+    "cloudTasksBefore": "DISABLED",
+    "cloudTasksAfter": "DISABLED",
+    "result": "PASS"
+  },
+  "telemetry": {
+    "window24h": {
+      "entries": 287,
+      "requestEntries": 102,
+      "latencyPresent": 102,
+      "traceEntries": 212,
+      "insertIdEntries": 287,
+      "runtimeStdoutStderr": 120,
+      "historicalPreRemediation403": 16
+    },
+    "probeWindow": {
+      "start": "2026-08-06T00:40:31.5498658Z",
+      "entries": 83,
+      "requestEntries": 29,
+      "http400": 20,
+      "http401": 5,
+      "http204": 4,
+      "http403": 0,
+      "latencyPresent": 29
+    },
+    "customCorrelationId": "NOT_OBSERVED_PRE_HANDLER",
+    "customSafeErrorCodeInLogs": "NOT_OBSERVED_PRE_HANDLER",
+    "safeCallableCodesInResponses": ["INVALID_ARGUMENT","UNAUTHENTICATED","LENGTH_REQUIRED"],
+    "sensitiveMarkers": {"personalNames":0,"emails":0,"phones":0,"rfcCurp":0,"rawPayloads":0,"jwt":0,"bearerTokens":0,"appCheckTokens":0,"apiKeys":0,"secrets":0,"hmacValues":0,"idempotencyValues":0,"productionUrlsExecuted":0}
+  },
+  "clientPreview": {
+    "vercelProject": "aura-control-center-preview",
+    "isolatedProject": true,
+    "publishedDomainReady": true,
+    "publishedTargetInsideIsolatedProject": "production",
+    "previewTargetVariableCount": 0,
+    "productionTargetVariableCount": 0,
+    "firebaseVariableCount": 0,
+    "recaptchaVariablePresent": false,
+    "sourceInitializesFirebase": true,
+    "sourceInitializesAppCheck": true,
+    "classification": "BLOCKING_CLIENT_HAPPY_PATH"
+  },
+  "productionReferences": {
+    "createDiscoveryLeadCount": 2,
+    "executedByProbes": false,
+    "classification": "BLOCKING_CLIENT_HAPPY_PATH"
+  },
+  "scope": {
+    "codeModified": false,
+    "iamModified": false,
+    "secretManagerModified": false,
+    "rulesModified": false,
+    "appCheckModified": false,
+    "vercelModified": false,
+    "stagingModified": false,
+    "productionModified": false,
+    "deployExecuted": false,
+    "happyPathExecuted": false,
+    "commitCreated": false,
+    "pushExecuted": false,
+    "pullRequestCreated": false
+  }
+}
