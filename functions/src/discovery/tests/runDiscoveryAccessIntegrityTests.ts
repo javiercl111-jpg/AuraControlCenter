@@ -174,7 +174,9 @@ const tests: readonly TestCase[] = [
       strictEqual(pageSource.includes("idempotencyKey: preformAttemptRef.current.idempotencyKey"), true);
       strictEqual(serviceSource.includes("globalThis.crypto.randomUUID()"), true);
       strictEqual(pageSource.includes("navigate(getDiscoveryNavigationTarget(newLink)"), true);
-      strictEqual(serviceSource.includes("new URL(response.discoveryUrl)"), true);
+      strictEqual(serviceSource.includes("new URL(response.discoveryUrl)"), false);
+      strictEqual(serviceSource.includes("encodeURIComponent(response.linkId)"), true);
+      strictEqual(serviceSource.includes("encodeURIComponent(response.oneTimeToken)"), true);
       strictEqual(serviceSource.includes('url.searchParams.has("access")'), true);
       strictEqual(pageSource.includes("?access=${newLink.oneTimeToken}"), false);
     },

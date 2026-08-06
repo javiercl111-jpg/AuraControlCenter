@@ -20,7 +20,7 @@ export async function resolveAdvisorByCode(commercialCode: string): Promise<Disc
 export interface CreateDiscoveryLeadResponse {
   status: string;
   nextAction: string;
-  discoveryUrl: string;
+  discoveryUrl?: string;
   linkId: string;
   oneTimeToken: string;
   advisorDisplayName?: string;
@@ -65,28 +65,18 @@ export function isCreateDiscoveryLeadResponse(value: unknown): value is CreateDi
   return (
     typeof obj.status === "string" &&
     typeof obj.nextAction === "string" &&
-    typeof obj.discoveryUrl === "string" &&
     typeof obj.linkId === "string" && obj.linkId.trim() !== "" &&
     typeof obj.oneTimeToken === "string" && obj.oneTimeToken.trim() !== ""
   );
 }
 
 export function getDiscoveryNavigationTarget(response: CreateDiscoveryLeadResponse): string {
-  const url = new URL(response.discoveryUrl);
-  const accessToken = new URLSearchParams(url.hash.slice(1)).get("access");
-  const encodedLinkId = url.pathname.split("/").filter(Boolean).at(-1);
-
-  if (
-    url.protocol !== "https:" ||
-    !encodedLinkId ||
-    decodeURIComponent(encodedLinkId) !== response.linkId ||
-    url.searchParams.has("access") ||
-    accessToken !== response.oneTimeToken
-  ) {
+  if (!response.linkId.trim() || !response.oneTimeToken.trim()) {
     throw new Error("DISCOVERY_LINK_RESPONSE_INVALID");
   }
 
-  return `${url.pathname}${url.hash}`;
+  return `/discover/${encodeURIComponent(response.linkId)}` +
+    `#access=${encodeURIComponent(response.oneTimeToken)}`;
 }
 
 export async function createDiscoveryLink(

@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../config/firebase';
+import {
+  getDiscoveryNavigationTarget,
+  isCreateDiscoveryLeadResponse,
+} from '../../modules/discovery/services/discoveryLinkService';
 
 export default function ExecutiveIntakeSmokeTestPage() {
   const [commercialCode, setCommercialCode] = useState('SMOKETEST');
   const [log, setLog] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [discoveryUrl, setDiscoveryUrl] = useState<string | null>(null);
+  const [discoveryTarget, setDiscoveryTarget] = useState<string | null>(null);
   
   // Use a fixed idempotency key for test reproducibility unless changed
   const [idempotencyKey, setIdempotencyKey] = useState(crypto.randomUUID());
@@ -68,10 +72,11 @@ export default function ExecutiveIntakeSmokeTestPage() {
       addLog(`Requires Manual Review: ${data.requiresManualReview}`);
       addLog(`Advisor Display Name: ${data.advisorDisplayName || 'N/A'}`);
       addLog(`Retry After Seconds: ${data.retryAfterSeconds || 'N/A'}`);
-      addLog(`Discovery URL present: ${data.discoveryUrl ? 'Yes' : 'No'}`);
-      
-      if (data.discoveryUrl) {
-        setDiscoveryUrl(data.discoveryUrl);
+      const validDiscoveryResponse = isCreateDiscoveryLeadResponse(data);
+      addLog(`Navigation target present: ${validDiscoveryResponse ? 'Yes' : 'No'}`);
+
+      if (validDiscoveryResponse) {
+        setDiscoveryTarget(getDiscoveryNavigationTarget(data));
       }
     } catch (error: any) {
       addLog(`Error: ${error.code} - ${error.message}`);
@@ -81,9 +86,9 @@ export default function ExecutiveIntakeSmokeTestPage() {
   };
 
   const handleOpenDiscovery = () => {
-    if (discoveryUrl) {
+    if (discoveryTarget) {
       addLog(`Opening discovery URL in new tab...`);
-      window.open(discoveryUrl, '_blank');
+      window.open(discoveryTarget, '_blank');
     }
   };
 
@@ -161,7 +166,7 @@ export default function ExecutiveIntakeSmokeTestPage() {
             <h2 className="text-lg font-semibold mb-4 text-purple-600">3. Validar Token & Reanudación</h2>
             <button 
               onClick={handleOpenDiscovery} 
-              disabled={!discoveryUrl}
+              disabled={!discoveryTarget}
               className="w-full bg-purple-600 text-white px-4 py-3 rounded hover:bg-purple-700 disabled:opacity-50 font-bold"
             >
               Abrir Discovery de prueba
