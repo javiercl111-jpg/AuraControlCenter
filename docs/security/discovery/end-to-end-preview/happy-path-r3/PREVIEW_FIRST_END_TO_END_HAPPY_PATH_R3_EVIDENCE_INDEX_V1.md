@@ -32,4 +32,3 @@ Change ID: `AI-02H2.2E-R3-PREVIEW-FIRST-END-TO-END-HAPPY-PATH-20260807-01`
 | Verdict | `C — BLOCKED` |
 
 The four files listed above are the complete evidence set for this run.
-
