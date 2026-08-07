@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "PREVIEW_DISCOVERY_SUBMIT_OBSERVABILITY_MATRIX_V1",
+  "changeId": "AI-02H2.2E-R3B-PREVIEW-DISCOVERY-SUBMIT-OBSERVABILITY-20260807-01",
+  "verdict": {
+    "code": "A",
+    "statement": "PREVIEW SUBMIT OBSERVABILITY CERTIFIED — READY FOR ONE CONTROLLED DIAGNOSTIC SUBMIT"
+  },
+  "scope": {
+    "environment": "PREVIEW",
+    "productionAuthorized": false,
+    "stagingInScope": false,
+    "realSubmitExecuted": false,
+    "deployExecuted": false,
+    "functionsGraphAffected": false
+  },
+  "requirements": [
+    { "id": 1, "requirement": "click observed", "status": "PASS", "evidence": "DiscoverPage integration test" },
+    { "id": 2, "requirement": "native submit observed", "status": "PASS", "evidence": "DiscoverPage integration test" },
+    { "id": 3, "requirement": "React handler observed", "status": "PASS", "evidence": "DiscoverPage integration test" },
+    { "id": 4, "requirement": "validation accepted", "status": "PASS", "evidence": "valid synthetic form flow and bounded stage contract" },
+    { "id": 5, "requirement": "validation rejected", "status": "PASS", "evidence": "invalid form flow" },
+    { "id": 6, "requirement": "App Check/client precondition accepted", "status": "PASS", "evidence": "valid service flow and bounded stage contract" },
+    { "id": 7, "requirement": "precondition rejected", "status": "PASS", "evidence": "invalid key and App Check failure tests" },
+    { "id": 8, "requirement": "service dispatch started", "status": "PASS", "evidence": "valid form and service tests" },
+    { "id": 9, "requirement": "pre-network failure", "status": "PASS", "evidence": "App Check and invalid precondition tests" },
+    { "id": 10, "requirement": "network dispatch observed", "status": "PASS", "evidence": "successful callable mock test" },
+    { "id": 11, "requirement": "Preview enabled", "status": "PASS", "evidence": "observer environment matrix" },
+    { "id": 12, "requirement": "Production disabled", "status": "PASS", "evidence": "observer fail-closed matrix and Production client tests" },
+    { "id": 13, "requirement": "payload never logged", "status": "PASS", "evidence": "forbidden-field injection test" },
+    { "id": 14, "requirement": "PII never logged", "status": "PASS", "evidence": "forbidden-field injection test" },
+    { "id": 15, "requirement": "tokens and secrets never logged", "status": "PASS", "evidence": "forbidden-field injection test and bundle audit" },
+    { "id": 16, "requirement": "instrumentation adds no retry", "status": "PASS", "evidence": "single invocation cardinality tests and source diff" },
+    { "id": 17, "requirement": "instrumentation does not change service call count", "status": "PASS", "evidence": "exactly one service and callable mock invocation" }
+  ],
+  "validation": [
+    { "name": "specific observability suite", "files": 3, "tests": 16, "status": "PASS" },
+    { "name": "client bootstrap isolation", "files": 4, "tests": 47, "status": "PASS" },
+    { "name": "Preview client enablement guard", "tests": 23, "status": "PASS" },
+    { "name": "Preview invocation boundary guard", "tests": 13, "status": "PASS" },
+    { "name": "Preview parameter binding guard", "tests": 15, "status": "PASS" },
+    { "name": "TypeScript project build noEmit", "status": "PASS" },
+    { "name": "root Production build", "modulesTransformed": 2134, "status": "PASS" },
+    { "name": "root Preview build", "modulesTransformed": 2134, "status": "PASS" },
+    { "name": "Functions build", "status": "NOT_APPLICABLE", "reason": "Functions graph not affected" },
+    { "name": "git diff check", "status": "PASS" }
+  ],
+  "previewBundleAudit": {
+    "diagnosticStagesExpected": 12,
+    "diagnosticStagesPresent": 12,
+    "syntheticDataMarkers": 0,
+    "privateKeyMarkers": 0,
+    "secretPatternMarkers": 0,
+    "productionHostsIntroducedByDiff": 0,
+    "productionFirebaseIdentifiersIntroducedByDiff": 0
+  },
+  "fileInventory": [
+    "docs/security/discovery/end-to-end-preview/submit-dispatch/observability/PREVIEW_DISCOVERY_SUBMIT_OBSERVABILITY_CHANGE_RECORD_V1.md",
+    "docs/security/discovery/end-to-end-preview/submit-dispatch/observability/PREVIEW_DISCOVERY_SUBMIT_OBSERVABILITY_EVIDENCE_INDEX_V1.md",
+    "docs/security/discovery/end-to-end-preview/submit-dispatch/observability/PREVIEW_DISCOVERY_SUBMIT_OBSERVABILITY_MATRIX_V1.json",
+    "docs/security/discovery/end-to-end-preview/submit-dispatch/observability/PREVIEW_DISCOVERY_SUBMIT_OBSERVABILITY_V1.md",
+    "package-lock.json",
+    "package.json",
+    "src/config/firebase.ts",
+    "src/modules/discovery/observability/previewDiscoverySubmitObservabilityV1.test.ts",
+    "src/modules/discovery/observability/previewDiscoverySubmitObservabilityV1.ts",
+    "src/modules/discovery/services/discoveryLinkService.observability.test.ts",
+    "src/modules/discovery/services/discoveryLinkService.ts",
+    "src/pages/DiscoverPage.submitObservability.test.tsx",
+    "src/pages/DiscoverPage.tsx"
+  ]
+}

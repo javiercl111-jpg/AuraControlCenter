@@ -44,6 +44,8 @@ const clientFirebaseConfiguration = resolveClientFirebaseBootstrapV1(
   typeof window === "undefined" ? undefined : window.location.hostname,
 );
 
+export const clientRuntimeEnvironment = clientFirebaseConfiguration.environment;
+
 const firebaseConfig: FirebaseOptions = {
   apiKey: clientFirebaseConfiguration.apiKey,
   authDomain: clientFirebaseConfiguration.authDomain,
