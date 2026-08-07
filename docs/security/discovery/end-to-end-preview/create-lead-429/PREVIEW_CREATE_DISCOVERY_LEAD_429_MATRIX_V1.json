@@ -1,0 +1,208 @@
+{
+  "schemaVersion": "PREVIEW_CREATE_DISCOVERY_LEAD_429_MATRIX_V1",
+  "classification": {
+    "code": "A",
+    "name": "EXPECTED_RATE_LIMIT_FROM_PRIOR_TEST",
+    "confidence": "CONFIRMED"
+  },
+  "scope": {
+    "environment": "PREVIEW",
+    "callable": "createDiscoveryLead",
+    "productionAuthorized": false,
+    "stagingInScope": false,
+    "requestReplayed": false,
+    "remoteStateMutated": false
+  },
+  "targetInvocation": {
+    "timestamp": "2026-08-07T18:34:18.170466Z",
+    "method": "POST",
+    "httpStatus": 429,
+    "latencySeconds": 0.724381803,
+    "traceLocator": "sha256:ec423b77b059…/len:67",
+    "executionLocator": "sha256:b2ccf79765c2…/len:12",
+    "appCheck": "VALID",
+    "auth": "MISSING_EXPECTED_FOR_PUBLIC_INTAKE",
+    "callableCode": "RESOURCE_EXHAUSTED",
+    "publicMessage": "DISCOVERY_TEMPORARILY_UNAVAILABLE"
+  },
+  "telemetry": [
+    {
+      "timestamp": "2026-08-07T18:34:18.496Z",
+      "eventType": "containment.emergency_quota_exceeded",
+      "outcome": "DENIED",
+      "reasonCode": "EMERGENCY_QUOTA_EXCEEDED",
+      "component": "discovery.intake",
+      "correlationLocator": "sha256:cf6890fe320f…/len:53",
+      "requests": 1,
+      "rejections": 1
+    },
+    {
+      "timestamp": "2026-08-07T18:34:18.686Z",
+      "eventType": "intake.rejected",
+      "outcome": "REJECTED",
+      "reasonCode": "RESOURCE_EXHAUSTED",
+      "component": "discovery.intake",
+      "correlationLocator": "sha256:cf6890fe320f…/len:53",
+      "requests": 1,
+      "rejections": 1
+    }
+  ],
+  "activePolicy": {
+    "locator": "SANITIZED_ACTIVE_PREVIEW_POLICY",
+    "status": "ACTIVE",
+    "updatedAt": "2026-08-07T14:47:47.742Z",
+    "expiresAt": "2026-08-08T14:47:47.742Z",
+    "publicIntakeEnabled": true,
+    "intakeRule": {
+      "enabled": true,
+      "windowSeconds": 86400,
+      "maxRequests": 1,
+      "burst": 0,
+      "effectiveLimit": 1
+    }
+  },
+  "counter": {
+    "locator": "SANITIZED_GLOBAL_INTAKE_COUNTER",
+    "exists": true,
+    "schemaVersion": "FIRESTORE_RATE_LIMIT_COUNTER_V1",
+    "dimension": "CUSTOM",
+    "environment": "preview",
+    "logicalKey": "global.intake",
+    "keyScheme": "OPAQUE_V1",
+    "keyVersion": "containment.v1",
+    "windowStartedAt": "2026-08-07T00:00:00Z",
+    "windowEndsAt": "2026-08-08T00:00:00Z",
+    "windowSeconds": 86400,
+    "maxRequests": 1,
+    "burst": 0,
+    "effectiveLimit": 1,
+    "count": 1,
+    "remaining": 0,
+    "createdAt": "2026-08-07T18:20:11.930Z",
+    "updatedAt": "2026-08-07T18:20:11.930Z",
+    "deniedRequestIncrementedCounter": false
+  },
+  "persistence": {
+    "before": { "leads": 1, "sessions": 1, "completions": 1 },
+    "after": { "leads": 1, "sessions": 1, "completions": 1 },
+    "delta": { "leads": 0, "sessions": 0, "completions": 0 }
+  },
+  "causalChain": [
+    "CALLABLE_POST_RECEIVED",
+    "APP_CHECK_VALID",
+    "PUBLIC_INTAKE_PAYLOAD_VALIDATED",
+    "PUBLIC_INTAKE_CONTAINMENT_EVALUATED",
+    "GLOBAL_INTAKE_COUNTER_AT_EFFECTIVE_LIMIT",
+    "EMERGENCY_QUOTA_EXCEEDED",
+    "HTTPS_RESOURCE_EXHAUSTED",
+    "HTTP_429",
+    "NO_CREATION_OR_PERSISTENCE"
+  ],
+  "branches": [
+    {
+      "name": "CONTAINMENT_EMERGENCY_GLOBAL_INTAKE_QUOTA",
+      "source": "functions/src/discovery/containment/enforceDiscoveryContainment.ts:98-104",
+      "condition": "INTAKE emergency quota enabled and shared counter is at effective limit",
+      "internalCode": "EMERGENCY_QUOTA_EXCEEDED",
+      "publicMessage": "DISCOVERY_TEMPORARILY_UNAVAILABLE",
+      "httpStatus": 429,
+      "reachable": true,
+      "matched": true
+    },
+    {
+      "name": "NON_EMERGENCY_CONTAINMENT_DENIAL",
+      "source": "functions/src/discovery/containment/enforceDiscoveryContainment.ts:98-106",
+      "condition": "Containment denial other than emergency quota exhaustion",
+      "internalCode": "CONTAINMENT_REASON_SPECIFIC",
+      "publicMessage": "DISCOVERY_TEMPORARILY_UNAVAILABLE",
+      "httpStatus": 503,
+      "reachable": true,
+      "matched": false
+    },
+    {
+      "name": "IDEMPOTENCY_CARDINALITY",
+      "source": "functions/src/discovery/createDiscoveryLead.ts:42-58",
+      "condition": "New namespace record while active idempotency record cardinality is at maximum",
+      "internalCode": "IDEMPOTENCY_CARDINALITY_EXCEEDED",
+      "publicMessage": "IDEMPOTENCY_CARDINALITY_EXCEEDED",
+      "httpStatus": 429,
+      "reachable": true,
+      "matched": false
+    },
+    {
+      "name": "ADVISOR_24H_LIMIT",
+      "source": "functions/src/discovery/createDiscoveryLead.ts:271-291",
+      "condition": "First attempt by authorized caller with recent advisor count at configured maximum",
+      "internalCode": "ADVISOR_DAILY_LIMIT",
+      "publicMessage": "RATE_LIMITED",
+      "httpStatus": 429,
+      "reachable": true,
+      "matched": false
+    },
+    {
+      "name": "EMAIL_24H_LIMIT",
+      "source": "functions/src/discovery/createDiscoveryLead.ts:271-307",
+      "condition": "First public attempt with recent exact-email count at configured maximum",
+      "internalCode": "EMAIL_DAILY_LIMIT",
+      "publicMessage": "RATE_LIMITED",
+      "httpStatus": 429,
+      "reachable": true,
+      "matched": false
+    },
+    {
+      "name": "GENERIC_DISCOVERY_BUDGET_MAPPER",
+      "source": "functions/src/discovery/discoveryPayloadHandlerSupport.ts:3-10",
+      "condition": "Conversation, report, or download budget error",
+      "internalCode": "BUDGET_SPECIFIC",
+      "publicMessage": "BUDGET_SPECIFIC",
+      "httpStatus": 429,
+      "reachable": false,
+      "matched": false,
+      "reasonUnreachable": "Public intake parser cannot emit those budget codes"
+    }
+  ],
+  "classificationMatrix": [
+    { "code": "A", "name": "EXPECTED_RATE_LIMIT_FROM_PRIOR_TEST", "status": "MATCHED" },
+    { "code": "B", "name": "EXPECTED_ABUSE_PROTECTION", "status": "NOT_SELECTED_MORE_SPECIFIC_A" },
+    { "code": "C", "name": "APP_CHECK_REPLAY_OR_THROTTLE", "status": "RULED_OUT_APP_CHECK_VALID" },
+    { "code": "D", "name": "DUPLICATE_OR_IDEMPOTENCY_REJECTION", "status": "RULED_OUT_CONTAINMENT_PRECEDED_IDEMPOTENCY" },
+    { "code": "E", "name": "TENANT_OR_GLOBAL_QUOTA", "status": "NOT_SELECTED_MORE_SPECIFIC_A" },
+    { "code": "F", "name": "MISCONFIGURED_PREVIEW_RATE_LIMIT", "status": "NOT_ESTABLISHED_POLICY_MATCHED_ACTIVE_CONFIGURATION" },
+    { "code": "G", "name": "UNEXPECTED_BACKEND_429", "status": "RULED_OUT_EXACT_APPLICATION_DECISION_FOUND" },
+    { "code": "H", "name": "ROOT_CAUSE_NOT_DETERMINED", "status": "RULED_OUT" }
+  ],
+  "fixtureIsolation": {
+    "isolated": [
+      "browser_context",
+      "cookies_and_web_storage",
+      "synthetic_input",
+      "email",
+      "idempotency_key",
+      "lead_session_completion_identity"
+    ],
+    "notIsolated": [
+      "preview_environment",
+      "intake_operation",
+      "global_intake_quota_counter"
+    ],
+    "explanation": "The denying key is global per environment and operation, so fixture-level changes do not create a new quota namespace."
+  },
+  "safeNextAction": {
+    "counterResetAt": "2026-08-08T00:00:00Z",
+    "automaticRetryAllowed": false,
+    "officialFixtureBypassExists": false,
+    "recommended": "After reset, confirm a new bucket read-only and obtain human authorization for exactly one submit."
+  },
+  "minimalRemediation": {
+    "implemented": false,
+    "proposal": "Use the audited Preview containment control plane to set a short-lived INTAKE request budget equal to the explicitly approved certification run count.",
+    "constraints": [
+      "PREVIEW_ONLY",
+      "SHORT_TTL",
+      "RATE_LIMIT_REMAINS_ENABLED",
+      "NO_PRODUCTION_OR_STAGING_CHANGE",
+      "NO_CLIENT_CONTROLLED_BYPASS"
+    ]
+  },
+  "verdict": "CREATE DISCOVERY LEAD 429 ROOT CAUSE IDENTIFIED — READY FOR TARGETED RESOLUTION"
+}
