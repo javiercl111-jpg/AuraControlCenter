@@ -1,4 +1,4 @@
-﻿import type { GovernedExecutionBoundary } from '../boundary/GovernedExecutionBoundary';
+import type { GovernedExecutionBoundary } from '../boundary/GovernedExecutionBoundary';
 import type { BoundaryInvocationContextV1 } from '../boundary/types';
 import type {
   PublicPreviewRequestV1,
@@ -114,8 +114,16 @@ export class AuraIntelligencePublicPreviewFacadeV1 {
       let usable = false;
       let output: Record<string, unknown> | undefined;
 
+      let facadeStatus = boundaryResponse.status;
+
       if (boundaryResponse.status === 'COMPLETED' || boundaryResponse.status === 'PARTIAL') {
-        if (boundaryResponse.resultSummary) {
+        if (boundaryResponse.semanticProjection) {
+          output = boundaryResponse.semanticProjection as Record<string, unknown>;
+          usable = true;
+          if (output.status === 'PARTIAL_SUCCESS') {
+            facadeStatus = 'PARTIAL';
+          }
+        } else if (boundaryResponse.resultSummary) {
           const safeOutput: Record<string, unknown> = {};
           const publicKeys = ['sessionId', 'status', 'startedAt', 'completedAt', 'durationMs'];
           for (const key of publicKeys) {
@@ -149,14 +157,15 @@ export class AuraIntelligencePublicPreviewFacadeV1 {
         contractVersion: '1.0',
         requestId: boundaryResponse.requestId,
         correlationId: boundaryResponse.correlationId,
-        status: boundaryResponse.status,
+        status: facadeStatus,
         usable,
         shadowOnly: true,
         output,
         warnings,
         safeError,
       };
-    } catch {
+    } catch (err: unknown) {
+      console.error('Facade caught error from boundary:', err);
       return this.createRejectedResponse(
         request.requestId,
         request.correlationId,

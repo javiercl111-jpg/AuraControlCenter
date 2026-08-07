@@ -552,11 +552,13 @@ export class GovernedExecutionBoundary {
         internalResult.status === 'SUCCESS' ||
         internalResult.status === 'COMPLETED'
           ? 'COMPLETED'
-          : internalResult.status === 'TIMED_OUT'
-            ? 'TIMED_OUT'
-            : internalResult.status === 'CANCELLED'
-              ? 'CANCELLED'
-              : 'FAILED';
+          : internalResult.status === 'PARTIAL'
+            ? 'PARTIAL'
+            : internalResult.status === 'TIMED_OUT'
+              ? 'TIMED_OUT'
+              : internalResult.status === 'CANCELLED'
+                ? 'CANCELLED'
+                : 'FAILED';
       const errors: BoundaryPublicError[] = [];
       for (const error of internalResult.errors ?? []) {
         errors.push(sanitizePublicError(new Error(error.message)));

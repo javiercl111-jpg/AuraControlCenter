@@ -70,7 +70,7 @@ describe('AI-02H1D.3 producer architecture', () => {
   });
 
   it('39. keeps its immutable index private and exports no mutable state', () => {
-    expect(producerSource).toContain('readonly #entryIndex');
+    expect(producerSource).toContain('readonly #snapshot');
     expect(producerSource).not.toMatch(
       /export\s+(?:const|let|var)\s+.*(?:Index|Map)/
     );

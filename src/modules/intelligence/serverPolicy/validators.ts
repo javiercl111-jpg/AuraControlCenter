@@ -1,4 +1,4 @@
-import {
+﻿import {
   AUTHORITATIVE_BOUNDARY_POLICY_SCHEMA_VERSION,
 } from '../os/boundary/types';
 import {
@@ -159,8 +159,8 @@ function cloneAuthoritativePolicyEntryV1(
     fail('INVALID_ENTRY');
   }
   if (
-    record.requestedMode !== 'SHADOW_ONLY' ||
-    record.effectiveExecutionMode !== 'SHADOW_ONLY'
+    (record.requestedMode !== 'SHADOW_ONLY' && record.requestedMode !== 'EVALUATION') ||
+    (record.effectiveExecutionMode !== 'SHADOW_ONLY' && record.effectiveExecutionMode !== 'EVALUATION')
   ) {
     fail('MODE_NOT_ALLOWED');
   }
@@ -208,7 +208,7 @@ function cloneAuthoritativePolicyEntryV1(
       tenantId: record.tenantId,
       consumerId: record.consumerId,
       source: record.source,
-      requestedMode: record.requestedMode,
+      requestedMode: record.requestedMode as 'SHADOW_ONLY' | 'EVALUATION',
       actor: {
         actorType: record.actorType,
         actorId: record.actorId,
@@ -224,17 +224,19 @@ function cloneAuthoritativePolicyEntryV1(
   const source =
     TRUSTED_SOURCE_REGISTRY_V1.entries
       .TRUSTED_COMPOSITION_CONTRACT_TEST;
+
+  const requestedModeString = query.requestedMode;
   if (
     query.consumerId !== consumer.id ||
     !consumer.enabled ||
-    !consumer.allowedExecutionModes.includes('SHADOW_ONLY')
+    !consumer.allowedExecutionModes.some((mode) => mode === requestedModeString)
   ) {
     fail('INVALID_BINDING');
   }
   if (
     query.source !== source.id ||
     !source.enabled ||
-    !source.allowedExecutionModes.includes('SHADOW_ONLY')
+    !source.allowedExecutionModes.some((mode) => mode === requestedModeString)
   ) {
     fail('INVALID_BINDING');
   }
@@ -251,8 +253,8 @@ function cloneAuthoritativePolicyEntryV1(
     actorId: query.actor.actorId,
     consumerId: consumer.id,
     source: source.id,
-    requestedMode: 'SHADOW_ONLY',
-    effectiveExecutionMode: 'SHADOW_ONLY',
+    requestedMode: query.requestedMode as 'SHADOW_ONLY' | 'EVALUATION',
+    effectiveExecutionMode: query.requestedMode as 'SHADOW_ONLY' | 'EVALUATION',
     effectiveTimeoutMs: record.effectiveTimeoutMs,
     authorizationPolicyVersion:
       record.authorizationPolicyVersion,

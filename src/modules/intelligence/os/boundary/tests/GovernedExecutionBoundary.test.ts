@@ -541,6 +541,22 @@ describe('GovernedExecutionBoundary', () => {
     expect(res.errors[0].code).toBe('EXECUTION_FAILED');
   });
 
+  it('24A. Preserves PARTIAL internal execution status at the public boundary', async () => {
+    const execPort = createMockExecutionPort({
+      status: 'PARTIAL',
+    });
+
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: execPort,
+    });
+
+    const res = await executeBoundary(boundary, createValidRequest());
+
+    expect(res.status).toBe('PARTIAL');
+    expect(execPort.execute).toHaveBeenCalledTimes(1);
+  });
   it('25. Never exposes stack or cause in public errors', async () => {
     const execPort: BoundaryExecutionPort = {
       execute: vi.fn().mockRejectedValue(new Error('Internal crash with stack trace')),
@@ -1037,7 +1053,7 @@ describe('GovernedExecutionBoundary', () => {
       expect(res.semanticProjection).toBeUndefined();
     });
 
-    it('14. Projector throws: ejecución principal conserva su status original (15, 16)', async () => {
+    it('14. Projector throws: ejecuciÃ³n principal conserva su status original (15, 16)', async () => {
       const projector = { project: vi.fn().mockImplementation(() => { throw new Error('Crash'); }) };
       const boundary = new GovernedExecutionBoundary({
         clockPort: createMockClock(),
@@ -1075,7 +1091,7 @@ describe('GovernedExecutionBoundary', () => {
       expect(res.semanticProjection).toEqual({ ok: true });
     });
 
-    it('18. Shadow comparison continúa funcionando', async () => {
+    it('18. Shadow comparison continÃºa funcionando', async () => {
       const comparisonPort = { compare: vi.fn().mockResolvedValue({ match: true }) };
       const projector = { project: vi.fn().mockReturnValue({ projected: true }) };
       const boundary = new GovernedExecutionBoundary({
@@ -1090,7 +1106,7 @@ describe('GovernedExecutionBoundary', () => {
       expect(res.semanticProjection).toEqual({ projected: true });
     });
 
-    it('19. EVALUATION continúa funcionando', async () => {
+    it('19. EVALUATION continÃºa funcionando', async () => {
       const projector = { project: vi.fn().mockReturnValue({ ok: true }) };
       const boundary = new GovernedExecutionBoundary({
         clockPort: createMockClock(),
@@ -1103,7 +1119,7 @@ describe('GovernedExecutionBoundary', () => {
       expect(res.semanticProjection).toEqual({ ok: true });
     });
 
-    it('20. PRODUCTIVE policy behavior permanece idéntico', async () => {
+    it('20. PRODUCTIVE policy behavior permanece idÃ©ntico', async () => {
       const projector = { project: vi.fn().mockReturnValue({ ok: true }) };
       const execPort = createMockExecutionPort();
       const policy = createDefaultPolicy({ allowedModes: ['SHADOW_ONLY', 'PRODUCTIVE'] });
@@ -1145,7 +1161,7 @@ describe('GovernedExecutionBoundary', () => {
       expect(true).toBe(true);
     });
 
-    it('24. Misma ejecución + mismo projector => misma projection', async () => {
+    it('24. Misma ejecuciÃ³n + mismo projector => misma projection', async () => {
       const projector = { project: vi.fn().mockReturnValue({ static: 'result' }) };
       const boundary = new GovernedExecutionBoundary({
         clockPort: createMockClock(),

@@ -89,6 +89,7 @@ describe('Aura Intelligence OS server export surface', () => {
     expect(Object.keys(manifest.exports)).toEqual(['./server']);
     expect(manifest.exports['./server']).toEqual({
       types: './dist/server.d.ts',
+      import: './dist/server.js',
       require: './dist/server.js',
     });
     expect(manifest.files).toEqual(['dist', 'README.md']);

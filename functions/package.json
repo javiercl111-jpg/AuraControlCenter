@@ -2,7 +2,7 @@
   "name": "functions",
   "scripts": {
     "lint": "eslint src",
-    "prebuild": "npm run prepare:intelligence-os-distribution && npm run verify:intelligence-os-distribution",
+    "prebuild": "npm run prepare:intelligence-os-distribution && npm run prepare:intelligence-execution-runtime-distribution && npm run verify:intelligence-os-distribution",
     "prepare:intelligence-os-distribution": "npm --prefix .. run stage:intelligence-os:functions",
     "build": "tsc && node copyAssets.js",
     "verify:intelligence-os-distribution": "node scripts/verifyIntelligenceOsDistribution.cjs",
@@ -12,7 +12,8 @@
     "start": "npm run shell",
     "guard:preview-discovery": "node ../scripts/preview-discovery-deployment-guard.cjs --project aura-intel-preview --environment PREVIEW",
     "dry-run:preview-discovery": "npm run build && npm run guard:preview-discovery",
-    "deploy:preview-discovery": "npm run build && npm run guard:preview-discovery && firebase deploy --project aura-intel-preview --only functions:preview-discovery --non-interactive"
+    "deploy:preview-discovery": "npm run build && npm run guard:preview-discovery && firebase deploy --project aura-intel-preview --only functions:preview-discovery --non-interactive",
+    "prepare:intelligence-execution-runtime-distribution": "npm --prefix .. run stage:intelligence-execution-runtime:functions"
   },
   "engines": {
     "node": "20"
@@ -25,7 +26,8 @@
     "firebase-admin": "^12.0.0",
     "firebase-functions": "^6.0.0",
     "jspdf": "^4.2.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "@aura/intelligence-execution-runtime": "file:.generated/aura-intelligence-execution-runtime"
   },
   "devDependencies": {
     "firebase-functions-test": "^3.1.0",

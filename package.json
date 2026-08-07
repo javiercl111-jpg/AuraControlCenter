@@ -55,7 +55,9 @@
     "test:enterprise-model": "vitest run src/modules/intelligence/enterprise-model",
     "validate:intelligence-os:node20": "npm run assert:node20 && npm run test:intelligence-os:architecture && npm run test:intelligence-os:distribution && npm run test:intelligence-os:consumption && npm run test:intelligence-os:integration && npm run build --prefix functions && npm run test:intelligence-os && npm run test:enterprise-model && npm run build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:intelligence-execution-runtime": "npm run build --prefix packages/aura-intelligence-execution-runtime",
+    "stage:intelligence-execution-runtime:functions": "npm run build:intelligence-execution-runtime && npm run stage:functions --prefix packages/aura-intelligence-execution-runtime"
   },
   "dependencies": {
     "aura-executive-documents": "file:packages/aura-executive-documents",

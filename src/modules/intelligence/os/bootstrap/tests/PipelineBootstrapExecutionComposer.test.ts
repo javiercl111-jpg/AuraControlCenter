@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+﻿import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { AssessmentPolicy } from '../../../enterprise-model/assessment/domain/types';
@@ -219,7 +219,8 @@ function createHarness(options: HarnessOptions = {}) {
   const composer = new PipelineBootstrapExecutionComposer({
     bootstrapPort: bootstrapper,
     checkpointMapper,
-    orchestrator,
+    clock,
+    orchestratorFactory: () => orchestrator,
     producer: PRODUCER,
   });
 
@@ -276,7 +277,8 @@ function createRejectedHarness() {
   const composer = new PipelineBootstrapExecutionComposer({
     bootstrapPort,
     checkpointMapper,
-    orchestrator,
+    clock: { now: () => 1_000, toISOString: () => '2026-01-01T00:00:01.000Z' },
+    orchestratorFactory: () => orchestrator as unknown as AuraIntelligenceOrchestrator,
     producer: PRODUCER,
   });
   return {
@@ -464,7 +466,8 @@ describe('AI-02G.2B PipelineBootstrapExecutionComposer', () => {
         evidenceFactory: new PipelineBootstrapEvidenceFactory(),
       }),
       checkpointMapper: mapper,
-      orchestrator: { executePipeline: vi.fn() },
+      clock: { now: () => 1_000, toISOString: () => '2026-01-01T00:00:01.000Z' },
+      orchestratorFactory: () => ({ executePipeline: vi.fn() } as unknown as AuraIntelligenceOrchestrator),
       producer: PRODUCER,
     });
     await expect(composer.execute(createInput())).rejects.toMatchObject({
@@ -482,9 +485,8 @@ describe('AI-02G.2B PipelineBootstrapExecutionComposer', () => {
         evidenceFactory: new PipelineBootstrapEvidenceFactory(),
       }),
       checkpointMapper: mapBootstrapAcceptedStateToCheckpointHandoff,
-      orchestrator: {
-        executePipeline: vi.fn(async () => failed),
-      },
+      clock: { now: () => 1_000, toISOString: () => '2026-01-01T00:00:01.000Z' },
+      orchestratorFactory: () => ({ executePipeline: vi.fn(async () => failed) } as unknown as AuraIntelligenceOrchestrator),
       producer: PRODUCER,
     });
     const result = await composer.execute(createInput());
@@ -554,5 +556,44 @@ describe('AI-02G.2B PipelineBootstrapExecutionComposer', () => {
       /PipelineBootstrapExecutionComposer|PipelineBootstrapper/
     );
     expect(PipelineBootstrapCoreError).toBeDefined();
+  });
+
+  it('23. dynamically resolves orchestrator per request with dedicated context', async () => {
+    const orchestratorFactory = vi.fn((osContext: PipelineExecutionContext) => ({
+      executePipeline: vi.fn(async () => ({ status: 'SUCCESS' }) as unknown as PipelineResult),
+      _testId: osContext.executionId,
+    }));
+
+    const composer = new PipelineBootstrapExecutionComposer({
+      bootstrapPort: new PipelineBootstrapper({
+        clock: { now: () => 300 },
+        evidenceFactory: new PipelineBootstrapEvidenceFactory(),
+      }),
+      checkpointMapper: mapBootstrapAcceptedStateToCheckpointHandoff,
+      clock: { now: () => 1_000, toISOString: () => '2026-01-01T00:00:01.000Z' },
+      orchestratorFactory: orchestratorFactory as unknown as (osContext: PipelineExecutionContext) => Pick<AuraIntelligenceOrchestrator, 'executePipeline'>,
+      producer: PRODUCER,
+    });
+
+    const input1 = createInput();
+    const input2 = createInput();
+    // mutate bootstrapId to differentiate
+    (input2 as unknown as { bootstrapId: string }).bootstrapId = 'bootstrap-2';
+
+    await composer.execute(input1);
+    await composer.execute(input2);
+
+    expect(orchestratorFactory).toHaveBeenCalledTimes(2);
+
+    const context1 = orchestratorFactory.mock.calls[0][0];
+    const context2 = orchestratorFactory.mock.calls[1][0];
+
+    expect(context1).toBeInstanceOf(PipelineExecutionContext);
+    expect(context2).toBeInstanceOf(PipelineExecutionContext);
+
+    expect(context1.executionId).toBe('bootstrap-1');
+    expect(context2.executionId).toBe('bootstrap-2');
+
+    expect(context1).not.toBe(context2);
   });
 });
