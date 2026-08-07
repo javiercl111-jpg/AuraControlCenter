@@ -281,6 +281,7 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
       'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts',
       'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
       'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
+      'composition/authorityProvisioning/previewAuthorityProvisioningComposition.ts',
       'infrastructure/firestore/authorityPersistence/FirestoreAuthorityMutationRepository.ts',
       'infrastructure/firestore/authorityPersistence/firestoreAuthorityCollections.ts',
       'infrastructure/firestore/authorityPersistence/firestoreAuthorityErrors.ts',
@@ -288,6 +289,7 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
       'infrastructure/firestore/authorityPersistence/firestoreAuthorityReadSet.ts',
       'infrastructure/firestore/authorityPersistence/firestoreAuthoritySnapshot.ts',
       'infrastructure/firestore/authorityPersistence/firestoreAuthorityWritePlan.ts',
+      'infrastructure/firestore/authorityProvisioning/FirestoreAuthorityProvisioningAdapter.ts',
     ]);
     importers.forEach((file) => {
       const source = readFileSync(resolve(sourceRoot, file), 'utf8');

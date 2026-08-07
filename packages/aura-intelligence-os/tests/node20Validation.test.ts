@@ -24,7 +24,7 @@ describe('Aura Intelligence OS Node 20 validation contract', () => {
         '.github/workflows/intelligence-os-node20.yml'
       ),
       'utf8'
-    );
+    ).replace(/\r\n/g, '\n');
     const cleanCheckoutIndex = workflow.indexOf('Verify clean checkout');
     const rootInstallIndex = workflow.indexOf('npm ci\n');
     const stagingIndex = workflow.indexOf(
