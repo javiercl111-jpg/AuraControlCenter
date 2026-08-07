@@ -10,12 +10,18 @@ import {
   DefaultDiscoveryContainmentEvaluator,
   DiscoveryContainmentError,
   P2DiscoveryEmergencyQuotaConsumer,
+  PREVIEW_CONTAINMENT_ACTIVATION_REQUEST_SCHEMA_VERSION,
+  PREVIEW_CONTAINMENT_POLICY_PROPOSAL_SCHEMA_VERSION,
+  PreviewContainmentActivationControlPlaneV1,
   deriveBlockedCommercialCodeHashV1,
   enforceDiscoveryContainmentV1,
+  fingerprintPreviewContainmentPolicyV1,
   type DiscoveryContainmentEnvironment,
   type DiscoveryContainmentPolicyV1,
   type DiscoveryContainmentSurface,
   type DiscoveryEmergencyGlobalQuotaV1,
+  type PreviewContainmentActivationRequestV1,
+  type PreviewContainmentPolicyProposalV1,
 } from "../../../src/discovery/containment";
 import { STRUCTURED_ABUSE_CONTAINMENT_EVENT_TYPES_V2 } from
   "../../../src/discovery/telemetry";
@@ -28,6 +34,7 @@ import {
   DISCOVERY_CONTAINMENT_POLICIES_COLLECTION,
   FirestoreDiscoveryContainmentPolicyProvider,
   FirestoreDiscoveryContainmentRepository,
+  FirestorePreviewContainmentActivationStoreV1,
   buildDiscoveryContainmentPolicyDocumentId,
 } from "../../../src/infrastructure/firestore/discoveryContainment";
 import { FirestoreRateLimitRepository } from
@@ -38,6 +45,8 @@ const BASE_TIME = Date.parse("2034-06-15T12:00:00.000Z");
 const SECRET = "containment-emulator-secret-with-at-least-32-bytes";
 let app: App;
 let db: Firestore;
+const PREVIEW_TENANT_ID = `tenant-${"a".repeat(32)}`;
+let authorityDecision: "ALLOW" | "DENY" = "ALLOW";
 
 function emulatorCredential() {
   const { privateKey } = generateKeyPairSync("rsa", {
@@ -155,13 +164,77 @@ function evaluator(environment: DiscoveryContainmentEnvironment = "LOCAL_DEMO") 
   }> = {}) => core.evaluate({ surface, environment, ...input });
 }
 
+function activationRequest(
+  overrides: Partial<PreviewContainmentActivationRequestV1> = {},
+): PreviewContainmentActivationRequestV1 {
+  return {
+    schemaVersion: PREVIEW_CONTAINMENT_ACTIVATION_REQUEST_SCHEMA_VERSION,
+    requestId: "request-0001",
+    correlationId: "correlation-0001",
+    actor: "SECURITY_OPERATOR",
+    approver: "SECURITY_APPROVER",
+    reason: "PREVIEW_CONTAINMENT_ACTIVATION",
+    environment: "PREVIEW",
+    projectId: "aura-intel-preview",
+    region: "us-central1",
+    tenantId: PREVIEW_TENANT_ID,
+    expectedCurrentVersion: null,
+    proposedVersion: "preview-policy-v1",
+    idempotencyKey: "idempotency-0001",
+    dryRun: false,
+    apply: true,
+    ...overrides,
+  };
+}
+
+function activationProposal(
+  overrides: Partial<PreviewContainmentPolicyProposalV1> = {},
+): PreviewContainmentPolicyProposalV1 {
+  return {
+    schemaVersion: PREVIEW_CONTAINMENT_POLICY_PROPOSAL_SCHEMA_VERSION,
+    policyVersion: "preview-policy-v1",
+    tenantId: PREVIEW_TENANT_ID,
+    publicIntakeEnabled: true,
+    advisorCodeResolutionEnabled: true,
+    tokenIssuanceEnabled: true,
+    sessionResolutionEnabled: true,
+    sessionCompletionEnabled: true,
+    conversationAiEnabled: true,
+    externalReportGenerationEnabled: false,
+    documentDownloadEnabled: false,
+    notificationFanoutEnabled: false,
+    blockedAppIds: [],
+    blockedCommercialCodeHashes: [],
+    emergencyGlobalQuota: quota(),
+    reason: "PREVIEW_CONTAINMENT_ACTIVATION",
+    ownerRole: "SECURITY_OPERATOR",
+    approvedByRole: "SECURITY_APPROVER",
+    ttlSeconds: 86_400,
+    rollbackVersion: null,
+    status: "ACTIVE",
+    ...overrides,
+  };
+}
+
+function activationControlPlane(now = BASE_TIME) {
+  return new PreviewContainmentActivationControlPlaneV1(
+    PREVIEW_TENANT_ID,
+    { verify: async () => authorityDecision },
+    new FirestorePreviewContainmentActivationStoreV1(db),
+    { nowEpochMilliseconds: () => now },
+  );
+}
+
 beforeAll(() => {
   app = initializeApp({ projectId: PROJECT_ID, credential: emulatorCredential() },
     `containment-emulator-${process.pid}`);
   db = getFirestore(app);
 });
 
-beforeEach(clear);
+beforeEach(async () => {
+  authorityDecision = "ALLOW";
+  await clear();
+});
 
 afterAll(async () => {
   await db.terminate();
@@ -534,5 +607,217 @@ describe("Discovery Containment Policy V1", () => {
       .toBe("CONTAINMENT_DISABLED");
     expect((await db.collection(DISCOVERY_CONTAINMENT_AUDIT_COLLECTION).get())
       .docs.map((doc) => doc.data().action)).toContain("REVOKE");
+  });
+});
+
+describe("Preview Containment Activation Control Plane V1", () => {
+  it("37. semantic fingerprint is deterministic across key and list ordering", () => {
+    const first = activationProposal({ blockedAppIds: ["app.z.test", "app.a.test"] });
+    const second = {
+      ...activationProposal(),
+      blockedAppIds: ["app.a.test", "app.z.test"],
+    } as PreviewContainmentPolicyProposalV1;
+    expect(fingerprintPreviewContainmentPolicyV1(first))
+      .toBe(fingerprintPreviewContainmentPolicyV1(second));
+  });
+
+  it("38. every semantic policy change produces a different fingerprint", () => {
+    expect(fingerprintPreviewContainmentPolicyV1(activationProposal()))
+      .not.toBe(fingerprintPreviewContainmentPolicyV1(
+        activationProposal({ conversationAiEnabled: false }),
+      ));
+  });
+
+  it("39. request, correlation, idempotency and clock do not enter the fingerprint", () => {
+    const proposalValue = activationProposal();
+    const first = fingerprintPreviewContainmentPolicyV1(proposalValue);
+    activationRequest({
+      requestId: "request-9999", correlationId: "correlation-9999",
+      idempotencyKey: "idempotency-9999",
+    });
+    expect(fingerprintPreviewContainmentPolicyV1(proposalValue)).toBe(first);
+  });
+
+  it("40. dry-run validates fully and writes no policy, pointer, or audit", async () => {
+    const result = await activationControlPlane().execute(
+      activationRequest({ dryRun: true, apply: false }), activationProposal(),
+    );
+    expect(result.decision).toBe("DRY_RUN_VALIDATED");
+    expect(result.auditId).toBeNull();
+    expect((await db.collection(DISCOVERY_CONTAINMENT_POLICIES_COLLECTION).get()).size)
+      .toBe(0);
+    expect((await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION).get()).size)
+      .toBe(0);
+    expect((await db.collection(DISCOVERY_CONTAINMENT_AUDIT_COLLECTION).get()).size)
+      .toBe(0);
+  });
+
+  it("41. apply atomically creates immutable policy, pointer and complete audit", async () => {
+    const result = await activationControlPlane().execute(
+      activationRequest(), activationProposal(),
+    );
+    expect(result.decision).toBe("APPLIED");
+    const policies = await db.collection(DISCOVERY_CONTAINMENT_POLICIES_COLLECTION).get();
+    const pointer = await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION)
+      .doc("PREVIEW").get();
+    const audit = await db.collection(DISCOVERY_CONTAINMENT_AUDIT_COLLECTION).get();
+    expect(policies.size).toBe(1);
+    expect(pointer.data()).toMatchObject({
+      environment: "PREVIEW", projectId: "aura-intel-preview", region: "us-central1",
+      tenantId: PREVIEW_TENANT_ID, policyVersion: "preview-policy-v1",
+      fingerprint: result.fingerprint,
+    });
+    expect(audit.size).toBe(1);
+    expect(audit.docs[0].data()).toMatchObject({
+      requestId: "request-0001", correlationId: "correlation-0001",
+      actor: "SECURITY_OPERATOR", approver: "SECURITY_APPROVER",
+      reason: "PREVIEW_CONTAINMENT_ACTIVATION", previousVersion: null,
+      proposedVersion: "preview-policy-v1", fingerprint: result.fingerprint,
+      result: "APPLIED",
+    });
+    expect(audit.docs[0].data().serverTimestamp.toMillis()).toBe(BASE_TIME);
+    expect(policies.docs[0].data().createdAt.toMillis()).toBe(BASE_TIME);
+  });
+
+  it("42. exact retry is idempotent and creates no second audit", async () => {
+    const control = activationControlPlane();
+    expect((await control.execute(activationRequest(), activationProposal())).decision)
+      .toBe("APPLIED");
+    expect((await control.execute(activationRequest(), activationProposal())).decision)
+      .toBe("REPLAY");
+    expect((await db.collection(DISCOVERY_CONTAINMENT_AUDIT_COLLECTION).get()).size)
+      .toBe(1);
+  });
+
+  it("43. reused idempotency key with changed request fails closed", async () => {
+    const control = activationControlPlane();
+    await control.execute(activationRequest(), activationProposal());
+    await expect(control.execute(
+      activationRequest({ requestId: "request-0002" }), activationProposal(),
+    )).rejects.toMatchObject({ code: "ACTIVATION_IDEMPOTENCY_CONFLICT" });
+  });
+
+  it("44. Production, Staging, unknown and wildcard environments are rejected", async () => {
+    for (const environment of ["PRODUCTION", "STAGING", "UNKNOWN", "*"]) {
+      await expect(activationControlPlane().execute(
+        { ...activationRequest(), environment }, activationProposal(),
+      )).rejects.toMatchObject({ code: "ACTIVATION_TARGET_REJECTED" });
+    }
+  });
+
+  it("45. wrong project and wrong region are rejected", async () => {
+    await expect(activationControlPlane().execute(
+      { ...activationRequest(), projectId: "wrong-preview" }, activationProposal(),
+    )).rejects.toMatchObject({ code: "ACTIVATION_TARGET_REJECTED" });
+    await expect(activationControlPlane().execute(
+      { ...activationRequest(), region: "europe-west1" }, activationProposal(),
+    )).rejects.toMatchObject({ code: "ACTIVATION_TARGET_REJECTED" });
+  });
+
+  it("46. tenant mismatch is rejected before authority or Firestore", async () => {
+    await expect(activationControlPlane().execute(
+      { ...activationRequest(), tenantId: `tenant-${"b".repeat(32)}` },
+      activationProposal(),
+    )).rejects.toMatchObject({ code: "ACTIVATION_TENANT_REJECTED" });
+  });
+
+  it("47. denied authority and absent actor/approver separation fail closed", async () => {
+    authorityDecision = "DENY";
+    await expect(activationControlPlane().execute(
+      activationRequest(), activationProposal(),
+    )).rejects.toMatchObject({ code: "ACTIVATION_AUTHORITY_REJECTED" });
+    authorityDecision = "ALLOW";
+    await expect(activationControlPlane().execute(
+      { ...activationRequest(), approver: "SECURITY_OPERATOR" }, activationProposal(),
+    )).rejects.toMatchObject({ code: "ACTIVATION_REQUEST_INVALID" });
+  });
+
+  it("48. unknown fields, request timestamps and unsafe mode combinations are rejected", async () => {
+    await expect(activationControlPlane().execute(
+      { ...activationRequest(), clientTimestamp: BASE_TIME }, activationProposal(),
+    )).rejects.toMatchObject({ code: "ACTIVATION_REQUEST_INVALID" });
+    await expect(activationControlPlane().execute(
+      { ...activationRequest(), dryRun: false, apply: false }, activationProposal(),
+    )).rejects.toMatchObject({ code: "ACTIVATION_REQUEST_INVALID" });
+  });
+
+  it("49. compare-and-set rejects a stale expected current version", async () => {
+    const control = activationControlPlane();
+    await control.execute(activationRequest(), activationProposal());
+    await expect(control.execute(
+      activationRequest({
+        requestId: "request-0002", correlationId: "correlation-0002",
+        idempotencyKey: "idempotency-0002", proposedVersion: "preview-policy-v2",
+        expectedCurrentVersion: null,
+      }),
+      activationProposal({
+        policyVersion: "preview-policy-v2", rollbackVersion: null,
+      }),
+    )).rejects.toMatchObject({ code: "ACTIVATION_CAS_MISMATCH" });
+  });
+
+  it("50. update requires exact rollback and advances the pointer atomically", async () => {
+    const control = activationControlPlane();
+    await control.execute(activationRequest(), activationProposal());
+    const result = await control.execute(
+      activationRequest({
+        requestId: "request-0002", correlationId: "correlation-0002",
+        idempotencyKey: "idempotency-0002", proposedVersion: "preview-policy-v2",
+        expectedCurrentVersion: "preview-policy-v1",
+      }),
+      activationProposal({
+        policyVersion: "preview-policy-v2", rollbackVersion: "preview-policy-v1",
+        publicIntakeEnabled: false,
+      }),
+    );
+    expect(result).toMatchObject({
+      decision: "APPLIED", previousVersion: "preview-policy-v1",
+      proposedVersion: "preview-policy-v2",
+    });
+    expect((await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION)
+      .doc("PREVIEW").get()).data()?.policyVersion).toBe("preview-policy-v2");
+  });
+
+  it("51. orphan pointer and pre-existing proposed version fail closed", async () => {
+    await db.collection(DISCOVERY_CONTAINMENT_ACTIVE_COLLECTION).doc("PREVIEW").set({
+      version: "DISCOVERY_CONTAINMENT_ACTIVE_V1", environment: "PREVIEW",
+      policyVersion: "missing-policy",
+    });
+    await expect(activationControlPlane().execute(
+      activationRequest({
+        expectedCurrentVersion: "missing-policy", proposedVersion: "preview-policy-v2",
+      }),
+      activationProposal({
+        policyVersion: "preview-policy-v2", rollbackVersion: "missing-policy",
+      }),
+    )).rejects.toMatchObject({ code: "ACTIVATION_ORPHAN_POINTER" });
+
+    await clear();
+    await writeRawPolicy(policy("preview-policy-v1", {
+      environment: "PREVIEW", reason: "PREVIEW_CONTAINMENT_ACTIVATION",
+      createdAt: BASE_TIME, updatedAt: BASE_TIME, expiresAt: BASE_TIME + 86_400_000,
+    }));
+    await expect(activationControlPlane().execute(
+      activationRequest(), activationProposal(),
+    )).rejects.toMatchObject({ code: "ACTIVATION_VERSION_IMMUTABLE" });
+  });
+
+  it("52. concurrent initial activations produce exactly one winner", async () => {
+    const control = activationControlPlane();
+    const first = control.execute(activationRequest(), activationProposal());
+    const second = control.execute(
+      activationRequest({
+        requestId: "request-0002", correlationId: "correlation-0002",
+        idempotencyKey: "idempotency-0002", proposedVersion: "preview-policy-v2",
+      }),
+      activationProposal({ policyVersion: "preview-policy-v2" }),
+    );
+    const results = await Promise.allSettled([first, second]);
+    expect(results.filter((entry) => entry.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((entry) => entry.status === "rejected")).toHaveLength(1);
+    expect((await db.collection(DISCOVERY_CONTAINMENT_POLICIES_COLLECTION).get()).size)
+      .toBe(1);
+    expect((await db.collection(DISCOVERY_CONTAINMENT_AUDIT_COLLECTION).get()).size)
+      .toBe(1);
   });
 });

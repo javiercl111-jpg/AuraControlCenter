@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "PREVIEW_CONTAINMENT_CONTROL_PLANE_MATRIX_V1",
+  "changeId": "AI-02H2.2E-R1A-PREVIEW-CONTAINMENT-CONTROL-PLANE-20260806-01",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "region": "us-central1",
+    "productionAuthorized": false,
+    "stagingInScope": false
+  },
+  "controls": [
+    {
+      "control": "ACTIVATION_REQUEST_V1",
+      "status": "PASS",
+      "evidence": "Exact mandatory field set; unknown fields and unsafe modes rejected"
+    },
+    {
+      "control": "TARGET_ISOLATION",
+      "status": "PASS",
+      "evidence": "Preview project and region are exact; Production, Staging, wildcard and unknown rejected"
+    },
+    {
+      "control": "TENANT_SCOPE",
+      "status": "PASS",
+      "evidence": "Expected tenant is injected and mismatch fails closed"
+    },
+    {
+      "control": "AUTHORITY_SEPARATION",
+      "status": "PASS",
+      "evidence": "Distinct actor and approver plus explicit authority ALLOW are required"
+    },
+    {
+      "control": "DETERMINISTIC_FINGERPRINT",
+      "status": "PASS",
+      "evidence": "Canonical SHA-256 fingerprint excludes request metadata and server time"
+    },
+    {
+      "control": "COMPARE_AND_SET",
+      "status": "PASS",
+      "evidence": "Exact expected version, rollback relation and transaction race behavior verified"
+    },
+    {
+      "control": "VERSION_IMMUTABILITY",
+      "status": "PASS",
+      "evidence": "Pre-existing proposed version and orphan pointer are rejected"
+    },
+    {
+      "control": "IDEMPOTENT_RETRY",
+      "status": "PASS",
+      "evidence": "Exact replay is stable; changed request under the same key is rejected"
+    },
+    {
+      "control": "SERVER_OWNED_TIMESTAMPS",
+      "status": "PASS",
+      "evidence": "Request timestamps are rejected and persisted timestamps come from the trusted server clock"
+    },
+    {
+      "control": "ATOMIC_AUDIT",
+      "status": "PASS",
+      "evidence": "Policy, pointer and complete audit are written in one transaction"
+    },
+    {
+      "control": "DRY_RUN_NO_WRITES",
+      "status": "PASS",
+      "evidence": "Full validation leaves all three containment collections unchanged"
+    },
+    {
+      "control": "NO_PUBLIC_ADMIN_SURFACE",
+      "status": "PASS",
+      "evidence": "Zero callable, HTTP or deployment entrypoint exports"
+    }
+  ],
+  "validation": {
+    "gate": "PASS",
+    "typescriptNoEmit": "PASS",
+    "historicalContainmentTests": {
+      "passed": 36,
+      "total": 36
+    },
+    "newControlPlaneEmulatorTests": {
+      "passed": 16,
+      "total": 16
+    },
+    "combinedContainmentTests": {
+      "passed": 52,
+      "total": 52
+    },
+    "guardTests": {
+      "passed": 14,
+      "total": 14
+    },
+    "sourceGuard": "PASS",
+    "functionsBuild": "PASS",
+    "rootBuild": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "cloudMutations": {
+    "policiesCreated": 0,
+    "activePointersModified": 0,
+    "auditRecordsCreated": 0,
+    "deployments": 0,
+    "iamChanges": 0,
+    "secretManagerChanges": 0
+  },
+  "verdict": "PREVIEW CONTAINMENT ACTIVATION CONTROL PLANE CERTIFIED — READY FOR CONTROLLED POLICY ACTIVATION"
+}

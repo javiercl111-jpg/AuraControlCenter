@@ -35,6 +35,10 @@ const CERTIFIED_COMPOSITION_CONSUMER_FILES = new Set([
   "composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts",
   "composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts",
 ]);
+const CERTIFIED_AUTHORITY_PROVISIONING_CONSUMER_FILES = new Set([
+  "composition/authorityProvisioning/previewAuthorityProvisioningComposition.ts",
+  "infrastructure/firestore/authorityProvisioning/FirestoreAuthorityProvisioningAdapter.ts",
+]);
 const FORBIDDEN_PRODUCTION_SOURCE_REFERENCES = [
   ".generated/aura-intelligence-os",
   "packages/aura-intelligence-os",
@@ -85,8 +89,11 @@ function certifiedProductionConsumerViolations(file, source) {
   );
   const isCertifiedDarkCompositionFile =
     CERTIFIED_COMPOSITION_CONSUMER_FILES.has(normalizedFile);
+  const isCertifiedAuthorityProvisioningFile =
+    CERTIFIED_AUTHORITY_PROVISIONING_CONSUMER_FILES.has(normalizedFile);
   const isCertifiedConsumer =
-    isCertifiedAdapterDirectory || isCertifiedDarkCompositionFile;
+    isCertifiedAdapterDirectory || isCertifiedDarkCompositionFile ||
+    isCertifiedAuthorityProvisioningFile;
   const moduleSpecifiers = extractModuleSpecifiers(source);
   const packageStringSpecifiers = [
     ...source.matchAll(

@@ -5,3 +5,4 @@ export * from "./discoveryContainmentValidation";
 export * from "./DefaultDiscoveryContainmentEvaluator";
 export * from "./P2DiscoveryEmergencyQuotaConsumer";
 export * from "./enforceDiscoveryContainment";
+export * from "./controlPlane";
