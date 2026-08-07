@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 import DossierBuilderService from "../modules/discovery/services/dossierBuilderService";
@@ -15,8 +15,9 @@ import {
   resolveAdvisorByCode,
   resolveDiscoverySession,
 } from "../modules/discovery/services/discoveryLinkService";
+import { createPreviewDiscoverySubmitObserverV1 } from "../modules/discovery/observability/previewDiscoverySubmitObservabilityV1";
 import { httpsCallable } from "firebase/functions";
-import { appCheck, functions } from "../config/firebase";
+import { appCheck, clientRuntimeEnvironment, functions } from "../config/firebase";
 
 interface SessionLinkInfo {
   linkId: string;
@@ -173,6 +174,22 @@ export default function DiscoverPage() {
   const [acquisitionSource, setAcquisitionSource] = useState<"DIRECT" | "AURA_NEXUS">("DIRECT");
   const [manualAdvisorCode, setManualAdvisorCode] = useState("");
   const preformAttemptRef = useRef<{ signature: string; idempotencyKey: string } | null>(null);
+  const preformRef = useRef<HTMLFormElement>(null);
+  const submitObserver = useMemo(
+    () => createPreviewDiscoverySubmitObserverV1({ environment: clientRuntimeEnvironment }),
+    [],
+  );
+
+  useEffect(() => {
+    const form = preformRef.current;
+    if (!form) return;
+
+    const observeNativeSubmit = () => {
+      submitObserver.record("DISCOVERY_NATIVE_SUBMIT_OBSERVED", "OBSERVED");
+    };
+    form.addEventListener("submit", observeNativeSubmit, true);
+    return () => form.removeEventListener("submit", observeNativeSubmit, true);
+  }, [screen, submitObserver]);
 
   // Real-time Chat log
   const [chatLog, setChatLog] = useState<{ sender: "aura" | "user"; text: string }[]>([]);
@@ -309,12 +326,24 @@ export default function DiscoverPage() {
 
   async function handlePreformSubmit(e: React.FormEvent) {
     e.preventDefault();
+    submitObserver.record("DISCOVERY_REACT_HANDLER_ENTERED", "OBSERVED");
     if (!companyName.trim() || !contactName.trim() || !email.trim() || !consent) {
+      submitObserver.record("DISCOVERY_VALIDATION_REJECTED", "REJECTED", {
+        safeErrorCode: "DISCOVERY_REQUIRED_FIELDS_INVALID",
+      });
       alert("Por favor completa los campos obligatorios y acepta la política de privacidad.");
       return;
     }
 
+    submitObserver.record("DISCOVERY_VALIDATION_ACCEPTED", "ACCEPTED");
+    submitObserver.record(
+      appCheck === null ? "DISCOVERY_APP_CHECK_REJECTED" : "DISCOVERY_APP_CHECK_READY",
+      appCheck === null ? "REJECTED" : "ACCEPTED",
+      appCheck === null ? { safeErrorCode: "APP_CHECK_NOT_INITIALIZED" } : undefined,
+    );
+
     setCreatingLink(true);
+    let serviceDispatchAttempted = false;
     try {
       let finalAdvisorContext = advisorContext;
 
@@ -345,6 +374,7 @@ export default function DiscoverPage() {
         };
       }
 
+      serviceDispatchAttempted = true;
       const newLink = await createDiscoveryLink({
         companyName: companyName.trim(),
         contactName: contactName.trim(),
@@ -363,10 +393,18 @@ export default function DiscoverPage() {
         marketingConsent: false,
         policyVersion: "DISCOVERY_PRIVACY_V1",
         idempotencyKey: preformAttemptRef.current.idempotencyKey,
-      }, finalAdvisorContext || undefined);
+      }, finalAdvisorContext || undefined, submitObserver);
 
       navigate(getDiscoveryNavigationTarget(newLink), { replace: true });
     } catch (err) {
+      if (!serviceDispatchAttempted) {
+        submitObserver.record("DISCOVERY_CLIENT_PRECONDITION_REJECTED", "REJECTED", {
+          safeErrorCode: "DISCOVERY_PRE_SERVICE_FAILURE",
+        });
+        submitObserver.record("DISCOVERY_SERVICE_DISPATCH_FAILED_PRE_NETWORK", "FAILED", {
+          safeErrorCode: "DISCOVERY_PRE_SERVICE_FAILURE",
+        });
+      }
       console.error(err);
       const mapped = mapDiscoveryError(err);
       alert(mapped === "PAYLOAD_REJECTED"
@@ -820,7 +858,7 @@ export default function DiscoverPage() {
               )}
             </div>
 
-            <form onSubmit={handlePreformSubmit} className="space-y-4">
+            <form ref={preformRef} onSubmit={handlePreformSubmit} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Nombre de la Empresa *</label>
@@ -880,6 +918,14 @@ export default function DiscoverPage() {
 
               <button
                 type="submit"
+                onClickCapture={(event) => {
+                  submitObserver.record("DISCOVERY_SUBMIT_CLICK_OBSERVED", "OBSERVED");
+                  if (event.currentTarget.form && !event.currentTarget.form.matches(":valid")) {
+                    submitObserver.record("DISCOVERY_VALIDATION_REJECTED", "REJECTED", {
+                      safeErrorCode: "DISCOVERY_NATIVE_CONSTRAINT_INVALID",
+                    });
+                  }
+                }}
                 disabled={creatingLink}
                 className="w-full rounded-xl bg-cyan-600 px-5 py-3 text-xs font-bold text-white hover:bg-cyan-500 transition shadow-lg active:scale-98 disabled:opacity-50"
               >

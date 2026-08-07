@@ -1,6 +1,12 @@
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "../../../config/firebase";
+import {
+  didPreviewDiscoveryNetworkDispatchV1,
+  isPreviewDiscoveryAppCheckFailureV1,
+  previewDiscoverySafeErrorCodeV1,
+  type PreviewDiscoverySubmitObserverV1,
+} from "../observability/previewDiscoverySubmitObservabilityV1";
 
 export interface DiscoveryAdvisor extends Record<string, unknown> {
   id: string;
@@ -81,14 +87,21 @@ export function getDiscoveryNavigationTarget(response: CreateDiscoveryLeadRespon
 
 export async function createDiscoveryLink(
   data: CreateDiscoveryLeadRequest,
-  advisorContext?: Record<string, unknown>
+  advisorContext?: Record<string, unknown>,
+  observer?: PreviewDiscoverySubmitObserverV1,
 ): Promise<CreateDiscoveryLeadResponse> {
   if (!isValidDiscoveryIdempotencyKey(data.idempotencyKey)) {
+    observer?.record("DISCOVERY_CLIENT_PRECONDITION_REJECTED", "REJECTED", {
+      safeErrorCode: "DISCOVERY_IDEMPOTENCY_KEY_INVALID",
+    });
+    observer?.record("DISCOVERY_SERVICE_DISPATCH_FAILED_PRE_NETWORK", "FAILED", {
+      safeErrorCode: "DISCOVERY_IDEMPOTENCY_KEY_INVALID",
+    });
     throw new Error("DISCOVERY_IDEMPOTENCY_KEY_INVALID");
   }
 
-  const createDiscoveryLeadFn = httpsCallable(functions, "createDiscoveryLead");
-  
+  observer?.record("DISCOVERY_CLIENT_PRECONDITION_ACCEPTED", "ACCEPTED");
+
   const payload: Record<string, unknown> = {
     schemaVersion: "PUBLIC_DISCOVERY_INTAKE_V1",
     companyName: data.companyName,
@@ -114,13 +127,49 @@ export async function createDiscoveryLink(
     payload.commercialCode = advisorContext.commercialCode;
   }
 
-  const result = await createDiscoveryLeadFn(payload);
+  const startedAt = Date.now();
+  let callableResolved = false;
 
-  if (!isCreateDiscoveryLeadResponse(result.data)) {
-    throw new Error("DISCOVERY_LINK_RESPONSE_INVALID");
+  try {
+    const createDiscoveryLeadFn = httpsCallable(functions, "createDiscoveryLead");
+    observer?.record("DISCOVERY_SERVICE_DISPATCH_STARTED", "STARTED");
+
+    const result = await createDiscoveryLeadFn(payload);
+    callableResolved = true;
+
+    if (!isCreateDiscoveryLeadResponse(result.data)) {
+      throw new Error("DISCOVERY_LINK_RESPONSE_INVALID");
+    }
+
+    observer?.record("DISCOVERY_NETWORK_DISPATCH_OBSERVED", "SUCCEEDED", {
+      durationMs: Date.now() - startedAt,
+    });
+    return result.data;
+  } catch (error) {
+    const safeErrorCode = previewDiscoverySafeErrorCodeV1(error);
+    const durationMs = Date.now() - startedAt;
+
+    if (callableResolved || didPreviewDiscoveryNetworkDispatchV1(error)) {
+      observer?.record("DISCOVERY_NETWORK_DISPATCH_OBSERVED", "FAILED", {
+        safeErrorCode,
+        durationMs,
+      });
+    } else {
+      observer?.record(
+        isPreviewDiscoveryAppCheckFailureV1(error)
+          ? "DISCOVERY_APP_CHECK_REJECTED"
+          : "DISCOVERY_CLIENT_PRECONDITION_REJECTED",
+        "REJECTED",
+        { safeErrorCode, durationMs },
+      );
+      observer?.record("DISCOVERY_SERVICE_DISPATCH_FAILED_PRE_NETWORK", "FAILED", {
+        safeErrorCode,
+        durationMs,
+      });
+    }
+
+    throw error;
   }
-
-  return result.data;
 }
 
 export interface ExchangeDiscoveryTokenResponse {
