@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "PREVIEW_FIRST_END_TO_END_HAPPY_PATH_R3_MATRIX_V1",
+  "changeId": "AI-02H2.2E-R3-PREVIEW-FIRST-END-TO-END-HAPPY-PATH-20260807-01",
+  "testRunId": "AI02H2-2E-R3-PREVIEW-HAPPY-PATH-20260807-01",
+  "date": "2026-08-07",
+  "environment": "PREVIEW",
+  "verdict": {
+    "code": "C",
+    "status": "BLOCKED",
+    "statement": "PREVIEW END-TO-END HAPPY PATH FAILED"
+  },
+  "gate": {
+    "worktree": "PASS",
+    "branch": "audit/intelligence-preview-first-happy-path-r3",
+    "headMatchesOriginMain": true,
+    "headShort": "01a5374",
+    "cleanBeforeEvidence": true,
+    "node": "v20.20.2",
+    "gcpProject": "aura-intel-preview",
+    "vercelProject": "aura-control-center-preview",
+    "vercelReady": true,
+    "functions": { "active": 5, "total": 5 },
+    "cloudRun": { "ready": 5, "total": 5, "failedRevisions": 0 },
+    "containmentResolver": {
+      "activePolicyFound": true,
+      "policyNotFound": false,
+      "environment": "PREVIEW"
+    },
+    "appCheck": {
+      "debugEnabled": false,
+      "enterpriseRecaptchaResourcesObserved": true,
+      "runtimeGlobalReadableFromAutomationWorld": false
+    }
+  },
+  "counts": {
+    "before": {
+      "containmentPolicies": 1,
+      "activeContainmentPointers": 1,
+      "containmentAudits": 1,
+      "leads": 0,
+      "sessions": 0,
+      "capabilities": 0,
+      "conversationBudgets": 0,
+      "abuseTelemetry": 6,
+      "abuseMetrics": 4,
+      "completions": 0,
+      "completionOutbox": 0,
+      "intakeIdempotency": 0,
+      "platformEvents": 0,
+      "notifications": 0,
+      "tasks": 0,
+      "functionalStorageObjects": 0
+    },
+    "after": {
+      "containmentPolicies": 1,
+      "activeContainmentPointers": 1,
+      "containmentAudits": 1,
+      "leads": 0,
+      "sessions": 0,
+      "capabilities": 0,
+      "conversationBudgets": 0,
+      "abuseTelemetry": 6,
+      "abuseMetrics": 4,
+      "completions": 0,
+      "completionOutbox": 0,
+      "intakeIdempotency": 0,
+      "platformEvents": 0,
+      "notifications": 0,
+      "tasks": 0,
+      "functionalStorageObjects": 0
+    }
+  },
+  "browser": {
+    "startPath": "/discover",
+    "endPath": "/discover",
+    "uiRendered": true,
+    "syntheticFormValid": true,
+    "submitClicks": 1,
+    "navigationObserved": false,
+    "productionTrafficObserved": false,
+    "directCloudRunClientTrafficObserved": false,
+    "captchaChallengeSolved": false,
+    "retryPerformed": false,
+    "browserWarningsOrErrors": 0
+  },
+  "operations": [
+    {
+      "operation": "discover",
+      "status": "PASS",
+      "requestCount": 1,
+      "outcome": "PREVIEW_UI_RENDERED"
+    },
+    {
+      "operation": "createDiscoveryLead",
+      "status": "BLOCKED",
+      "requestCount": 0,
+      "appCheckOutcome": "NOT_OBSERVABLE_BECAUSE_CALLABLE_NOT_REACHED",
+      "containmentOutcome": "NOT_EVALUATED_FOR_ATTEMPT",
+      "correlationId": "UNAVAILABLE",
+      "duration": "UNAVAILABLE",
+      "outcome": "CLIENT_DID_NOT_DISPATCH_OBSERVABLE_CALLABLE_REQUEST"
+    },
+    {
+      "operation": "exchangeDiscoveryToken",
+      "status": "NOT_RUN",
+      "requestCount": 0,
+      "outcome": "NO_LEAD_ARTIFACT"
+    },
+    {
+      "operation": "resolveDiscoverySession",
+      "status": "NOT_RUN",
+      "requestCount": 0,
+      "outcome": "NO_SESSION_CAPABILITY"
+    },
+    {
+      "operation": "evaluateConversation",
+      "status": "NOT_RUN",
+      "requestCount": 0,
+      "reasoningOrFallbackOutcome": "NOT_EVALUATED"
+    },
+    {
+      "operation": "completeDiscoverySession",
+      "status": "NOT_RUN",
+      "requestCount": 0,
+      "completionOutcome": "NOT_CREATED"
+    }
+  ],
+  "isolation": {
+    "backendDiscoveryUrlObserved": false,
+    "clientUsesBackendDiscoveryUrl": false,
+    "clientNavigationContract": "RELATIVE_PREVIEW_PATH",
+    "productionActionPerformed": false,
+    "stagingActionPerformed": false
+  },
+  "prohibitedActions": {
+    "replay": false,
+    "fuzzing": false,
+    "loadOrStress": false,
+    "codeModification": false,
+    "iamModification": false,
+    "secretModification": false,
+    "rulesModification": false,
+    "deployment": false,
+    "commit": false,
+    "push": false,
+    "pullRequest": false
+  }
+}
