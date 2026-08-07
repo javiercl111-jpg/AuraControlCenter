@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "PREVIEW_CONTAINMENT_AUTHORITY_COMPOSITION_MATRIX_V1",
+  "slice": "AI-02H2.2E-R1C-R2",
+  "changeId": "AI-02H2.2E-R1C-R2-PREVIEW-CONTAINMENT-AUTHORITY-COMPOSITION-20260806-01",
+  "target": {
+    "project": "aura-intel-preview",
+    "environment": "PREVIEW",
+    "region": "us-central1",
+    "productionAuthorized": false,
+    "stagingInScope": false
+  },
+  "gate": {
+    "branch": "feature/intelligence-preview-containment-activation-authority-r2",
+    "head": "f98b83dc97759de1049219f06ed8b2d634a2ed65",
+    "headEqualsOriginMain": true,
+    "initialWorktreeClean": true,
+    "node": "v20.20.2",
+    "npm": "10.8.2"
+  },
+  "authority": {
+    "eligibleActor": 1,
+    "eligibleApprover": 1,
+    "validSeparatedPair": 1,
+    "sameTenant": true,
+    "identitiesSeparated": true,
+    "principalsSeparated": true,
+    "membershipsSeparated": true,
+    "actorCapability": "containment.policy.activate",
+    "approverCapability": "containment.policy.approve",
+    "wildcards": 0,
+    "globalPrivileges": 0,
+    "verifierDecision": "ALLOW"
+  },
+  "composition": {
+    "private": true,
+    "failClosed": true,
+    "callableExports": 0,
+    "httpExports": 0,
+    "firebaseFunctions": 0,
+    "deploymentUnitExports": 0,
+    "publicEntrypointExports": 0,
+    "activationExecuted": false,
+    "cloudActivationDryRunExecuted": false
+  },
+  "readOnlyCheck": {
+    "mode": "READ_ONLY",
+    "collectionsComparedBeforeAfter": 6,
+    "writes": 0,
+    "containmentPolicies": 0,
+    "activePointers": 0,
+    "containmentAudits": 0,
+    "leads": 0,
+    "sessions": 0,
+    "completions": 0
+  },
+  "validation": {
+    "compositionTests": { "passed": 25, "total": 25 },
+    "compositionGuard": { "passed": 18, "total": 18 },
+    "authorityProvisioning": { "passed": 25, "total": 25 },
+    "authorityProvisioningAdapter": { "passed": 8, "total": 8 },
+    "tenantScope": { "passed": 66, "total": 66 },
+    "containmentEmulator": { "passed": 52, "total": 52 },
+    "containmentControlPlane": { "passed": 16, "total": 16 },
+    "containmentControlPlaneGuard": { "passed": 14, "total": 14 },
+    "authorityProvisioningGuard": { "passed": 17, "total": 17 },
+    "typescriptNoEmit": "PASS",
+    "functionsBuild": "PASS",
+    "rootBuild": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "verdict": "PREVIEW CONTAINMENT ACTIVATION AUTHORITY COMPOSITION CERTIFIED — READY TO RETRY CONTROLLED POLICY ACTIVATION"
+}
