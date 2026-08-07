@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "PREVIEW_DISCOVERY_SUBMIT_DISPATCH_MATRIX_V1",
+  "changeId": "AI-02H2.2E-R3A-PREVIEW-DISCOVERY-SUBMIT-DISPATCH-20260807-01",
+  "date": "2026-08-07",
+  "environment": "PREVIEW",
+  "mode": "PASSIVE",
+  "verdict": {
+    "code": "C",
+    "status": "BLOCKED",
+    "statement": "SUBMIT DISPATCH ROOT CAUSE NOT SAFELY IDENTIFIED"
+  },
+  "rootCause": {
+    "classification": "H. ROOT_CAUSE_NOT_DETERMINED",
+    "exactCondition": "UNAVAILABLE_FROM_R3_EVIDENCE",
+    "unresolvedBoundary": [
+      "src/pages/DiscoverPage.tsx:310-348",
+      "src/modules/discovery/services/discoveryLinkService.ts:51-117"
+    ],
+    "reason": "R3 did not retain submit-event receipt, handler-entry React state, alert text, stage markers, or the pre-fetch exception. Multiple client paths therefore remain observationally equivalent."
+  },
+  "gate": {
+    "worktree": "PASS",
+    "branch": "audit/intelligence-preview-discovery-submit-dispatch",
+    "headMatchesOriginMain": true,
+    "headShort": "0403ee8",
+    "cleanBeforeEvidence": true,
+    "node": "v20.20.2",
+    "gcpProject": "aura-intel-preview"
+  },
+  "sourceTrace": [
+    { "stage": "ROUTE", "location": "src/App.tsx:35", "status": "WIRED" },
+    { "stage": "FORM", "location": "src/pages/DiscoverPage.tsx:823", "status": "WIRED" },
+    { "stage": "BUTTON", "location": "src/pages/DiscoverPage.tsx:881-886", "status": "SUBMIT_INSIDE_FORM" },
+    { "stage": "REACT_HANDLER", "location": "src/pages/DiscoverPage.tsx:310-379", "status": "WIRED" },
+    { "stage": "REACT_GUARD", "location": "src/pages/DiscoverPage.tsx:312-315", "status": "POSSIBLE_NOT_OBSERVED_IN_R3" },
+    { "stage": "CLIENT_SERVICE", "location": "src/modules/discovery/services/discoveryLinkService.ts:82-123", "status": "WIRED" },
+    { "stage": "APP_CHECK", "location": "src/config/firebase.ts:66-103", "status": "CURRENT_PREVIEW_INITIALIZED" },
+    { "stage": "CALLABLE", "location": "src/modules/discovery/services/discoveryLinkService.ts:90-117", "status": "NOT_REACHED_IN_R3" }
+  ],
+  "nativeValidation": {
+    "requiredControls": 4,
+    "hiddenRequiredControls": 0,
+    "patterns": 0,
+    "invalidPlaceholderOptions": 0,
+    "validSyntheticForm": true,
+    "formMatchesValid": true,
+    "submitDisabled": false
+  },
+  "browserReadOnly": {
+    "path": "/discover",
+    "uiRendered": true,
+    "submitClicked": false,
+    "discoveryRequestsGenerated": 0,
+    "browserWarningsOrErrors": 0,
+    "enterpriseRecaptchaObserved": true,
+    "appCheckTokenExchangeObserved": true,
+    "productionTrafficObserved": false,
+    "directCloudRunClientTrafficObserved": false
+  },
+  "deployment": {
+    "project": "aura-control-center-preview",
+    "readyState": "READY",
+    "branch": "main",
+    "commitShort": "0403ee8",
+    "matchesLocalHead": true,
+    "mainBundle": "index-DylVN4Vu.js",
+    "bundleReadStatus": 200,
+    "bundleSha256Short": "16cbe32240b5",
+    "bundleContainsAuditedSubmitPath": true,
+    "serviceWorkerStrategy": "NETWORK_FIRST_DOCUMENT_SCRIPT",
+    "bundleMismatch": false
+  },
+  "classificationMatrix": [
+    { "code": "A", "classification": "NATIVE_FORM_VALIDATION_BLOCK", "result": "RULED_OUT" },
+    { "code": "B", "classification": "REACT_VALIDATION_BLOCK", "result": "POSSIBLE_NOT_PROVEN" },
+    { "code": "C", "classification": "SUBMIT_HANDLER_NOT_WIRED", "result": "RULED_OUT_AS_DEPLOYED_DEFECT" },
+    { "code": "D", "classification": "CLIENT_PRECONDITION_BLOCK", "result": "POSSIBLE_NOT_PROVEN" },
+    { "code": "E", "classification": "SILENT_CLIENT_EXCEPTION", "result": "POSSIBLE_NOT_PROVEN" },
+    { "code": "F", "classification": "DEPLOYED_BUNDLE_MISMATCH", "result": "RULED_OUT" },
+    { "code": "G", "classification": "OTHER_EXACTLY_IDENTIFIED_CLIENT_BLOCK", "result": "NOT_IDENTIFIED" },
+    { "code": "H", "classification": "ROOT_CAUSE_NOT_DETERMINED", "result": "SELECTED" }
+  ],
+  "testCoverage": {
+    "existingPreviewClientGuard": { "passed": 23, "total": 23 },
+    "validFormExactlyOneServiceInvocation": false,
+    "invalidFormZeroServiceInvocation": false,
+    "appCheckPreconditionVisibleErrorZeroRequest": false
+  },
+  "prohibitedActions": {
+    "submitClick": false,
+    "createDiscoveryLead": false,
+    "codeModification": false,
+    "configurationModification": false,
+    "deployment": false,
+    "production": false,
+    "staging": false,
+    "commit": false,
+    "push": false,
+    "pullRequest": false
+  }
+}
