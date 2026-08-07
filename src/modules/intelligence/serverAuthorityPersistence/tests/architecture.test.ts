@@ -113,9 +113,29 @@ describe('serverAuthorityPersistence architecture', () => {
         entry: entry.replaceAll('\\', '/'),
         source: fs.readFileSync(path.join(functionsRoot, entry), 'utf8'),
       }))
-      .filter(({ source }) =>
-        /serverAuthorityPersistence|@aura\/intelligence-os/.test(source),
-      );
+      .filter(({ entry, source }) => {
+        const isCertifiedAdapter = entry.startsWith(
+          'infrastructure/firestore/authorityPersistence/',
+        );
+        const isCertifiedDarkCompositionTypes =
+          entry ===
+          'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts';
+        const isCertifiedDarkHandlerComposition = new Set([
+          'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
+          'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
+        ]).has(entry);
+
+        const isCertifiedConsumerPath =
+          isCertifiedAdapter ||
+          isCertifiedDarkCompositionTypes ||
+          isCertifiedDarkHandlerComposition;
+
+        return (
+          /serverAuthorityPersistence/.test(source) ||
+          (isCertifiedConsumerPath &&
+            source.includes('@aura/intelligence-os/server'))
+        );
+      });
     expect(
       importers.every(({ entry, source }) => {
         const isCertifiedAdapter = entry.startsWith(

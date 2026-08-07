@@ -30,7 +30,7 @@ export function createAuthoritativePolicyLookupKeyV1(
         actorId: input.actorId,
       },
     });
-    if (query.requestedMode !== 'SHADOW_ONLY') {
+    if (query.requestedMode !== 'SHADOW_ONLY' && query.requestedMode !== 'EVALUATION') {
       throw new AuthoritativePolicySnapshotContractError(
         'MODE_NOT_ALLOWED'
       );

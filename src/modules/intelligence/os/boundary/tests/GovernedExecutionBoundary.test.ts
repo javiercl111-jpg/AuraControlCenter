@@ -540,6 +540,25 @@ describe('GovernedExecutionBoundary', () => {
     expect(res.errors[0].code).toBe('EXECUTION_FAILED');
   });
 
+  it('24A. Preserves PARTIAL internal execution status at the public boundary', async () => {
+    const execPort = createMockExecutionPort({
+      status: 'PARTIAL',
+    });
+
+    const boundary = new GovernedExecutionBoundary({
+      clockPort: createMockClock(),
+      featurePolicyPort: createMockPolicyPort(),
+      executionPort: execPort,
+    });
+
+    const res = await executeBoundary(
+      boundary,
+      createValidRequest(),
+    );
+
+    expect(res.status).toBe('PARTIAL');
+    expect(execPort.execute).toHaveBeenCalledTimes(1);
+  });
   it('25. Never exposes stack or cause in public errors', async () => {
     const execPort: BoundaryExecutionPort = {
       execute: vi.fn().mockRejectedValue(new Error('Internal crash with stack trace')),

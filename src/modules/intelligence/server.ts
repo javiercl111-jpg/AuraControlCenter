@@ -1389,3 +1389,7 @@ export type {
   TenantMembershipStatusV1,
   TenantMembershipV1,
 } from './serverAuthorityProvisioning';
+
+export type {
+  AuthoritativeFeaturePolicySourcePortV1,
+} from './serverPolicy/ports';

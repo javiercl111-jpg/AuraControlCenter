@@ -1,4 +1,6 @@
 import type { AuraIntelligenceOrchestrator } from '../AuraIntelligenceOrchestrator';
+import { PipelineExecutionContext } from '../PipelineExecutionContext';
+import type { PipelineClock } from '../ports';
 import type { PipelineResult } from '../types';
 import {
   PipelineBootstrapCoreError,
@@ -25,10 +27,10 @@ export type PipelineBootstrapCheckpointMapper = (
 export interface PipelineBootstrapExecutionComposerDependencies {
   readonly bootstrapPort: PipelineBootstrapPort;
   readonly checkpointMapper: PipelineBootstrapCheckpointMapper;
-  readonly orchestrator: Pick<
-    AuraIntelligenceOrchestrator,
-    'executePipeline'
-  >;
+  readonly clock: PipelineClock;
+  readonly orchestratorFactory: (
+    osContext: PipelineExecutionContext
+  ) => Pick<AuraIntelligenceOrchestrator, 'executePipeline'>;
   readonly producer:
     PipelineBootstrapCheckpointMapperOptions['producer'];
 }
@@ -54,10 +56,10 @@ export type PipelineBootstrapExecutionResult =
 export class PipelineBootstrapExecutionComposer {
   private readonly bootstrapPort: PipelineBootstrapPort;
   private readonly checkpointMapper: PipelineBootstrapCheckpointMapper;
-  private readonly orchestrator: Pick<
-    AuraIntelligenceOrchestrator,
-    'executePipeline'
-  >;
+  private readonly clock: PipelineClock;
+  private readonly orchestratorFactory: (
+    osContext: PipelineExecutionContext
+  ) => Pick<AuraIntelligenceOrchestrator, 'executePipeline'>;
   private readonly producer:
     PipelineBootstrapCheckpointMapperOptions['producer'];
 
@@ -66,7 +68,8 @@ export class PipelineBootstrapExecutionComposer {
   ) {
     this.bootstrapPort = dependencies.bootstrapPort;
     this.checkpointMapper = dependencies.checkpointMapper;
-    this.orchestrator = dependencies.orchestrator;
+    this.clock = dependencies.clock;
+    this.orchestratorFactory = dependencies.orchestratorFactory;
     this.producer = Object.freeze({ ...dependencies.producer });
   }
 
@@ -120,7 +123,14 @@ export class PipelineBootstrapExecutionComposer {
 
     let pipelineResult: PipelineResult;
     try {
-      pipelineResult = await this.orchestrator.executePipeline(
+      const osContext = new PipelineExecutionContext(
+        input.bootstrapId,
+        this.clock,
+        handoff.pipelineInput,
+        signal
+      );
+      const orchestrator = this.orchestratorFactory(osContext);
+      pipelineResult = await orchestrator.executePipeline(
         handoff.pipelineInput,
         handoff.aggregatedState
       );
