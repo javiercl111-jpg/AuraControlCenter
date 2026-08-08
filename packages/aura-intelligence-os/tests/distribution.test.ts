@@ -241,7 +241,7 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
     );
 
     expect(manifest.scripts.prebuild).toBe(
-      'npm run prepare:intelligence-os-distribution && npm run verify:intelligence-os-distribution'
+      'npm run prepare:intelligence-os-distribution && npm run prepare:intelligence-execution-runtime-distribution && npm run verify:intelligence-os-distribution'
     );
     expect(manifest.scripts['prepare:intelligence-os-distribution']).toBe(
       'npm --prefix .. run stage:intelligence-os:functions'
@@ -290,6 +290,8 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
       'infrastructure/firestore/authorityPersistence/firestoreAuthoritySnapshot.ts',
       'infrastructure/firestore/authorityPersistence/firestoreAuthorityWritePlan.ts',
       'infrastructure/firestore/authorityProvisioning/FirestoreAuthorityProvisioningAdapter.ts',
+      'infrastructure/firestore/featurePolicy/FirestoreAuthoritativeFeaturePolicySourceV1.ts',
+      'infrastructure/firestore/featurePolicy/tests/FirestoreAuthoritativeFeaturePolicySourceV1.test.ts',
     ]);
     importers.forEach((file) => {
       const source = readFileSync(resolve(sourceRoot, file), 'utf8');

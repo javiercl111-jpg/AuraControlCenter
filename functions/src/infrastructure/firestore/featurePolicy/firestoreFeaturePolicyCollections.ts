@@ -1,0 +1,2 @@
+export const FIRESTORE_INTELLIGENCE_FEATURE_POLICIES_COLLECTION =
+  'platform_intelligence_feature_policies';

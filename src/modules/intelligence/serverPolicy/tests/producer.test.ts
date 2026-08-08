@@ -219,7 +219,6 @@ describe('AI-02H1D.3 in-memory authoritative policy producer', () => {
   });
 
   for (const requestedMode of [
-    'EVALUATION',
     'PRODUCTIVE',
     'DISABLED',
   ] as const) {

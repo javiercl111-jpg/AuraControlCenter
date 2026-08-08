@@ -408,7 +408,7 @@ describe('AI-02H1D.4 Boundary integration validation', () => {
     expect(result.boundaryResponse.status).toBe('REJECTED');
     expect(
       fixture.observations.policyDecisions[0]?.reasonCode
-    ).toBe('MODE_NOT_ALLOWED');
+    ).toBe('POLICY_NOT_FOUND');
     expectNoDispatch(fixture);
   });
 

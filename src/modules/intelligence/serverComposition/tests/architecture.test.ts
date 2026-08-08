@@ -20,7 +20,7 @@ function productionFiles(directory: string): string[] {
     const absolutePath = resolve(directory, entry);
     const stats = statSync(absolutePath);
     if (stats.isDirectory()) {
-      if (entry !== 'tests') {
+      if (entry !== 'tests' && entry !== 'adapters') {
         files.push(...productionFiles(absolutePath));
       }
     } else if (stats.isFile() && entry.endsWith('.ts')) {

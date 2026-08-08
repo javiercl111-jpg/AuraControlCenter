@@ -1,4 +1,4 @@
-export const AUTHORITATIVE_POLICY_SNAPSHOT_CONTRACT_ERROR_VERSION =
+﻿export const AUTHORITATIVE_POLICY_SNAPSHOT_CONTRACT_ERROR_VERSION =
   '1' as const;
 
 export const AUTHORITATIVE_POLICY_SNAPSHOT_CONTRACT_ISSUES =
@@ -44,6 +44,37 @@ export class AuthoritativePolicySnapshotContractError extends Error {
     super(ISSUE_MESSAGES[issue]);
     this.name = 'AuthoritativePolicySnapshotContractError';
     this.issue = issue;
+    Object.freeze(this);
+  }
+}
+
+export const AUTHORITATIVE_FEATURE_POLICY_SOURCE_ERROR_VERSION = '1' as const;
+
+export const AUTHORITATIVE_FEATURE_POLICY_SOURCE_ERROR_CODES = Object.freeze([
+  'SOURCE_UNAVAILABLE',
+  'MALFORMED_SNAPSHOT',
+  'TENANT_INTEGRITY_VIOLATION',
+] as const);
+
+export type AuthoritativeFeaturePolicySourceErrorCode =
+  (typeof AUTHORITATIVE_FEATURE_POLICY_SOURCE_ERROR_CODES)[number];
+
+const SOURCE_ERROR_MESSAGES: Readonly<
+  Record<AuthoritativeFeaturePolicySourceErrorCode, string>
+> = Object.freeze({
+  SOURCE_UNAVAILABLE: 'Authoritative feature policy source is unavailable',
+  MALFORMED_SNAPSHOT: 'Authoritative feature policy snapshot is malformed',
+  TENANT_INTEGRITY_VIOLATION: 'Authoritative feature policy snapshot violates tenant integrity',
+});
+
+export class AuthoritativeFeaturePolicySourceError extends Error {
+  public readonly schemaVersion = AUTHORITATIVE_FEATURE_POLICY_SOURCE_ERROR_VERSION;
+  public readonly code: AuthoritativeFeaturePolicySourceErrorCode;
+
+  constructor(code: AuthoritativeFeaturePolicySourceErrorCode) {
+    super(SOURCE_ERROR_MESSAGES[code]);
+    this.name = 'AuthoritativeFeaturePolicySourceError';
+    this.code = code;
     Object.freeze(this);
   }
 }

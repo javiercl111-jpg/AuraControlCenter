@@ -1,0 +1,21 @@
+{
+    "name":  "@aura/intelligence-execution-runtime",
+    "version":  "0.0.0-internal",
+    "private":  true,
+    "type":  "commonjs",
+    "main":  "./dist/execution.js",
+    "types":  "./dist/execution.d.ts",
+    "exports":  {
+                    ".":  {
+                              "types":  "./dist/execution.d.ts",
+                              "import":  "./dist/execution.js",
+                              "require":  "./dist/execution.js"
+                          }
+                },
+    "scripts":  {
+                    "clean":  "node -e \"require(\u0027fs\u0027).rmSync(\u0027dist\u0027,{recursive:true,force:true})\"",
+                    "build":  "npm run clean \u0026\u0026 tsc -p tsconfig.build.json",
+                    "test:architecture":  "npm run build \u0026\u0026 vitest run tests",
+                    "stage:functions":  "node ./scripts/stage-for-functions.cjs"
+                }
+}

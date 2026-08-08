@@ -16,7 +16,7 @@ export const AUTHORITATIVE_POLICY_MAX_TIMEOUT_MS =
   2_147_483_647;
 
 export const AUTHORITATIVE_POLICY_EXECUTION_MODES_V1 =
-  Object.freeze(['SHADOW_ONLY'] as const);
+  Object.freeze(['SHADOW_ONLY', 'EVALUATION'] as const);
 
 export type AuthoritativePolicyExecutionModeV1 =
   (typeof AUTHORITATIVE_POLICY_EXECUTION_MODES_V1)[number];

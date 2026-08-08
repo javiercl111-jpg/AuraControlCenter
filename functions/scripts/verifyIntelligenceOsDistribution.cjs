@@ -100,6 +100,7 @@ function verifyManifest(manifest) {
   const expectedExports = {
     "./server": {
       types: "./dist/server.d.ts",
+      import: "./dist/server.js",
       require: "./dist/server.js",
     },
   };

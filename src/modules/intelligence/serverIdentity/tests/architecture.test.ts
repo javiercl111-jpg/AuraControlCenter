@@ -89,9 +89,7 @@ describe('serverIdentity architecture', () => {
       }))
       .filter(
         ({ entry, source }) =>
-          !entry.startsWith(
-            'infrastructure/firestore/authorityPersistence/',
-          ) &&
+          !/^(?:infrastructure\/firestore\/(?:authorityPersistence|featurePolicy|authorityProvisioning)|composition\/authorityProvisioning)\//.test(entry) &&
           entry !==
             'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts' &&
           ![

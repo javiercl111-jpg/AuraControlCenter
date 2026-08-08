@@ -125,11 +125,9 @@ describe('AI-02H1D.4 integration architecture', () => {
               '/'
             )
           ) &&
-          !relative(productionFunctionsRoot, path)
-            .replaceAll('\\', '/')
-            .startsWith(
-              'infrastructure/firestore/authorityPersistence/'
-            ) &&
+          !/^(?:infrastructure\/firestore\/(?:authorityPersistence|featurePolicy|authorityProvisioning)|composition\/authorityProvisioning)\//.test(
+            relative(productionFunctionsRoot, path).replaceAll('\\', '/')
+          ) &&
           /@aura\/intelligence-os|src\/modules\/intelligence/.test(
             source
           )
