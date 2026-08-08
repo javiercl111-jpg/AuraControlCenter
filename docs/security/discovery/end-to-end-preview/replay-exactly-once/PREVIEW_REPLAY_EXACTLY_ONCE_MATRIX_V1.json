@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "PREVIEW_REPLAY_EXACTLY_ONCE_MATRIX_V1",
+  "changeId": "AI-02H2.2F-REPLAY-IDEMPOTENCY-EXACTLY-ONCE-20260807-01",
+  "environment": "PREVIEW",
+  "verdict": {
+    "code": "B",
+    "label": "CONDITIONAL — REPLAY COMPLETED WITH NON-BLOCKING CONTROL GAP",
+    "gap": "Live replay exercised completed-session resolution; completion replay and concurrency were certified in isolated Firestore tests rather than through a second remote completion invocation."
+  },
+  "scope": {
+    "gcpProject": "aura-intel-preview",
+    "vercelProject": "aura-control-center-preview",
+    "browserOrigin": "https://preview-controlcenter.auranexus.io",
+    "productionAccessed": false,
+    "stagingAccessed": false,
+    "newDiscoveryCreated": false,
+    "browserClicks": 0
+  },
+  "fixture": {
+    "replayable": true,
+    "leadLocator": "sha256:31d85eea1116",
+    "sessionLocator": "sha256:f0279b13e363",
+    "completionLocator": "sha256:8f60b7af067e",
+    "correlationLocator": "sha256:54781c09d3fc",
+    "status": "COMPLETED",
+    "sessionCapability": {
+      "type": "SESSION",
+      "purpose": "DISCOVERY_SESSION",
+      "unexpired": true,
+      "completed": true,
+      "revoked": false,
+      "linkageConsistent": true
+    },
+    "idempotency": {
+      "status": "COMPLETED",
+      "attempts": 1,
+      "leaseRecoveries": 0,
+      "failureCode": null
+    }
+  },
+  "liveOperations": [
+    {
+      "kind": "RECOVERY",
+      "operation": "resolveDiscoverySession",
+      "businessRequests": 1,
+      "httpStatus": 200,
+      "durationSeconds": 1.547,
+      "appCheck": "VALID",
+      "containment": "ALLOWED",
+      "outcome": "SESSION_RESOLVED"
+    },
+    {
+      "kind": "REPLAY",
+      "operation": "resolveDiscoverySession",
+      "businessRequests": 1,
+      "httpStatus": 200,
+      "durationSeconds": 0.579,
+      "appCheck": "VALID",
+      "containment": "ALLOWED",
+      "outcome": "SAME_COMPLETED_SESSION"
+    }
+  ],
+  "state": {
+    "leads": { "before": 2, "after": 2, "delta": 0 },
+    "sessions": { "before": 2, "after": 2, "delta": 0 },
+    "completions": { "before": 2, "after": 2, "delta": 0 },
+    "capabilities": { "before": 6, "after": 6, "delta": 0 },
+    "completionOutbox": { "before": 2, "after": 2, "delta": 0 },
+    "intakeIdempotency": { "before": 2, "after": 2, "delta": 0 },
+    "idempotencyNamespaces": { "before": 2, "after": 2, "delta": 0 },
+    "platformEvents": { "before": 6, "after": 6, "delta": 0 },
+    "notifications": { "before": 0, "after": 0, "delta": 0 }
+  },
+  "quota": {
+    "intake": { "count": 1, "effectiveLimit": 1, "remaining": 0 },
+    "aiEvaluation": { "count": 1, "effectiveLimit": 16, "remaining": 15 },
+    "completion": { "count": 1, "effectiveLimit": 1, "remaining": 0 }
+  },
+  "containment": {
+    "policies": 1,
+    "activePointers": 1,
+    "activationAudits": 1
+  },
+  "sideEffects": {
+    "newLeads": 0,
+    "newSessions": 0,
+    "newCompletions": 0,
+    "newNotifications": 0,
+    "newTaskQueues": 0,
+    "newFunctionalStorageObjects": 0,
+    "newIntakeConsumption": 0
+  },
+  "tests": {
+    "firestoreIdempotency": { "passed": 24, "total": 24 },
+    "firestoreCapabilities": { "passed": 29, "total": 29 },
+    "discoveryContainment": { "passed": 52, "total": 52 },
+    "firestoreAuthorityAdapter": { "passed": 30, "total": 30 },
+    "authorityHandlerComposition": { "passed": 81, "total": 81 },
+    "previewTrustCompletion": { "passed": 20, "total": 20 },
+    "aggregate": { "passed": 236, "total": 236 },
+    "typescriptNoEmit": {
+      "app": "PASS",
+      "node": "PASS",
+      "functions": "PASS"
+    },
+    "rootBuild": {
+      "status": "PASS",
+      "transformedModules": 2134
+    }
+  },
+  "formalRemoteCompletionReplayPerformed": false,
+  "secondReplayPerformed": false
+}
