@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "AI_02H2_2G_FINAL_PREVIEW_CERTIFICATION_MATRIX_V1",
+  "date": "2026-08-08",
+  "target": {
+    "projectId": "aura-intel-preview",
+    "environment": "PREVIEW",
+    "productionTouched": false,
+    "stagingTouched": false
+  },
+  "verdict": "CONDITIONAL — CERTIFIED WITH DOCUMENTED NON-BLOCKING GAPS",
+  "controls": {
+    "authority": {
+      "status": "CERTIFIED",
+      "canonicalPrincipals": true,
+      "exactTenantBinding": true,
+      "exactMembershipCardinality": true,
+      "actorApproverSeparated": true,
+      "actorCapability": "containment.policy.activate",
+      "approverCapability": "containment.policy.approve",
+      "failClosed": true
+    },
+    "containment": {
+      "status": "CERTIFIED",
+      "controlPlane": "PreviewContainmentActivationControlPlaneV1",
+      "immutableVersioning": true,
+      "compareAndSet": true,
+      "atomicAudit": true,
+      "idempotentReplay": true,
+      "conflictingReplayFailClosed": true
+    },
+    "policyRenewalV2": {
+      "status": "CERTIFIED",
+      "policy": "preview-containment-v2",
+      "policyStateAtFinalValidation": "ACTIVE",
+      "activePointer": "PRESENT",
+      "expiredAtFinalValidation": false,
+      "runtimeResolver": "SUCCESS",
+      "intakeDecision": "CONTAINMENT_ALLOWED",
+      "completionDecision": "CONTAINMENT_ALLOWED"
+    },
+    "discoveryFinalValidation": {
+      "status": "CERTIFIED",
+      "fixture": "SYNTHETIC",
+      "appCheck": "VALID",
+      "authentication": "VALID",
+      "authorization": "ALLOW",
+      "createDiscoveryLead": "SUCCESS",
+      "completion": "COMPLETION_COMPLETED",
+      "leads": { "before": 2, "after": 3, "delta": 1 },
+      "sessions": { "before": 2, "after": 3, "delta": 1 },
+      "completions": { "before": 2, "after": 3, "delta": 1 },
+      "duplicates": 0,
+      "unexpectedCloudTasks": 0,
+      "unexpectedNotifications": 0,
+      "unexpectedStorageObjects": 0
+    },
+    "replayExactlyOnce": {
+      "status": "CONDITIONAL_CERTIFIED",
+      "remoteResolutionReplay": "PASS",
+      "remoteFunctionalDelta": { "leads": 0, "sessions": 0, "completions": 0 },
+      "isolatedCompletionReplaySuite": "PASS",
+      "concurrentConvergence": "PASS",
+      "conflictingReplayFailClosed": "PASS",
+      "gapId": "GAP-2F-01",
+      "gapBlocking": false,
+      "gap": "No live remote completion.replayed result; remote replay exercised completed-session resolution."
+    },
+    "controlCenterAccess": {
+      "status": "RESTORED",
+      "authenticatedSession": true,
+      "effectiveRole": "VIEWER",
+      "globalAdminResolution": "SUCCESS",
+      "authorization": "ALLOW"
+    },
+    "crmRestoration": {
+      "status": "RESTORED",
+      "function": "createCrmLead",
+      "functionState": "ACTIVE",
+      "cloudRun": "READY",
+      "failedRevisions": 0,
+      "capability": "crm.leads.create",
+      "authorization": "ALLOW",
+      "backendOutcome": "CREATED",
+      "prospects": { "before": 2, "after": 3, "delta": 1 },
+      "duplicates": 0
+    },
+    "leastPrivilege": {
+      "status": "PRESERVED",
+      "role": "VIEWER",
+      "roleEscalation": false,
+      "unexpectedCapabilities": 0,
+      "clientFirestoreCreate": "DENY",
+      "clientFirestoreUpdate": "DENY",
+      "clientFirestoreDelete": "DENY",
+      "superAdmin": false,
+      "platformOwner": false
+    }
+  },
+  "assembly": {
+    "documentationOnly": true,
+    "newFunctionalTests": false,
+    "browserUsed": false,
+    "discoveryInvoked": false,
+    "crmInvoked": false,
+    "deploy": false,
+    "provisioning": false,
+    "policyChange": false,
+    "commit": false,
+    "push": false,
+    "pullRequest": false
+  }
+}
