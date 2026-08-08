@@ -51,6 +51,8 @@
     "audit:preview-synthetic-authority": "node scripts/preview-synthetic-authority-provisioning.cjs --project=aura-intel-preview --environment=PREVIEW",
     "provision:preview-synthetic-authority": "npm run build:functions && npm ci --prefix functions --ignore-scripts && node scripts/preview-synthetic-authority-provisioning.cjs --apply --project=aura-intel-preview --environment=PREVIEW --confirm-change-id=AI-02H2.2D-PREVIEW-SYNTHETIC-CLOUD-PROVISIONING-20260806-01",
     "test:preview-synthetic-authority-runner": "node --test scripts/tests/preview-synthetic-authority-provisioning.test.cjs",
+    "test:preview-global-admin-provisioning": "node --test scripts/tests/preview-global-admin-provisioning.test.cjs",
+    "dry-run:preview-global-admin-provisioning": "node scripts/preview-global-admin-provisioning.cjs --dry-run --project=aura-intel-preview --environment=PREVIEW --role=VIEWER --is-active=true",
     "guard:preview-client-enablement:source": "node scripts/preview-client-enablement-guard.cjs --source-only",
     "guard:preview-client-enablement": "node scripts/preview-client-enablement-guard.cjs",
     "guard:preview-invocation-boundary": "node scripts/preview-invocation-boundary-guard.cjs --project=aura-intel-preview --region=us-central1",
