@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "PREVIEW_CONTROL_CENTER_ACCESS_MATRIX_V1",
+  "mode": "READ_ONLY_DIAGNOSIS",
+  "target": {
+    "projectId": "aura-intel-preview",
+    "environment": "PREVIEW",
+    "domain": "https://preview-controlcenter.auranexus.io/login"
+  },
+  "gate": {
+    "branch": "audit/intelligence-preview-control-center-access-r1",
+    "headEqualsOriginMain": true,
+    "worktreeClean": true,
+    "firebaseTargetMatches": true,
+    "result": "PASS"
+  },
+  "subjectLocator": {
+    "source": "$PreviewUid",
+    "availableToAuditProcess": false,
+    "sanitizedLocator": null,
+    "reason": "SESSION_SCOPED_VARIABLE_NOT_INHERITED"
+  },
+  "actualChain": {
+    "authUserExists": "NOT_EVALUATED",
+    "authUserDisabled": "UNKNOWN",
+    "providerSummary": "UNKNOWN",
+    "principalFound": "UNKNOWN",
+    "principalState": "UNKNOWN",
+    "principalEnvironment": "UNKNOWN",
+    "principalType": "UNKNOWN",
+    "membershipCount": "UNKNOWN",
+    "activeMembershipCount": "UNKNOWN",
+    "tenantFound": "UNKNOWN",
+    "tenantState": "UNKNOWN",
+    "tenantEnvironment": "UNKNOWN",
+    "roles": "UNKNOWN",
+    "capabilities": "UNKNOWN"
+  },
+  "requiredControlCenterAuthority": {
+    "collection": "platform_global_admins",
+    "documentKey": "AUTHENTICATED_FIREBASE_UID",
+    "isActive": true,
+    "allowedRoles": [
+      "PLATFORM_OWNER",
+      "PLATFORM_PARTNER",
+      "SUPER_ADMIN",
+      "FOUNDER",
+      "SALES_DIRECTOR",
+      "CONSULTANT",
+      "SALES_ADVISOR",
+      "VIEWER",
+      "ADMIN",
+      "SUPPORT"
+    ],
+    "salesAdvisorAdditionalRequirement": "ACTIVE_OR_NON_SUSPENDED_ADVISOR_BINDING",
+    "membershipRequiredForLogin": false,
+    "tenantRequiredForLogin": false,
+    "capabilityRequiredForLogin": false,
+    "customClaimAuthoritative": false
+  },
+  "serverOnlyTenantAuthorityContract": {
+    "invokedByControlCenterLogin": false,
+    "principalCollection": "platform_global_admins",
+    "membershipCollection": "tenant_memberships",
+    "tenantCollection": "platform_tenants",
+    "requiredActiveMembershipCount": 1,
+    "environment": "PREVIEW",
+    "effectiveCapabilitiesSource": "membership.capabilities"
+  },
+  "browserCorrelation": {
+    "loginPageRendered": true,
+    "submitEnabled": true,
+    "preAuthenticationRuntimeErrorsObserved": false,
+    "clientConfigurationFailureObserved": false,
+    "expectedMissingAuthorityError": "firestore/permission-denied",
+    "loginAttempted": false
+  },
+  "comparison": {
+    "requiredAuthorityKnown": true,
+    "actualAuthorityKnown": false,
+    "firstBreakPoint": "UNDETERMINED"
+  },
+  "classification": "J. ROOT_CAUSE_NOT_DETERMINED",
+  "verdict": "C. BLOCKED — CONTROL CENTER ACCESS ROOT CAUSE NOT SAFELY IDENTIFIED",
+  "remediationApplied": false,
+  "proposedRemediation": "AFTER_UID_SCOPED_READBACK_USE_MINIMUM_AUDITED_PREVIEW_ONLY_ADMIN_SDK_CHANGE_IF_REQUIRED",
+  "safety": {
+    "loginPerformed": false,
+    "credentialsAccessed": false,
+    "firebaseWrites": false,
+    "provisioningPerformed": false,
+    "deploymentPerformed": false,
+    "productionAccessed": false,
+    "stagingAccessed": false
+  }
+}
