@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "PREVIEW_GLOBAL_ADMIN_PROVISIONING_MATRIX_V1",
+  "target": {
+    "environment": "PREVIEW",
+    "projectId": "aura-intel-preview",
+    "collection": "platform_global_admins",
+    "productionAuthorized": false,
+    "stagingInScope": false
+  },
+  "verdict": "PREVIEW GLOBAL ADMIN PROVISIONING CERTIFIED — READY FOR CONTROLLED DRY-RUN AND APPLY",
+  "recommendedPreviewRole": "VIEWER",
+  "roleComparison": [
+    {
+      "role": "VIEWER",
+      "passesLoginAllowlist": true,
+      "capabilities": [
+        "dashboard.read",
+        "market.read"
+      ],
+      "leastPrivilegeRank": 1,
+      "recommended": true
+    },
+    {
+      "role": "SUPPORT",
+      "passesLoginAllowlist": true,
+      "capabilities": [
+        "dashboard.read",
+        "market.read",
+        "advisors.read"
+      ],
+      "leastPrivilegeRank": 2,
+      "recommended": false
+    },
+    {
+      "role": "ADMIN",
+      "passesLoginAllowlist": true,
+      "capabilityProfile": "ALL_CAPABILITIES",
+      "includesTechnicalOrDestructiveCapabilities": true,
+      "leastPrivilegeRank": 3,
+      "recommended": false
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "passesLoginAllowlist": true,
+      "capabilityProfile": "ALL_CAPABILITIES",
+      "includesTechnicalOrDestructiveCapabilities": true,
+      "leastPrivilegeRank": 3,
+      "recommended": false
+    }
+  ],
+  "requestContract": {
+    "name": "PreviewGlobalAdminProvisioningRequestV1",
+    "allowedFields": [
+      "targetEnvironment",
+      "firebaseUid",
+      "role",
+      "isActive"
+    ],
+    "unexpectedFieldsRejected": true,
+    "uidRules": {
+      "type": "string",
+      "trimmed": true,
+      "nonEmpty": true,
+      "maxLength": 128,
+      "singleLine": true
+    },
+    "isActiveRequired": true
+  },
+  "idempotency": {
+    "missing": "CREATED",
+    "identical": "REUSED_WITH_ZERO_WRITES",
+    "different": "FAIL_CLOSED_EXISTING_DOCUMENT_CONFLICT"
+  },
+  "writeModel": {
+    "authorityDocumentFields": [
+      "isActive",
+      "role"
+    ],
+    "authorityTargetCount": 1,
+    "auditCollection": "platform_audit_logs",
+    "auditUsesServerTimestamp": true,
+    "dryRunWrites": 0,
+    "persistsFullUid": false,
+    "persistsPii": false,
+    "persistsTenantOrMembership": false,
+    "modifiesCustomClaims": false
+  },
+  "validation": {
+    "provisioningTests": {
+      "passed": 20,
+      "failed": 0,
+      "total": 20
+    },
+    "previewRulesGuardTests": {
+      "passed": 15,
+      "failed": 0,
+      "total": 15
+    },
+    "typescriptNoEmit": "PASS",
+    "rootBuild": "PASS",
+    "rootBuildModulesTransformed": 2134,
+    "functionsBuild": "NOT_APPLICABLE_GRAPH_UNCHANGED",
+    "gitDiffCheck": "PASS",
+    "evidenceDocumentCount": 4
+  },
+  "execution": {
+    "liveDryRunPerformed": false,
+    "applyPerformed": false,
+    "remoteWritesPerformed": false,
+    "loginPerformed": false,
+    "deployPerformed": false
+  }
+}
