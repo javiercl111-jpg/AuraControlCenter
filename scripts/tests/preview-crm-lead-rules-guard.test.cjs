@@ -28,6 +28,15 @@ test("CLIENT DELETE platform_leads remains denied", () => {
 });
 
 test("backend capability and idempotency records are never client-readable or writable", () => {
-  assert.match(rules, /match \/platform_global_admin_capability_grants\/\{adminId\}[\s\S]*?allow read, write: if false;/u);
-  assert.match(rules, /match \/crm_lead_create_idempotency\/\{recordId\}[\s\S]*?allow read, write: if false;/u);
+  const administrativeReadBlock = catchAllBlock(rules);
+  for (const collection of [
+    "platform_global_admin_capability_grants",
+    "crm_lead_create_idempotency",
+  ]) {
+    assert.doesNotMatch(administrativeReadBlock, new RegExp(`['\"]${collection}['\"]`, "u"));
+  }
+  assert.match(
+    rules,
+    /match \/\{document=\*\*\} \{\s*allow read, write: if false;/u,
+  );
 });

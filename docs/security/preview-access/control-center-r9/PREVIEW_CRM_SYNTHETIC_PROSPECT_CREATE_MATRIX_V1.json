@@ -1,0 +1,94 @@
+{
+  "schemaVersion": "PREVIEW_CRM_SYNTHETIC_PROSPECT_CREATE_MATRIX_V1",
+  "verdict": "PREVIEW CRM SYNTHETIC PROSPECT CREATE CERTIFIED — CRM CREATE ACCESS RESTORED",
+  "target": {
+    "firebaseProject": "aura-intel-preview",
+    "gcpProject": "aura-intel-preview",
+    "function": "createCrmLead",
+    "productionTargeted": false,
+    "stagingTargeted": false
+  },
+  "baseline": {
+    "prospectCount": 2,
+    "fixtureMatches": 0,
+    "submits": 0,
+    "requests": 0
+  },
+  "fixture": {
+    "classification": "SYNTHETIC",
+    "formValid": true,
+    "createButtonEnabled": true,
+    "realDataUsed": false
+  },
+  "execution": {
+    "submits": 1,
+    "createCrmLeadRequests": 1,
+    "retries": 0,
+    "remoteReplays": 0,
+    "authentication": "VALID",
+    "appCheck": "VALID",
+    "authorization": "ALLOW",
+    "backendOutcome": "CREATED",
+    "callableOutcome": "SUCCESS",
+    "safeError": null,
+    "logErrorEntries": 0
+  },
+  "persistence": {
+    "prospectCountAfter": 3,
+    "prospectDelta": 1,
+    "fixtureMatchesAfter": 1,
+    "duplicates": 0,
+    "leadContractValid": true,
+    "serverOwnedIdPresent": true,
+    "serverTimestampsValid": true,
+    "idempotencyRecordCount": 1,
+    "idempotencyState": "ESTABLISHED"
+  },
+  "audit": {
+    "found": true,
+    "operation": "crm.leads.create",
+    "outcome": "CREATED",
+    "correlationLocatorPresent": true,
+    "actorLocatorSanitized": true,
+    "leadLocatorSanitized": true
+  },
+  "authority": {
+    "role": "VIEWER",
+    "requiredCapability": "crm.leads.create",
+    "requiredCapabilityPresent": true,
+    "unexpectedCapabilities": 0,
+    "roleEscalation": false
+  },
+  "runtime": {
+    "functionState": "ACTIVE",
+    "cloudRunReady": true
+  },
+  "clientSecurity": {
+    "createUsesCallable": true,
+    "directPlatformLeadAdd": false,
+    "firestoreClientCreate": "DENY",
+    "firestoreClientUpdate": "DENY",
+    "firestoreClientDelete": "DENY",
+    "rulesGuardTestsPassed": 4
+  },
+  "sideEffects": {
+    "serverTransactionCreates": 3,
+    "unexpectedSecondLead": false,
+    "unexpectedTasks": false,
+    "unexpectedNotifications": false,
+    "unexpectedStorageWrites": false,
+    "deploymentPerformed": false
+  },
+  "prohibitedOperations": {
+    "secondProspectCreated": false,
+    "retryPerformed": false,
+    "remoteReplayPerformed": false,
+    "roleChanged": false,
+    "capabilityChanged": false,
+    "productionTouched": false,
+    "stagingTouched": false,
+    "commitCreated": false,
+    "pushPerformed": false,
+    "pullRequestCreated": false
+  }
+}
