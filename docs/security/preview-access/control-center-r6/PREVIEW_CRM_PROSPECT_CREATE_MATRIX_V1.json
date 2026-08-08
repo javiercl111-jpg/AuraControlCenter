@@ -1,0 +1,178 @@
+{
+  "schemaVersion": "PREVIEW_CRM_PROSPECT_CREATE_MATRIX_V1",
+  "target": {
+    "projectId": "aura-intel-preview",
+    "environment": "PREVIEW",
+    "productionAuthorized": false,
+    "stagingInScope": false
+  },
+  "classification": "E. CLIENT_AUTHORITY_MODEL_MISMATCH",
+  "verdict": "PREVIEW CRM PROSPECT CREATE ROOT CAUSE IDENTIFIED — READY FOR LEAST-PRIVILEGE REMEDIATION",
+  "flow": [
+    "CrmPage.handleCreateLead",
+    "platformLeadService.createLead",
+    "Firebase Web SDK addDoc",
+    "platform_leads/{autoId}",
+    "Firestore Security Rules",
+    "DENY"
+  ],
+  "authorizationBoundary": {
+    "type": "FIRESTORE_SECURITY_RULES",
+    "clientOperation": "CREATE",
+    "collection": "platform_leads",
+    "createCondition": "false",
+    "callableParticipates": false,
+    "capabilityResolverParticipates": false,
+    "customClaimsParticipate": false,
+    "platformGlobalAdminEnablesRead": true,
+    "platformGlobalAdminEnablesClientWrite": false
+  },
+  "roleMatrix": [
+    {
+      "role": "VIEWER",
+      "controlCenterLogin": true,
+      "actualCrmRead": true,
+      "declaredCrmCapabilities": [],
+      "actualProspectCreate": false,
+      "actualProspectEdit": false,
+      "importantAdditionalPrivileges": [
+        "dashboard.read",
+        "market.read"
+      ]
+    },
+    {
+      "role": "SUPPORT",
+      "controlCenterLogin": true,
+      "actualCrmRead": true,
+      "declaredCrmCapabilities": [],
+      "actualProspectCreate": false,
+      "actualProspectEdit": false,
+      "importantAdditionalPrivileges": [
+        "advisors.read"
+      ]
+    },
+    {
+      "role": "CONSULTANT",
+      "controlCenterLogin": true,
+      "actualCrmRead": true,
+      "declaredCrmCapabilities": [
+        "crm.read"
+      ],
+      "actualProspectCreate": false,
+      "actualProspectEdit": false,
+      "importantAdditionalPrivileges": [
+        "discovery.read",
+        "clients.read",
+        "proposals.read"
+      ]
+    },
+    {
+      "role": "SALES_ADVISOR",
+      "controlCenterLogin": true,
+      "actualCrmRead": true,
+      "declaredCrmCapabilities": [
+        "crm.leads.read_own",
+        "crm.leads.update_own"
+      ],
+      "actualProspectCreate": false,
+      "actualProspectEdit": false,
+      "importantAdditionalPrivileges": [
+        "market.pipeline.manage_own"
+      ]
+    },
+    {
+      "role": "SALES_DIRECTOR",
+      "controlCenterLogin": true,
+      "actualCrmRead": true,
+      "declaredCrmCapabilities": [
+        "crm.read",
+        "crm.leads.read_all",
+        "crm.leads.update_all"
+      ],
+      "actualProspectCreate": false,
+      "actualProspectEdit": false,
+      "importantAdditionalPrivileges": [
+        "advisors.manage",
+        "reports.read"
+      ]
+    },
+    {
+      "role": "PLATFORM_PARTNER",
+      "controlCenterLogin": true,
+      "actualCrmRead": true,
+      "declaredCrmCapabilities": [
+        "crm.read",
+        "crm.write",
+        "crm.leads.read_all",
+        "crm.leads.update_all"
+      ],
+      "actualProspectCreate": false,
+      "actualProspectEdit": false,
+      "importantAdditionalPrivileges": [
+        "broad functional read and write capabilities"
+      ]
+    },
+    {
+      "role": "ADMIN",
+      "controlCenterLogin": true,
+      "actualCrmRead": true,
+      "declaredCrmCapabilities": [
+        "crm.read",
+        "crm.write",
+        "crm.leads.read_all",
+        "crm.leads.update_all"
+      ],
+      "actualProspectCreate": false,
+      "actualProspectEdit": false,
+      "importantAdditionalPrivileges": [
+        "ALL_CAPABILITIES",
+        "technical and destructive capabilities"
+      ]
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "controlCenterLogin": true,
+      "actualCrmRead": true,
+      "declaredCrmCapabilities": [
+        "crm.read",
+        "crm.write",
+        "crm.leads.read_all",
+        "crm.leads.update_all"
+      ],
+      "actualProspectCreate": false,
+      "actualProspectEdit": false,
+      "importantAdditionalPrivileges": [
+        "ALL_CAPABILITIES",
+        "technical and destructive capabilities"
+      ]
+    }
+  ],
+  "customClaimsAnalysis": {
+    "warning": "CUSTOM_CLAIMS_SYNC_WARNING",
+    "comparedClaim": "roleCode",
+    "comparedAgainst": "platform_global_admins canonical role",
+    "sourceOfTruth": "platform_global_admins/{UID}",
+    "refreshWritesClaims": false,
+    "missingOrStaleClaimCausesThisDenial": false,
+    "serverSideClaimMutationRequiredForThisPath": false
+  },
+  "attemptCorrelation": {
+    "writeIntentConfirmed": true,
+    "rejectionLayer": "FIRESTORE_SECURITY_RULES",
+    "safeError": "permission-denied",
+    "remoteProspectCreatedByAttempt": false,
+    "cloudPermissionDeniedLogCount": 0,
+    "deployedRulesReadback": "IAM_403",
+    "secondCreatePerformed": false
+  },
+  "leastPrivilegeRemediation": {
+    "currentRole": "VIEWER",
+    "minimumRoleForCurrentClientPath": "NONE",
+    "preferredCapability": "crm.leads.create",
+    "preferredEnforcement": "AUDITED_BACKEND_CALLABLE",
+    "additionalPrivilegesGranted": [],
+    "existingFallbackCapability": "crm.write",
+    "leastBroadExistingRoleWithFallbackCapability": "PLATFORM_PARTNER",
+    "roleEscalationRecommended": false
+  }
+}
