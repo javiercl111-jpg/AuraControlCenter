@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "PREVIEW_CRM_LEAD_CREATE_BACKEND_MATRIX_V1",
+  "verdict": "PREVIEW CRM LEAD CREATE BACKEND CERTIFIED — READY FOR CONTROLLED CAPABILITY PROVISIONING AND DEPLOY",
+  "targets": {
+    "firebaseProject": "aura-intel-preview",
+    "gcpProject": "aura-intel-preview",
+    "vercelProject": "aura-control-center-preview",
+    "environment": "PREVIEW",
+    "productionTouched": false,
+    "stagingTouched": false
+  },
+  "rootCause": {
+    "classification": "CLIENT_AUTHORITY_MODEL_MISMATCH",
+    "previousPath": ["CrmPage", "createLead", "addDoc", "platform_leads", "Rules", "DENY"],
+    "status": "REMEDIATED_IN_SOURCE"
+  },
+  "architecture": {
+    "newPath": [
+      "CrmPage",
+      "createLead",
+      "createCrmLead callable",
+      "Authentication",
+      "App Check",
+      "crm.leads.create",
+      "CreateCrmLeadRequestV1 validation",
+      "Admin SDK transaction",
+      "platform_leads",
+      "audit and idempotency"
+    ],
+    "clientAddDocRemovedForCreate": true,
+    "serverGeneratedLeadId": true,
+    "serverOwnedTimestamps": true
+  },
+  "authorization": {
+    "currentRole": "VIEWER",
+    "requiredCapability": "crm.leads.create",
+    "roleBasedBypass": false,
+    "grantContract": "PlatformGlobalAdminCapabilityGrantV1",
+    "grantCollection": "platform_global_admin_capability_grants",
+    "grantProvisioned": false,
+    "additionalPrivilegesGranted": "NONE"
+  },
+  "idempotency": {
+    "firstRequest": "CREATED",
+    "identicalReplay": "REUSED",
+    "identicalReplayWriteDelta": 0,
+    "conflictingReplay": "FAIL_CLOSED",
+    "originalLeadExistenceVerified": true
+  },
+  "rules": {
+    "clientCreatePlatformLeads": "DENIED",
+    "clientUpdatePlatformLeads": "DENIED",
+    "clientDeletePlatformLeads": "DENIED",
+    "trustedServerPathSeparated": true
+  },
+  "tests": {
+    "backend": { "passed": 30, "failed": 0 },
+    "frontend": { "passed": 5, "failed": 0 },
+    "r7RulesGuard": { "passed": 4, "failed": 0 },
+    "deploymentUnit": { "passed": 22, "failed": 0 },
+    "runtimeContracts": { "passed": 18, "failed": 0 },
+    "previewRulesTargetGuard": { "passed": 15, "failed": 0 },
+    "total": { "passed": 94, "failed": 0 }
+  },
+  "builds": {
+    "typescriptNoEmit": "PASS",
+    "functions": "PASS",
+    "root": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "operations": {
+    "deployPerformed": false,
+    "capabilityAssigned": false,
+    "realLeadCreated": false,
+    "roleChanged": false,
+    "commitCreated": false,
+    "pushPerformed": false,
+    "pullRequestCreated": false
+  }
+}

@@ -8,6 +8,7 @@ import { MODULE_OPTIONS } from "../constants/clientOptions";
 import { convertLeadToClientAndTenant } from "../services/leadConversionService";
 import {
   createLead,
+  getCreateLeadSafeMessage,
   getLeads,
   updateLeadStage,
 } from "../services/platformLeadService";
@@ -139,7 +140,6 @@ export default function CrmPage() {
         leadSourceLabel: label,
         leadSourceDetail: source === "OTHER" ? leadSourceDetail.trim() : undefined,
         interestedModules,
-        stage: "NEW_LEAD",
         notes: notes.trim(),
         nextFollowUpDate,
       });
@@ -157,8 +157,12 @@ export default function CrmPage() {
 
       await loadData();
     } catch (err) {
-      console.error(err);
-      setError("No se pudo crear el prospecto.");
+      console.error("CRM create failed", {
+        code: typeof err === "object" && err !== null
+          ? Reflect.get(err, "code")
+          : undefined,
+      });
+      setError(getCreateLeadSafeMessage(err));
     } finally {
       setIsLoading(false);
     }

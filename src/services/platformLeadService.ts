@@ -1,5 +1,4 @@
 import {
-    addDoc,
     collection,
     doc,
     getDocs,
@@ -8,8 +7,9 @@ import {
     serverTimestamp,
     updateDoc,
   } from "firebase/firestore";
+  import { httpsCallable } from "firebase/functions";
   
-  import { db } from "../config/firebase";
+  import { db, functions } from "../config/firebase";
   import type { LeadStage, PlatformLead, LeadSource } from "../types/platformLead";
   
   const COLLECTION_NAME = "platform_leads";
@@ -24,7 +24,7 @@ import {
     }));
   }
   
-  export async function createLead(data: {
+  export interface CreateLeadInput {
     companyName: string;
     contactName: string;
     email: string;
@@ -35,33 +35,80 @@ import {
     leadSourceDetail?: string;
     interestedModules: string[];
     estimatedValue?: number;
-    stage: LeadStage;
     notes: string;
     nextFollowUpDate?: string;
-  }): Promise<void> {
-    const payload: any = {
-      companyName: data.companyName,
-      contactName: data.contactName,
-      email: data.email,
-      phone: data.phone,
-      interestedModules: data.interestedModules,
-      stage: data.stage,
-      notes: data.notes,
-      nextFollowUpDate: data.nextFollowUpDate || "",
-      convertedClientId: "",
-      convertedTenantId: "",
-      convertedAt: "",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
+  }
 
-    if (data.source !== undefined) payload.source = data.source;
-    if (data.leadSourceCode !== undefined) payload.leadSourceCode = data.leadSourceCode;
-    if (data.leadSourceLabel !== undefined) payload.leadSourceLabel = data.leadSourceLabel;
-    if (data.leadSourceDetail !== undefined) payload.leadSourceDetail = data.leadSourceDetail;
-    if (data.estimatedValue !== undefined) payload.estimatedValue = data.estimatedValue;
+  export interface CreateLeadResult {
+    schemaVersion: "CreateCrmLeadResultV1";
+    action: "CREATED" | "REUSED";
+  }
 
-    await addDoc(collection(db, COLLECTION_NAME), payload);
+  function createIdempotencyKey(): string {
+    if (!globalThis.crypto?.randomUUID) {
+      throw new Error("CRM_SECURE_RANDOM_UNAVAILABLE");
+    }
+    return globalThis.crypto.randomUUID();
+  }
+
+  function isCreateLeadResult(value: unknown): value is CreateLeadResult {
+    if (typeof value !== "object" || value === null) return false;
+    const candidate = value as Record<string, unknown>;
+    return candidate.schemaVersion === "CreateCrmLeadResultV1" &&
+      (candidate.action === "CREATED" || candidate.action === "REUSED");
+  }
+
+  export function getCreateLeadSafeMessage(error: unknown): string {
+    const code = typeof error === "object" && error !== null &&
+      typeof Reflect.get(error, "code") === "string"
+      ? String(Reflect.get(error, "code"))
+      : "";
+    if (code.includes("permission-denied")) {
+      return "No tienes permiso para crear prospectos.";
+    }
+    if (code.includes("already-exists")) {
+      return "La solicitud entra en conflicto con un intento anterior.";
+    }
+    if (code.includes("invalid-argument")) {
+      return "Los datos del prospecto no son válidos.";
+    }
+    return "No se pudo crear el prospecto.";
+  }
+
+  export async function createLead(data: CreateLeadInput): Promise<CreateLeadResult> {
+    const callable = httpsCallable(functions, "createCrmLead");
+    const result = await callable({
+      schemaVersion: "CreateCrmLeadRequestV1",
+      idempotencyKey: createIdempotencyKey(),
+      lead: {
+        companyName: data.companyName,
+        contactName: data.contactName,
+        email: data.email,
+        phone: data.phone,
+        interestedModules: data.interestedModules,
+        notes: data.notes,
+        ...(data.source !== undefined ? { source: data.source } : {}),
+        ...(data.leadSourceCode !== undefined
+          ? { leadSourceCode: data.leadSourceCode }
+          : {}),
+        ...(data.leadSourceLabel !== undefined
+          ? { leadSourceLabel: data.leadSourceLabel }
+          : {}),
+        ...(data.leadSourceDetail !== undefined
+          ? { leadSourceDetail: data.leadSourceDetail }
+          : {}),
+        ...(data.estimatedValue !== undefined
+          ? { estimatedValue: data.estimatedValue }
+          : {}),
+        ...(data.nextFollowUpDate !== undefined
+          ? { nextFollowUpDate: data.nextFollowUpDate }
+          : {}),
+      },
+    });
+    if (!isCreateLeadResult(result.data)) {
+      throw new Error("CRM_CREATE_RESPONSE_INVALID");
+    }
+    return result.data;
   }
   
   export async function updateLeadStage(

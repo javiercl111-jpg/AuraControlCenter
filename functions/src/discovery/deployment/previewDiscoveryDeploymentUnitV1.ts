@@ -14,6 +14,7 @@ export const PREVIEW_DISCOVERY_DEPLOY_TARGET_V1 =
 
 export const PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1 = Object.freeze([
   "createDiscoveryLead",
+  "createCrmLead",
   "exchangeDiscoveryToken",
   "resolveDiscoverySession",
   "evaluateConversation",
@@ -28,6 +29,7 @@ const serviceAccount = (name: string): string =>
 
 export const PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1 = Object.freeze({
   createDiscoveryLead: serviceAccount("preview-public-intake-runtime"),
+  createCrmLead: serviceAccount("preview-crm-lead-runtime"),
   exchangeDiscoveryToken: serviceAccount("preview-discovery-session-rt"),
   resolveDiscoverySession: serviceAccount("preview-discovery-session-rt"),
   evaluateConversation: serviceAccount("preview-conversation-runtime"),
@@ -46,6 +48,7 @@ export const PREVIEW_DISCOVERY_SECRET_BINDINGS_V1 = Object.freeze({
       secretResource: "discovery-idempotency-secret-preview",
     }),
   ]),
+  createCrmLead: Object.freeze([]),
   exchangeDiscoveryToken: Object.freeze([]),
   resolveDiscoverySession: Object.freeze([]),
   evaluateConversation: Object.freeze([
@@ -75,6 +78,7 @@ const callableOptions = (
 
 export const PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1 = Object.freeze({
   createDiscoveryLead: callableOptions("createDiscoveryLead"),
+  createCrmLead: callableOptions("createCrmLead"),
   exchangeDiscoveryToken: callableOptions("exchangeDiscoveryToken"),
   resolveDiscoverySession: callableOptions("resolveDiscoverySession"),
   evaluateConversation: callableOptions("evaluateConversation"),

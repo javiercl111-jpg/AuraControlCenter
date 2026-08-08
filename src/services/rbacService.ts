@@ -15,6 +15,7 @@ export type Capability =
   | "market.pipeline.manage_all"
   | "crm.read"
   | "crm.write"
+  | "crm.leads.create"
   | "crm.leads.read_own"
   | "crm.leads.update_own"
   | "crm.leads.read_all"
