@@ -1,0 +1,135 @@
+{
+  "schemaVersion": "PREVIEW_FRESH_BUCKET_END_TO_END_HAPPY_PATH_MATRIX_V1",
+  "changeId": "AI-02H2.2E-R3E-FRESH-BUCKET-END-TO-END-HAPPY-PATH-20260807-01",
+  "testRunId": "AI-02H2.2E-R3E-FRESH-BUCKET-HAPPY-PATH-20260807-01",
+  "environment": "PREVIEW",
+  "verdict": {
+    "code": "B",
+    "label": "CONDITIONAL — HAPPY PATH COMPLETED WITH NON-BLOCKING CONTROL GAP",
+    "blockingFailure": false,
+    "gap": "resolveDiscoverySession was not invoked by the uninterrupted frontend path; exercising its resumption branch would have violated the no-reload constraint."
+  },
+  "boundaries": {
+    "gcpProject": "aura-intel-preview",
+    "vercelProject": "aura-control-center-preview",
+    "browserOrigin": "https://preview-controlcenter.auranexus.io",
+    "productionAccessed": false,
+    "stagingAccessed": false,
+    "remoteWritesOutsideHappyPath": 0
+  },
+  "submit": {
+    "authorizedClicks": 1,
+    "createBusinessRequests": 1,
+    "retries": 0,
+    "reloads": 0,
+    "secondDiscoveries": 0,
+    "diagnosticRecordsObserved": 8,
+    "stages": [
+      "CLICK",
+      "NATIVE_SUBMIT",
+      "REACT_HANDLER",
+      "VALIDATION_ACCEPTED",
+      "APP_CHECK_READY",
+      "CLIENT_PRECONDITION_ACCEPTED",
+      "SERVICE_DISPATCH_STARTED",
+      "NETWORK_DISPATCH"
+    ]
+  },
+  "operations": [
+    {
+      "operation": "createDiscoveryLead",
+      "invoked": true,
+      "httpStatus": 200,
+      "durationSeconds": 2.651,
+      "appCheck": "VALID",
+      "containment": "ALLOWED",
+      "outcome": "SUCCESS"
+    },
+    {
+      "operation": "exchangeDiscoveryToken",
+      "invoked": true,
+      "httpStatus": 200,
+      "durationSeconds": 1.826,
+      "appCheck": "VALID",
+      "containment": "ALLOWED",
+      "outcome": "SUCCESS"
+    },
+    {
+      "operation": "resolveDiscoverySession",
+      "invoked": false,
+      "httpStatus": null,
+      "durationSeconds": null,
+      "appCheck": "NOT_OBSERVED",
+      "containment": "NOT_OBSERVED",
+      "outcome": "NOT_INVOKED",
+      "serviceHealth": "ACTIVE_AND_READY"
+    },
+    {
+      "operation": "evaluateConversation",
+      "invoked": true,
+      "httpStatus": 200,
+      "durationSeconds": 2.43,
+      "appCheck": "VALID",
+      "containment": "ALLOWED",
+      "outcome": "SUCCESS"
+    },
+    {
+      "operation": "completeDiscoverySession",
+      "invoked": true,
+      "httpStatus": 200,
+      "durationSeconds": 3.294,
+      "appCheck": "VALID",
+      "containment": "ALLOWED",
+      "outcome": "SUCCESS"
+    }
+  ],
+  "state": {
+    "leads": { "before": 1, "after": 2, "delta": 1 },
+    "sessions": { "before": 1, "after": 2, "delta": 1 },
+    "capabilities": { "before": 3, "after": 6, "delta": 3 },
+    "conversationBudgets": { "before": 1, "after": 2, "delta": 1 },
+    "completions": { "before": 1, "after": 2, "delta": 1 },
+    "completionOutbox": { "before": 1, "after": 2, "delta": 1 },
+    "platformEvents": { "before": 3, "after": 6, "delta": 3 },
+    "completedIdempotencyRecords": { "before": 1, "after": 2, "delta": 1 },
+    "idempotencyNamespaces": { "before": 1, "after": 2, "delta": 1 },
+    "notifications": { "before": 0, "after": 0, "delta": 0 },
+    "taskQueues": { "before": 0, "after": 0, "delta": 0 },
+    "functionalStorageObjects": { "before": 0, "after": 0, "delta": 0 }
+  },
+  "quota": {
+    "intake": { "count": 1, "effectiveLimit": 1, "remaining": 0 },
+    "aiEvaluation": { "count": 1, "effectiveLimit": 16, "remaining": 15 },
+    "completion": { "count": 1, "effectiveLimit": 1, "remaining": 0 }
+  },
+  "containment": {
+    "policies": 1,
+    "activePointers": 1,
+    "activationAudits": 1
+  },
+  "nonReuse": {
+    "previousLeadLocator": "sha256:1a82ce34512d",
+    "newLeadLocator": "sha256:31d85eea1116",
+    "leadDistinct": true,
+    "previousSessionLocator": "sha256:dd71dfded1b6",
+    "newSessionLocator": "sha256:f0279b13e363",
+    "sessionDistinct": true,
+    "previousCompletionLocator": "sha256:c158612acbdb",
+    "newCompletionLocator": "sha256:8f60b7af067e",
+    "completionDistinct": true,
+    "newCompletionLinksNewLead": true,
+    "newCompletionLinksNewSession": true
+  },
+  "health": {
+    "functionsActive": 5,
+    "functionsExpected": 5,
+    "cloudRunReady": 5,
+    "cloudRunExpected": 5,
+    "failedSelectedRevisions": 0,
+    "vercelPreviewDeployment": "READY",
+    "cloudTasksApiEnabled": false,
+    "functionalStorageBuckets": 0,
+    "functionalStorageObjects": 0
+  },
+  "formalReplayCertificationPerformed": false
+}
