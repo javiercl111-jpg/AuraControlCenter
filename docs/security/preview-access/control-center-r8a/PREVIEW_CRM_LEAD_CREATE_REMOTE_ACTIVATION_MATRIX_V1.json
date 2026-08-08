@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "PREVIEW_CRM_LEAD_CREATE_REMOTE_ACTIVATION_MATRIX_V1",
+  "verdict": "PREVIEW CRM LEAD CREATE REMOTE ACTIVATION CERTIFIED — READY FOR ONE CONTROLLED SYNTHETIC PROSPECT CREATE",
+  "targets": {
+    "firebaseProject": "aura-intel-preview",
+    "gcpProject": "aura-intel-preview",
+    "deployTarget": "functions:preview-discovery:createCrmLead",
+    "productionTargeted": false,
+    "stagingTargeted": false
+  },
+  "capability": {
+    "dryRunAction": "WOULD_CREATE",
+    "dryRunWrites": 0,
+    "applyInvocations": 1,
+    "applyAction": "CREATED",
+    "currentRole": "VIEWER",
+    "requiredCapability": "crm.leads.create",
+    "requiredCapabilityPresent": true,
+    "unexpectedCapabilities": 0,
+    "roleEscalation": false,
+    "contractValid": true
+  },
+  "runtimeIdentity": {
+    "shortName": "preview-crm-lead-runtime",
+    "exists": true,
+    "dedicated": true,
+    "userManagedKeys": 0,
+    "datastoreUserPresent": true,
+    "logsWriterPresent": true,
+    "unexpectedPrivilegedRoles": 0
+  },
+  "predeploy": {
+    "testsPassed": 121,
+    "testsFailed": 0,
+    "typescriptNoEmit": "PASS",
+    "functionsBuild": "PASS",
+    "selectiveGuard": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "deployment": {
+    "deployInvocations": 1,
+    "selectiveTargetOnly": true,
+    "functionName": "createCrmLead",
+    "functionState": "ACTIVE",
+    "region": "us-central1",
+    "dedicatedRuntimeIdentity": true,
+    "appCheckRequiredByContract": true,
+    "functionalInvocationPerformed": false
+  },
+  "cloudRun": {
+    "ready": true,
+    "configurationReady": true,
+    "routesReady": true,
+    "latestRevisionReady": true,
+    "revisionCount": 1,
+    "failedRevisions": 0
+  },
+  "frontend": {
+    "httpReady": true,
+    "httpStatus": 200,
+    "servedBundleContainsCreateCrmLead": true,
+    "clientCreateUsesDirectFirestoreAdd": false,
+    "deploymentRequired": false,
+    "deploymentPerformed": false
+  },
+  "rulesBoundary": {
+    "platformLeadClientCreate": "DENY",
+    "platformLeadClientUpdate": "DENY",
+    "platformLeadClientDelete": "DENY",
+    "rulesDeploymentPerformed": false
+  },
+  "prohibitedOperations": {
+    "prospectsCreated": 0,
+    "secondCapabilityApply": false,
+    "secondDeploy": false,
+    "roleChanged": false,
+    "productionTouched": false,
+    "stagingTouched": false,
+    "commitCreated": false,
+    "pushPerformed": false,
+    "pullRequestCreated": false
+  },
+  "nonBlockingNotices": [
+    "Node.js 20 runtime lifecycle warning",
+    "firebase-functions dependency upgrade warning"
+  ]
+}

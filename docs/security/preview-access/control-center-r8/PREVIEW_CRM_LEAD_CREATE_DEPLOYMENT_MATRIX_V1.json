@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "PREVIEW_CRM_LEAD_CREATE_DEPLOYMENT_MATRIX_V1",
+  "verdict": "PREVIEW CRM LEAD CREATE DEPLOYMENT READY — WAITING FOR CONTROLLED REMOTE CHANGE AUTHORIZATION",
+  "targets": {
+    "firebaseProject": "aura-intel-preview",
+    "gcpProject": "aura-intel-preview",
+    "vercelProject": "aura-control-center-preview",
+    "productionTargeted": false,
+    "stagingTargeted": false
+  },
+  "authority": {
+    "sourceOfTruth": [
+      "platform_global_admins/{canonical actor}",
+      "platform_global_admin_capability_grants/{canonical actor}"
+    ],
+    "currentRole": "VIEWER",
+    "currentCapabilities": [],
+    "requiredCapability": "crm.leads.create",
+    "roleAfter": "VIEWER",
+    "additionalCapabilities": 0
+  },
+  "dryRun": {
+    "status": "PASS",
+    "action": "WOULD_CREATE",
+    "capabilityBefore": "ABSENT",
+    "capabilityAfter": "crm.leads.create",
+    "writes": 0,
+    "postDryRunDocumentFound": false
+  },
+  "backend": {
+    "functionName": "createCrmLead",
+    "codebase": "preview-discovery",
+    "deployTarget": "functions:preview-discovery:createCrmLead",
+    "currentlyDeployed": false,
+    "runtimeIdentityPresent": false,
+    "runtimeDependencies": [
+      "dedicated Preview runtime identity",
+      "Datastore User",
+      "Log Writer",
+      "deployer actAs authorization"
+    ],
+    "selectiveGuard": "PASS",
+    "deploymentRequired": true
+  },
+  "frontend": {
+    "state": "READY",
+    "sourceMatchesOriginMain": true,
+    "containsMerge125": true,
+    "deploymentRequired": false
+  },
+  "remoteChanges": [
+    {
+      "order": 1,
+      "name": "capability provisioning",
+      "required": true,
+      "executed": false,
+      "expectedWrites": 2,
+      "blastRadius": "one identity and one CRM operation"
+    },
+    {
+      "order": 2,
+      "name": "selective Function deployment",
+      "required": true,
+      "executed": false,
+      "target": "functions:preview-discovery:createCrmLead",
+      "blastRadius": "one Preview callable"
+    },
+    {
+      "order": 3,
+      "name": "Vercel Preview frontend deployment",
+      "required": false,
+      "executed": false,
+      "expectedDelta": 0,
+      "blastRadius": "none"
+    }
+  ],
+  "validation": {
+    "testsPassed": 121,
+    "testsFailed": 0,
+    "typescriptNoEmit": "PASS",
+    "functionsBuild": "PASS",
+    "compiledSelectiveGuard": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "prohibitedOperations": {
+    "capabilityApplied": false,
+    "firebaseDeployed": false,
+    "vercelDeployed": false,
+    "prospectCreated": false,
+    "roleChanged": false,
+    "productionTouched": false,
+    "stagingTouched": false,
+    "commitCreated": false,
+    "pushPerformed": false,
+    "pullRequestCreated": false
+  }
+}
