@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "PREVIEW_DISCOVERY_503_MATRIX_V1",
+  "date": "2026-08-08",
+  "target": {
+    "project": "aura-intel-preview",
+    "environment": "PREVIEW",
+    "productionTouched": false,
+    "stagingTouched": false
+  },
+  "repositoryGate": {
+    "headEqualsOriginMain": true,
+    "worktreeInitiallyClean": true,
+    "commit": "6f66393ff6a7fdfd25fd515ff6eb84a7cdb3eca3"
+  },
+  "request": {
+    "sanitizedLocator": "trace-sha256:aa311496281c",
+    "timestamp": "2026-08-08T20:19:02.321908Z",
+    "httpStatus": 503,
+    "safeError": "DISCOVERY_TEMPORARILY_UNAVAILABLE",
+    "appCheck": "VALID",
+    "authentication": "VALID",
+    "containmentOutcome": "DENY",
+    "containmentReason": "CONTAINMENT_POLICY_EXPIRED"
+  },
+  "policy": {
+    "pointerFound": true,
+    "pointerContractValid": true,
+    "documentFound": true,
+    "policyVersion": "preview-containment-v1",
+    "schemaVersion": "DISCOVERY_CONTAINMENT_POLICY_V1",
+    "status": "ACTIVE",
+    "publicIntakeEnabled": true,
+    "tokenIssuanceEnabled": true,
+    "expiresAt": "2026-08-08T14:47:47.742Z",
+    "expiredAtRequest": true,
+    "blockedAppCount": 0,
+    "blockedCommercialCodeCount": 0
+  },
+  "globalIntakeCounter": {
+    "found": true,
+    "windowStartedAt": "2026-08-08T00:00:00.000Z",
+    "windowEndsAt": "2026-08-09T00:00:00.000Z",
+    "maxRequests": 1,
+    "burst": 0,
+    "effectiveLimit": 1,
+    "count": 1,
+    "remaining": 0,
+    "updatedAt": "2026-08-08T00:21:01.974Z",
+    "updatedByFailedRequest": false,
+    "decisiveFor503": false,
+    "quotaDenialHttpStatus": 429
+  },
+  "persistenceDelta": {
+    "marketDiscoveryLinksCreated": 0,
+    "discoverySessionsCreated": 0,
+    "platformLeadsCreated": 0,
+    "idempotencyRecordsCreated": 0,
+    "idempotencyRecordsUpdated": 0,
+    "idempotencyNamespacesUpdated": 0
+  },
+  "infrastructure": {
+    "function": "ACTIVE",
+    "generation": "GEN_2",
+    "cloudRun": "READY",
+    "failedRevisions": 0,
+    "previewWebHttpStatus": 200,
+    "appCheckEnforcedBySource": true
+  },
+  "classification": "A. CONTAINMENT_POLICY_EXPIRED",
+  "firstBreak": "The active Preview containment policy was semantically expired before PUBLIC_INTAKE evaluation could reach quota, authority or persistence.",
+  "remediation": {
+    "implemented": false,
+    "mechanism": "PreviewContainmentActivationControlPlaneV1",
+    "newImmutableVersionRequired": true,
+    "freshServerOwnedTtlRequired": true,
+    "dryRunFirst": true,
+    "manualFirestoreWriteAllowed": false,
+    "expiredDocumentMutationAllowed": false
+  },
+  "verdict": "PREVIEW DISCOVERY 503 ROOT CAUSE IDENTIFIED — READY FOR TARGETED REMEDIATION"
+}
