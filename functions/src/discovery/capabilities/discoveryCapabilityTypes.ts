@@ -25,6 +25,15 @@ export interface DiscoveryCapabilityV1 {
   readonly revocationReason: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
+  readonly synthetic?: true;
+  readonly environment?: "PREVIEW";
+  readonly projectId?: "aura-intel-preview";
+  readonly tenantId?: string;
+  readonly fixtureLocator?: string;
+  readonly requiredCapability?: "EVALUATE_CONVERSATION";
+  readonly capabilityScope?: "DISCOVERY_SESSION";
+  readonly issuedByActorId?: string;
+  readonly issuerVersion?: "SYNTHETIC_DISCOVERY_CAPABILITY_ISSUER_V1";
 }
 
 export const DISCOVERY_CAPABILITY_ERROR_CODES = Object.freeze([

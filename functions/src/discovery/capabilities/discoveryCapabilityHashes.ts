@@ -1,5 +1,11 @@
 import * as crypto from "crypto";
 
+export const DISCOVERY_CAPABILITY_TOKEN_BYTES_V1 = 32;
+
+export function generateDiscoveryCapabilityTokenV1(): string {
+  return crypto.randomBytes(DISCOVERY_CAPABILITY_TOKEN_BYTES_V1).toString("hex");
+}
+
 export function hashDiscoveryCapabilityToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
