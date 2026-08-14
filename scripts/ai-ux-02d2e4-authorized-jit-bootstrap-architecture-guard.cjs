@@ -167,11 +167,28 @@ function validateEvidence() {
   return [...new Set(errors)];
 }
 
-if (require.main === module) {
-  const errors = [
-    ...evaluateAiUx02D2E4ArchitectureV1(loadFiles()),
-    ...validateEvidence(),
+function collectAiUx02D2E4GuardErrorsV1(
+  files,
+  evidenceErrors,
+  options = {},
+) {
+  return [
+    ...evaluateAiUx02D2E4ArchitectureV1(files),
+    ...(options.sourceOnly ? [] : evidenceErrors),
   ];
+}
+
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  const sourceOnly = args.length === 1 && args[0] === "--source-only";
+  const argumentsValid = args.length === 0 || sourceOnly;
+  const errors = argumentsValid
+    ? collectAiUx02D2E4GuardErrorsV1(
+      loadFiles(),
+      sourceOnly ? [] : validateEvidence(),
+      { sourceOnly },
+    )
+    : ["GUARD_ARGUMENT_INVALID"];
   if (errors.length) {
     process.stderr.write(
       `AI_UX_02D2E4_ARCHITECTURE_GUARD_FAILED:${errors.join(",")}\n`,
@@ -182,4 +199,8 @@ if (require.main === module) {
   }
 }
 
-module.exports = { evaluateAiUx02D2E4ArchitectureV1, validateEvidence };
+module.exports = {
+  collectAiUx02D2E4GuardErrorsV1,
+  evaluateAiUx02D2E4ArchitectureV1,
+  validateEvidence,
+};

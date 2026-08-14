@@ -2,11 +2,19 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 import DossierBuilderService from "../modules/discovery/services/dossierBuilderService";
+import {
+  DirectEphemeralDiscoveryCapabilityInjectionBoundaryV1,
+  type DirectEphemeralDiscoveryCapabilityRequestV1,
+  type DirectEphemeralDiscoveryCapabilitySourceV1,
+} from "../modules/discovery/security/directEphemeralDiscoveryCapabilityInjectionV1";
 import ConversationOrchestrator from "../modules/intelligence/engine/services/ConversationOrchestrator";
 import ConversationState from "../modules/intelligence/engine/domain/ConversationState";
 import { ReflectionEngine } from "../modules/intelligence/engine/services/ReflectionEngine";
 import type { ReflectionState, ConfidenceMatrix } from "../modules/intelligence/engine/types/reflection.types";
-import type { ConversationPhase } from "../modules/intelligence/engine/types/orchestrator.types";
+import type {
+  ConversationPhase,
+  OrchestratorOutput,
+} from "../modules/intelligence/engine/types/orchestrator.types";
 import {
   createDiscoveryIdempotencyKey,
   createDiscoveryLink,
@@ -145,7 +153,14 @@ function mapDiscoveryError(err: unknown): DiscoveryErrorType {
   return "UNKNOWN";
 }
 
-export default function DiscoverPage() {
+export interface DiscoverPageProps {
+  readonly directEphemeralCapabilitySource?:
+    DirectEphemeralDiscoveryCapabilitySourceV1;
+}
+
+export default function DiscoverPage({
+  directEphemeralCapabilitySource,
+}: DiscoverPageProps = {}) {
   const showAuraThoughts = false; // Disabled by default for public experience
   const { linkId, commercialCode } = useParams<{ linkId?: string, commercialCode?: string }>();
   const navigate = useNavigate();
@@ -254,6 +269,29 @@ export default function DiscoverPage() {
       }
 
       try {
+        if (directEphemeralCapabilitySource) {
+          if (
+            directEphemeralCapabilitySource.scope.environment !== "PREVIEW" ||
+            directEphemeralCapabilitySource.scope.linkId !== linkId ||
+            new URLSearchParams(window.location.hash.slice(1)).has("access")
+          ) {
+            setError("El boundary efímero directo no coincide con esta sesión Preview.");
+            setLoading(false);
+            return;
+          }
+
+          setLinkInfo({
+            linkId,
+            companyName:
+              directEphemeralCapabilitySource.displayContext.companyName,
+            contactName:
+              directEphemeralCapabilitySource.displayContext.contactName,
+          });
+          setScreen("welcome");
+          setLoading(false);
+          return;
+        }
+
         const hash = window.location.hash;
         const hashParams = new URLSearchParams(hash.substring(1)); // Remove '#'
         const access = hashParams.get("access");
@@ -305,7 +343,7 @@ export default function DiscoverPage() {
       }
     }
     loadLink();
-  }, [linkId, commercialCode]);
+  }, [linkId, commercialCode, directEphemeralCapabilitySource]);
 
   async function handlePreformSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -413,6 +451,8 @@ export default function DiscoverPage() {
   // Welcome page text starts chat
   function handleStartChat() {
     if (!linkInfo) return;
+    const directSession =
+      directEphemeralCapabilitySource?.scope.linkId === linkInfo.linkId;
 
     // Instantiate Orchestrator and States
     orchestratorRef.current = new ConversationOrchestrator();
@@ -420,16 +460,23 @@ export default function DiscoverPage() {
     reflectionStateRef.current = tempReflectionEngine.createInitialState();
     confidenceMatrixRef.current = reflectionStateRef.current.matrix;
     stateRef.current = new ConversationState(
-      linkId || "demo",
+      directSession
+        ? directEphemeralCapabilitySource.scope.sessionId
+        : linkId || "demo",
       linkInfo.companyName,
       "Industria General" // We can update this later if we know it
     );
 
     setScreen("chat");
-    processTurn(""); // Start the conversation
+    if (!directSession) {
+      void processTurn(""); // Start the standard exchange-backed conversation.
+    }
   }
 
-  async function processTurn(userText: string) {
+  async function processTurn(
+    userText: string,
+    directRequest?: DirectEphemeralDiscoveryCapabilityRequestV1,
+  ): Promise<OrchestratorOutput | undefined> {
     if (!orchestratorRef.current || !stateRef.current || !reflectionStateRef.current || !confidenceMatrixRef.current || !linkInfo) return;
 
     // Record User Message
@@ -459,7 +506,10 @@ export default function DiscoverPage() {
 
       // Build Orchestrator Input
       const input = {
-        sessionToken: sessionStorage.getItem(`discovery_session_token_${linkInfo.linkId}`) ?? undefined,
+        sessionToken:
+          directRequest?.sessionToken ??
+          sessionStorage.getItem(`discovery_session_token_${linkInfo.linkId}`) ??
+          undefined,
         engineInput,
         conversationStateSnapshot: stateRef.current.getSnapshot(),
         reflectionState: reflectionStateRef.current,
@@ -526,6 +576,7 @@ export default function DiscoverPage() {
       if (output.shouldComplete) {
         handleComplete();
       }
+      return output;
     } catch (err) {
       console.error("Error processing turn:", err);
     } finally {
@@ -533,6 +584,65 @@ export default function DiscoverPage() {
     }
 
   }
+
+  const directTurnExecutorRef = useRef<
+    (
+      request: DirectEphemeralDiscoveryCapabilityRequestV1,
+    ) => Promise<OrchestratorOutput | undefined>
+  >(async () => undefined);
+  directTurnExecutorRef.current = (request) => processTurn("", request);
+
+  useEffect(() => {
+    if (
+      !directEphemeralCapabilitySource ||
+      !linkInfo ||
+      directEphemeralCapabilitySource.scope.environment !== "PREVIEW" ||
+      directEphemeralCapabilitySource.scope.linkId !== linkInfo.linkId
+    ) {
+      return;
+    }
+
+    const boundary =
+      new DirectEphemeralDiscoveryCapabilityInjectionBoundaryV1(
+        directEphemeralCapabilitySource.scope,
+      );
+    const disconnect = directEphemeralCapabilitySource.connect(
+      (injection) => boundary.injectAndExecute(
+        injection,
+        async (request) => {
+          if (
+            request.linkId !== linkInfo.linkId ||
+            request.sessionId !==
+              directEphemeralCapabilitySource.scope.sessionId
+          ) {
+            throw new Error("DIRECT_CAPABILITY_SCOPE_INVALID");
+          }
+
+          orchestratorRef.current = new ConversationOrchestrator();
+          const reflectionEngine = new ReflectionEngine();
+          reflectionStateRef.current = reflectionEngine.createInitialState();
+          confidenceMatrixRef.current = reflectionStateRef.current.matrix;
+          stateRef.current = new ConversationState(
+            request.sessionId,
+            linkInfo.companyName,
+            "Industria General",
+          );
+          setScreen("chat");
+
+          const output = await directTurnExecutorRef.current(request);
+          if (!output) {
+            throw new Error("DIRECT_CAPABILITY_INTELLIGENCE_EXECUTION_FAILED");
+          }
+          return output;
+        },
+      ),
+    );
+
+    return () => {
+      disconnect();
+      boundary.clear();
+    };
+  }, [directEphemeralCapabilitySource, linkInfo]);
 
   function handleUserSubmit(e: React.FormEvent) {
     e.preventDefault();

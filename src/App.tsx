@@ -27,14 +27,33 @@ import TenantsPage from "./pages/TenantsPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import ExecutiveIntakeSmokeTestPage from "./pages/dev/ExecutiveIntakeSmokeTestPage";
 import PublicNotFoundPage from "./pages/PublicNotFoundPage";
+import type {
+  DirectEphemeralDiscoveryCapabilitySourceV1,
+} from "./modules/discovery/security/directEphemeralDiscoveryCapabilityInjectionV1";
 
-export default function App() {
+export interface AppProps {
+  readonly directEphemeralCapabilitySource?:
+    DirectEphemeralDiscoveryCapabilitySourceV1;
+}
+
+export default function App({
+  directEphemeralCapabilitySource,
+}: AppProps = {}) {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/discover" element={<DiscoverPage />} />
       <Route path="/discover/advisor/:commercialCode" element={<DiscoverPage />} />
-      <Route path="/discover/:linkId" element={<DiscoverPage />} />
+      <Route
+        path="/discover/:linkId"
+        element={
+          <DiscoverPage
+            directEphemeralCapabilitySource={
+              directEphemeralCapabilitySource
+            }
+          />
+        }
+      />
 
       {import.meta.env.DEV && (
         <Route path="/dev/executive-intake-smoke-test" element={<ExecutiveIntakeSmokeTestPage />} />

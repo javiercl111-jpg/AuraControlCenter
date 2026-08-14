@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  collectAiUx02D2E4GuardErrorsV1,
   evaluateAiUx02D2E4ArchitectureV1,
 } = require("../ai-ux-02d2e4-authorized-jit-bootstrap-architecture-guard.cjs");
 
@@ -55,6 +56,27 @@ function fixture(overrides = {}) {
 
 test("accepts the authorized Preview-only JIT bootstrap", () => {
   assert.deepEqual(evaluateAiUx02D2E4ArchitectureV1(fixture()), []);
+});
+
+test("source-only validation remains independent from evidence custody", () => {
+  assert.deepEqual(
+    collectAiUx02D2E4GuardErrorsV1(
+      fixture(),
+      ["EVIDENCE_DIRECTORY_MISSING"],
+      { sourceOnly: true },
+    ),
+    [],
+  );
+});
+
+test("full validation retains evidence custody failures", () => {
+  assert.deepEqual(
+    collectAiUx02D2E4GuardErrorsV1(
+      fixture(),
+      ["EVIDENCE_DIRECTORY_MISSING"],
+    ),
+    ["EVIDENCE_DIRECTORY_MISSING"],
+  );
 });
 
 for (const forbidden of [
