@@ -1,9 +1,33 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
-export default defineConfig({
-  plugins: [
+const CONTROL_PROOF_DIGEST_V1 = /^[a-f0-9]{64}$/u;
+const CONTROL_PROOF_DIGEST_VARIABLE_V1 =
+  "VITE_AI_UX_02D2E4_CONTROL_PROOF_DIGEST_V1";
+const LEGACY_CONTROL_PROOF_VARIABLE =
+  "VITE_AI_UX_02D2E4_CONTROL_PROOF_SHA256";
+
+export default defineConfig(({ mode }) => {
+  const environment = loadEnv(mode, process.cwd(), "");
+  const isPreviewCertification =
+    mode === "preview-certification" ||
+    environment.VITE_AURA_RUNTIME_ENVIRONMENT === "PREVIEW";
+  const controlProofDigest = environment[CONTROL_PROOF_DIGEST_VARIABLE_V1];
+
+  if (environment[LEGACY_CONTROL_PROOF_VARIABLE] !== undefined) {
+    throw new Error("BROWSER_PROOF_LEGACY_BUILD_INPUT_REJECTED");
+  }
+  if (isPreviewCertification &&
+      !CONTROL_PROOF_DIGEST_V1.test(controlProofDigest ?? "")) {
+    throw new Error("BROWSER_PROOF_CERTIFIED_DIGEST_REQUIRED");
+  }
+  if (!isPreviewCertification && controlProofDigest !== undefined) {
+    throw new Error("BROWSER_PROOF_DIGEST_OUTSIDE_PREVIEW_REJECTED");
+  }
+
+  return {
+    plugins: [
     react(),
     VitePWA({
       registerType: "autoUpdate",
@@ -85,5 +109,6 @@ export default defineConfig({
         ],
       },
     }),
-  ],
+    ],
+  };
 });
