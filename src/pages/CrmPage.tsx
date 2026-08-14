@@ -376,9 +376,18 @@ export default function CrmPage() {
 
                 <div className="space-y-3">
                   {stageLeads.map((lead) => {
-                    const sessionMatch = discoverySessions.find(
-                      (s) => s.companyName.toLowerCase() === lead.companyName.toLowerCase()
-                    );
+                    const normalizedLeadCompanyName =
+                      typeof lead.companyName === "string"
+                        ? lead.companyName.trim().toLowerCase()
+                        : "";
+                    const sessionMatch = normalizedLeadCompanyName
+                      ? discoverySessions.find(
+                          (session) =>
+                            typeof session.companyName === "string" &&
+                            session.companyName.trim().toLowerCase() ===
+                              normalizedLeadCompanyName
+                        )
+                      : undefined;
                     
                     return (
                     <article

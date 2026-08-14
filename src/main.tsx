@@ -34,6 +34,39 @@ function mountApplication(
   );
 }
 
+function mountWaitingForAuthorizedClaim(): void {
+  root.render(
+    <StrictMode>
+      <main
+        aria-busy="true"
+        aria-live="polite"
+        data-bootstrap-state="waiting-for-authorized-claim"
+        role="status"
+        style={{
+          alignItems: "center",
+          backgroundColor: "#020617",
+          color: "#e2e8f0",
+          display: "flex",
+          justifyContent: "center",
+          minHeight: "100vh",
+          padding: "2rem",
+          textAlign: "center",
+        }}
+      >
+        <section aria-labelledby="preview-authorization-title">
+          <h1 id="preview-authorization-title">
+            Preview authorization pending
+          </h1>
+          <p>
+            This controlled Preview is waiting for an authorized session. No
+            application data has been loaded.
+          </p>
+        </section>
+      </main>
+    </StrictMode>,
+  );
+}
+
 const authorizedJitBootstrap = installAuthorizedJitBootstrapV1({
   environment: import.meta.env.VITE_AURA_RUNTIME_ENVIRONMENT,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -45,4 +78,6 @@ const authorizedJitBootstrap = installAuthorizedJitBootstrapV1({
 
 if (authorizedJitBootstrap.status === "UNAVAILABLE") {
   mountApplication();
+} else {
+  mountWaitingForAuthorizedClaim();
 }

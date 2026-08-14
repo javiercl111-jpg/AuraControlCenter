@@ -4,6 +4,9 @@ export const PREVIEW_CLIENT_AUTH_DOMAIN_V1 =
 export const PREVIEW_CLIENT_DOMAIN_V1 =
   "preview-controlcenter.auranexus.io" as const;
 
+const PREVIEW_CLIENT_IMMUTABLE_DEPLOYMENT_DOMAIN_PATTERN_V1 =
+  /^aura-control-center-[a-z0-9]{9}-javiers-projects-eab33ae8\.vercel\.app$/u;
+
 export const PREVIEW_CLIENT_REQUIRED_VARIABLES_V1 = Object.freeze([
   "VITE_AURA_RUNTIME_ENVIRONMENT",
   "VITE_FIREBASE_API_KEY",
@@ -125,7 +128,15 @@ export function resolvePreviewClientConfigurationV1(
 }
 
 export function assertPreviewClientDomainV1(hostname: string): void {
-  if (hostname.trim().toLowerCase() !== PREVIEW_CLIENT_DOMAIN_V1) {
+  const normalizedHostname = hostname.trim().toLowerCase();
+  const isCanonicalPreviewDomain =
+    normalizedHostname === PREVIEW_CLIENT_DOMAIN_V1;
+  const isImmutablePreviewDeploymentDomain =
+    PREVIEW_CLIENT_IMMUTABLE_DEPLOYMENT_DOMAIN_PATTERN_V1.test(
+      normalizedHostname,
+    );
+
+  if (!isCanonicalPreviewDomain && !isImmutablePreviewDeploymentDomain) {
     throw new PreviewClientConfigurationErrorV1(
       "PREVIEW_CLIENT_DOMAIN_MISMATCH",
     );
