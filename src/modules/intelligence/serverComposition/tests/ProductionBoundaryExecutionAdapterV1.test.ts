@@ -251,9 +251,7 @@ describe('ProductionBoundaryExecutionAdapterV1', () => {
     const composer = {
       execute: vi.fn(
         async (
-          _input: Parameters<
-            ProductionBoundaryExecutionAdapterV1['execute']
-          >[0],
+          _input: PipelineBootstrapInput,
           _signal?: AbortSignal,
         ) => {
           void _input;
