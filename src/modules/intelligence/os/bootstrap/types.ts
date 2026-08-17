@@ -27,6 +27,7 @@ export const PIPELINE_BOOTSTRAP_SCENARIO_IDS = [
   'COMPENSATION_RESTRUCTURE',
   'ORGANIZATION_RESTRUCTURE',
   'COMPLIANCE_AUDIT',
+  'GROWTH_INTELLIGENCE',
 ] as const;
 
 export type PipelineBootstrapScenarioId =
@@ -48,6 +49,7 @@ export const PIPELINE_BOOTSTRAP_SCENARIO_OBJECTIVE_KEYS = {
   ORGANIZATION_RESTRUCTURE:
     'ASSESS_ORGANIZATION_RESTRUCTURE_READINESS',
   COMPLIANCE_AUDIT: 'ASSESS_COMPLIANCE_AUDIT_READINESS',
+  GROWTH_INTELLIGENCE: 'ASSESS_GROWTH_INTELLIGENCE',
 } as const satisfies Readonly<
   Record<PipelineBootstrapScenarioId, string>
 >;
@@ -204,6 +206,33 @@ export const PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY: Readonly<
       'compensation',
       'benefits',
       'talent_performance',
+      'workforce_analytics',
+    ] as const,
+  }),
+  GROWTH_INTELLIGENCE: Object.freeze({
+    scenarioId: 'GROWTH_INTELLIGENCE',
+    version: PIPELINE_BOOTSTRAP_SCENARIO_VERSION,
+    description:
+      'Assess evidence readiness for governed enterprise growth intelligence.',
+    objectiveKey:
+      PIPELINE_BOOTSTRAP_SCENARIO_OBJECTIVE_KEYS.GROWTH_INTELLIGENCE,
+    allowedStages: PIPELINE_BOOTSTRAP_REQUESTABLE_STAGES,
+    requiredStages: PIPELINE_BOOTSTRAP_REQUIRED_SCENARIO_STAGES,
+    stageDependencies: PIPELINE_BOOTSTRAP_STAGE_DEPENDENCIES,
+    includedDomains: [
+      'growth_strategy',
+      'commercial_performance',
+      'campaigns',
+      'opportunities',
+    ] as const,
+    excludedDomains: [
+      'organization',
+      'payroll',
+      'compensation',
+      'benefits',
+      'compliance',
+      'talent_performance',
+      'time_attendance',
       'workforce_analytics',
     ] as const,
   }),
