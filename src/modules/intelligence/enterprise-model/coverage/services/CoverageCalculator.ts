@@ -6,7 +6,7 @@ import type {
   DomainCoverageMetrics,
   OverallCoverageReport,
 } from '../domain/types';
-import { COVERAGE_DOMAINS } from '../domain/types';
+import { COVERAGE_DOMAINS, DEFAULT_COVERAGE_DOMAINS_V1 } from '../domain/types';
 import {
   calculateCompletenessScore,
   categorizeGapSeverity,
@@ -134,7 +134,7 @@ export class CoverageCalculator {
   ): OverallCoverageReport {
     const evaluatedDomains = requiredDomains
       ? [...requiredDomains]
-      : [...ALL_COVERAGE_DOMAINS];
+      : [...DEFAULT_COVERAGE_DOMAINS_V1];
     const evaluatedDomainSet = new Set<CoverageDomain>(evaluatedDomains);
     const domainBreakdown: Record<CoverageDomain, DomainCoverageMetrics> = {} as Record<
       CoverageDomain,
@@ -143,7 +143,11 @@ export class CoverageCalculator {
     let totalScore = 0;
     const allGaps: CoverageGap[] = [];
 
-    ALL_COVERAGE_DOMAINS.forEach((domain) => {
+    const materializedDomains = requiredDomains
+      ? [...ALL_COVERAGE_DOMAINS]
+      : [...DEFAULT_COVERAGE_DOMAINS_V1];
+
+    materializedDomains.forEach((domain) => {
       const metrics = this.calculateDomainMetrics(graph, domain);
       const isEvaluated = evaluatedDomainSet.has(domain);
       domainBreakdown[domain] = isEvaluated
@@ -242,6 +246,38 @@ export class CoverageCalculator {
           text.includes('metric') ||
           text.includes('analytics') ||
           text.includes('turnover')
+        );
+      case 'growth_strategy':
+        return (
+          text.includes('growth') ||
+          text.includes('strategy') ||
+          text.includes('strategic') ||
+          text.includes('expansion') ||
+          text.includes('market')
+        );
+      case 'commercial_performance':
+        return (
+          text.includes('revenue') ||
+          text.includes('conversion') ||
+          text.includes('pipeline') ||
+          text.includes('commercial') ||
+          text.includes('sales performance')
+        );
+      case 'campaigns':
+        return (
+          text.includes('campaign') ||
+          text.includes('audience') ||
+          text.includes('channel') ||
+          text.includes('messaging') ||
+          text.includes('promotion')
+        );
+      case 'opportunities':
+        return (
+          text.includes('opportunity') ||
+          text.includes('market potential') ||
+          text.includes('growth potential') ||
+          text.includes('commercial potential') ||
+          text.includes('prioritize')
         );
       default:
         return false;

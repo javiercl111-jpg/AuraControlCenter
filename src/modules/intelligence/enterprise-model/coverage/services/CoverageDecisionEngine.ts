@@ -130,6 +130,14 @@ export class CoverageDecisionEngine {
           return '¿Qué prestaciones superiores a la ley están activas actualmente?';
         case 'compliance':
           return '¿Qué regulaciones fiscales y laborales locales requieren validación explícita?';
+        case 'growth_strategy':
+          return 'What strategic growth objectives, target markets, constraints and success measures are currently approved?';
+        case 'commercial_performance':
+          return 'What revenue, conversion, pipeline and commercial performance evidence is available for the current period?';
+        case 'campaigns':
+          return 'What campaign objective, audience, channels, message, budget and performance evidence is available?';
+        case 'opportunities':
+          return 'What evidence supports the value, effort, priority and market potential of the identified opportunities?';
         case 'time_attendance':
           return '¿Cómo se registran e integran las incidencias de tiempo y asistencia?';
         default:

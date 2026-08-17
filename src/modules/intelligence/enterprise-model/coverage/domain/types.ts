@@ -7,9 +7,24 @@ export const COVERAGE_DOMAINS = [
   'talent_performance',
   'time_attendance',
   'workforce_analytics',
+  'growth_strategy',
+  'commercial_performance',
+  'campaigns',
+  'opportunities',
 ] as const;
 
 export type CoverageDomain = (typeof COVERAGE_DOMAINS)[number];
+
+export const DEFAULT_COVERAGE_DOMAINS_V1 = [
+  'organization',
+  'payroll',
+  'compensation',
+  'benefits',
+  'compliance',
+  'talent_performance',
+  'time_attendance',
+  'workforce_analytics',
+] as const satisfies readonly CoverageDomain[];
 
 export interface CoverageScenarioScope {
   readonly scenarioId: string;
@@ -55,7 +70,7 @@ export interface OverallCoverageReport {
   totalRelationships: number;
   overallScore: number;
   confidenceLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXECUTIVE';
-  domainBreakdown: Record<CoverageDomain, DomainCoverageMetrics>;
+  domainBreakdown: Partial<Record<CoverageDomain, DomainCoverageMetrics>>;
   criticalGaps: CoverageGap[];
   readinessForDecision: boolean;
 }

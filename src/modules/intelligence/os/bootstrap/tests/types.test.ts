@@ -329,6 +329,7 @@ describe('Pipeline bootstrap contract types', () => {
       'COMPENSATION_RESTRUCTURE',
       'ORGANIZATION_RESTRUCTURE',
       'COMPLIANCE_AUDIT',
+      'GROWTH_INTELLIGENCE',
     ]);
     expect(
       Object.values(PIPELINE_BOOTSTRAP_SCENARIO_REGISTRY).every(
