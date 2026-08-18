@@ -90,13 +90,21 @@ describe('AI-02H1D.4 integration architecture', () => {
     );
   });
 
-  it('59. retains only the contract-test registry entries', () => {
+  it('59. retains only explicitly certified trusted registry entries', () => {
     expect(
       Object.keys(TRUSTED_CONSUMER_REGISTRY_V1.entries)
-    ).toEqual(['INTELLIGENCE_OS_CONTRACT_TEST']);
+    ).toEqual([
+      'INTELLIGENCE_OS_CONTRACT_TEST',
+      'AURA_GROWTH',
+    ]);
+
     expect(
       Object.keys(TRUSTED_SOURCE_REGISTRY_V1.entries)
-    ).toEqual(['TRUSTED_COMPOSITION_CONTRACT_TEST']);
+    ).toEqual([
+      'TRUSTED_COMPOSITION_CONTRACT_TEST',
+      'AURA_GROWTH',
+    ]);
+
     expect(
       JSON.stringify({
         consumers: TRUSTED_CONSUMER_REGISTRY_V1,

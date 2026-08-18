@@ -491,16 +491,36 @@ export function resolveTrustedRegistrySelectionV1(
       TRUSTED_COMPOSITION_REGISTRY_VERSION ||
     TRUSTED_SOURCE_REGISTRY_V1.schemaVersion !==
       TRUSTED_COMPOSITION_REGISTRY_VERSION ||
-    record.consumer !== 'INTELLIGENCE_OS_CONTRACT_TEST' ||
-    record.source !== 'TRUSTED_COMPOSITION_CONTRACT_TEST' ||
     !isOneOf(record.transport, TRUSTED_SERVER_TRANSPORTS) ||
     (record.requestedExecutionMode !== 'SHADOW_ONLY' &&
       record.requestedExecutionMode !== 'EVALUATION')
   ) {
     fail('REGISTRY_DENIED');
   }
-  const consumer = TRUSTED_CONSUMER_REGISTRY_V1.entries[record.consumer];
-  const source = TRUSTED_SOURCE_REGISTRY_V1.entries[record.source];
+  if (
+    typeof record.consumer !== 'string' ||
+    typeof record.source !== 'string' ||
+    !Object.prototype.hasOwnProperty.call(
+      TRUSTED_CONSUMER_REGISTRY_V1.entries,
+      record.consumer
+    ) ||
+    !Object.prototype.hasOwnProperty.call(
+      TRUSTED_SOURCE_REGISTRY_V1.entries,
+      record.source
+    )
+  ) {
+    fail('REGISTRY_DENIED');
+  }
+
+  const consumer =
+    TRUSTED_CONSUMER_REGISTRY_V1.entries[
+      record.consumer as keyof typeof TRUSTED_CONSUMER_REGISTRY_V1.entries
+    ];
+
+  const source =
+    TRUSTED_SOURCE_REGISTRY_V1.entries[
+      record.source as keyof typeof TRUSTED_SOURCE_REGISTRY_V1.entries
+    ];
   if (
     !consumer.enabled ||
     !source.enabled ||
@@ -518,7 +538,7 @@ export function resolveTrustedRegistrySelectionV1(
     !source.allowedExecutionModes.includes(
       record.requestedExecutionMode
     ) ||
-    !source.allowedConsumerIds.includes(record.consumer)
+    !source.allowedConsumerIds.includes(consumer.id)
   ) {
     fail('REGISTRY_DENIED');
   }

@@ -142,7 +142,7 @@ describe('AI-02H1C trusted composition architecture', () => {
     expect(source).not.toMatch(/\bTODO\b/);
   });
 
-  it('46. registers no productive consumer or source', () => {
+  it('46. registers only certified non-productive consumers and sources', () => {
     const consumers = Object.values(
       TRUSTED_CONSUMER_REGISTRY_V1.entries
     );
@@ -150,20 +150,30 @@ describe('AI-02H1C trusted composition architecture', () => {
       TRUSTED_SOURCE_REGISTRY_V1.entries
     );
 
-    expect(consumers).toHaveLength(1);
-    expect(sources).toHaveLength(1);
-    expect(consumers[0]?.id).toBe('INTELLIGENCE_OS_CONTRACT_TEST');
-    expect(sources[0]?.id).toBe(
-      'TRUSTED_COMPOSITION_CONTRACT_TEST'
-    );
-    expect(consumers[0]?.allowedTransports).toEqual([
-      'INTERNAL_TEST',
+    expect(consumers.map((entry) => entry.id)).toEqual([
+      'INTELLIGENCE_OS_CONTRACT_TEST',
+      'AURA_GROWTH',
     ]);
-    expect(sources[0]?.allowedTransports).toEqual([
-      'INTERNAL_TEST',
+
+    expect(sources.map((entry) => entry.id)).toEqual([
+      'TRUSTED_COMPOSITION_CONTRACT_TEST',
+      'AURA_GROWTH',
     ]);
-    expect(JSON.stringify({ consumers, sources })).not.toMatch(
-      /DISCOVERY|PRODUCTIVE/
-    );
+
+    expect(
+      consumers.every((entry) =>
+        entry.allowedExecutionModes.includes('SHADOW_ONLY')
+      )
+    ).toBe(true);
+
+    expect(
+      sources.every((entry) =>
+        entry.allowedExecutionModes.includes('SHADOW_ONLY')
+      )
+    ).toBe(true);
+
+    expect(
+      JSON.stringify({ consumers, sources })
+    ).not.toMatch(/DISCOVERY|PRODUCTIVE/);
   });
 });

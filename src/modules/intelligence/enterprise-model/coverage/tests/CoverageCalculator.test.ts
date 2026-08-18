@@ -206,8 +206,8 @@ describe('AI-01D: Knowledge Coverage Engine - CoverageCalculator', () => {
     expect(report.criticalGaps.map((gap) => gap.domain)).toEqual(
       requiredDomains
     );
-    expect(report.domainBreakdown.compensation.gaps).toEqual([]);
-    expect(report.domainBreakdown.payroll.gaps).toEqual([]);
+    expect(report.domainBreakdown.compensation!.gaps).toEqual([]);
+    expect(report.domainBreakdown.payroll!.gaps).toEqual([]);
     expect(report.readinessForDecision).toBe(false);
   });
 });
