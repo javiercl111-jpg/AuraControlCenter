@@ -19,6 +19,16 @@ export const TRUSTED_CONSUMER_REGISTRY_V1: TrustedConsumerRegistryV1 =
           'Contract-only consumer for trusted server composition tests',
         contractVersion: '1',
       }),
+      AURA_GROWTH: Object.freeze({
+        id: 'AURA_GROWTH',
+        version: '1',
+        enabled: true,
+        allowedTransports: Object.freeze(['INTERNAL_TEST'] as const),
+        allowedExecutionModes: Object.freeze(['SHADOW_ONLY'] as const),
+        description:
+          'Aura Growth governed shadow consumer',
+        contractVersion: '1',
+      }),
     }),
   });
 
@@ -37,6 +47,19 @@ export const TRUSTED_SOURCE_REGISTRY_V1: TrustedSourceRegistryV1 =
         allowedExecutionModes: Object.freeze(['SHADOW_ONLY'] as const),
         description:
           'Contract-only source for trusted server composition tests',
+        contractVersion: '1',
+      }),
+      AURA_GROWTH: Object.freeze({
+        id: 'AURA_GROWTH',
+        version: '1',
+        enabled: true,
+        allowedConsumerIds: Object.freeze([
+          'AURA_GROWTH',
+        ] as const),
+        allowedTransports: Object.freeze(['INTERNAL_TEST'] as const),
+        allowedExecutionModes: Object.freeze(['SHADOW_ONLY'] as const),
+        description:
+          'Aura Growth governed shadow source',
         contractVersion: '1',
       }),
     }),

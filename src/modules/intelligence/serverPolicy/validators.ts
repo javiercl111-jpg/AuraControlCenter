@@ -218,12 +218,28 @@ function cloneAuthoritativePolicyEntryV1(
     fail('INVALID_BINDING');
   }
 
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      TRUSTED_CONSUMER_REGISTRY_V1.entries,
+      query.consumerId
+    ) ||
+    !Object.prototype.hasOwnProperty.call(
+      TRUSTED_SOURCE_REGISTRY_V1.entries,
+      query.source
+    )
+  ) {
+    fail('INVALID_BINDING');
+  }
+
   const consumer =
-    TRUSTED_CONSUMER_REGISTRY_V1.entries
-      .INTELLIGENCE_OS_CONTRACT_TEST;
+    TRUSTED_CONSUMER_REGISTRY_V1.entries[
+      query.consumerId as keyof typeof TRUSTED_CONSUMER_REGISTRY_V1.entries
+    ];
+
   const source =
-    TRUSTED_SOURCE_REGISTRY_V1.entries
-      .TRUSTED_COMPOSITION_CONTRACT_TEST;
+    TRUSTED_SOURCE_REGISTRY_V1.entries[
+      query.source as keyof typeof TRUSTED_SOURCE_REGISTRY_V1.entries
+    ];
 
   const requestedModeString = query.requestedMode;
   if (

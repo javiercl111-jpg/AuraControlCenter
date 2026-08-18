@@ -141,10 +141,12 @@ export interface TrustedSanitizedTransportContextV1 {
 }
 
 export type TrustedConsumerId =
-  'INTELLIGENCE_OS_CONTRACT_TEST';
+  | 'INTELLIGENCE_OS_CONTRACT_TEST'
+  | 'AURA_GROWTH';
 
 export type TrustedSourceId =
-  'TRUSTED_COMPOSITION_CONTRACT_TEST';
+  | 'TRUSTED_COMPOSITION_CONTRACT_TEST'
+  | 'AURA_GROWTH';
 
 export interface TrustedConsumerRegistryEntryV1 {
   readonly id: TrustedConsumerId;

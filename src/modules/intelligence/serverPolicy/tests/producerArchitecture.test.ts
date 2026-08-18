@@ -95,13 +95,27 @@ describe('AI-02H1D.3 producer architecture', () => {
     );
   });
 
-  it('42. does not expand trusted registries', () => {
+  it('42. permits only explicitly certified trusted registries', () => {
     expect(
       Object.keys(TRUSTED_CONSUMER_REGISTRY_V1.entries)
-    ).toEqual(['INTELLIGENCE_OS_CONTRACT_TEST']);
+    ).toEqual([
+      'INTELLIGENCE_OS_CONTRACT_TEST',
+      'AURA_GROWTH',
+    ]);
+
     expect(
       Object.keys(TRUSTED_SOURCE_REGISTRY_V1.entries)
-    ).toEqual(['TRUSTED_COMPOSITION_CONTRACT_TEST']);
+    ).toEqual([
+      'TRUSTED_COMPOSITION_CONTRACT_TEST',
+      'AURA_GROWTH',
+    ]);
+
+    expect(
+      JSON.stringify({
+        consumers: TRUSTED_CONSUMER_REGISTRY_V1.entries,
+        sources: TRUSTED_SOURCE_REGISTRY_V1.entries,
+      })
+    ).not.toMatch(/PRODUCTIVE|DISCOVERY/);
   });
 
   it('43. retains one SHADOW_ONLY test policy and no productive consumer', () => {
