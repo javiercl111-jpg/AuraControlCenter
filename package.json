@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build --prefix packages/aura-executive-documents && tsc -b && vite build",
+    "build:preview-certification": "node scripts/ai-ux-02d2e4x-preview-certified-build.mjs",
     "typecheck:intelligence-os": "npm run typecheck --prefix packages/aura-intelligence-os",
     "build:intelligence-os": "npm run build --prefix packages/aura-intelligence-os",
     "stage:intelligence-os:functions": "npm run build:intelligence-os && npm run stage:functions --prefix packages/aura-intelligence-os",
