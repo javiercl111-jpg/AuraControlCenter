@@ -59,8 +59,8 @@ function createTrustedContext() {
     transport: 'INTERNAL_TEST',
     authenticatedPrincipal: principal,
     tenantMembership: membership,
-    consumer: 'INTELLIGENCE_OS_CONTRACT_TEST',
-    source: 'TRUSTED_COMPOSITION_CONTRACT_TEST',
+    consumer: 'AURA_GROWTH',
+    source: 'AURA_GROWTH',
     requestIdentity,
     initiatedAt: '2026-08-17T20:00:00.000Z',
     requestedExecutionMode: 'SHADOW_ONLY',
@@ -163,8 +163,8 @@ describe(
           actorType: 'USER',
           actorId: 'trusted-growth-actor-001',
         },
-        consumerId: 'INTELLIGENCE_OS_CONTRACT_TEST',
-        source: 'TRUSTED_COMPOSITION_CONTRACT_TEST',
+        consumerId: 'AURA_GROWTH',
+        source: 'AURA_GROWTH',
         requestId: 'growth-runtime-request-001',
         correlationId: 'growth-runtime-correlation-001',
       });
@@ -240,6 +240,91 @@ describe(
 
       expect(first.boundary).not.toBe(second.boundary);
       expect(first.growthCore).not.toBe(second.growthCore);
+    });
+
+    it('executes analyzeCampaign through the full governed runtime path', async () => {
+      const executionPort = createExecutionPort();
+
+      const composition =
+        createGovernedGrowthRuntimeCompositionV1({
+          trustedContext: createTrustedContext(),
+          featurePolicyPort: createPolicyPort(),
+          executionPort,
+          clockPort: createClock(),
+        });
+
+      const result = await composition.growthCore.analyzeCampaign(
+        {
+          context: {
+            contractVersion: '1.0',
+            requestId: 'growth-runtime-request-001',
+            correlationId: 'growth-runtime-correlation-001',
+            tenantId: 'trusted-growth-tenant-001',
+            actorId: 'trusted-growth-actor-001',
+            requestedAt: '2026-08-17T23:00:00.000Z',
+            mode: 'SHADOW',
+          },
+          campaign: {
+            campaignId: 'campaign-001',
+            objective: 'Increase qualified enterprise demand',
+            audienceSummary: 'Mid-market operations leaders',
+            valueProposition: 'Governed enterprise intelligence',
+            channels: ['LINKEDIN', 'EMAIL'],
+            keyMessages: ['Improve decision quality'],
+            expectedKpis: [
+              {
+                metric: 'qualified_leads',
+                target: 25,
+                unit: 'COUNT',
+              },
+            ],
+          },
+          evidence: [],
+          constraints: [
+            'No autonomous commercial execution',
+          ],
+        },
+        {
+          actorType: 'USER',
+          requestedMode: 'SHADOW_ONLY',
+        },
+      );
+
+      expect(result.status).toBe('SUCCEEDED');
+      expect(executionPort.execute).toHaveBeenCalledTimes(1);
+
+      const [executionInput] =
+        vi.mocked(executionPort.execute).mock.calls[0];
+
+      expect(executionInput.payload).toMatchObject({
+        operation: 'ANALYZE_CAMPAIGN',
+        scenarioId: 'GROWTH_INTELLIGENCE',
+        objectiveKey: 'ASSESS_GROWTH_INTELLIGENCE',
+      });
+
+      expect(
+        executionInput.authoritativeContext?.tenantId,
+      ).toBe('trusted-growth-tenant-001');
+
+      expect(
+        executionInput.authoritativeContext?.actor.actorId,
+      ).toBe('trusted-growth-actor-001');
+
+      expect(
+        executionInput.authoritativeContext?.requestId,
+      ).toBe('growth-runtime-request-001');
+
+      expect(
+        executionInput.authoritativeContext?.correlationId,
+      ).toBe('growth-runtime-correlation-001');
+
+      expect(
+        executionInput.authoritativeContext?.consumerId,
+      ).toBe('AURA_GROWTH');
+
+      const serialized = JSON.stringify(executionInput);
+
+      expect(serialized).not.toContain('PRODUCTIVE');
     });
   },
 );
