@@ -31,7 +31,8 @@ export type AuraModuleCode =
   | "AURA_HCM"
   | "AURA_MAINTENANCE"
   | "AURA_SIGNATURE"
-  | "AURA_INTELLIGENCE";
+  | "AURA_INTELLIGENCE"
+  | "AURA_GROWTH";
 
 export type CfdiPaymentMethod = "PUE" | "PPD";
 
