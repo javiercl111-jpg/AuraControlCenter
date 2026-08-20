@@ -30,4 +30,5 @@ export const CLIENT_STATUS_OPTIONS = [
     { value: "AURA_MAINTENANCE", label: "Aura Maintenance OS" },
     { value: "AURA_SIGNATURE", label: "Aura Signature" },
     { value: "AURA_INTELLIGENCE", label: "Aura Intelligence" },
+    { value: "AURA_GROWTH", label: "Aura Growth" },
   ] as const;

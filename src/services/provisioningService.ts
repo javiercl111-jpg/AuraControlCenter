@@ -45,6 +45,8 @@ function getProductName(code: AuraModuleCode): string {
       return "Aura Signature";
     case "AURA_INTELLIGENCE":
       return "Aura Intelligence";
+    case "AURA_GROWTH":
+      return "Aura Growth";
     default:
       return code;
   }
@@ -69,6 +71,9 @@ function getModuleMonthlyPrice(quote: PlatformQuote, moduleCode: AuraModuleCode)
       break;
     case "AURA_INTELLIGENCE":
       keyword = "intelligence";
+      break;
+    case "AURA_GROWTH":
+      keyword = "growth";
       break;
   }
 

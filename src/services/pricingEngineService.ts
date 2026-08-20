@@ -148,6 +148,13 @@ const DEFAULT_MODULE_RULES: ModulePricingRule[] = [
     includedInBase: false,
     active: true,
   },
+  {
+    moduleCode: "AURA_GROWTH",
+    label: "Aura Growth",
+    monthlyPrice: 0,
+    includedInBase: false,
+    active: false,
+  },
 ];
 
 interface CacheEntry<T> {

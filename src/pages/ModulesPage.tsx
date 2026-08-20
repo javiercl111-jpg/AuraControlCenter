@@ -23,6 +23,12 @@ const modules = [
       description: "Asistente IA central para soporte y operación del ecosistema.",
       status: "MVP",
     },
+    {
+      code: "AURA_GROWTH",
+      name: "Aura Growth",
+      description: "Inteligencia y automatizaci�n para crecimiento, contenido y operaci�n comercial.",
+      status: "Pre-lanzamiento",
+    },
   ];
   
   export default function ModulesPage() {
