@@ -1,6 +1,7 @@
 import {
   GrowthCoreSemanticMapperV1,
   type GrowthAnalyzeCampaignSemanticRequestV1,
+  type GrowthPrioritizeOpportunitiesSemanticRequestV1,
 } from '../GrowthCoreSemanticMapperV1';
 
 import type {
@@ -59,6 +60,51 @@ export class GrowthCoreRemoteAdapterV1 {
           (item) => ({ ...item }),
         ),
         constraints: [...mapped.payload.constraints],
+      },
+    };
+
+    return this.governedExecution.execute({
+      authority: {
+        tenantId: request.context.tenantId,
+        actor: {
+          actorId: request.context.actorId,
+          actorType: options.actorType,
+        },
+      },
+      execution: {
+        requestId: mapped.requestId,
+        correlationId: mapped.correlationId,
+        source: 'AURA_GROWTH',
+        requestedMode: options.requestedMode,
+      },
+      semantic,
+    });
+  }
+
+  async prioritizeOpportunities(
+    request: GrowthPrioritizeOpportunitiesSemanticRequestV1,
+    options: GrowthCoreRemoteExecutionOptionsV1,
+  ): Promise<GrowthGovernedExecutionResultV1> {
+    const mapped =
+      GrowthCoreSemanticMapperV1.mapPrioritizeOpportunities(
+        request,
+      );
+
+    const semantic: GrowthGovernedSemanticProjectionV1 = {
+      operation: mapped.operation,
+      scenarioId: mapped.scenarioId,
+      objectiveKey: mapped.objectiveKey,
+      domains: [...mapped.domains],
+      payload: {
+        opportunities:
+          mapped.payload.opportunities.map(
+            (opportunity) => ({
+              ...opportunity,
+            }),
+          ),
+        constraints: [
+          ...mapped.payload.constraints,
+        ],
       },
     };
 
