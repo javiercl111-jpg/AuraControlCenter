@@ -34,6 +34,9 @@ jobs:
       - name: Assert Node 20
         run: npm run assert:node20
 
+      - name: Guard Vercel Production auto-deploy containment
+        run: npm run test:vercel-production-auto-deploy-containment
+
       - name: Install root dependencies
         run: npm ci
 
