@@ -30,10 +30,19 @@ export interface GrowthExternalActionOrchestratorDependenciesV1 {
 
 export class GrowthExternalActionOrchestratorV1 {
 
+  private readonly dependencies:
+    GrowthExternalActionOrchestratorDependenciesV1;
+
+
   constructor(
-    private readonly dependencies:
+    dependencies:
       GrowthExternalActionOrchestratorDependenciesV1,
-  ) {}
+  ) {
+
+    this.dependencies =
+      dependencies;
+
+  }
 
 
   async execute(
