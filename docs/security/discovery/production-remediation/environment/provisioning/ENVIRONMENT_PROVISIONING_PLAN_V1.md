@@ -227,6 +227,13 @@ Secuencia: registrar app/provider Preview → métricas → Staging unenforced v
 | Domains | Preview pattern and expiry | Dedicated Staging pattern | Preserve approved Production domain |
 | Cleanup/rollback | Remove closed-PR deployment | Previous Staging deployment | P9 stable then certified prior deployment |
 
+### Production auto-deploy containment invariant
+
+- Git auto-deploy from `main` to Production is prohibited; `git.deploymentEnabled.main=false` is a mandatory repository invariant.
+- Production changes proceed only through certified promotion or authorized rollback.
+- Git deployments to Preview remain allowed for branches not disabled by the guard.
+- Removing the guard requires an approved replacement gate before the change is merged.
+
 ## 11. Observability resources
 
 Cada cloud environment crea los exact names del naming document:

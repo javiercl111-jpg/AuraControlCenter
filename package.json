@@ -18,6 +18,7 @@
     "test:intelligence-os:distribution": "npm run stage:intelligence-os:functions && npm run test:distribution --prefix packages/aura-intelligence-os",
     "test:intelligence-os:consumption": "npm run test:intelligence-os-consumption --prefix functions",
     "test:firestore-authority-adapter": "vitest run --config functions/tests/vitest.authority.config.ts",
+    "test:vercel-production-auto-deploy-containment": "node --test scripts/tests/vercel-production-auto-deploy-containment.test.cjs",
     "test:preview-rules-guard": "node --test scripts/tests/preview-rules-target-guard.test.cjs",
     "test:preview-rules-emulator": "npm run assert:node20 && node functions/tests/emulator/runPreviewRulesEmulator.cjs",
     "test:firestore-authority-emulator": "npm run assert:node20 && npm run stage:intelligence-os:functions && node functions/tests/emulator/runFirestoreAuthorityEmulator.cjs",
