@@ -1,6 +1,10 @@
 import React, { useRef, useState } from "react";
 import { read, utils } from "xlsx";
 import {
+  assertXlsxImportEnabled,
+  isXlsxImportEnabled,
+} from "../security/xlsxImportContainment";
+import {
   Database,
   HelpCircle,
   Loader2,
@@ -314,6 +318,8 @@ export default function MarketIntelligenceHeader({
   const [selectedImportState, setSelectedImportState] = useState("");
   const [uploadedFilename, setUploadedFilename] = useState<string>("");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const xlsxImportEnabled = isXlsxImportEnabled();
+
   const [pendingImportData, setPendingImportData] = useState<{
     rows2D: any[][];
     headerMap: any;
@@ -381,6 +387,13 @@ export default function MarketIntelligenceHeader({
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    try {
+      assertXlsxImportEnabled();
+    } catch (err: any) {
+      setError(err.message);
+      event.target.value = "";
+      return;
+    }
     setUploadedFilename(file.name);
     setUploadedFile(file);
     
@@ -402,6 +415,7 @@ export default function MarketIntelligenceHeader({
   }
 
   function processExcelFile(file: File) {
+    assertXlsxImportEnabled();
     setParseStatus("Leyendo archivo Excel...");
     setError("");
 
@@ -510,7 +524,7 @@ export default function MarketIntelligenceHeader({
           </button>
 
           {/* Uploader Excel o ZIP */}
-          {canImport ? (
+          {canImport && xlsxImportEnabled ? (
             <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-300 active:scale-95">
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
