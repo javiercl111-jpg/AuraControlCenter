@@ -16,6 +16,8 @@
     "guard:preview-crm-lead-create": "node ../scripts/preview-crm-lead-create-deployment-guard.cjs --project aura-intel-preview --environment PREVIEW",
     "dry-run:preview-crm-lead-create-deploy": "npm run build && npm run guard:preview-crm-lead-create",
     "deploy:preview-crm-lead-create": "npm run build && npm run guard:preview-crm-lead-create && firebase deploy --project aura-intel-preview --only functions:preview-discovery:createCrmLead --non-interactive",
+    "guard:preview-growth-linkedin-runtime-readiness": "node ../scripts/preview-growth-linkedin-runtime-readiness-deployment-guard.cjs --project aura-intel-preview --environment PREVIEW",
+    "deploy:preview-growth-linkedin-runtime-readiness": "npm run build && npm run guard:preview-growth-linkedin-runtime-readiness && firebase deploy --project aura-intel-preview --only functions:preview-discovery:growthLinkedInRuntimeReadinessV1 --non-interactive",
     "prepare:intelligence-execution-runtime-distribution": "npm --prefix .. run stage:intelligence-execution-runtime:functions"
   },
   "engines": {

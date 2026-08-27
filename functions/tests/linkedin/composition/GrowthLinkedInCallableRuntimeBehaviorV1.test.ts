@@ -105,7 +105,31 @@ describe(
         expect(
           source,
         ).toContain(
+          'resolveDiscoveryPrincipalV1',
+        );
+
+        expect(
+          source,
+        ).toContain(
+          'assertPreviewDiscoveryRuntimeV1();',
+        );
+
+        expect(
+          source,
+        ).not.toContain(
           'resolvePlatformPrincipal',
+        );
+
+        expect(
+          source,
+        ).toContain(
+          'caller.uid',
+        );
+
+        expect(
+          source,
+        ).not.toContain(
+          'caller.id',
         );
 
         expect(

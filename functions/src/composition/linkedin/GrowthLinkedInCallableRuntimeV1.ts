@@ -6,12 +6,17 @@ import {
 } from 'firebase-functions/v2/https';
 
 import {
-  resolvePlatformPrincipal,
-} from '../../auth/resolvePlatformPrincipal';
+  resolveDiscoveryPrincipalV1,
+} from '../../discovery/runtimeContracts/resolveDiscoveryPrincipalV1';
 
 import {
   growthLinkedInAccessTokenSecretV1,
 } from '../../infrastructure/linkedin/credentials/GrowthLinkedInFirebaseSecretSourceV1';
+
+import {
+  PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1,
+  assertPreviewDiscoveryRuntimeV1,
+} from '../../discovery/deployment/previewDiscoveryDeploymentUnitV1';
 
 import {
   GROWTH_LINKEDIN_INTEGRATION_TENANT_V1,
@@ -47,6 +52,8 @@ export const isGrowthLinkedInAuthorizedRoleV1 =
 export const growthLinkedInRuntimeReadinessV1 =
   onCall(
     {
+      ...PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.growthLinkedInRuntimeReadinessV1,
+
       enforceAppCheck:
         true,
 
@@ -58,6 +65,7 @@ export const growthLinkedInRuntimeReadinessV1 =
     async (
       request,
     ) => {
+      assertPreviewDiscoveryRuntimeV1();
 
       if (!request.auth) {
         throw new HttpsError(
@@ -68,7 +76,7 @@ export const growthLinkedInRuntimeReadinessV1 =
 
 
       const caller =
-        await resolvePlatformPrincipal(
+        await resolveDiscoveryPrincipalV1(
           admin.firestore(),
           request.auth,
         );
@@ -94,7 +102,7 @@ export const growthLinkedInRuntimeReadinessV1 =
           GROWTH_LINKEDIN_INTEGRATION_TENANT_V1,
 
         principalId:
-          caller.id,
+          caller.uid,
 
         role:
           caller.role,

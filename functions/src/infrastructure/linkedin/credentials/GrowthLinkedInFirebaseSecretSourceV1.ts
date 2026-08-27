@@ -14,7 +14,7 @@ import type {
 
 
 export const GROWTH_LINKEDIN_ACCESS_TOKEN_SECRET_NAME_V1 =
-  'AURA_GROWTH_LINKEDIN_ACCESS_TOKEN';
+  'GROWTH_LINKEDIN_ACCESS_TOKEN';
 
 
 export const growthLinkedInAccessTokenSecretV1 =
