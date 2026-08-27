@@ -462,6 +462,7 @@ export default function DiscoverPage() {
       linkInfo.companyName,
       "Industria General" // We can update this later if we know it
     );
+    stateRef.current.llmModeForSession = "HEURISTIC_ONLY";
 
     setScreen("chat");
     processTurn(""); // Start the conversation
