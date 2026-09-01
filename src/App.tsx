@@ -27,7 +27,6 @@ import TenantEnforcementPage from "./pages/TenantEnforcementPage";
 import TenantsPage from "./pages/TenantsPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import ExecutiveIntakeSmokeTestPage from "./pages/dev/ExecutiveIntakeSmokeTestPage";
-import GrowthLinkedInRuntimeReadinessHarnessPage from "./pages/dev/GrowthLinkedInRuntimeReadinessHarnessPage";
 import PublicNotFoundPage from "./pages/PublicNotFoundPage";
 
 export default function App() {
@@ -51,10 +50,6 @@ export default function App() {
         }
       >
         <Route index element={<DashboardPage />} />
-        <Route
-          path="dev/growth-linkedin-runtime-readiness"
-          element={<GrowthLinkedInRuntimeReadinessHarnessPage />}
-        />
         <Route path="consulting" element={<ConsultingCenterPage />} />
         <Route path="crm" element={<CrmPage />} />
         <Route path="pricing" element={<PricingEnginePage />} />
