@@ -19,34 +19,13 @@ import {
 } from '../../discovery/deployment/previewDiscoveryDeploymentUnitV1';
 
 import {
+  GROWTH_SOCIAL_MANAGE_CAPABILITY_V1,
+  hasGrowthSocialCapabilityV1,
+} from '../../growth/authorization/GrowthSocialCapabilityAuthorizationV1';
+
+import {
   GROWTH_LINKEDIN_INTEGRATION_TENANT_V1,
 } from './GrowthLinkedInRuntimeCompositionV1';
-
-
-export const GROWTH_LINKEDIN_AUTHORIZED_ROLES_V1 =
-  Object.freeze([
-    'SUPER_ADMIN',
-    'FOUNDER',
-    'SALES_DIRECTOR',
-    'PLATFORM_OWNER',
-    'PLATFORM_PARTNER',
-    'PARTNER',
-  ] as const);
-
-
-export const isGrowthLinkedInAuthorizedRoleV1 =
-  (
-    role:
-      string,
-  ): boolean => {
-
-    return (
-      GROWTH_LINKEDIN_AUTHORIZED_ROLES_V1 as
-        readonly string[]
-    ).includes(
-      role,
-    );
-  };
 
 
 export const growthLinkedInRuntimeReadinessV1 =
@@ -82,11 +61,13 @@ export const growthLinkedInRuntimeReadinessV1 =
         );
 
 
-      if (
-        !isGrowthLinkedInAuthorizedRoleV1(
-          caller.role,
-        )
-      ) {
+      const capabilityAuthorized = await hasGrowthSocialCapabilityV1(
+        admin.firestore(),
+        caller.uid,
+        GROWTH_SOCIAL_MANAGE_CAPABILITY_V1,
+      );
+
+      if (!capabilityAuthorized) {
         throw new HttpsError(
           'permission-denied',
           'LINKEDIN_RUNTIME_NOT_AUTHORIZED',
