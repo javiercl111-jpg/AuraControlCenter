@@ -1,133 +1,158 @@
 import {
+  readFileSync,
+} from 'node:fs';
+
+import {
   describe,
   expect,
   it,
 } from 'vitest';
 
-import fs from 'fs';
+const CALLABLE_PATH =
+  'functions/src/composition/linkedin/GrowthLinkedInCallableRuntimeV1.ts';
 
-import {
-  GROWTH_LINKEDIN_AUTHORIZED_ROLES_V1,
-  isGrowthLinkedInAuthorizedRoleV1,
-} from '../../../src/composition/linkedin/GrowthLinkedInCallableRuntimeV1';
-
+const callableSource =
+  readFileSync(
+    CALLABLE_PATH,
+    'utf8',
+  );
 
 describe(
   'GROWTH-CLOSURE-01 | LinkedIn Callable Runtime Behavior V1',
   () => {
-
     it(
-      'declares the governed administrative role set',
+      'authorizes readiness through growth.social.manage instead of LinkedIn role allowlists',
       () => {
-
         expect(
-          GROWTH_LINKEDIN_AUTHORIZED_ROLES_V1,
+          callableSource,
         ).toContain(
-          'PLATFORM_OWNER',
+          'GROWTH_SOCIAL_MANAGE_CAPABILITY_V1',
         );
 
         expect(
-          GROWTH_LINKEDIN_AUTHORIZED_ROLES_V1,
+          callableSource,
         ).toContain(
-          'SALES_DIRECTOR',
+          'hasGrowthSocialCapabilityV1',
         );
 
+        expect(
+          callableSource,
+        ).toContain(
+          '../../growth/authorization/GrowthSocialCapabilityAuthorizationV1',
+        );
+
+        expect(
+          callableSource,
+        ).toContain(
+          'await hasGrowthSocialCapabilityV1(',
+        );
+
+        expect(
+          callableSource,
+        ).not.toContain(
+          'GROWTH_LINKEDIN_AUTHORIZED_ROLES_V1',
+        );
+
+        expect(
+          callableSource,
+        ).not.toContain(
+          'isGrowthLinkedInAuthorizedRoleV1',
+        );
       },
     );
 
-
     it(
-      'authorizes a governed platform owner',
+      'keeps Preview assertion and canonical read-only principal resolution',
       () => {
-
         expect(
-          isGrowthLinkedInAuthorizedRoleV1(
-            'PLATFORM_OWNER',
-          ),
-        ).toBe(
-          true,
+          callableSource,
+        ).toContain(
+          'assertPreviewDiscoveryRuntimeV1();',
         );
 
+        expect(
+          callableSource,
+        ).toContain(
+          'resolveDiscoveryPrincipalV1',
+        );
+
+        expect(
+          callableSource,
+        ).toContain(
+          'caller.uid',
+        );
+
+        expect(
+          callableSource,
+        ).not.toContain(
+          'resolvePlatformPrincipal',
+        );
+
+        expect(
+          callableSource,
+        ).not.toContain(
+          'caller.id',
+        );
       },
     );
 
-
     it(
-      'rejects a non-authorized viewer role',
+      'preserves App Check and secret declaration without secret or LinkedIn execution',
       () => {
-
         expect(
-          isGrowthLinkedInAuthorizedRoleV1(
-            'VIEWER',
-          ),
-        ).toBe(
-          false,
+          callableSource,
+        ).toContain(
+          'PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.growthLinkedInRuntimeReadinessV1',
         );
 
-      },
-    );
-
-
-    it(
-      'declares App Check and the LinkedIn secret binding without secret acquisition',
-      () => {
-
-        const source =
-          fs.readFileSync(
-            'functions/src/composition/linkedin/GrowthLinkedInCallableRuntimeV1.ts',
-            'utf8',
-          );
-
         expect(
-          source,
+          callableSource,
         ).toContain(
           'enforceAppCheck',
         );
 
         expect(
-          source,
+          callableSource,
         ).toContain(
           'growthLinkedInAccessTokenSecretV1',
         );
 
         expect(
-          source,
+          callableSource,
         ).toContain(
-          'secrets:',
+          "'DECLARED_NOT_READ'",
         );
 
         expect(
-          source,
+          callableSource,
         ).toContain(
-          'request.auth',
+          "'NOT_EXECUTED'",
         );
 
         expect(
-          source,
-        ).toContain(
-          'resolvePlatformPrincipal',
+          callableSource,
+        ).not.toMatch(
+          /\.acquire\s*\(/,
         );
 
         expect(
-          source,
+          callableSource,
+        ).not.toMatch(
+          /\.value\s*\(/,
+        );
+
+        expect(
+          callableSource,
+        ).not.toMatch(
+          /\bfetch\s*\(/,
+        );
+
+        expect(
+          callableSource,
         ).not.toContain(
-          '.acquire(',
+          'api.linkedin.com',
         );
-
-        expect(
-          source,
-        ).not.toContain(
-          '.value()',
-        );
-
-        expect(
-          source,
-        ).not.toContain(
-          'fetch(',
-        );
-
       },
     );
-
   },
 );

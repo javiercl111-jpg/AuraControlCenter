@@ -58,6 +58,7 @@
     "test:preview-crm-lead-rules-guard": "node --test scripts/tests/preview-crm-lead-rules-guard.test.cjs",
     "test:preview-crm-lead-capability-provisioning": "node --test scripts/tests/preview-crm-lead-capability-provisioning.test.cjs",
     "test:preview-crm-lead-create-deployment-guard": "node --test scripts/tests/preview-crm-lead-create-deployment-guard.test.cjs",
+    "test:preview-growth-linkedin-runtime-readiness-deployment-guard": "node --test scripts/tests/preview-growth-linkedin-runtime-readiness-deployment-guard.test.cjs",
     "dry-run:preview-crm-lead-capability-provisioning": "node scripts/preview-crm-lead-capability-provisioning.cjs --dry-run --project=aura-intel-preview --environment=PREVIEW --capability=crm.leads.create --expected-role=VIEWER",
     "dry-run:preview-global-admin-provisioning": "node scripts/preview-global-admin-provisioning.cjs --dry-run --project=aura-intel-preview --environment=PREVIEW --role=VIEWER --is-active=true",
     "guard:preview-client-enablement:source": "node scripts/preview-client-enablement-guard.cjs --source-only",

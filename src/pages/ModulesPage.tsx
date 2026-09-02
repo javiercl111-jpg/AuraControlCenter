@@ -1,4 +1,14 @@
-const modules = [
+import { Link } from "react-router-dom";
+
+type ModuleDefinition = {
+  code: string;
+  name: string;
+  description: string;
+  status: string;
+  path?: string;
+};
+
+const modules: ModuleDefinition[] = [
     {
       code: "AURA_HCM",
       name: "Aura HCM",
@@ -27,7 +37,8 @@ const modules = [
       code: "AURA_GROWTH",
       name: "Aura Growth",
       description: "Inteligencia y automatizaci�n para crecimiento, contenido y operaci�n comercial.",
-      status: "Pre-lanzamiento",
+      status: "Preview operativo",
+      path: "/growth",
     },
   ];
   
@@ -74,6 +85,15 @@ const modules = [
               <p className="text-sm leading-6 text-slate-400">
                 {module.description}
               </p>
+
+              {module.path ? (
+                <Link
+                  to={module.path}
+                  className="mt-5 inline-flex items-center rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-400/20"
+                >
+                  Abrir consola
+                </Link>
+              ) : null}
             </article>
           ))}
         </section>
