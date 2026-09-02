@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { httpsCallable } from "firebase/functions";
 
-import { auth, functions } from "../config/firebase";
+import { auth, clientRuntimeEnvironment, functions } from "../config/firebase";
 
 type LinkedInReadinessResponse = {
   status?: string;
@@ -196,7 +196,7 @@ export default function GrowthPage() {
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
               Runtime
             </p>
-            <p className="mt-2 font-semibold text-white">Preview</p>
+            <p className="mt-2 font-semibold text-white">{clientRuntimeEnvironment}</p>
           </div>
 
           <div className="bg-slate-950/70 p-5">

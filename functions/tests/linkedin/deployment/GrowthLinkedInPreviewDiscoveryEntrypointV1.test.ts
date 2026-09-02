@@ -21,7 +21,7 @@ describe(
           );
 
         expect(source).toContain(
-          'import { growthLinkedInRuntimeReadinessV1 as growthLinkedInRuntimeReadinessV1Handler } from "./composition/linkedin/GrowthLinkedInCallableRuntimeV1";',
+          'import { growthLinkedInRuntimeReadinessV1 as growthLinkedInRuntimeReadinessV1Handler } from "./composition/linkedin/GrowthLinkedInPreviewCallableRuntimeV1";',
         );
 
         expect(source).toContain(

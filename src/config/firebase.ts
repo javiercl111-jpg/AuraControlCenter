@@ -70,12 +70,31 @@ function initializeAuraAppCheck(
 ): AppCheck | null {
   if (
     typeof window === "undefined" ||
-    clientConfiguration.environment !== "PREVIEW" ||
     !clientConfiguration.appCheckEnabled
   ) {
     return null;
   }
 
+  if (clientConfiguration.environment === "PRODUCTION") {
+    const instance =
+      initializeAppCheck(
+        firebaseApp,
+        {
+          provider:
+            new ReCaptchaEnterpriseProvider(
+              clientConfiguration.recaptchaSiteKey,
+            ),
+
+          isTokenAutoRefreshEnabled:
+            true,
+        },
+      );
+
+    window.__AURA_APP_CHECK__ =
+      instance;
+
+    return instance;
+  }
   const configuration = resolvePreviewAppCheckConfigurationV1({
     VITE_AURA_RUNTIME_ENVIRONMENT: clientConfiguration.environment,
     VITE_FIREBASE_PROJECT_ID: clientConfiguration.projectId,

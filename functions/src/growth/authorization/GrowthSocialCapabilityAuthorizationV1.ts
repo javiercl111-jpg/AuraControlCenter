@@ -4,8 +4,15 @@ export const GROWTH_SOCIAL_CAPABILITY_GRANT_COLLECTION_V1 =
 export const GROWTH_SOCIAL_CAPABILITY_GRANT_SCHEMA_VERSION_V1 =
   'GrowthSocialCapabilityGrantV1' as const;
 
-export const GROWTH_SOCIAL_CAPABILITY_ENVIRONMENT_V1 =
+export type GrowthSocialCapabilityEnvironmentV1 =
+  | 'PREVIEW'
+  | 'PRODUCTION';
+
+export const GROWTH_SOCIAL_CAPABILITY_PREVIEW_ENVIRONMENT_V1 =
   'PREVIEW' as const;
+
+export const GROWTH_SOCIAL_CAPABILITY_PRODUCTION_ENVIRONMENT_V1 =
+  'PRODUCTION' as const;
 
 export const GROWTH_SOCIAL_MANAGE_CAPABILITY_V1 =
   'growth.social.manage' as const;
@@ -103,6 +110,7 @@ const isValidCapabilityListV1 = (
 
 const isValidGrantV1 = (
   value: Record<string, unknown>,
+  expectedEnvironment: GrowthSocialCapabilityEnvironmentV1,
 ): boolean => {
   if (
     !hasExactKeysV1(
@@ -127,7 +135,7 @@ const isValidGrantV1 = (
 
   if (
     value.environment !==
-    GROWTH_SOCIAL_CAPABILITY_ENVIRONMENT_V1
+    expectedEnvironment
   ) {
     return false;
   }
@@ -146,6 +154,7 @@ export const hasGrowthSocialCapabilityV1 =
     db: GrowthSocialCapabilityFirestorePortV1,
     uid: string,
     requiredCapability: GrowthSocialCapabilityV1,
+    expectedEnvironment: GrowthSocialCapabilityEnvironmentV1,
   ): Promise<boolean> => {
     const canonicalUid =
       uid.trim();
@@ -203,7 +212,12 @@ export const hasGrowthSocialCapabilityV1 =
       return false;
     }
 
-    if (!isValidGrantV1(grant)) {
+    if (
+      !isValidGrantV1(
+        grant,
+        expectedEnvironment,
+      )
+    ) {
       return false;
     }
 

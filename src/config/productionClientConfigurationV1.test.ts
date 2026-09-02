@@ -14,12 +14,13 @@ const validProductionSource = (): ProductionClientEnvironmentSourceV1 => ({
   VITE_FIREBASE_PROJECT_ID: "aura-control-center-debb3",
   VITE_FIREBASE_MESSAGING_SENDER_ID: "2468135790",
   VITE_FIREBASE_APP_ID: "1:2468135790:web:productionmetadata",
+  VITE_RECAPTCHA_SITE_KEY: "production-site-key-metadata",
 });
 
 describe("Production client configuration contract", () => {
   it("defines the exact minimum Production variable set", () => {
-    expect(PRODUCTION_CLIENT_REQUIRED_VARIABLES_V1).toHaveLength(6);
-    expect(new Set(PRODUCTION_CLIENT_REQUIRED_VARIABLES_V1).size).toBe(6);
+    expect(PRODUCTION_CLIENT_REQUIRED_VARIABLES_V1).toHaveLength(7);
+    expect(new Set(PRODUCTION_CLIENT_REQUIRED_VARIABLES_V1).size).toBe(7);
   });
 
   it("resolves only the authorized Production configuration", () => {
@@ -29,7 +30,8 @@ describe("Production client configuration contract", () => {
         projectId: "aura-control-center-debb3",
         authDomain: "aura-control-center-debb3.firebaseapp.com",
         functionsRegion: "us-central1",
-        appCheckEnabled: false,
+        recaptchaSiteKey: "production-site-key-metadata",
+      appCheckEnabled: true,
       });
   });
 

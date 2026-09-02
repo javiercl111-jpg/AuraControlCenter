@@ -23,6 +23,7 @@ const validProductionSource = (): ClientFirebaseEnvironmentSourceV1 => ({
   VITE_FIREBASE_PROJECT_ID: "aura-control-center-debb3",
   VITE_FIREBASE_MESSAGING_SENDER_ID: "2468135790",
   VITE_FIREBASE_APP_ID: "1:2468135790:web:productionmetadata",
+  VITE_RECAPTCHA_SITE_KEY: "production-site-key-metadata",
 });
 
 describe("Production and Preview Firebase bootstrap isolation", () => {
@@ -68,11 +69,11 @@ describe("Production and Preview Firebase bootstrap isolation", () => {
     )).toMatchObject({
       environment: "PRODUCTION",
       projectId: "aura-control-center-debb3",
-      appCheckEnabled: false,
+      appCheckEnabled: true,
     });
   });
 
-  it("Production does not evaluate the Preview site-key contract", () => {
+  it("Production requires its certified App Check site-key contract", () => {
     const source = {
       ...validProductionSource(),
       VITE_RECAPTCHA_SITE_KEY: undefined,
@@ -80,7 +81,7 @@ describe("Production and Preview Firebase bootstrap isolation", () => {
     expect(() => resolveClientFirebaseBootstrapV1(
       source,
       "controlcenter.auranexus.io",
-    )).not.toThrow();
+    )).toThrowError("PRODUCTION_CLIENT_VARIABLE_MISSING");
   });
 
   it("Production never requires the Preview project", () => {

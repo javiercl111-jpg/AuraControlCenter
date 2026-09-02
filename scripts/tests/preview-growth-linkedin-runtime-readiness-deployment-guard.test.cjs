@@ -125,11 +125,11 @@ test("7 guard enforces LinkedIn safety boundaries", () => {
 
   assert.match(
     guardSource,
-    /assertPreviewDiscoveryRuntimeV1\(\);/u,
+    /previewSource\.includes\("assertPreviewDiscoveryRuntimeV1"\)/u,
   );
   assert.match(
     guardSource,
-    /PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1\.growthLinkedInRuntimeReadinessV1/u,
+    /previewSource\.includes\("PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1"\)/u,
   );
   assert.match(
     guardSource,
