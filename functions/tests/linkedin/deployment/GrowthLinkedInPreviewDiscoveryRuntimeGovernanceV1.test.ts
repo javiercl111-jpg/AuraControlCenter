@@ -85,34 +85,70 @@ describe(
       "makes the LinkedIn callable consume governed preview runtime options",
       () => {
 
-        const callableSource =
+        const previewCallableSource =
+          fs.readFileSync(
+            "functions/src/composition/linkedin/GrowthLinkedInPreviewCallableRuntimeV1.ts",
+            "utf8",
+          );
+
+        const sharedCallableSource =
           fs.readFileSync(
             "functions/src/composition/linkedin/GrowthLinkedInCallableRuntimeV1.ts",
             "utf8",
           );
 
         expect(
-          callableSource,
+          previewCallableSource,
         ).toContain(
           "PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1",
         );
 
         expect(
-          callableSource,
+          previewCallableSource,
         ).toContain(
-          "...PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.growthLinkedInRuntimeReadinessV1",
+          "assertPreviewDiscoveryRuntimeV1",
         );
 
         expect(
-          callableSource,
+          previewCallableSource,
+        ).toContain(
+          "GROWTH_SOCIAL_CAPABILITY_PREVIEW_ENVIRONMENT_V1",
+        );
+
+        expect(
+          previewCallableSource,
+        ).toContain(
+          "createGrowthLinkedInRuntimeReadinessV1",
+        );
+
+        expect(
+          sharedCallableSource,
         ).toContain(
           "growthLinkedInAccessTokenSecretV1",
         );
 
         expect(
-          callableSource,
+          sharedCallableSource,
         ).toContain(
           "secrets:",
+        );
+
+        expect(
+          sharedCallableSource,
+        ).toContain(
+          "enforceAppCheck",
+        );
+
+        expect(
+          sharedCallableSource,
+        ).not.toContain(
+          "PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1",
+        );
+
+        expect(
+          sharedCallableSource,
+        ).not.toContain(
+          "assertPreviewDiscoveryRuntimeV1",
         );
 
       },

@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "source": "functions/.generated/production-growth-linkedin",
+    "codebase": "production-growth-linkedin",
+    "runtime": "nodejs20"
+  }
+}

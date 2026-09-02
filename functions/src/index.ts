@@ -1159,4 +1159,4 @@ export { reactivatePipelineProspect } from "./prospects/reactivatePipelineProspe
 export { emitDiscoveryCompletedNotification } from "./notifications/emitDiscoveryCompletedNotification";
 export { markNotificationAsRead } from "./notifications/markNotificationAsRead";
 // --- Growth LinkedIn Runtime ---
-export { growthLinkedInRuntimeReadinessV1 } from "./composition/linkedin/GrowthLinkedInCallableRuntimeV1";
+export { growthLinkedInRuntimeReadinessV1 } from "./composition/linkedin/GrowthLinkedInProductionCallableRuntimeV1";

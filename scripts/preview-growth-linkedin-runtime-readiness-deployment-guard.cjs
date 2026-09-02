@@ -70,6 +70,10 @@ function validatePreviewGrowthLinkedInDeployment(input) {
     "functions/src/composition/linkedin/GrowthLinkedInCallableRuntimeV1.ts",
   );
 
+  const previewSource = read(
+    "functions/src/composition/linkedin/GrowthLinkedInPreviewCallableRuntimeV1.ts",
+  );
+
   const index = read("functions/src/previewDiscoveryIndex.ts");
 
   const contract = read(
@@ -80,12 +84,16 @@ function validatePreviewGrowthLinkedInDeployment(input) {
     "functions/src/infrastructure/linkedin/credentials/GrowthLinkedInFirebaseSecretSourceV1.ts",
   );
 
-  if (!source.includes("assertPreviewDiscoveryRuntimeV1();") ||
-      !source.includes(
-        "PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.growthLinkedInRuntimeReadinessV1",
-      ) ||
+  if (!previewSource.includes("assertPreviewDiscoveryRuntimeV1") ||
+      !previewSource.includes("PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1") ||
+      !previewSource.includes("GROWTH_SOCIAL_CAPABILITY_PREVIEW_ENVIRONMENT_V1") ||
+      !previewSource.includes("createGrowthLinkedInRuntimeReadinessV1") ||
       !source.includes("resolveDiscoveryPrincipalV1") ||
-      !source.includes("growthLinkedInAccessTokenSecretV1")) {
+      !source.includes("growthLinkedInAccessTokenSecretV1") ||
+      !source.includes("secrets:") ||
+      !source.includes("enforceAppCheck") ||
+      !source.includes("GROWTH_SOCIAL_MANAGE_CAPABILITY_V1") ||
+      !source.includes("hasGrowthSocialCapabilityV1")) {
     fail("LINKEDIN_DEPLOY_HANDLER_GUARDS_MISSING");
   }
 

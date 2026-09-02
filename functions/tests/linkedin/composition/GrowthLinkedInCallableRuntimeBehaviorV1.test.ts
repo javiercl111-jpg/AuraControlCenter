@@ -11,9 +11,18 @@ import {
 const CALLABLE_PATH =
   'functions/src/composition/linkedin/GrowthLinkedInCallableRuntimeV1.ts';
 
+const PREVIEW_CALLABLE_PATH =
+  'functions/src/composition/linkedin/GrowthLinkedInPreviewCallableRuntimeV1.ts';
+
 const callableSource =
   readFileSync(
     CALLABLE_PATH,
+    'utf8',
+  );
+
+const previewCallableSource =
+  readFileSync(
+    PREVIEW_CALLABLE_PATH,
     'utf8',
   );
 
@@ -65,9 +74,9 @@ describe(
       'keeps Preview assertion and canonical read-only principal resolution',
       () => {
         expect(
-          callableSource,
+          previewCallableSource,
         ).toContain(
-          'assertPreviewDiscoveryRuntimeV1();',
+          'assertPreviewDiscoveryRuntimeV1',
         );
 
         expect(
@@ -100,9 +109,9 @@ describe(
       'preserves App Check and secret declaration without secret or LinkedIn execution',
       () => {
         expect(
-          callableSource,
+          previewCallableSource,
         ).toContain(
-          'PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.growthLinkedInRuntimeReadinessV1',
+          'PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1',
         );
 
         expect(

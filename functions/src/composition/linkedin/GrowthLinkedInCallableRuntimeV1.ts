@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import {
   HttpsError,
   onCall,
+  type CallableOptions,
 } from 'firebase-functions/v2/https';
 
 import {
@@ -14,13 +15,9 @@ import {
 } from '../../infrastructure/linkedin/credentials/GrowthLinkedInFirebaseSecretSourceV1';
 
 import {
-  PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1,
-  assertPreviewDiscoveryRuntimeV1,
-} from '../../discovery/deployment/previewDiscoveryDeploymentUnitV1';
-
-import {
   GROWTH_SOCIAL_MANAGE_CAPABILITY_V1,
   hasGrowthSocialCapabilityV1,
+  type GrowthSocialCapabilityEnvironmentV1,
 } from '../../growth/authorization/GrowthSocialCapabilityAuthorizationV1';
 
 import {
@@ -28,71 +25,89 @@ import {
 } from './GrowthLinkedInRuntimeCompositionV1';
 
 
-export const growthLinkedInRuntimeReadinessV1 =
-  onCall(
-    {
-      ...PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.growthLinkedInRuntimeReadinessV1,
+export interface GrowthLinkedInRuntimeReadinessFactoryV1 {
+  readonly callableOptions:
+    Readonly<CallableOptions>;
 
-      enforceAppCheck:
-        true,
+  readonly environment:
+    GrowthSocialCapabilityEnvironmentV1;
 
-      secrets: [
-        growthLinkedInAccessTokenSecretV1,
-      ],
-    },
-
-    async (
-      request,
-    ) => {
-      assertPreviewDiscoveryRuntimeV1();
-
-      if (!request.auth) {
-        throw new HttpsError(
-          'unauthenticated',
-          'AUTHENTICATION_REQUIRED',
-        );
-      }
+  readonly assertRuntime:
+    () => void;
+}
 
 
-      const caller =
-        await resolveDiscoveryPrincipalV1(
-          admin.firestore(),
-          request.auth,
-        );
+export const createGrowthLinkedInRuntimeReadinessV1 =
+  (
+    dependencies:
+      GrowthLinkedInRuntimeReadinessFactoryV1,
+  ) =>
+    onCall(
+      {
+        ...dependencies.callableOptions,
+
+        enforceAppCheck:
+          true,
+
+        secrets: [
+          growthLinkedInAccessTokenSecretV1,
+        ],
+      },
+
+      async (
+        request,
+      ) => {
+        dependencies.assertRuntime();
+
+        if (!request.auth) {
+          throw new HttpsError(
+            'unauthenticated',
+            'AUTHENTICATION_REQUIRED',
+          );
+        }
 
 
-      const capabilityAuthorized = await hasGrowthSocialCapabilityV1(
-        admin.firestore(),
-        caller.uid,
-        GROWTH_SOCIAL_MANAGE_CAPABILITY_V1,
-      );
-
-      if (!capabilityAuthorized) {
-        throw new HttpsError(
-          'permission-denied',
-          'LINKEDIN_RUNTIME_NOT_AUTHORIZED',
-        );
-      }
+        const caller =
+          await resolveDiscoveryPrincipalV1(
+            admin.firestore(),
+            request.auth,
+          );
 
 
-      return Object.freeze({
-        status:
-          'AUTHORIZED',
+        const capabilityAuthorized =
+          await hasGrowthSocialCapabilityV1(
+            admin.firestore(),
+            caller.uid,
+            GROWTH_SOCIAL_MANAGE_CAPABILITY_V1,
+            dependencies.environment,
+          );
 
-        tenantId:
-          GROWTH_LINKEDIN_INTEGRATION_TENANT_V1,
+        if (!capabilityAuthorized) {
+          throw new HttpsError(
+            'permission-denied',
+            'LINKEDIN_RUNTIME_NOT_AUTHORIZED',
+          );
+        }
 
-        principalId:
-          caller.uid,
 
-        role:
-          caller.role,
+        return Object.freeze({
+          status:
+            'AUTHORIZED',
 
-        secretBinding:
-          'DECLARED_NOT_READ',
+          tenantId:
+            GROWTH_LINKEDIN_INTEGRATION_TENANT_V1,
 
-        linkedInConnection:
-          'NOT_EXECUTED',
-      });
-    },
-  );
+          principalId:
+            caller.uid,
+
+          role:
+            caller.role,
+
+          secretBinding:
+            'DECLARED_NOT_READ',
+
+          linkedInConnection:
+            'NOT_EXECUTED',
+        });
+      },
+    );

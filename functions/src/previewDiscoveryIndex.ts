@@ -1,7 +1,7 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 
 import { createCrmLead as createCrmLeadHandler } from "./crm/createCrmLead";
-import { growthLinkedInRuntimeReadinessV1 as growthLinkedInRuntimeReadinessV1Handler } from "./composition/linkedin/GrowthLinkedInCallableRuntimeV1";
+import { growthLinkedInRuntimeReadinessV1 as growthLinkedInRuntimeReadinessV1Handler } from "./composition/linkedin/GrowthLinkedInPreviewCallableRuntimeV1";
 
 import { completeDiscoverySession as completeDiscoverySessionHandler } from
   "./discovery/completeDiscoverySession";

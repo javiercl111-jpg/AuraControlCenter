@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": ".generated/production-growth-linkedin/lib"
+  },
+  "files": [
+    "src/productionGrowthLinkedInIndex.ts"
+  ],
+  "include": []
+}
