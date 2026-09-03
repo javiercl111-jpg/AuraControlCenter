@@ -428,6 +428,10 @@ export class AuraIntelligenceOrchestrator {
         } else {
           const result = await this.executeReasoningStage(currentState, stageResults, guardCtx);
           if (result.status === 'SUCCEEDED' && result.output) {
+            stageResults['EXECUTIVE_REASONING'] = {
+              ...stageResults['EXECUTIVE_REASONING']!,
+              output: result.output.reasoningReport
+            };
             currentState = result.output;
           } else {
             reasoningFailed = true;
@@ -467,6 +471,10 @@ export class AuraIntelligenceOrchestrator {
         } else {
           const result = await this.executeDossierStage(currentState, stageResults, guardCtx);
           if (result.status === 'SUCCEEDED' && result.output) {
+            stageResults['EXECUTIVE_DOSSIER'] = {
+              ...stageResults['EXECUTIVE_DOSSIER']!,
+              output: result.output.dossier
+            };
             currentState = result.output;
           } else {
             dossierFailed = true;
@@ -504,6 +512,10 @@ export class AuraIntelligenceOrchestrator {
         } else {
           const result = await this.executeAssessmentStage(currentState, stageResults, guardCtx);
           if (result.status === 'SUCCEEDED' && result.output) {
+            stageResults['TRANSFORMATION_ASSESSMENT'] = {
+              ...stageResults['TRANSFORMATION_ASSESSMENT']!,
+              output: result.output.assessment
+            };
             currentState = result.output;
           } else {
             partialFailures = true;
