@@ -299,6 +299,15 @@ function stageProductionGrowthLinkedIn() {
     "utf8",
   );
 
+  fs.writeFileSync(
+    path.join(
+      GENERATED_ROOT,
+      ".env.aura-control-center-debb3",
+    ),
+    "AURA_RUNTIME_ENVIRONMENT=PRODUCTION\n",
+    "utf8",
+  );
+
   const lockSource =
     path.join(
       FUNCTIONS_ROOT,
