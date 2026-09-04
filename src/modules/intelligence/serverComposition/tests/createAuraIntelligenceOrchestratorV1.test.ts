@@ -95,11 +95,13 @@ describe('AEA-05-R1C.3 createAuraIntelligenceOrchestratorV1 - Pipeline Execution
     const dossierStage = result.stageResults['EXECUTIVE_DOSSIER'];
     expect(dossierStage).toBeDefined();
     expect(dossierStage?.status).toBe('SUCCEEDED');
+    expect(dossierStage?.output).toBeDefined();
 
     // 20. TRANSFORMATION_ASSESSMENT produce output
     const assessmentStage = result.stageResults['TRANSFORMATION_ASSESSMENT'];
     expect(assessmentStage).toBeDefined();
     expect(assessmentStage?.status).toBe('SUCCEEDED');
+    expect(assessmentStage?.output).toBeDefined();
 
     // 21. status final pertenece a estados contractuales válidos
     const validStatuses = ['SUCCESS', 'PARTIAL_SUCCESS', 'PARTIAL', 'FAILED', 'TIMEOUT', 'CANCELLED'];
