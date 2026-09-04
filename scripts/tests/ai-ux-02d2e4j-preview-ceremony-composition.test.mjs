@@ -31,6 +31,19 @@ const NOW = Date.parse("2026-08-12T22:00:00.000Z");
 const TENANT = syntheticCapabilityPolicy.tenantId;
 const FIXTURE = syntheticCapabilityPolicy.fixtureLocator;
 const POLICY = "AI_UX_02D2E4J_POLICY_0001";
+
+const PREVIEW_TARGET = Object.freeze({
+  deploymentId:
+    D2E4G_PREVIEW_DEPLOYMENT_ID,
+  deploymentUrl:
+    D2E4G_PREVIEW_URL,
+  previewUrl:
+    D2E4G_PREVIEW_URL,
+  projectId:
+    "aura-control-center",
+  gitBranch:
+    "release/ai-ux-02d2e4-preview-control",
+});
 const authority = Object.freeze({
   environment: "PREVIEW",
   targetProjectId: "aura-intel-preview",
@@ -166,6 +179,8 @@ function setup(overrides = {}) {
     new CertifiedAdaptiveCanaryControlPlane();
   const input = {
     environment: "PREVIEW",
+    previewTarget:
+      PREVIEW_TARGET,
     releaseRoot: process.cwd(),
     approver: "approved-human-operator",
     authoritativeTenantLocator:
@@ -216,6 +231,32 @@ test("legacy Preview composition stays fail-closed before D2E4H receipt executio
     apply: 0,
     readBack: 0,
   });
+});
+
+test("explicit Preview target is required before any adapter construction", async () => {
+  const {
+    input,
+    commandExecutor,
+  } = setup({
+    previewTarget: undefined,
+  });
+
+  await assert.rejects(
+    () =>
+      createOperationalD2E4JPreviewCeremonyCompositionV1(
+        input
+      ),
+    (error) =>
+      error instanceof D2E4JCompositionError &&
+      error.code ===
+        "D2E4J_REQUIRED_PREVIEW_TARGET_MISSING" &&
+      error.phase === "CONFIGURATION",
+  );
+
+  assert.equal(
+    commandExecutor.calls.length,
+    0,
+  );
 });
 
 test("all seven operational configuration fields are required before preflight", async (t) => {

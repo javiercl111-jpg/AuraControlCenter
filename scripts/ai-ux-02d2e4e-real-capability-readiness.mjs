@@ -92,9 +92,11 @@ function failAuthority(code, { traceId, occurredAtMs, cause } = {}) {
 function assertTarget(target) {
   if (
     target?.environment !== "PREVIEW" ||
-    target?.projectName !== D2E4D_TARGET.projectName ||
+    typeof target?.projectName !== "string" ||
+    !/^[a-z0-9][a-z0-9-]{2,99}$/u.test(target.projectName) ||
     target?.firebaseProjectId !== D2E4D_TARGET.firebaseProjectId ||
-    target?.gitBranch !== D2E4D_TARGET.gitBranch ||
+    typeof target?.gitBranch !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._/-]{2,255}$/u.test(target.gitBranch) ||
     target?.controlContext !== D2E4_CONTROL_CONTEXT
   ) {
     fail("D2E4E_PREVIEW_TARGET_REJECTED");
@@ -438,6 +440,7 @@ export class OperationalD2E4EFinalCeremonyEntrypointV1 {
   #rotatorClass;
   #runnerFactory;
   #clock;
+  #target;
   #created = false;
 
   constructor({
@@ -449,6 +452,7 @@ export class OperationalD2E4EFinalCeremonyEntrypointV1 {
     runtimeRevisionReader,
     rotatorClass,
     runnerFactory = createOperationalSingleProcessCeremonyRunnerV1,
+    target = D2E4D_TARGET,
     clock = Date.now,
   }) {
     if (typeof authorityFactory !== "function" ||
@@ -463,8 +467,10 @@ export class OperationalD2E4EFinalCeremonyEntrypointV1 {
     this.#browserRuntime = browserRuntime;
     this.#runtimeRevisionReader = runtimeRevisionReader;
     this.#rotatorClass = rotatorClass;
+    assertTarget(target);
     this.#runnerFactory = runnerFactory;
     this.#clock = clock;
+    this.#target = Object.freeze({ ...target });
   }
 
   async preflight(input) {
@@ -485,14 +491,17 @@ export class OperationalD2E4EFinalCeremonyEntrypointV1 {
       });
     const authority = bindingResolution.authority;
     const consumerBoundary = new RealConsumerBoundaryReadinessAdapterV1({
+        target: this.#target,
       rotationRepository: this.#rotationRepository,
       browserRuntime: this.#browserRuntime,
     });
     const rotationAuthority = new RealCapabilityRotationAuthorityAdapterV1({
+        target: this.#target,
       rotationRepository: this.#rotationRepository,
       assertCertifiedAuthority: this.#assertCertifiedAuthority,
     });
     const canaryRevalidation = new RealCanaryPolicyRevalidationAdapterV1({
+        target: this.#target,
       policyRepository: this.#policyRepository,
       runtimeRevisionReader: this.#runtimeRevisionReader,
       clock: this.#clock,
@@ -526,7 +535,7 @@ export class OperationalD2E4EFinalCeremonyEntrypointV1 {
       input.traceId,
     );
     const runner = this.#runnerFactory({
-      target: D2E4D_TARGET,
+      target: this.#target,
       authoritativeBinding: bindingResolution.binding,
     });
     this.#created = true;

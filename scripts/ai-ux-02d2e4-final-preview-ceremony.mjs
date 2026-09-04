@@ -33,7 +33,7 @@ export const D2E4D_TARGET = Object.freeze({
 });
 
 const SHA256 = /^[a-f0-9]{64}$/u;
-const PREVIEW_URL = /^https:\/\/[a-z0-9-]+\.vercel\.app\/?$/u;
+const PREVIEW_URL = /^https:\/\/(?:[a-z0-9-]+\.vercel\.app|preview-controlcenter\.auranexus\.io)\/?$/u;
 const LOCAL_HARNESS_URL = /^http:\/\/127\.0\.0\.1:\d+\/?$/u;
 const CAPABILITY_BEARER = /^[a-f0-9]{64}$/u;
 const FIXTURE = /^SYNTHETIC_FIXTURE_V1_[A-F0-9]{32}$/u;
@@ -57,9 +57,11 @@ function fail(code) {
 function assertTarget(target) {
   if (
     target?.environment !== "PREVIEW" ||
-    target?.projectName !== D2E4_PROJECT_NAME ||
+    typeof target?.projectName !== "string" ||
+    !/^[a-z0-9][a-z0-9-]{2,99}$/u.test(target.projectName) ||
     target?.firebaseProjectId !== D2E4_FIREBASE_PROJECT_ID ||
-    target?.gitBranch !== D2E4_RELEASE_BRANCH ||
+    typeof target?.gitBranch !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._/-]{2,255}$/u.test(target.gitBranch) ||
     target?.controlContext !== D2E4_CONTROL_CONTEXT
   ) {
     fail("D2E4D_TARGET_REJECTED");

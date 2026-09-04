@@ -32,6 +32,65 @@ export const D2E4G_PREVIEW_URL =
   "https://aura-control-center-hyqo6tsph-javiers-projects-eab33ae8.vercel.app";
 export const D2E4G_PREVIEW_PROJECT_ID = "aura-control-center";
 
+export const D2E4G_PREVIEW_TARGET = Object.freeze({
+  deploymentId: D2E4G_PREVIEW_DEPLOYMENT_ID,
+  deploymentUrl: D2E4G_PREVIEW_URL,
+  previewUrl: D2E4G_PREVIEW_URL,
+  projectId: D2E4G_PREVIEW_PROJECT_ID,
+});
+
+export function assertD2E4GPreviewTargetV1(input) {
+  let deploymentUrl;
+  let previewUrl;
+
+  try {
+    deploymentUrl = new URL(input?.deploymentUrl);
+    previewUrl = new URL(input?.previewUrl);
+  } catch {
+    fail("D2E4G_PREVIEW_TARGET_REJECTED");
+  }
+
+  const deploymentPathAccepted =
+    deploymentUrl.pathname === "/" &&
+    !deploymentUrl.search &&
+    !deploymentUrl.hash &&
+    !deploymentUrl.username &&
+    !deploymentUrl.password;
+
+  const previewPathAccepted =
+    previewUrl.pathname === "/" &&
+    !previewUrl.search &&
+    !previewUrl.hash &&
+    !previewUrl.username &&
+    !previewUrl.password;
+
+  const previewHostAccepted =
+    previewUrl.hostname.endsWith(".vercel.app") ||
+    previewUrl.hostname === "preview-controlcenter.auranexus.io";
+
+  if (
+    typeof input?.deploymentId !== "string" ||
+    !/^dpl_[A-Za-z0-9]+$/u.test(input.deploymentId) ||
+    deploymentUrl.protocol !== "https:" ||
+    !deploymentUrl.hostname.endsWith(".vercel.app") ||
+    !deploymentPathAccepted ||
+    previewUrl.protocol !== "https:" ||
+    !previewHostAccepted ||
+    !previewPathAccepted ||
+    typeof input?.projectId !== "string" ||
+    !/^[a-z0-9][a-z0-9-]{2,99}$/u.test(input.projectId)
+  ) {
+    fail("D2E4G_PREVIEW_TARGET_REJECTED");
+  }
+
+  return Object.freeze({
+    deploymentId: input.deploymentId,
+    deploymentUrl: deploymentUrl.origin,
+    previewUrl: previewUrl.origin,
+    projectId: input.projectId,
+  });
+}
+
 const COMPOSITION_STATUSES = new Set(["READY", "CONDITIONAL", "BLOCKED"]);
 const TENANT = /^tenant-[a-f0-9]{64}$/u;
 const FIXTURE = /^SYNTHETIC_FIXTURE_V1_[A-F0-9]{32}$/u;
@@ -96,6 +155,7 @@ export class ExistingPreviewDeploymentReadBackAdapterV1 {
   #httpReader;
   #clock;
   #idFactory;
+  #previewTarget;
   #read = false;
 
   constructor({
@@ -104,6 +164,7 @@ export class ExistingPreviewDeploymentReadBackAdapterV1 {
     httpReader = new DeploymentReadBackHttpReaderV1(),
     clock = Date.now,
     idFactory = randomUUID,
+    previewTarget = D2E4G_PREVIEW_TARGET,
   } = {}) {
     if (typeof executor?.execute !== "function" ||
         typeof releaseRoot !== "string" || !releaseRoot.trim() ||
@@ -112,80 +173,151 @@ export class ExistingPreviewDeploymentReadBackAdapterV1 {
         typeof clock !== "function" || typeof idFactory !== "function") {
       fail("D2E4G_DEPLOYMENT_READBACK_ADAPTER_REJECTED");
     }
+
     this.#executor = executor;
     this.#releaseRoot = releaseRoot;
     this.#httpReader = httpReader;
     this.#clock = clock;
     this.#idFactory = idFactory;
+    this.#previewTarget =
+      assertD2E4GPreviewTargetV1(previewTarget);
   }
 
   async readBack({ traceId } = {}) {
-    const boundaryTraceId = traceId ?? `deployment-readback-trace-${this.#idFactory()}`;
+    const boundaryTraceId =
+      traceId ??
+      `deployment-readback-trace-${this.#idFactory()}`;
+
     try {
-      if (this.#read) fail("D2E4G_SECOND_DEPLOYMENT_READBACK_REJECTED");
+      if (this.#read) {
+        fail("D2E4G_SECOND_DEPLOYMENT_READBACK_REJECTED");
+      }
+
       this.#read = true;
-      const executable = process.platform === "win32" ? "vercel.cmd" : "vercel";
-      const result = await this.#executor.execute(executable, [
-        "inspect",
-        D2E4G_PREVIEW_DEPLOYMENT_ID,
-        "--json",
-      ], { cwd: this.#releaseRoot });
+
+      const executable =
+        process.platform === "win32"
+          ? "vercel.cmd"
+          : "vercel";
+
+      const result = await this.#executor.execute(
+        executable,
+        [
+          "inspect",
+          this.#previewTarget.deploymentId,
+          "--json",
+        ],
+        { cwd: this.#releaseRoot },
+      );
+
       const value = parseJsonOutput(result.stdout);
       const deploymentId = value.id;
       const readyState = value.readyState;
-      const target = String(value.target ?? "").toLowerCase();
-      const projectId = value.project?.id ?? value.projectId;
-      const deploymentRevision = value.deploymentRevision;
+      const target =
+        String(value.target ?? "").toLowerCase();
+      const projectId =
+        value.project?.id ?? value.projectId;
+      const deploymentRevision =
+        value.deploymentRevision;
       const rawUrl = value.url;
-      const previewUrl = String(rawUrl ?? "").startsWith("https://")
-        ? String(rawUrl)
-        : `https://${String(rawUrl ?? "")}`;
+
+      const deploymentUrl =
+        String(rawUrl ?? "").startsWith("https://")
+          ? String(rawUrl)
+          : `https://${String(rawUrl ?? "")}`;
+
       if (
-        deploymentId !== D2E4G_PREVIEW_DEPLOYMENT_ID ||
-        readyState !== "READY" || target !== "preview" ||
-        projectId !== D2E4G_PREVIEW_PROJECT_ID ||
-        typeof deploymentRevision !== "string" || !deploymentRevision ||
-        previewUrl !== D2E4G_PREVIEW_URL
+        deploymentId !==
+          this.#previewTarget.deploymentId ||
+        readyState !== "READY" ||
+        target !== "preview" ||
+        projectId !== this.#previewTarget.projectId ||
+        typeof deploymentRevision !== "string" ||
+        !deploymentRevision ||
+        deploymentUrl !==
+          this.#previewTarget.deploymentUrl
       ) {
         fail("D2E4G_EXISTING_PREVIEW_REJECTED");
       }
 
+      /*
+       * Certification bytes are always read from the immutable
+       * Vercel deployment URL. The canonical Preview URL is only
+       * emitted in the readiness receipt for browser execution.
+       */
       const sidecarUrl = new URL(
         DEPLOYMENT_CERTIFICATION_SIDECAR_PATH_V1,
-        `${previewUrl}/`,
+        `${deploymentUrl}/`,
       ).href;
-      const sidecar = assertDeploymentCertificationSidecarV1(
-        await this.#httpReader.readJson(sidecarUrl),
-      );
-      if (sidecar.projectId !== projectId ||
-          (value.deploymentArtifactDigest !== undefined &&
-            value.deploymentArtifactDigest !== sidecar.deploymentArtifactDigest) ||
-          (value.controlProofDigest !== undefined &&
-            value.controlProofDigest !== sidecar.controlProofDigest)) {
-        fail("D2E4G_DEPLOYMENT_CERTIFICATION_MISMATCH");
+
+      const sidecar =
+        assertDeploymentCertificationSidecarV1(
+          await this.#httpReader.readJson(sidecarUrl),
+        );
+
+      if (
+        sidecar.projectId !== projectId ||
+        (
+          value.deploymentArtifactDigest !== undefined &&
+          value.deploymentArtifactDigest !==
+            sidecar.deploymentArtifactDigest
+        ) ||
+        (
+          value.controlProofDigest !== undefined &&
+          value.controlProofDigest !==
+            sidecar.controlProofDigest
+        )
+      ) {
+        fail(
+          "D2E4G_DEPLOYMENT_CERTIFICATION_MISMATCH"
+        );
       }
+
       for (const file of sidecar.files) {
-        const fileUrl = new URL(file.path, `${previewUrl}/`);
-        if (fileUrl.origin !== new URL(previewUrl).origin) {
-          fail("D2E4G_DEPLOYMENT_FILE_ORIGIN_REJECTED");
+        const fileUrl =
+          new URL(file.path, `${deploymentUrl}/`);
+
+        if (
+          fileUrl.origin !==
+          new URL(deploymentUrl).origin
+        ) {
+          fail(
+            "D2E4G_DEPLOYMENT_FILE_ORIGIN_REJECTED"
+          );
         }
-        const bytes = await this.#httpReader.readBytes(fileUrl.href);
-        if (!(bytes instanceof Uint8Array) || bytes.byteLength !== file.byteLength ||
-            sha256BytesV1(bytes) !== file.sha256) {
-          fail("D2E4G_DEPLOYMENT_FILE_DIGEST_REJECTED");
+
+        const bytes =
+          await this.#httpReader.readBytes(
+            fileUrl.href
+          );
+
+        if (
+          !(bytes instanceof Uint8Array) ||
+          bytes.byteLength !== file.byteLength ||
+          sha256BytesV1(bytes) !== file.sha256
+        ) {
+          fail(
+            "D2E4G_DEPLOYMENT_FILE_DIGEST_REJECTED"
+          );
         }
       }
+
       const certifiedAtMs = this.#clock();
+
       return createDeploymentReadinessReceiptV1({
-        receiptId: `deployment-readiness-${this.#idFactory()}`,
+        receiptId:
+          `deployment-readiness-${this.#idFactory()}`,
         status: "READY",
         environment: "PREVIEW",
         projectId,
         deploymentId,
         deploymentRevision,
-        deploymentArtifactDigest: sidecar.deploymentArtifactDigest,
-        controlProofDigest: sidecar.controlProofDigest,
-        previewUrl,
+        deploymentArtifactDigest:
+          sidecar.deploymentArtifactDigest,
+        controlProofDigest:
+          sidecar.controlProofDigest,
+        previewUrl:
+          this.#previewTarget.previewUrl,
         deploymentType: "Preview",
         readyState,
         reusedExistingPreview: true,
@@ -194,23 +326,36 @@ export class ExistingPreviewDeploymentReadBackAdapterV1 {
         stagingChanged: false,
         readBackSource: "VERCEL_INSPECT",
         certifiedAtMs,
-        expiresAtMs: certifiedAtMs + DEPLOYMENT_READINESS_TTL_MS_V1,
+        expiresAtMs:
+          certifiedAtMs +
+          DEPLOYMENT_READINESS_TTL_MS_V1,
       }, { now: certifiedAtMs });
     } catch (error) {
-      if (error?.contractName === "RuntimeErrorV1") throw error;
+      if (error?.contractName === "RuntimeErrorV1") {
+        throw error;
+      }
+
       const occurredAtMs = this.#clock();
-      const code = error?.code ?? "D2E4G_DEPLOYMENT_READBACK_FAILED";
+      const code =
+        error?.code ??
+        "D2E4G_DEPLOYMENT_READBACK_FAILED";
+
       throw createBoundaryRuntimeErrorV1({
         code,
         stage: "DEPLOYMENT",
         producer: "DeploymentReadBack",
         traceId: boundaryTraceId,
         occurredAtMs,
-        errorId: `deployment-readback-error-${this.#idFactory()}`,
+        errorId:
+          `deployment-readback-error-${this.#idFactory()}`,
         retryable: false,
         details: {
-          deploymentId: D2E4G_PREVIEW_DEPLOYMENT_ID,
-          previewUrl: D2E4G_PREVIEW_URL,
+          deploymentId:
+            this.#previewTarget.deploymentId,
+          deploymentUrl:
+            this.#previewTarget.deploymentUrl,
+          previewUrl:
+            this.#previewTarget.previewUrl,
         },
       });
     }
@@ -271,8 +416,16 @@ export class D2E4GCompositionPreflightV1 {
   async preflight(input) {
     if (this.#used) return deepFreeze({ COMPOSITION_STATUS: "BLOCKED" });
     this.#used = true;
-    if (input?.environment !== "PREVIEW" ||
-        input?.deploymentId !== D2E4G_PREVIEW_DEPLOYMENT_ID) {
+
+    const previewTarget =
+      assertD2E4GPreviewTargetV1(
+        input?.previewTarget ?? D2E4G_PREVIEW_TARGET,
+      );
+
+    if (
+      input?.environment !== "PREVIEW" ||
+      input?.deploymentId !== previewTarget.deploymentId
+    ) {
       return deepFreeze({ COMPOSITION_STATUS: "BLOCKED" });
     }
     try {
@@ -309,9 +462,9 @@ export class D2E4GCompositionPreflightV1 {
       const deployment = await this.#deploymentReadBack.readBack();
       if (normalizeReadStatus(deployment, "D2E4G_DEPLOYMENT_READINESS_INVALID") !== "READY" ||
           assertDeploymentReadinessReceiptV1(deployment).deploymentId !==
-            D2E4G_PREVIEW_DEPLOYMENT_ID ||
-          deployment.projectId !== D2E4G_PREVIEW_PROJECT_ID ||
-          deployment.previewUrl !== D2E4G_PREVIEW_URL) {
+            previewTarget.deploymentId ||
+          deployment.projectId !== previewTarget.projectId ||
+          deployment.previewUrl !== previewTarget.previewUrl) {
         return deepFreeze({ COMPOSITION_STATUS: "BLOCKED" });
       }
 
@@ -343,15 +496,22 @@ export class D2E4GCompositionPreflightV1 {
   }
 }
 
-export function assertD2E4GReadyArtifactV1(result) {
+export function assertD2E4GReadyArtifactV1(
+  result,
+  previewTarget = D2E4G_PREVIEW_TARGET,
+) {
+  const expectedTarget =
+    assertD2E4GPreviewTargetV1(previewTarget);
+
   const artifact = result?.artifact;
+
   if (
     result?.COMPOSITION_STATUS !== "READY" ||
     artifact?.version !== D2E4G_SHARED_ARTIFACT_VERSION ||
     artifact?.environment !== "PREVIEW" ||
-    artifact?.deployment?.deploymentId !== D2E4G_PREVIEW_DEPLOYMENT_ID ||
-    artifact?.deployment?.projectId !== D2E4G_PREVIEW_PROJECT_ID ||
-    artifact?.deployment?.previewUrl !== D2E4G_PREVIEW_URL ||
+    artifact?.deployment?.deploymentId !== expectedTarget.deploymentId ||
+    artifact?.deployment?.projectId !== expectedTarget.projectId ||
+    artifact?.deployment?.previewUrl !== expectedTarget.previewUrl ||
     artifact?.readiness?.authority !== "READY" ||
     artifact?.readiness?.rotation !== "READY" ||
     artifact?.readiness?.adaptiveCanary !== "READY" ||
@@ -360,8 +520,15 @@ export function assertD2E4GReadyArtifactV1(result) {
   ) {
     fail("D2E4G_READY_ARTIFACT_REQUIRED");
   }
-  assertDeploymentReadinessReceiptV1(artifact.deployment);
-  assertBinding(artifact.authoritativeBinding);
+
+  assertDeploymentReadinessReceiptV1(
+    artifact.deployment
+  );
+
+  assertBinding(
+    artifact.authoritativeBinding
+  );
+
   return artifact;
 }
 

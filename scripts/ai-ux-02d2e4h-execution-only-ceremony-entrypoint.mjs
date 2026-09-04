@@ -6,8 +6,8 @@ import {
   createOperationalSingleProcessCeremonyRunnerV1,
 } from "./ai-ux-02d2e4-final-preview-ceremony.mjs";
 import {
-  D2E4G_PREVIEW_DEPLOYMENT_ID,
-  D2E4G_PREVIEW_URL,
+  D2E4G_PREVIEW_TARGET,
+  assertD2E4GPreviewTargetV1,
   createD2E4GExecutionCeremonyV1,
 } from "./ai-ux-02d2e4g-execution-entrypoint-separation.mjs";
 import {
@@ -175,6 +175,8 @@ export class OperationalExistingPreviewCeremonyExecutorV1 {
   #clock;
   #idFactory;
   #browserProofCustody;
+  #previewTarget;
+  #target;
   #used = false;
 
   constructor({
@@ -184,6 +186,8 @@ export class OperationalExistingPreviewCeremonyExecutorV1 {
     browserProofCustody,
     evaluateConversationBoundary = new BrowserEvaluateConversationBoundaryV1(),
     ceremonyConfiguration,
+    previewTarget = D2E4G_PREVIEW_TARGET,
+    target = D2E4D_TARGET,
     runnerFactory = createOperationalSingleProcessCeremonyRunnerV1,
     clock = Date.now,
     idFactory = randomUUID,
@@ -207,6 +211,10 @@ export class OperationalExistingPreviewCeremonyExecutorV1 {
     this.#clock = clock;
     this.#idFactory = idFactory;
     this.#browserProofCustody = browserProofCustody;
+    this.#previewTarget =
+      assertD2E4GPreviewTargetV1(previewTarget);
+    this.#target =
+      Object.freeze({ ...target });
   }
 
   #nextId(prefix) {
@@ -318,14 +326,19 @@ export class OperationalExistingPreviewCeremonyExecutorV1 {
       if (this.#ceremonyConfiguration.policyVersion !== certifiedArtifact.policy.policyVersion) {
         fail("D2E4H_POLICY_VERSION_REJECTED");
       }
-      if (certifiedArtifact.deployment.deploymentId !== D2E4G_PREVIEW_DEPLOYMENT_ID ||
-          certifiedArtifact.deployment.previewUrl !== D2E4G_PREVIEW_URL ||
-          certifiedArtifact.projectId !== D2E4D_TARGET.projectName) {
+      if (
+        certifiedArtifact.deployment.deploymentId !==
+          this.#previewTarget.deploymentId ||
+        certifiedArtifact.deployment.previewUrl !==
+          this.#previewTarget.previewUrl ||
+        certifiedArtifact.projectId !==
+          this.#target.projectName
+      ) {
         fail("D2E4H_EXISTING_PREVIEW_REJECTED");
       }
 
       runner = this.#runnerFactory({
-        target: D2E4D_TARGET,
+        target: this.#target,
         authoritativeBinding: authoritativeRunnerBinding(certifiedArtifact),
         proofCustody: this.#browserProofCustody,
         clock: this.#clock,

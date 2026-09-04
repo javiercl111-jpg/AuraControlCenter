@@ -31,6 +31,20 @@ import {
   deepFreezeExecutionContractV1,
 } from "./ai-ux-02d2e4x-execution-receipt-contract-v1.mjs";
 
+const DISC_INT_03_PREVIEW_TARGET =
+  Object.freeze({
+    deploymentId:
+      "dpl_mtcXLU2TzaCYzGRJszq64dvStPqp",
+    deploymentUrl:
+      "https://aura-control-center-preview-3of6q4xkq-javiers-projects-eab33ae8.vercel.app",
+    previewUrl:
+      "https://preview-controlcenter.auranexus.io",
+    projectId:
+      "aura-control-center-preview",
+    gitBranch:
+      "feature/disc-int-03-semantic-output-aligned",
+  });
+
 const requireFromFunctions = createRequire(
   new URL("../functions/package.json", import.meta.url),
 );
@@ -134,6 +148,8 @@ export async function runFinalLiveCeremonyLauncherV1() {
       new FirestoreAdaptiveCanaryControlPlaneV1({ db });
     const deploymentReadBack = new ExistingPreviewDeploymentReadBackAdapterV1({
       releaseRoot: process.cwd(),
+      previewTarget:
+        DISC_INT_03_PREVIEW_TARGET,
     });
     const browserExecutablePath =
       "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
@@ -150,6 +166,8 @@ export async function runFinalLiveCeremonyLauncherV1() {
 
     handle = await createOperationalD2E4JPreviewCeremonyCompositionV1({
       environment: "PREVIEW",
+      previewTarget:
+        DISC_INT_03_PREVIEW_TARGET,
       releaseRoot: process.cwd(),
       approver: "preview-canary-control-plane",
       authoritativeTenantLocator,
