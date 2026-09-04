@@ -1416,3 +1416,11 @@ export type {
   GrowthSocialProfileBindingListQueryV1,
   GrowthSocialProfileBindingRepositoryV1,
 } from './growthIntegration/externalActions/social/profiles/GrowthSocialProfileBindingRepositoryV1';
+
+export {
+  GrowthSocialProfileBindingManagementServiceV1,
+} from './growthIntegration/externalActions/social/profiles/GrowthSocialProfileBindingManagementServiceV1';
+
+export type {
+  GrowthSocialProfileBindingManagementServiceDependenciesV1,
+} from './growthIntegration/externalActions/social/profiles/GrowthSocialProfileBindingManagementServiceV1';
