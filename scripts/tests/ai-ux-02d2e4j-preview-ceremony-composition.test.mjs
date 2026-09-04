@@ -193,11 +193,14 @@ function setup(overrides = {}) {
     syntheticFixtureLocator: FIXTURE,
     intentClass: "DISCOVER_PROBLEM",
     turnId: "AI_UX_02D2E4J_TURN_0001",
+    traceId: "AI_UX_02D2E4J_TRACE_0001",
     authorityFactory(value) {
       assert.deepEqual(value, {
         authoritativeTenantId: TENANT,
         syntheticFixtureLocator: FIXTURE,
         intentClass: "DISCOVER_PROBLEM",
+        turnId: "AI_UX_02D2E4J_TURN_0001",
+        traceId: "AI_UX_02D2E4J_TRACE_0001",
       });
       return authority;
     },
@@ -360,6 +363,23 @@ test("Production and Staging fail closed before adapter construction", async (t)
       assert.equal(commandExecutor.calls.length, 0);
     });
   }
+});
+
+test("traceId is required and reaches D2E4E authority resolution", async () => {
+  const traceId = "AI_UX_02D2E4J_TRACE_0001";
+  let observedTraceId = null;
+  const { input } = setup({
+    traceId,
+    authorityFactory(value) {
+      observedTraceId = value.traceId;
+      return authority;
+    },
+  });
+  await assert.rejects(
+    () => createOperationalD2E4JPreviewCeremonyCompositionV1(input),
+    /D2E4J_D2E4G_NOT_READY/u,
+  );
+  assert.equal(observedTraceId, traceId);
 });
 
 test("operational root contains no test doubles or manual READY artifact", async () => {

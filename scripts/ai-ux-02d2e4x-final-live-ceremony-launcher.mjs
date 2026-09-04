@@ -180,6 +180,7 @@ export async function runFinalLiveCeremonyLauncherV1() {
       intentClass: "DISCOVER_PROBLEM",
       now: Date.now(),
       turnId: TURN_ID,
+      traceId: randomUUID(),
       authorityFactory,
       assertCertifiedAuthority: assertCertifiedPreviewAuthorityV1,
       rotationRepository,

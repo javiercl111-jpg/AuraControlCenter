@@ -58,6 +58,7 @@ const REQUIRED_AUTHORITY_INPUT = Object.freeze([
   "syntheticFixtureLocator",
   "intentClass",
   "turnId",
+  "traceId",
 ]);
 const VALID_READINESS = new Set(["READY", "CONDITIONAL", "BLOCKED"]);
 
