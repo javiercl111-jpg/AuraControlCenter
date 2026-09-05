@@ -135,19 +135,30 @@ export class RealVercelPreviewCeremonyAdapterV1 {
   #releaseRoot;
   #target;
   #mode;
+  #controlProofDigest;
   #deployInvoked = false;
 
-  constructor({ executor, releaseRoot, target = D2E4D_TARGET, mode = "DRY_RUN" }) {
+  constructor({
+    executor,
+    releaseRoot,
+    target = D2E4D_TARGET,
+    mode = "DRY_RUN",
+    controlProofDigest,
+  }) {
     assertTarget(target);
     if (!executor || typeof executor.execute !== "function" ||
         typeof releaseRoot !== "string" || !releaseRoot.trim() ||
-        !new Set(["DRY_RUN", "APPLY"]).has(mode)) {
+        !new Set(["DRY_RUN", "APPLY"]).has(mode) ||
+        (controlProofDigest !== undefined &&
+          (typeof controlProofDigest !== "string" ||
+            !/^[a-f0-9]{64}$/u.test(controlProofDigest)))) {
       fail("D2E4D_VERCEL_ADAPTER_REJECTED");
     }
     this.#executor = executor;
     this.#releaseRoot = releaseRoot;
     this.#target = Object.freeze({ ...target });
     this.#mode = mode;
+    this.#controlProofDigest = controlProofDigest;
   }
 
   #vercelExecutable() {
@@ -172,9 +183,19 @@ export class RealVercelPreviewCeremonyAdapterV1 {
       });
     }
 
+    if (!this.#controlProofDigest) {
+      fail("D2E4D_CONTROL_PROOF_DIGEST_REQUIRED");
+    }
+
     const deployment = await this.#executor.execute(
       this.#vercelExecutable(),
-      ["deploy", "--yes", "--json"],
+      [
+        "deploy",
+        "--yes",
+        "--json",
+        "--build-env",
+        `VITE_AI_UX_02D2E4_CONTROL_PROOF_DIGEST_V1=${this.#controlProofDigest}`,
+      ],
       { cwd: this.#releaseRoot },
     );
     const created = parseJsonOutput(deployment.stdout);

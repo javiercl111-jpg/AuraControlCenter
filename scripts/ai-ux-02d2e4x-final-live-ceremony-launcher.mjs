@@ -7,6 +7,14 @@ import {
   createOperationalD2E4JPreviewCeremonyCompositionV1,
 } from "./ai-ux-02d2e4j-preview-ceremony-composition.mjs";
 import {
+  createBrowserProofCustodyV1,
+} from "./ai-ux-02d2e4-preview-ceremony-controller.mjs";
+import {
+  D2E4D_TARGET,
+  NodeProcessCommandExecutorV1,
+  RealVercelPreviewCeremonyAdapterV1,
+} from "./ai-ux-02d2e4-final-preview-ceremony.mjs";
+import {
   createFirestorePreviewAuthorityFactoryV1,
   assertCertifiedPreviewAuthorityV1,
 } from "./ai-ux-02d2e4n-live-preview-authority.mjs";
@@ -31,20 +39,14 @@ import {
   deepFreezeExecutionContractV1,
 } from "./ai-ux-02d2e4x-execution-receipt-contract-v1.mjs";
 
-const DISC_INT_03_PREVIEW_TARGET =
-  Object.freeze({
-    deploymentId:
-      "dpl_mtcXLU2TzaCYzGRJszq64dvStPqp",
-    deploymentUrl:
-      "https://aura-control-center-preview-3of6q4xkq-javiers-projects-eab33ae8.vercel.app",
-    previewUrl:
-      "https://preview-controlcenter.auranexus.io",
-    projectId:
-      "aura-control-center-preview",
-    gitBranch:
-      "feature/disc-int-03-semantic-output-aligned",
-  });
+const DISC_INT_03_CANONICAL_PREVIEW_URL =
+  "https://preview-controlcenter.auranexus.io";
 
+const DISC_INT_03_PROJECT_ID =
+  "aura-control-center-preview";
+
+const DISC_INT_03_GIT_BRANCH =
+  "fix/disc-int-03-preview-ceremony-binding";
 const requireFromFunctions = createRequire(
   new URL("../functions/package.json", import.meta.url),
 );
@@ -118,7 +120,17 @@ export function certifyLauncherExecutionResultV1(
   return deepFreezeExecutionContractV1({ result, presentation });
 }
 
-export async function runFinalLiveCeremonyLauncherV1() {
+export async function runFinalLiveCeremonyLauncherV1({ browserProofCustody } = {}) {
+  const proofCustody =
+    browserProofCustody ?? createBrowserProofCustodyV1();
+  if (
+    typeof proofCustody?.deriveDigest !== "function" ||
+    typeof proofCustody?.claimOnce !== "function" ||
+    typeof proofCustody?.destroy !== "function"
+  ) {
+    throw new Error("D2E4X_BROWSER_PROOF_CUSTODY_REQUIRED");
+  }
+
   const {
     SYNTHETIC_DISCOVERY_CAPABILITY_POLICY_V1: syntheticPolicy,
   } = await import(
@@ -135,6 +147,59 @@ export async function runFinalLiveCeremonyLauncherV1() {
   let handle = null;
 
   try {
+    const controlProofDigest =
+      proofCustody.deriveDigest();
+
+    const liveCommandExecutor =
+      new NodeProcessCommandExecutorV1();
+
+    const livePreviewAdapter =
+      new RealVercelPreviewCeremonyAdapterV1({
+        executor: liveCommandExecutor,
+        releaseRoot: process.cwd(),
+        target: Object.freeze({
+          ...D2E4D_TARGET,
+          projectName: DISC_INT_03_PROJECT_ID,
+          gitBranch: DISC_INT_03_GIT_BRANCH,
+        }),
+        mode: "APPLY",
+        controlProofDigest,
+      });
+
+    const deployment =
+      await livePreviewAdapter.deployOnce();
+
+    if (
+      typeof deployment?.deploymentId !== "string" ||
+      !deployment.deploymentId.trim() ||
+      typeof deployment?.previewUrl !== "string" ||
+      !deployment.previewUrl.trim()
+    ) {
+      throw new Error("D2E4X_PREVIEW_DEPLOYMENT_IDENTITY_REJECTED");
+    }
+
+    const vercelExecutable =
+      process.platform === "win32" ? "vercel.cmd" : "vercel";
+
+    await liveCommandExecutor.execute(
+      vercelExecutable,
+      [
+        "alias",
+        "set",
+        deployment.previewUrl,
+        new URL(DISC_INT_03_CANONICAL_PREVIEW_URL).hostname,
+      ],
+      { cwd: process.cwd() },
+    );
+
+    const previewTarget =
+      Object.freeze({
+        deploymentId: deployment.deploymentId,
+        deploymentUrl: deployment.previewUrl,
+        previewUrl: DISC_INT_03_CANONICAL_PREVIEW_URL,
+        projectId: DISC_INT_03_PROJECT_ID,
+        gitBranch: DISC_INT_03_GIT_BRANCH,
+      });
     const authorityFactory = createFirestorePreviewAuthorityFactoryV1({
       db,
       linkId: syntheticPolicy.linkId,
@@ -148,8 +213,7 @@ export async function runFinalLiveCeremonyLauncherV1() {
       new FirestoreAdaptiveCanaryControlPlaneV1({ db });
     const deploymentReadBack = new ExistingPreviewDeploymentReadBackAdapterV1({
       releaseRoot: process.cwd(),
-      previewTarget:
-        DISC_INT_03_PREVIEW_TARGET,
+      previewTarget,
     });
     const browserExecutablePath =
       "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
@@ -165,9 +229,9 @@ export async function runFinalLiveCeremonyLauncherV1() {
     }
 
     handle = await createOperationalD2E4JPreviewCeremonyCompositionV1({
+      browserProofCustody: proofCustody,
       environment: "PREVIEW",
-      previewTarget:
-        DISC_INT_03_PREVIEW_TARGET,
+      previewTarget,
       releaseRoot: process.cwd(),
       approver: "preview-canary-control-plane",
       authoritativeTenantLocator,
@@ -200,6 +264,7 @@ export async function runFinalLiveCeremonyLauncherV1() {
     return certified.result;
   } finally {
     if (handle && typeof handle.destroy === "function") await handle.destroy();
+    proofCustody.destroy();
     await app.delete();
   }
 }

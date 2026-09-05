@@ -72,4 +72,12 @@ if (!(preflight >= 0 && preflight < readyGate && readyGate < artifact &&
   fail("MANDATORY_SEQUENCE_REJECTED");
 }
 
+if (!/browserProofCustody:\s*input\?\.browserProofCustody/u.test(source)) {
+  fail("BROWSER_PROOF_CUSTODY_PROPAGATION_MISSING");
+}
+
+if (/createBrowserProofCustodyV1|\brandomBytes\b/u.test(source)) {
+  fail("BROWSER_PROOF_CUSTODY_OWNERSHIP_VIOLATION");
+}
+
 process.stdout.write("AI_UX_02D2E4J_ARCHITECTURE_GUARD=PASS\n");

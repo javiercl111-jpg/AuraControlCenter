@@ -552,6 +552,7 @@ export async function createOperationalD2E4JPreviewCeremonyCompositionV1(input) 
   let execution;
   try {
     execution = createOperationalD2E4HExecutionCeremonyV1({
+      browserProofCustody: input?.browserProofCustody,
       previewConfigurationAdapter,
       adaptiveCanaryControlPlaneAdapter,
       capabilityIssuerAdapter:

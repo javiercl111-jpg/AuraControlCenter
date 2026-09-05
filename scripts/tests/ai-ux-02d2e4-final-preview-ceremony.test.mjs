@@ -361,3 +361,96 @@ test("runner source contains no plaintext persistence or logging carrier", async
   assert.doesNotMatch(source, /console\.|process\.(?:stdout|stderr)|writeFile|clipboard|localStorage|sessionStorage|document\.cookie/iu);
   assert.doesNotMatch(source, new RegExp(`${proof}|${bearer}`, "u"));
 });
+test("RealVercelPreviewCeremonyAdapterV1 transports only control-proof digest as transient build env", async () => {
+  const calls = [];
+  const digest = "a".repeat(64);
+
+  const executor = {
+    async execute(executable, args, options) {
+      calls.push({ executable, args, options });
+
+      if (args[0] === "deploy") {
+        return {
+          stdout: JSON.stringify({
+            id: "dpl_unit_live_custody",
+            url: "unit-live-custody.vercel.app",
+          }),
+          stderr: "",
+        };
+      }
+
+      return {
+        stdout: JSON.stringify({
+          id: "dpl_unit_live_custody",
+          readyState: "READY",
+          target: "preview",
+        }),
+        stderr: "",
+      };
+    },
+  };
+
+  const adapter =
+    new RealVercelPreviewCeremonyAdapterV1({
+      executor,
+      releaseRoot: process.cwd(),
+      mode: "APPLY",
+      controlProofDigest: digest,
+    });
+
+  const deployment =
+    await adapter.deployOnce();
+
+  assert.equal(deployment.status, "READY");
+  assert.equal(calls.length, 2);
+
+  assert.deepEqual(
+    calls[0].args,
+    [
+      "deploy",
+      "--yes",
+      "--json",
+      "--build-env",
+      `VITE_AI_UX_02D2E4_CONTROL_PROOF_DIGEST_V1=${digest}`,
+    ],
+  );
+});
+
+test("RealVercelPreviewCeremonyAdapterV1 APPLY fails closed without digest", async () => {
+  const executor = {
+    async execute() {
+      throw new Error("EXECUTOR_MUST_NOT_RUN");
+    },
+  };
+
+  const adapter =
+    new RealVercelPreviewCeremonyAdapterV1({
+      executor,
+      releaseRoot: process.cwd(),
+      mode: "APPLY",
+    });
+
+  await assert.rejects(
+    () => adapter.deployOnce(),
+    /D2E4D_CONTROL_PROOF_DIGEST_REQUIRED/u,
+  );
+});
+
+test("RealVercelPreviewCeremonyAdapterV1 rejects invalid digest", () => {
+  const executor = {
+    async execute() {
+      return { stdout: "", stderr: "" };
+    },
+  };
+
+  assert.throws(
+    () =>
+      new RealVercelPreviewCeremonyAdapterV1({
+        executor,
+        releaseRoot: process.cwd(),
+        mode: "APPLY",
+        controlProofDigest: "A".repeat(64),
+      }),
+    /D2E4D_VERCEL_ADAPTER_REJECTED/u,
+  );
+});
