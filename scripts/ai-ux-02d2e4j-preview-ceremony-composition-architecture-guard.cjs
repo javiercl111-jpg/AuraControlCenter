@@ -29,7 +29,11 @@ for (const required of [
   "BrowserEvaluateConversationBoundaryV1",
   "createOperationalD2E4HExecutionCeremonyV1",
   "async executeOnce(...args)",
-  "D2E4G_PREVIEW_DEPLOYMENT_ID",
+  "validatePreviewTarget",
+  "configuration.previewTarget.deployment",
+  "target: controlTarget",
+  "previewTarget:",
+  "D2E4J_REQUIRED_PREVIEW_TARGET_MISSING",
 ]) {
   if (!source.includes(required)) fail(`REQUIRED_BINDING_MISSING_${required}`);
 }
@@ -38,6 +42,7 @@ for (const forbidden of [
   /\bmock\w*\b/iu,
   /\b(?:function|const)\s+readyArtifact\b/iu,
   /D2E4G_SHARED_ARTIFACT_VERSION/u,
+  /D2E4G_PREVIEW_DEPLOYMENT_ID/u,
   /\.deploy(?:Once|Preview)?\s*\(/u,
   /await\s+[^;]*\.executeOnce\s*\(/u,
   /environment:\s*["'](?:PRODUCTION|STAGING)["']/u,
@@ -58,11 +63,21 @@ for (const key of [
 
 const preflight = source.indexOf("await compositionPreflight.preflight");
 const readyGate = source.indexOf("compositionResult?.COMPOSITION_STATUS !== \"READY\"");
-const artifact = source.indexOf("assertD2E4GReadyArtifactV1(compositionResult)");
+const artifact = source.indexOf(
+  "assertD2E4GReadyArtifactV1(compositionResult, deploymentTarget)",
+);
 const execution = source.indexOf("createOperationalD2E4HExecutionCeremonyV1({");
 if (!(preflight >= 0 && preflight < readyGate && readyGate < artifact &&
       artifact < execution)) {
   fail("MANDATORY_SEQUENCE_REJECTED");
+}
+
+if (!/browserProofCustody:\s*input\?\.browserProofCustody/u.test(source)) {
+  fail("BROWSER_PROOF_CUSTODY_PROPAGATION_MISSING");
+}
+
+if (/createBrowserProofCustodyV1|\brandomBytes\b/u.test(source)) {
+  fail("BROWSER_PROOF_CUSTODY_OWNERSHIP_VIOLATION");
 }
 
 process.stdout.write("AI_UX_02D2E4J_ARCHITECTURE_GUARD=PASS\n");

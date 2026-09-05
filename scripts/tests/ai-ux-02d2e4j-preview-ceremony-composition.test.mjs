@@ -31,6 +31,19 @@ const NOW = Date.parse("2026-08-12T22:00:00.000Z");
 const TENANT = syntheticCapabilityPolicy.tenantId;
 const FIXTURE = syntheticCapabilityPolicy.fixtureLocator;
 const POLICY = "AI_UX_02D2E4J_POLICY_0001";
+
+const PREVIEW_TARGET = Object.freeze({
+  deploymentId:
+    D2E4G_PREVIEW_DEPLOYMENT_ID,
+  deploymentUrl:
+    D2E4G_PREVIEW_URL,
+  previewUrl:
+    D2E4G_PREVIEW_URL,
+  projectId:
+    "aura-control-center",
+  gitBranch:
+    "release/ai-ux-02d2e4-preview-control",
+});
 const authority = Object.freeze({
   environment: "PREVIEW",
   targetProjectId: "aura-intel-preview",
@@ -166,6 +179,8 @@ function setup(overrides = {}) {
     new CertifiedAdaptiveCanaryControlPlane();
   const input = {
     environment: "PREVIEW",
+    previewTarget:
+      PREVIEW_TARGET,
     releaseRoot: process.cwd(),
     approver: "approved-human-operator",
     authoritativeTenantLocator:
@@ -178,11 +193,14 @@ function setup(overrides = {}) {
     syntheticFixtureLocator: FIXTURE,
     intentClass: "DISCOVER_PROBLEM",
     turnId: "AI_UX_02D2E4J_TURN_0001",
+    traceId: "AI_UX_02D2E4J_TRACE_0001",
     authorityFactory(value) {
       assert.deepEqual(value, {
         authoritativeTenantId: TENANT,
         syntheticFixtureLocator: FIXTURE,
         intentClass: "DISCOVER_PROBLEM",
+        turnId: "AI_UX_02D2E4J_TURN_0001",
+        traceId: "AI_UX_02D2E4J_TRACE_0001",
       });
       return authority;
     },
@@ -216,6 +234,32 @@ test("legacy Preview composition stays fail-closed before D2E4H receipt executio
     apply: 0,
     readBack: 0,
   });
+});
+
+test("explicit Preview target is required before any adapter construction", async () => {
+  const {
+    input,
+    commandExecutor,
+  } = setup({
+    previewTarget: undefined,
+  });
+
+  await assert.rejects(
+    () =>
+      createOperationalD2E4JPreviewCeremonyCompositionV1(
+        input
+      ),
+    (error) =>
+      error instanceof D2E4JCompositionError &&
+      error.code ===
+        "D2E4J_REQUIRED_PREVIEW_TARGET_MISSING" &&
+      error.phase === "CONFIGURATION",
+  );
+
+  assert.equal(
+    commandExecutor.calls.length,
+    0,
+  );
 });
 
 test("all seven operational configuration fields are required before preflight", async (t) => {
@@ -319,6 +363,23 @@ test("Production and Staging fail closed before adapter construction", async (t)
       assert.equal(commandExecutor.calls.length, 0);
     });
   }
+});
+
+test("traceId is required and reaches D2E4E authority resolution", async () => {
+  const traceId = "AI_UX_02D2E4J_TRACE_0001";
+  let observedTraceId = null;
+  const { input } = setup({
+    traceId,
+    authorityFactory(value) {
+      observedTraceId = value.traceId;
+      return authority;
+    },
+  });
+  await assert.rejects(
+    () => createOperationalD2E4JPreviewCeremonyCompositionV1(input),
+    /D2E4J_D2E4G_NOT_READY/u,
+  );
+  assert.equal(observedTraceId, traceId);
 });
 
 test("operational root contains no test doubles or manual READY artifact", async () => {
