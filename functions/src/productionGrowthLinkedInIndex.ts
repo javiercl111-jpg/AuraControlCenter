@@ -5,3 +5,7 @@ if (getApps().length === 0) initializeApp();
 export {
   growthLinkedInRuntimeReadinessV1,
 } from "./composition/linkedin/GrowthLinkedInProductionCallableRuntimeV1";
+
+export {
+  growthSocialProfileManagementV1,
+} from "./composition/socialProfiles/GrowthSocialProfileManagementProductionCallableRuntimeV1";
