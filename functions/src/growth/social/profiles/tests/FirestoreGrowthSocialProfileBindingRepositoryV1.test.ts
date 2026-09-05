@@ -433,10 +433,12 @@ describe(
 
         fake.records.set(
           'aura-nexus__expected-binding',
-          createBindingV1({
-            bindingId:
-              'different-binding',
-          }),
+          {
+            ...createBindingV1({
+              bindingId:
+                'different-binding',
+            }),
+          },
         );
 
         await expect(

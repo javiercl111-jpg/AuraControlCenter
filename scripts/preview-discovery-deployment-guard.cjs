@@ -153,17 +153,54 @@ if (/export\s+\{\s*(generateDiscoveryReport|requestExecutiveDocument|emitDiscove
 for (const handler of allowlist) {
   const sourcePath = handler === "evaluateConversation"
     ? "functions/src/intelligence/evaluateConversation.ts"
-    : `functions/src/discovery/${handler}.ts`;
+    : handler === "growthSocialProfileManagementV1"
+      ? "functions/src/composition/socialProfiles/GrowthSocialProfileManagementPreviewCallableRuntimeV1.ts"
+      : handler === "growthLinkedInRuntimeReadinessV1"
+        ? "functions/src/composition/linkedin/GrowthLinkedInPreviewCallableRuntimeV1.ts"
+        : handler === "createCrmLead"
+          ? "functions/src/crm/createCrmLead.ts"
+          : `functions/src/discovery/${handler}.ts`;
   const handlerSource = read(sourcePath);
-  if (!handlerSource.includes("assertPreviewDiscoveryRuntimeV1();")) {
+  const compositionRuntimeBinding =
+    handler === "growthSocialProfileManagementV1" ||
+    handler === "growthLinkedInRuntimeReadinessV1";
+  const runtimeAssertionPresent =
+    compositionRuntimeBinding
+      ? /assertRuntime\s*:\s*assertPreviewDiscoveryRuntimeV1\b/.test(handlerSource)
+      : handlerSource.includes("assertPreviewDiscoveryRuntimeV1();");
+  if (!runtimeAssertionPresent) {
     fail(`PREVIEW_GUARD_RUNTIME_ASSERTION_MISSING:${handler}`);
   }
-  if (!handlerSource.includes(`PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1.${handler}`)) {
+  const optionsBindingPattern = new RegExp(
+    `PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1\\s*\\.\\s*${handler}\\b`,
+  );
+  if (!optionsBindingPattern.test(handlerSource)) {
     fail(`PREVIEW_GUARD_OPTIONS_BINDING_MISSING:${handler}`);
   }
-  const declaredSecretParams = [...handlerSource.matchAll(
-    /defineSecret\(["']([^"']+)["']\)/g,
+  const secretDeclarationSource =
+    handler === "growthLinkedInRuntimeReadinessV1"
+      ? read("functions/src/infrastructure/linkedin/credentials/GrowthLinkedInFirebaseSecretSourceV1.ts")
+      : handlerSource;
+  const literalSecretParams = [...secretDeclarationSource.matchAll(
+    /defineSecret\(\s*["']([^"']+)["']\s*\)/g,
   )].map((match) => match[1]);
+  const constantSecretParams = [...secretDeclarationSource.matchAll(
+    /defineSecret\(\s*([A-Za-z_$][\w$]*)\s*,?\s*\)/g,
+  )].map((match) => {
+    const constantName = match[1];
+    const constantPattern = new RegExp(
+      `(?:export\\s+)?const\\s+${constantName}\\s*=\\s*["']([^"']+)["']`,
+    );
+    const constantMatch = secretDeclarationSource.match(constantPattern);
+    if (!constantMatch) {
+      fail(`PREVIEW_GUARD_SECRET_CONSTANT_UNRESOLVED:${handler}:${constantName}`);
+    }
+    return constantMatch[1];
+  });
+  const declaredSecretParams = [
+    ...literalSecretParams,
+    ...constantSecretParams,
+  ];
   const expectedSecretParams = contract.PREVIEW_DISCOVERY_SECRET_BINDINGS_V1[handler]
     .map(({ secretParamName }) => secretParamName);
   if (!equalSet(declaredSecretParams, expectedSecretParams)) {
