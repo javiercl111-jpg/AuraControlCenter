@@ -20,6 +20,7 @@ export const PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1 = Object.freeze([
   "evaluateConversation",
   "completeDiscoverySession",
   "growthLinkedInRuntimeReadinessV1",
+  "growthSocialProfileManagementV1",
 ] as const);
 
 export type PreviewDiscoveryHandlerNameV1 =
@@ -36,6 +37,7 @@ export const PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1 = Object.freeze({
   evaluateConversation: serviceAccount("preview-conversation-runtime"),
   completeDiscoverySession: serviceAccount("preview-discovery-complete-rt"),
   growthLinkedInRuntimeReadinessV1: serviceAccount("preview-growth-linkedin-rt"),
+  growthSocialProfileManagementV1: serviceAccount("preview-growth-social-profiles-rt"),
 } satisfies Record<PreviewDiscoveryHandlerNameV1, string>);
 
 export interface PreviewDiscoverySecretBindingV1 {
@@ -71,6 +73,7 @@ export const PREVIEW_DISCOVERY_SECRET_BINDINGS_V1 = Object.freeze({
       secretResource: "GROWTH_LINKEDIN_ACCESS_TOKEN",
     }),
   ]),
+  growthSocialProfileManagementV1: Object.freeze([]),
 } satisfies Record<
   PreviewDiscoveryHandlerNameV1,
   readonly PreviewDiscoverySecretBindingV1[]
@@ -92,6 +95,7 @@ export const PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1 = Object.freeze({
   evaluateConversation: callableOptions("evaluateConversation"),
   completeDiscoverySession: callableOptions("completeDiscoverySession"),
   growthLinkedInRuntimeReadinessV1: callableOptions("growthLinkedInRuntimeReadinessV1"),
+  growthSocialProfileManagementV1: callableOptions("growthSocialProfileManagementV1"),
 } satisfies Record<PreviewDiscoveryHandlerNameV1, Readonly<CallableOptions>>);
 
 export const PREVIEW_DISCOVERY_FORBIDDEN_EXPORTS_V1 = Object.freeze([
