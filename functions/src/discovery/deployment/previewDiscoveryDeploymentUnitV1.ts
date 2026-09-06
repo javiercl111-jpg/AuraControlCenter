@@ -37,7 +37,7 @@ export const PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1 = Object.freeze({
   evaluateConversation: serviceAccount("preview-conversation-runtime"),
   completeDiscoverySession: serviceAccount("preview-discovery-complete-rt"),
   growthLinkedInRuntimeReadinessV1: serviceAccount("preview-growth-linkedin-rt"),
-  growthSocialProfileManagementV1: serviceAccount("preview-growth-social-profiles-rt"),
+  growthSocialProfileManagementV1: serviceAccount("preview-growth-social-rt"),
 } satisfies Record<PreviewDiscoveryHandlerNameV1, string>);
 
 export interface PreviewDiscoverySecretBindingV1 {

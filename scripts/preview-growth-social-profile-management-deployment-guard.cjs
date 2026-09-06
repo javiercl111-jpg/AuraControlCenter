@@ -13,7 +13,7 @@ const FUNCTION_NAME = "growthSocialProfileManagementV1";
 const DEPLOY_TARGET = `functions:${CODEBASE}:${FUNCTION_NAME}`;
 
 const SERVICE_ACCOUNT =
-  "preview-growth-social-profiles-rt@aura-intel-preview.iam.gserviceaccount.com";
+  "preview-growth-social-rt@aura-intel-preview.iam.gserviceaccount.com";
 
 const EXPECTED_GUARD_COMMAND =
   "node ../scripts/preview-growth-social-profile-management-deployment-guard.cjs --project aura-intel-preview --environment PREVIEW";
@@ -225,7 +225,7 @@ function validatePreviewGrowthSocialProfileManagementDeployment(input) {
       `"growthSocialProfileManagementV1"`,
     ) ||
     !contract.includes(
-      `growthSocialProfileManagementV1: serviceAccount("preview-growth-social-profiles-rt")`,
+      `growthSocialProfileManagementV1: serviceAccount("preview-growth-social-rt")`,
     ) ||
     !contract.includes(
       "growthSocialProfileManagementV1: Object.freeze([])",
