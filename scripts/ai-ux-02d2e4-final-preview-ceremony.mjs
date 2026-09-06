@@ -103,6 +103,42 @@ function parseJsonOutput(output) {
   fail("D2E4D_COMMAND_OUTPUT_INVALID");
 }
 
+const WINDOWS_CMD_UNSAFE_TOKEN = /[\u0000\r\n"%!]/u;
+
+function quoteWindowsCmdTokenV1(value) {
+  if (
+    typeof value !== "string" ||
+    !value.length ||
+    WINDOWS_CMD_UNSAFE_TOKEN.test(value)
+  ) {
+    fail("D2E4D_COMMAND_REJECTED");
+  }
+
+  return `"${value}"`;
+}
+
+function createWindowsCmdCommandV1(executable, args) {
+  const tokens =
+    [executable, ...args].map(quoteWindowsCmdTokenV1);
+
+  return `"${tokens.join(" ")}"`;
+}
+
+function resolveWindowsComSpecV1(environment = process.env) {
+  const comSpec =
+    environment?.ComSpec ?? environment?.COMSPEC;
+
+  if (
+    typeof comSpec !== "string" ||
+    !comSpec.trim() ||
+    !/[\\/]cmd\.exe$/iu.test(comSpec.trim())
+  ) {
+    fail("D2E4D_COMMAND_REJECTED");
+  }
+
+  return comSpec.trim();
+}
+
 export class NodeProcessCommandExecutorV1 {
   #execFile;
   #environment;
@@ -113,23 +149,64 @@ export class NodeProcessCommandExecutorV1 {
   }
 
   async execute(executable, args, options = {}) {
-    if (!Array.isArray(args) || args.some((value) => typeof value !== "string")) {
+    if (
+      typeof executable !== "string" ||
+      !executable.trim() ||
+      /[\u0000\r\n]/u.test(executable) ||
+      !Array.isArray(args) ||
+      args.some((value) => typeof value !== "string")
+    ) {
       fail("D2E4D_COMMAND_REJECTED");
     }
-    const result = await this.#execFile(executable, args, {
-      cwd: options.cwd,
-      env: this.#environment,
-      encoding: "utf8",
-      windowsHide: true,
-      maxBuffer: 8 * 1024 * 1024,
-    });
+
+    let resolvedExecutable =
+      executable;
+
+    let resolvedArgs =
+      args;
+
+    const isWindowsCmdBridge =
+      process.platform === "win32" &&
+      /\.cmd$/iu.test(executable);
+
+    if (isWindowsCmdBridge) {
+      resolvedExecutable =
+        resolveWindowsComSpecV1(process.env);
+
+      resolvedArgs =
+        [
+          "/d",
+          "/s",
+          "/c",
+          createWindowsCmdCommandV1(
+            executable,
+            args,
+          ),
+        ];
+    }
+
+    const result =
+      await this.#execFile(
+        resolvedExecutable,
+        resolvedArgs,
+        {
+          cwd: options.cwd,
+          env: this.#environment,
+          encoding: "utf8",
+          windowsHide: true,
+          maxBuffer: 8 * 1024 * 1024,
+          ...(isWindowsCmdBridge
+            ? { windowsVerbatimArguments: true }
+            : {}),
+        },
+      );
+
     return Object.freeze({
       stdout: String(result?.stdout ?? ""),
       stderr: String(result?.stderr ?? ""),
     });
   }
 }
-
 export class RealVercelPreviewCeremonyAdapterV1 {
   #executor;
   #releaseRoot;
