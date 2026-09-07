@@ -53,9 +53,25 @@ const requireFromFunctions = createRequire(
 const admin = requireFromFunctions("firebase-admin");
 
 const PROJECT_ID = "aura-intel-preview";
-const POLICY_VERSION = "AI_UX_02D3_PREVIEW_CANARY_20260813_V4";
 const TURN_ID = "AI_UX_02D2E4_FINAL_TURN_0001";
 const SAFE_ID = /^[^\u0000-\u001f\u007f]{1,256}$/u;
+
+export function resolveDiscoveryCanaryPolicyVersionV1(
+  explicitPolicyVersion,
+  environment = process.env,
+) {
+  const resolvedPolicyVersion =
+    explicitPolicyVersion ?? environment?.AURA_DISCOVERY_CANARY_POLICY_VERSION;
+  if (
+    typeof resolvedPolicyVersion !== "string" ||
+    resolvedPolicyVersion.length === 0 ||
+    resolvedPolicyVersion !== resolvedPolicyVersion.trim() ||
+    !SAFE_ID.test(resolvedPolicyVersion)
+  ) {
+    throw new Error("D2E4X_CANARY_POLICY_VERSION_REQUIRED");
+  }
+  return resolvedPolicyVersion;
+}
 
 export function certifyLauncherExecutionResultV1(
   result,
@@ -120,7 +136,10 @@ export function certifyLauncherExecutionResultV1(
   return deepFreezeExecutionContractV1({ result, presentation });
 }
 
-export async function runFinalLiveCeremonyLauncherV1({ browserProofCustody } = {}) {
+export async function runFinalLiveCeremonyLauncherV1({ browserProofCustody, policyVersion } = {}) {
+  const resolvedPolicyVersion =
+    resolveDiscoveryCanaryPolicyVersionV1(policyVersion);
+
   const proofCustody =
     browserProofCustody ?? createBrowserProofCustodyV1();
   if (
@@ -237,7 +256,7 @@ export async function runFinalLiveCeremonyLauncherV1({ browserProofCustody } = {
       authoritativeTenantLocator,
       changeId: "AI_UX_02D2E4_FINAL_CHANGE_0001",
       operationId: "AI_UX_02D2E4_FINAL_OPERATION_0001",
-      policyVersion: POLICY_VERSION,
+      policyVersion: resolvedPolicyVersion,
       reasonCode: "AI_UX_02D2E4_FINAL_CEREMONY",
       authoritativeTenantId: syntheticPolicy.tenantId,
       syntheticFixtureLocator: syntheticPolicy.fixtureLocator,
