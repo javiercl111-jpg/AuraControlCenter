@@ -212,12 +212,6 @@ export class FirestoreAdaptiveCanaryControlPlaneV1 {
     const current =
       await this.#readCurrent();
 
-    if (
-      current.active.authoritativeTenantLocator !==
-      candidate.authoritativeTenantLocator
-    ) {
-      fail("D2E4O_CONTROL_PLANE_TENANT_REJECTED");
-    }
 
     if (
       candidate.policyVersion ===
@@ -255,6 +249,9 @@ export class FirestoreAdaptiveCanaryControlPlaneV1 {
       previousAuditId:
         current.active.auditId,
 
+      previousAuthoritativeTenantLocator:
+        current.active.authoritativeTenantLocator,
+
       authoritativeTenantLocator:
         candidate.authoritativeTenantLocator,
 
@@ -278,6 +275,9 @@ export class FirestoreAdaptiveCanaryControlPlaneV1 {
 
         previousAuditId:
           proposed.previousAuditId,
+
+        previousAuthoritativeTenantLocator:
+          proposed.previousAuthoritativeTenantLocator,
 
         authoritativeTenantLocator:
           proposed.authoritativeTenantLocator,
@@ -350,6 +350,9 @@ export class FirestoreAdaptiveCanaryControlPlaneV1 {
 
         previousAuditId:
           cas.previousAuditId,
+
+        previousAuthoritativeTenantLocator:
+          cas.previousAuthoritativeTenantLocator,
 
         authoritativeTenantLocator:
           cas.authoritativeTenantLocator,
@@ -431,7 +434,7 @@ export class FirestoreAdaptiveCanaryControlPlaneV1 {
           active?.auditId !==
             cas.previousAuditId ||
           active?.authoritativeTenantLocator !==
-            cas.authoritativeTenantLocator
+            cas.previousAuthoritativeTenantLocator
         ) {
           fail("D2E4O_CONTROL_PLANE_CAS_FAILED");
         }

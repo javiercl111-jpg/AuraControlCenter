@@ -12,6 +12,12 @@ const NOW = 1_800_000_000_000;
 const TENANT =
   "canary-authoritative-tenant";
 
+const OTHER_TENANT =
+  "canary-authoritative-tenant-migrated";
+
+const DRIFT_TENANT =
+  "canary-authoritative-tenant-drift";
+
 const CURRENT_POLICY =
   "AI_UX_02D3_PREVIEW_CANARY_20260812_V3";
 
@@ -449,6 +455,53 @@ test("dryRun produces deterministic SHA-256 fingerprint and zero writes", async 
     CURRENT_AUDIT_ID,
   );
 
+  assert.equal(
+    first.cas.previousAuthoritativeTenantLocator,
+    TENANT,
+  );
+
+  assert.equal(
+    first.cas.authoritativeTenantLocator,
+    TENANT,
+  );
+
+  assert.equal(db.writes.length, 0);
+});
+
+test("different tenant dryRun captures previous tenant and remains zero write", async () => {
+  const db = fakeDb();
+
+  const controlPlane =
+    new FirestoreAdaptiveCanaryControlPlaneV1({
+      db,
+    });
+
+  const result =
+    await controlPlane.dryRun(candidate({
+      authoritativeTenantLocator:
+        OTHER_TENANT,
+    }));
+
+  assert.equal(
+    result.status,
+    "DRY_RUN_VALIDATED",
+  );
+
+  assert.equal(
+    result.cas.previousAuthoritativeTenantLocator,
+    TENANT,
+  );
+
+  assert.equal(
+    result.cas.authoritativeTenantLocator,
+    OTHER_TENANT,
+  );
+
+  assert.equal(
+    result.candidate.authoritativeTenantLocator,
+    OTHER_TENANT,
+  );
+
   assert.equal(db.writes.length, 0);
 });
 
@@ -506,6 +559,57 @@ test("apply performs exactly policy create + audit create + active set", async (
   );
 });
 
+test("apply migrates tenant while preserving exact three logical mutations", async () => {
+  const db = fakeDb();
+
+  const controlPlane =
+    new FirestoreAdaptiveCanaryControlPlaneV1({
+      db,
+    });
+
+  const dryRun =
+    await controlPlane.dryRun(candidate({
+      authoritativeTenantLocator:
+        OTHER_TENANT,
+    }));
+
+  const applied =
+    await controlPlane.apply(dryRun);
+
+  assert.equal(applied.status, "APPLIED");
+  assert.equal(applied.logicalMutations, 3);
+
+  assert.equal(
+    db.state.active.authoritativeTenantLocator,
+    OTHER_TENANT,
+  );
+
+  assert.equal(
+    db.state.nextPolicy.authoritativeTenantLocator,
+    OTHER_TENANT,
+  );
+
+  assert.equal(
+    db.state.nextAudit.data.authoritativeTenantLocator,
+    OTHER_TENANT,
+  );
+
+  assert.equal(db.writes.length, 3);
+
+  const readBack =
+    await controlPlane.readBack({
+      policyVersion:
+        applied.policyVersion,
+      fingerprint:
+        applied.fingerprint,
+    });
+
+  assert.equal(
+    readBack.status,
+    "READ_BACK_CERTIFIED",
+  );
+});
+
 test("readBack certifies pointer policy audit after apply", async () => {
   const db = fakeDb();
 
@@ -557,6 +661,75 @@ test("stale active pointer fails CAS with zero writes", async () => {
     await controlPlane.dryRun(candidate());
 
   db.state.active.updatedAt += 1;
+
+  await expectCode(
+    () => controlPlane.apply(dryRun),
+    "D2E4O_CONTROL_PLANE_CAS_FAILED",
+  );
+
+  assert.equal(db.writes.length, 0);
+});
+
+test("tenant migration fails CAS when previous tenant changes after dryRun", async () => {
+  const db = fakeDb();
+
+  const controlPlane =
+    new FirestoreAdaptiveCanaryControlPlaneV1({
+      db,
+    });
+
+  const dryRun =
+    await controlPlane.dryRun(candidate({
+      authoritativeTenantLocator:
+        OTHER_TENANT,
+    }));
+
+  db.state.active.authoritativeTenantLocator =
+    DRIFT_TENANT;
+
+  await expectCode(
+    () => controlPlane.apply(dryRun),
+    "D2E4O_CONTROL_PLANE_CAS_FAILED",
+  );
+
+  assert.equal(db.writes.length, 0);
+});
+
+test("stale policy version fails CAS with zero writes", async () => {
+  const db = fakeDb();
+
+  const controlPlane =
+    new FirestoreAdaptiveCanaryControlPlaneV1({
+      db,
+    });
+
+  const dryRun =
+    await controlPlane.dryRun(candidate());
+
+  db.state.active.policyVersion =
+    "AI_UX_02D3_PREVIEW_CANARY_DRIFT";
+
+  await expectCode(
+    () => controlPlane.apply(dryRun),
+    "D2E4O_CONTROL_PLANE_CAS_FAILED",
+  );
+
+  assert.equal(db.writes.length, 0);
+});
+
+test("stale audit id fails CAS with zero writes", async () => {
+  const db = fakeDb();
+
+  const controlPlane =
+    new FirestoreAdaptiveCanaryControlPlaneV1({
+      db,
+    });
+
+  const dryRun =
+    await controlPlane.dryRun(candidate());
+
+  db.state.active.auditId =
+    "logical-drift-audit-id";
 
   await expectCode(
     () => controlPlane.apply(dryRun),
