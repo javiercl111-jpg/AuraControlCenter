@@ -475,20 +475,22 @@ export class OperationalD2E4EFinalCeremonyEntrypointV1 {
 
   async preflight(input) {
     if (this.#created) fail("D2E4E_CEREMONY_ALREADY_CREATED");
-    const now = this.#clock();
+    const requestAtMs = this.#clock();
     const bindingResolution =
       await new AuthoritativeJitFixtureSessionBindingResolverV1({
         authorityFactory: this.#authorityFactory,
         rotationRepository: this.#rotationRepository,
         assertCertifiedAuthority: this.#assertCertifiedAuthority,
+        clock: this.#clock,
       }).resolve({
         authoritativeTenantId: input.authoritativeTenantId,
         syntheticFixtureLocator: input.syntheticFixtureLocator,
         intentClass: input.intentClass,
         turnId: input.turnId,
         traceId: input.traceId,
-        now,
+        now: requestAtMs,
       });
+    const now = this.#clock();
     const authority = bindingResolution.authority;
     const consumerBoundary = new RealConsumerBoundaryReadinessAdapterV1({
         target: this.#target,

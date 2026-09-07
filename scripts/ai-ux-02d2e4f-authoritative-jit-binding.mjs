@@ -100,17 +100,20 @@ export class AuthoritativeJitFixtureSessionBindingResolverV1 {
   #rotationRepository;
   #assertCertifiedAuthority;
   #errorIdFactory;
+  #clock;
 
   constructor({
     authorityFactory,
     rotationRepository,
     assertCertifiedAuthority,
+    clock,
     errorIdFactory = () => `binding-error-${randomUUID()}`,
   }) {
     if (
       typeof authorityFactory !== "function" ||
       typeof rotationRepository?.inspectExpired !== "function" ||
       typeof assertCertifiedAuthority !== "function" ||
+      (clock !== undefined && typeof clock !== "function") ||
       typeof errorIdFactory !== "function"
     ) {
       fail("D2E4F_BINDING_RESOLVER_REJECTED");
@@ -119,6 +122,7 @@ export class AuthoritativeJitFixtureSessionBindingResolverV1 {
     this.#rotationRepository = rotationRepository;
     this.#assertCertifiedAuthority = assertCertifiedAuthority;
     this.#errorIdFactory = errorIdFactory;
+    this.#clock = clock;
   }
 
   async resolve(input) {
@@ -144,10 +148,30 @@ export class AuthoritativeJitFixtureSessionBindingResolverV1 {
       turnId: input.turnId,
       traceId: input.traceId,
     }));
-    assertAuthority(authority, input, this.#errorIdFactory);
+
+    const authorityObservedAtMs =
+      this.#clock === undefined ? input.now : this.#clock();
+
+    if (
+      !Number.isSafeInteger(authorityObservedAtMs) ||
+      authorityObservedAtMs < input.now
+    ) {
+      fail("D2E4F_AUTHORITATIVE_BINDING_REJECTED", {
+        traceId: input.traceId,
+        occurredAtMs: input.now,
+        errorIdFactory: this.#errorIdFactory,
+      });
+    }
+
+    const authorityRequest = Object.freeze({
+      ...input,
+      now: authorityObservedAtMs,
+    });
+
+    assertAuthority(authority, authorityRequest, this.#errorIdFactory);
     try {
       this.#assertCertifiedAuthority(authority, {
-        atMs: input.now,
+        atMs: authorityObservedAtMs,
         traceId: input.traceId,
         errorIdFactory: this.#errorIdFactory,
       });
@@ -155,7 +179,7 @@ export class AuthoritativeJitFixtureSessionBindingResolverV1 {
       if (isRuntimeErrorV1(cause)) throw cause;
       fail("D2E4F_CERTIFIED_AUTHORITY_REJECTED", {
         traceId: input.traceId,
-        occurredAtMs: input.now,
+        occurredAtMs: authorityObservedAtMs,
         errorIdFactory: this.#errorIdFactory,
         cause,
         details: { observedName: cause?.name ?? "Error" },
@@ -164,7 +188,7 @@ export class AuthoritativeJitFixtureSessionBindingResolverV1 {
 
     const expectation = await this.#rotationRepository.inspectExpired(
       authority,
-      input.now,
+      authorityObservedAtMs,
       { traceId: input.traceId },
     );
     if (
@@ -173,7 +197,7 @@ export class AuthoritativeJitFixtureSessionBindingResolverV1 {
     ) {
       fail("D2E4F_REPOSITORY_BINDING_NOT_FOUND", {
         traceId: input.traceId,
-        occurredAtMs: input.now,
+        occurredAtMs: authorityObservedAtMs,
         errorIdFactory: this.#errorIdFactory,
       });
     }
