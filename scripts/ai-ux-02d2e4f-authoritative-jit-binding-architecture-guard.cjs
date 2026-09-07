@@ -38,7 +38,7 @@ if (!/claimEphemeral\(controlProof, authoritativeBinding\)/u.test(controller) ||
   errors.push("CONTROLLER_BINDING_HANDOFF_MISSING");
 }
 if (!/#authoritativeBinding/u.test(runner) ||
-    !/this\.#controller\.bootstrapBrowser\(adapter, this\.#authoritativeBinding\)/u.test(runner) ||
+    !/this\.#controller\.bootstrapBrowser\(\s*adapter,\s*this\.#authoritativeBinding,\s*\)/u.test(runner) ||
     !/bootstrapBrowser\(adapter, authoritativeBinding\)/u.test(controller)) {
   errors.push("RUNNER_BINDING_COMPOSITION_MISSING");
 }

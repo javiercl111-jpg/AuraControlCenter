@@ -361,3 +361,367 @@ test("runner source contains no plaintext persistence or logging carrier", async
   assert.doesNotMatch(source, /console\.|process\.(?:stdout|stderr)|writeFile|clipboard|localStorage|sessionStorage|document\.cookie/iu);
   assert.doesNotMatch(source, new RegExp(`${proof}|${bearer}`, "u"));
 });
+test("RealVercelPreviewCeremonyAdapterV1 transports only control-proof digest as transient build env", async () => {
+  const calls = [];
+  const digest = "a".repeat(64);
+
+  const executor = {
+    async execute(executable, args, options) {
+      calls.push({ executable, args, options });
+
+      if (args[0] === "deploy") {
+        return {
+          stdout: JSON.stringify({
+            id: "dpl_unit_live_custody",
+            url: "unit-live-custody.vercel.app",
+          }),
+          stderr: "",
+        };
+      }
+
+      return {
+        stdout: JSON.stringify({
+          id: "dpl_unit_live_custody",
+          readyState: "READY",
+          target: "preview",
+        }),
+        stderr: "",
+      };
+    },
+  };
+
+  const adapter =
+    new RealVercelPreviewCeremonyAdapterV1({
+      executor,
+      releaseRoot: process.cwd(),
+      mode: "APPLY",
+      controlProofDigest: digest,
+    });
+
+  const deployment =
+    await adapter.deployOnce();
+
+  assert.equal(deployment.status, "READY");
+  assert.equal(calls.length, 2);
+
+  assert.deepEqual(
+    calls[0].args,
+    [
+      "deploy",
+      "--yes",
+      "--json",
+      "--build-env",
+      `VITE_AI_UX_02D2E4_CONTROL_PROOF_DIGEST_V1=${digest}`,
+    ],
+  );
+});
+
+test("RealVercelPreviewCeremonyAdapterV1 APPLY fails closed without digest", async () => {
+  const executor = {
+    async execute() {
+      throw new Error("EXECUTOR_MUST_NOT_RUN");
+    },
+  };
+
+  const adapter =
+    new RealVercelPreviewCeremonyAdapterV1({
+      executor,
+      releaseRoot: process.cwd(),
+      mode: "APPLY",
+    });
+
+  await assert.rejects(
+    () => adapter.deployOnce(),
+    /D2E4D_CONTROL_PROOF_DIGEST_REQUIRED/u,
+  );
+});
+
+test("RealVercelPreviewCeremonyAdapterV1 rejects invalid digest", () => {
+  const executor = {
+    async execute() {
+      return { stdout: "", stderr: "" };
+    },
+  };
+
+  assert.throws(
+    () =>
+      new RealVercelPreviewCeremonyAdapterV1({
+        executor,
+        releaseRoot: process.cwd(),
+        mode: "APPLY",
+        controlProofDigest: "A".repeat(64),
+      }),
+    /D2E4D_VERCEL_ADAPTER_REJECTED/u,
+  );
+});
+// R45-R2 WINDOWS CMD TRANSPORT CONTRACT
+test(
+  "NodeProcessCommandExecutorV1 bridges .cmd through explicit ComSpec without generic shell",
+  { skip: process.platform !== "win32" },
+  async () => {
+    const {
+      NodeProcessCommandExecutorV1,
+    } = await import(
+      "../ai-ux-02d2e4-final-preview-ceremony.mjs"
+    );
+
+    const calls = [];
+
+    const executor =
+      new NodeProcessCommandExecutorV1({
+        execFile: async (
+          executable,
+          args,
+          options,
+        ) => {
+          calls.push({
+            executable,
+            args,
+            options,
+          });
+
+          return {
+            stdout: "D2E4D_CMD_BRIDGE_UNIT_OK",
+            stderr: "",
+          };
+        },
+      });
+
+    const result =
+      await executor.execute(
+        "harmless.cmd",
+        [
+          "alpha",
+          "beta=1",
+          "https://example.invalid/path",
+        ],
+      );
+
+    assert.equal(
+      result.stdout,
+      "D2E4D_CMD_BRIDGE_UNIT_OK",
+    );
+
+    assert.equal(
+      calls.length,
+      1,
+    );
+
+    const call =
+      calls[0];
+
+    assert.equal(
+      call.executable,
+      process.env.ComSpec ??
+        process.env.COMSPEC,
+    );
+
+    assert.deepEqual(
+      call.args.slice(0, 3),
+      [
+        "/d",
+        "/s",
+        "/c",
+      ],
+    );
+
+    assert.match(
+      call.args[3],
+      /"harmless\.cmd"/u,
+    );
+
+    assert.match(
+      call.args[3],
+      /"beta=1"/u,
+    );
+
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(
+        call.options,
+        "shell",
+      ),
+      false,
+    );
+    assert.equal(
+      call.options.windowsVerbatimArguments,
+      true,
+    );
+  },
+);
+
+test(
+  "NodeProcessCommandExecutorV1 preserves default execFile quoting for non-.cmd executables",
+  async () => {
+    const {
+      NodeProcessCommandExecutorV1,
+    } = await import(
+      "../ai-ux-02d2e4-final-preview-ceremony.mjs"
+    );
+
+    const calls = [];
+
+    const executor =
+      new NodeProcessCommandExecutorV1({
+        execFile: async (
+          executable,
+          args,
+          options,
+        ) => {
+          calls.push({
+            executable,
+            args,
+            options,
+          });
+
+          return {
+            stdout: "D2E4D_NON_CMD_OK",
+            stderr: "",
+          };
+        },
+      });
+
+    const result =
+      await executor.execute(
+        "harmless.exe",
+        [
+          "safe-token=1",
+        ],
+      );
+
+    assert.equal(
+      result.stdout,
+      "D2E4D_NON_CMD_OK",
+    );
+
+    assert.equal(
+      calls.length,
+      1,
+    );
+
+    assert.equal(
+      calls[0].executable,
+      "harmless.exe",
+    );
+
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(
+        calls[0].options,
+        "windowsVerbatimArguments",
+      ),
+      false,
+    );
+  },
+);
+test(
+  "NodeProcessCommandExecutorV1 executes a harmless real .cmd file on Windows",
+  { skip: process.platform !== "win32" },
+  async () => {
+    const {
+      mkdtemp,
+      rm,
+      writeFile,
+    } = await import(
+      "node:fs/promises"
+    );
+
+    const {
+      tmpdir,
+    } = await import(
+      "node:os"
+    );
+
+    const {
+      join,
+    } = await import(
+      "node:path"
+    );
+
+    const {
+      NodeProcessCommandExecutorV1,
+    } = await import(
+      "../ai-ux-02d2e4-final-preview-ceremony.mjs"
+    );
+
+    const directory =
+      await mkdtemp(
+        join(
+          tmpdir(),
+          "d2e4d-cmd-transport-",
+        ),
+      );
+
+    const script =
+      join(
+        directory,
+        "probe.cmd",
+      );
+
+    try {
+      await writeFile(
+        script,
+        [
+          "@echo off",
+          "echo D2E4D_CMD_TRANSPORT_OK:%~1",
+          "",
+        ].join("\r\n"),
+        "utf8",
+      );
+
+      const executor =
+        new NodeProcessCommandExecutorV1();
+
+      const result =
+        await executor.execute(
+          script,
+          [
+            "safe-token=1",
+          ],
+        );
+
+      assert.match(
+        result.stdout,
+        /D2E4D_CMD_TRANSPORT_OK:safe-token=1/u,
+      );
+    } finally {
+      await rm(
+        directory,
+        {
+          recursive: true,
+          force: true,
+        },
+      );
+    }
+  },
+);
+
+test(
+  "NodeProcessCommandExecutorV1 rejects unsafe Windows cmd tokens",
+  { skip: process.platform !== "win32" },
+  async () => {
+    const {
+      NodeProcessCommandExecutorV1,
+    } = await import(
+      "../ai-ux-02d2e4-final-preview-ceremony.mjs"
+    );
+
+    const executor =
+      new NodeProcessCommandExecutorV1({
+        execFile: async () => {
+          throw new Error(
+            "EXECFILE_MUST_NOT_RUN",
+          );
+        },
+      });
+
+    await assert.rejects(
+      () =>
+        executor.execute(
+          "harmless.cmd",
+          [
+            "unsafe%PATH%",
+          ],
+        ),
+      /D2E4D_COMMAND_REJECTED/u,
+    );
+  },
+);

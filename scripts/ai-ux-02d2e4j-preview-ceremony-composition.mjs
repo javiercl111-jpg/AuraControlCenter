@@ -17,7 +17,7 @@ import {
   SYNTHETIC_DISCOVERY_CAPABILITY_ACTOR_V1,
 } from "./ai-ux-02d2e4e-real-capability-readiness.mjs";
 import {
-  D2E4G_PREVIEW_DEPLOYMENT_ID,
+  assertD2E4GPreviewTargetV1,
   D2E4GCompositionPreflightV1,
   ExistingPreviewDeploymentReadBackAdapterV1,
   assertD2E4GReadyArtifactV1,
@@ -58,6 +58,7 @@ const REQUIRED_AUTHORITY_INPUT = Object.freeze([
   "syntheticFixtureLocator",
   "intentClass",
   "turnId",
+  "traceId",
 ]);
 const VALID_READINESS = new Set(["READY", "CONDITIONAL", "BLOCKED"]);
 
@@ -83,6 +84,67 @@ function requiredText(input, key, phase = "CONFIGURATION") {
   return value.trim();
 }
 
+function validatePreviewTarget(input) {
+  const source =
+    input?.previewTarget;
+
+  if (
+    !source ||
+    typeof source !== "object"
+  ) {
+    fail(
+      "D2E4J_REQUIRED_PREVIEW_TARGET_MISSING",
+      "CONFIGURATION",
+    );
+  }
+
+  const deployment =
+    assertD2E4GPreviewTargetV1({
+      deploymentId:
+        requiredText(
+          source,
+          "deploymentId",
+        ),
+      deploymentUrl:
+        requiredText(
+          source,
+          "deploymentUrl",
+        ),
+      previewUrl:
+        requiredText(
+          source,
+          "previewUrl",
+        ),
+      projectId:
+        requiredText(
+          source,
+          "projectId",
+        ),
+    });
+
+  const gitBranch =
+    requiredText(
+      source,
+      "gitBranch",
+    );
+
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9._/-]{2,255}$/u.test(
+      gitBranch
+    )
+  ) {
+    fail(
+      "D2E4J_PREVIEW_GIT_BRANCH_REJECTED",
+      "CONFIGURATION",
+    );
+  }
+
+  return Object.freeze({
+    deployment,
+    gitBranch,
+  });
+}
+
 function validateConfiguration(input) {
   if (input?.environment !== "PREVIEW") {
     fail("D2E4J_PREVIEW_ONLY", "CONFIGURATION");
@@ -90,6 +152,9 @@ function validateConfiguration(input) {
   const configuration = Object.fromEntries(
     REQUIRED_CONFIGURATION.map((key) => [key, requiredText(input, key)]),
   );
+
+  const previewTarget =
+    validatePreviewTarget(input);
   if (!isAbsolute(configuration.releaseRoot) ||
       !existsSync(configuration.releaseRoot)) {
     fail("D2E4J_RELEASE_ROOT_REJECTED", "CONFIGURATION");
@@ -99,6 +164,7 @@ function validateConfiguration(input) {
   );
   return Object.freeze({
     ...configuration,
+    previewTarget,
     authorityInput: Object.freeze(authorityInput),
   });
 }
@@ -270,7 +336,7 @@ export class D2E4JOperationalCeremonyHandleV1 {
     this.#browserRuntime = browserRuntime;
     this.version = D2E4J_COMPOSITION_VERSION;
     this.environment = "PREVIEW";
-    this.previewDeploymentId = D2E4G_PREVIEW_DEPLOYMENT_ID;
+    this.previewDeploymentId = compositionResult.artifact.deployment.deploymentId;
     this.compositionResult = compositionResult;
     this.artifact = compositionResult.artifact;
     this.bindings = bindings;
@@ -308,6 +374,22 @@ export async function createOperationalD2E4JPreviewCeremonyCompositionV1(input) 
   const clock = input.clock ?? Date.now;
   const commandExecutor = input.commandExecutor ??
     new NodeProcessCommandExecutorV1();
+
+  const deploymentTarget =
+    configuration.previewTarget.deployment;
+
+  const controlTarget =
+    Object.freeze({
+      environment: "PREVIEW",
+      projectName:
+        deploymentTarget.projectId,
+      firebaseProjectId:
+        D2E4D_TARGET.firebaseProjectId,
+      gitBranch:
+        configuration.previewTarget.gitBranch,
+      controlContext:
+        D2E4D_TARGET.controlContext,
+    });
   const browserRuntime = new PlaywrightCoreBrowserRuntimeV1({
     executablePath: input.browserExecutablePath,
   });
@@ -323,6 +405,7 @@ export async function createOperationalD2E4JPreviewCeremonyCompositionV1(input) 
       browserRuntime,
       runtimeRevisionReader,
       rotatorClass: input.rotatorClass,
+      target: controlTarget,
       clock,
     });
   const coordinator = new D2E4JCapabilityCompositionCoordinatorV1({
@@ -384,11 +467,13 @@ export async function createOperationalD2E4JPreviewCeremonyCompositionV1(input) 
   const deploymentReadBack = new ExistingPreviewDeploymentReadBackAdapterV1({
     executor: commandExecutor,
     releaseRoot: configuration.releaseRoot,
+    previewTarget:
+      deploymentTarget,
   });
   const previewConfigurationAdapter = new RealVercelPreviewCeremonyAdapterV1({
     executor: commandExecutor,
     releaseRoot: configuration.releaseRoot,
-    target: D2E4D_TARGET,
+    target: controlTarget,
     mode: "APPLY",
   });
   const adaptiveCanaryControlPlaneAdapter =
@@ -414,7 +499,10 @@ export async function createOperationalD2E4JPreviewCeremonyCompositionV1(input) 
   });
   const compositionResult = await compositionPreflight.preflight(Object.freeze({
     environment: "PREVIEW",
-    deploymentId: D2E4G_PREVIEW_DEPLOYMENT_ID,
+    deploymentId:
+      deploymentTarget.deploymentId,
+    previewTarget:
+      deploymentTarget,
   }));
   if (compositionResult?.COMPOSITION_STATUS !== "READY") {
     coordinator.current()?.runner?.destroy?.();
@@ -436,7 +524,7 @@ export async function createOperationalD2E4JPreviewCeremonyCompositionV1(input) 
     throw error;
   }
 
-  const artifact = assertD2E4GReadyArtifactV1(compositionResult);
+  const artifact = assertD2E4GReadyArtifactV1(compositionResult, deploymentTarget);
   const capabilityComposition = coordinator.current();
   if (!capabilityComposition ||
       !sameBinding(
@@ -464,12 +552,17 @@ export async function createOperationalD2E4JPreviewCeremonyCompositionV1(input) 
   let execution;
   try {
     execution = createOperationalD2E4HExecutionCeremonyV1({
+      browserProofCustody: input?.browserProofCustody,
       previewConfigurationAdapter,
       adaptiveCanaryControlPlaneAdapter,
       capabilityIssuerAdapter:
         rotatedCapabilityCeremonyAdapter,
       browserRuntime,
       evaluateConversationBoundary,
+      previewTarget:
+        deploymentTarget,
+      target:
+        controlTarget,
       ceremonyConfiguration: Object.freeze({
         actor: SYNTHETIC_DISCOVERY_CAPABILITY_ACTOR_V1,
         approver: configuration.approver,

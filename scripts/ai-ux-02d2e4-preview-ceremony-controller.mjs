@@ -48,9 +48,11 @@ function fail(code) {
 function assertPreviewControlTarget(input) {
   if (
     input?.environment !== "PREVIEW" ||
-    input?.projectName !== D2E4_PROJECT_NAME ||
+    typeof input?.projectName !== "string" ||
+    !/^[a-z0-9][a-z0-9-]{2,99}$/u.test(input.projectName) ||
     input?.firebaseProjectId !== D2E4_FIREBASE_PROJECT_ID ||
-    input?.gitBranch !== D2E4_RELEASE_BRANCH ||
+    typeof input?.gitBranch !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._/-]{2,255}$/u.test(input.gitBranch) ||
     input?.controlContext !== D2E4_CONTROL_CONTEXT
   ) {
     fail("D2E4_PREVIEW_CONTROL_TARGET_REJECTED");

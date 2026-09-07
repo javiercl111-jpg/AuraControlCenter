@@ -33,7 +33,7 @@ export const D2E4D_TARGET = Object.freeze({
 });
 
 const SHA256 = /^[a-f0-9]{64}$/u;
-const PREVIEW_URL = /^https:\/\/[a-z0-9-]+\.vercel\.app\/?$/u;
+const PREVIEW_URL = /^https:\/\/(?:[a-z0-9-]+\.vercel\.app|preview-controlcenter\.auranexus\.io)\/?$/u;
 const LOCAL_HARNESS_URL = /^http:\/\/127\.0\.0\.1:\d+\/?$/u;
 const CAPABILITY_BEARER = /^[a-f0-9]{64}$/u;
 const FIXTURE = /^SYNTHETIC_FIXTURE_V1_[A-F0-9]{32}$/u;
@@ -57,9 +57,11 @@ function fail(code) {
 function assertTarget(target) {
   if (
     target?.environment !== "PREVIEW" ||
-    target?.projectName !== D2E4_PROJECT_NAME ||
+    typeof target?.projectName !== "string" ||
+    !/^[a-z0-9][a-z0-9-]{2,99}$/u.test(target.projectName) ||
     target?.firebaseProjectId !== D2E4_FIREBASE_PROJECT_ID ||
-    target?.gitBranch !== D2E4_RELEASE_BRANCH ||
+    typeof target?.gitBranch !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._/-]{2,255}$/u.test(target.gitBranch) ||
     target?.controlContext !== D2E4_CONTROL_CONTEXT
   ) {
     fail("D2E4D_TARGET_REJECTED");
@@ -101,6 +103,42 @@ function parseJsonOutput(output) {
   fail("D2E4D_COMMAND_OUTPUT_INVALID");
 }
 
+const WINDOWS_CMD_UNSAFE_TOKEN = /[\u0000\r\n"%!]/u;
+
+function quoteWindowsCmdTokenV1(value) {
+  if (
+    typeof value !== "string" ||
+    !value.length ||
+    WINDOWS_CMD_UNSAFE_TOKEN.test(value)
+  ) {
+    fail("D2E4D_COMMAND_REJECTED");
+  }
+
+  return `"${value}"`;
+}
+
+function createWindowsCmdCommandV1(executable, args) {
+  const tokens =
+    [executable, ...args].map(quoteWindowsCmdTokenV1);
+
+  return `"${tokens.join(" ")}"`;
+}
+
+function resolveWindowsComSpecV1(environment = process.env) {
+  const comSpec =
+    environment?.ComSpec ?? environment?.COMSPEC;
+
+  if (
+    typeof comSpec !== "string" ||
+    !comSpec.trim() ||
+    !/[\\/]cmd\.exe$/iu.test(comSpec.trim())
+  ) {
+    fail("D2E4D_COMMAND_REJECTED");
+  }
+
+  return comSpec.trim();
+}
+
 export class NodeProcessCommandExecutorV1 {
   #execFile;
   #environment;
@@ -111,41 +149,93 @@ export class NodeProcessCommandExecutorV1 {
   }
 
   async execute(executable, args, options = {}) {
-    if (!Array.isArray(args) || args.some((value) => typeof value !== "string")) {
+    if (
+      typeof executable !== "string" ||
+      !executable.trim() ||
+      /[\u0000\r\n]/u.test(executable) ||
+      !Array.isArray(args) ||
+      args.some((value) => typeof value !== "string")
+    ) {
       fail("D2E4D_COMMAND_REJECTED");
     }
-    const result = await this.#execFile(executable, args, {
-      cwd: options.cwd,
-      env: this.#environment,
-      encoding: "utf8",
-      windowsHide: true,
-      maxBuffer: 8 * 1024 * 1024,
-    });
+
+    let resolvedExecutable =
+      executable;
+
+    let resolvedArgs =
+      args;
+
+    const isWindowsCmdBridge =
+      process.platform === "win32" &&
+      /\.cmd$/iu.test(executable);
+
+    if (isWindowsCmdBridge) {
+      resolvedExecutable =
+        resolveWindowsComSpecV1(process.env);
+
+      resolvedArgs =
+        [
+          "/d",
+          "/s",
+          "/c",
+          createWindowsCmdCommandV1(
+            executable,
+            args,
+          ),
+        ];
+    }
+
+    const result =
+      await this.#execFile(
+        resolvedExecutable,
+        resolvedArgs,
+        {
+          cwd: options.cwd,
+          env: this.#environment,
+          encoding: "utf8",
+          windowsHide: true,
+          maxBuffer: 8 * 1024 * 1024,
+          ...(isWindowsCmdBridge
+            ? { windowsVerbatimArguments: true }
+            : {}),
+        },
+      );
+
     return Object.freeze({
       stdout: String(result?.stdout ?? ""),
       stderr: String(result?.stderr ?? ""),
     });
   }
 }
-
 export class RealVercelPreviewCeremonyAdapterV1 {
   #executor;
   #releaseRoot;
   #target;
   #mode;
+  #controlProofDigest;
   #deployInvoked = false;
 
-  constructor({ executor, releaseRoot, target = D2E4D_TARGET, mode = "DRY_RUN" }) {
+  constructor({
+    executor,
+    releaseRoot,
+    target = D2E4D_TARGET,
+    mode = "DRY_RUN",
+    controlProofDigest,
+  }) {
     assertTarget(target);
     if (!executor || typeof executor.execute !== "function" ||
         typeof releaseRoot !== "string" || !releaseRoot.trim() ||
-        !new Set(["DRY_RUN", "APPLY"]).has(mode)) {
+        !new Set(["DRY_RUN", "APPLY"]).has(mode) ||
+        (controlProofDigest !== undefined &&
+          (typeof controlProofDigest !== "string" ||
+            !/^[a-f0-9]{64}$/u.test(controlProofDigest)))) {
       fail("D2E4D_VERCEL_ADAPTER_REJECTED");
     }
     this.#executor = executor;
     this.#releaseRoot = releaseRoot;
     this.#target = Object.freeze({ ...target });
     this.#mode = mode;
+    this.#controlProofDigest = controlProofDigest;
   }
 
   #vercelExecutable() {
@@ -170,9 +260,19 @@ export class RealVercelPreviewCeremonyAdapterV1 {
       });
     }
 
+    if (!this.#controlProofDigest) {
+      fail("D2E4D_CONTROL_PROOF_DIGEST_REQUIRED");
+    }
+
     const deployment = await this.#executor.execute(
       this.#vercelExecutable(),
-      ["deploy", "--yes", "--json"],
+      [
+        "deploy",
+        "--yes",
+        "--json",
+        "--build-env",
+        `VITE_AI_UX_02D2E4_CONTROL_PROOF_DIGEST_V1=${this.#controlProofDigest}`,
+      ],
       { cwd: this.#releaseRoot },
     );
     const created = parseJsonOutput(deployment.stdout);
