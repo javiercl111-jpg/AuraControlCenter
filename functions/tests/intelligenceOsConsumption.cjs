@@ -26,6 +26,11 @@ const stagedPackageRoot = resolve(
   ".generated",
   "aura-intelligence-os"
 );
+const CERTIFIED_SOCIAL_PROFILE_CONSUMER_FILES = new Set([
+  "composition/socialProfiles/GrowthSocialProfileManagementCallableRuntimeV1.ts",
+  "growth/social/profiles/FirestoreGrowthSocialProfileBindingRepositoryV1.ts",
+  "growth/social/profiles/tests/FirestoreGrowthSocialProfileBindingRepositoryV1.test.ts",
+]);
 const CERTIFIED_PRODUCTION_CONSUMER_DIRECTORY =
   "infrastructure/firestore/authorityPersistence/";
 const CERTIFIED_PRODUCTION_PACKAGE_SPECIFIER =
@@ -97,7 +102,10 @@ function certifiedProductionConsumerViolations(file, source) {
     CERTIFIED_AUTHORITY_PROVISIONING_CONSUMER_FILES.has(normalizedFile);
   const isCertifiedFeaturePolicyFile =
     CERTIFIED_FEATURE_POLICY_CONSUMER_FILES.has(normalizedFile);
+  const isCertifiedSocialProfileFile =
+    CERTIFIED_SOCIAL_PROFILE_CONSUMER_FILES.has(normalizedFile);
   const isCertifiedConsumer =
+    isCertifiedSocialProfileFile ||
     isCertifiedAdapterDirectory || isCertifiedDarkCompositionFile ||
     isCertifiedAuthorityProvisioningFile ||
     isCertifiedFeaturePolicyFile;
@@ -154,6 +162,13 @@ function assertCertifiedProductionConsumerPolicy() {
     'import type { AuthorityClockPort } from "@aura/intelligence-os/server";';
   const darkHandlerImport =
     'import type { AuthorityApplicationServiceV1 } from "@aura/intelligence-os/server";';
+  assert.equal(CERTIFIED_SOCIAL_PROFILE_CONSUMER_FILES.size, 3);
+  for (const file of CERTIFIED_SOCIAL_PROFILE_CONSUMER_FILES) {
+    assert.deepEqual(
+      certifiedProductionConsumerViolations(file, certifiedImport),
+      []
+    );
+  }
 
   assert.deepEqual(
     certifiedProductionConsumerViolations(

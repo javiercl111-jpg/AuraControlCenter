@@ -608,4 +608,8 @@ export const AUTHORIZED_SERVER_RUNTIME_EXPORTS = Object.freeze([
   'validateProvisionSyntheticPreviewAuthorityRequestV1',
   'validateResolvePreviewAuthorityRequestV1',
   'validateTenantMembershipV1',
+  'GROWTH_SOCIAL_PROFILE_BINDING_COLLECTION_V1',
+  'GROWTH_SOCIAL_PROFILE_BINDING_SCHEMA_VERSION_V1',
+  'GrowthSocialProfileBindingManagementServiceV1',
+  'createGrowthSocialProfileBindingV1',
 ] as const);

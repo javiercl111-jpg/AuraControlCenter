@@ -1393,3 +1393,34 @@ export type {
 export type {
   AuthoritativeFeaturePolicySourcePortV1,
 } from './serverPolicy/ports';
+
+export {
+  GROWTH_SOCIAL_PROFILE_BINDING_SCHEMA_VERSION_V1,
+  createGrowthSocialProfileBindingV1,
+} from './growthIntegration/externalActions/social/profiles/GrowthSocialProfileBindingV1';
+
+export type {
+  CreateGrowthSocialProfileBindingInputV1,
+  GrowthSocialAccountTypeV1,
+  GrowthSocialConnectionStateV1,
+  GrowthSocialProfileBindingV1,
+  GrowthSocialProviderV1,
+} from './growthIntegration/externalActions/social/profiles/GrowthSocialProfileBindingV1';
+
+export {
+  GROWTH_SOCIAL_PROFILE_BINDING_COLLECTION_V1,
+} from './growthIntegration/externalActions/social/profiles/GrowthSocialProfileBindingRepositoryV1';
+
+export type {
+  GrowthSocialProfileBindingKeyV1,
+  GrowthSocialProfileBindingListQueryV1,
+  GrowthSocialProfileBindingRepositoryV1,
+} from './growthIntegration/externalActions/social/profiles/GrowthSocialProfileBindingRepositoryV1';
+
+export {
+  GrowthSocialProfileBindingManagementServiceV1,
+} from './growthIntegration/externalActions/social/profiles/GrowthSocialProfileBindingManagementServiceV1';
+
+export type {
+  GrowthSocialProfileBindingManagementServiceDependenciesV1,
+} from './growthIntegration/externalActions/social/profiles/GrowthSocialProfileBindingManagementServiceV1';

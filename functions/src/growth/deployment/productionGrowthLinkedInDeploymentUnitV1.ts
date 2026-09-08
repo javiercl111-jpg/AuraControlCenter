@@ -23,6 +23,9 @@ export const PRODUCTION_GROWTH_LINKEDIN_CODEBASE_V1 =
 export const PRODUCTION_GROWTH_LINKEDIN_SERVICE_ACCOUNT_V1 =
   'production-growth-linkedin-rt@aura-control-center-debb3.iam.gserviceaccount.com' as const;
 
+export const PRODUCTION_GROWTH_SOCIAL_PROFILE_MANAGEMENT_SERVICE_ACCOUNT_V1 =
+  'production-growth-social-profiles-rt@aura-control-center-debb3.iam.gserviceaccount.com' as const;
+
 export const PRODUCTION_GROWTH_LINKEDIN_SECRET_NAME_V1 =
   'GROWTH_LINKEDIN_ACCESS_TOKEN' as const;
 
@@ -36,6 +39,18 @@ export const PRODUCTION_GROWTH_LINKEDIN_CALLABLE_OPTIONS_V1 =
 
         serviceAccount:
           PRODUCTION_GROWTH_LINKEDIN_SERVICE_ACCOUNT_V1,
+
+        enforceAppCheck:
+          true,
+      }) satisfies Readonly<CallableOptions>,
+
+    growthSocialProfileManagementV1:
+      Object.freeze({
+        region:
+          PRODUCTION_GROWTH_LINKEDIN_REGION_V1,
+
+        serviceAccount:
+          PRODUCTION_GROWTH_SOCIAL_PROFILE_MANAGEMENT_SERVICE_ACCOUNT_V1,
 
         enforceAppCheck:
           true,
