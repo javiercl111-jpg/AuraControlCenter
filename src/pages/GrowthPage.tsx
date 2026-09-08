@@ -2,6 +2,15 @@ import { useState } from "react";
 import { httpsCallable } from "firebase/functions";
 
 import { auth, clientRuntimeEnvironment, functions } from "../config/firebase";
+import {
+  getGrowthSocialProfileById,
+  listGrowthSocialProfiles,
+  upsertGrowthSocialProfile,
+  type GrowthSocialAccountType,
+  type GrowthSocialConnectionState,
+  type GrowthSocialProfileBinding,
+  type GrowthSocialProvider,
+} from "../services/growthSocialProfileService";
 
 type LinkedInReadinessResponse = {
   status?: string;
@@ -20,6 +29,30 @@ type ReadinessResult = {
   secretBinding: string;
   linkedInConnection: string;
   checkedAt: string;
+};
+
+type SocialProfileFormState = {
+  bindingId: string;
+  provider: GrowthSocialProvider;
+  accountType: GrowthSocialAccountType;
+  externalAccountId: string;
+  displayName: string;
+  handle: string;
+  profileUrl: string;
+  connectionState: GrowthSocialConnectionState;
+  isActive: boolean;
+};
+
+const initialSocialProfileForm: SocialProfileFormState = {
+  bindingId: "",
+  provider: "LINKEDIN",
+  accountType: "PROFILE",
+  externalAccountId: "",
+  displayName: "",
+  handle: "",
+  profileUrl: "",
+  connectionState: "PENDING",
+  isActive: true,
 };
 
 const providers = [
@@ -89,6 +122,180 @@ export default function GrowthPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ReadinessResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [socialProfiles, setSocialProfiles] =
+    useState<GrowthSocialProfileBinding[]>([]);
+  const [socialError, setSocialError] = useState<string | null>(null);
+  const [socialMessage, setSocialMessage] = useState<string | null>(null);
+  const [lookupBindingId, setLookupBindingId] = useState("");
+  const [lookupResult, setLookupResult] =
+    useState<GrowthSocialProfileBinding | null>(null);
+  const [socialForm, setSocialForm] =
+    useState<SocialProfileFormState>(initialSocialProfileForm);
+
+  const loadSocialProfiles = async () => {
+    if (socialLoading) return;
+
+    if (!auth.currentUser) {
+      setSocialError("AUTHENTICATED_USER_REQUIRED");
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+    setSocialMessage(null);
+
+    try {
+      const bindings = await listGrowthSocialProfiles({
+        activeOnly: false,
+      });
+
+      setSocialProfiles([...bindings]);
+      setSocialMessage(
+        `Loaded ${bindings.length} managed profile binding(s).`
+      );
+    } catch (candidateError) {
+      setSocialError(normalizeError(candidateError));
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  const lookupSocialProfile = async () => {
+    if (socialLoading) return;
+
+    if (!auth.currentUser) {
+      setSocialError("AUTHENTICATED_USER_REQUIRED");
+      return;
+    }
+
+    const bindingId = lookupBindingId.trim();
+
+    if (!bindingId) {
+      setSocialError("BINDING_ID_REQUIRED");
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+    setSocialMessage(null);
+    setLookupResult(null);
+
+    try {
+      const binding = await getGrowthSocialProfileById(bindingId);
+
+      setLookupResult(binding);
+      setSocialMessage(
+        binding
+          ? `Binding ${binding.bindingId} loaded.`
+          : `Binding ${bindingId} was not found.`
+      );
+    } catch (candidateError) {
+      setSocialError(normalizeError(candidateError));
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  const editSocialProfile = (
+    binding: GrowthSocialProfileBinding
+  ) => {
+    setSocialForm({
+      bindingId: binding.bindingId,
+      provider: binding.provider,
+      accountType: binding.accountType,
+      externalAccountId: binding.externalAccountId,
+      displayName: binding.displayName,
+      handle: binding.handle ?? "",
+      profileUrl: binding.profileUrl ?? "",
+      connectionState: binding.connectionState,
+      isActive: binding.isActive,
+    });
+
+    setLookupBindingId(binding.bindingId);
+    setLookupResult(binding);
+    setSocialError(null);
+    setSocialMessage(`Editing ${binding.bindingId}.`);
+  };
+
+  const saveSocialProfile = async () => {
+    if (socialLoading) return;
+
+    if (!auth.currentUser) {
+      setSocialError("AUTHENTICATED_USER_REQUIRED");
+      return;
+    }
+
+    const bindingId = socialForm.bindingId.trim();
+    const externalAccountId = socialForm.externalAccountId.trim();
+    const displayName = socialForm.displayName.trim();
+
+    if (!bindingId || !externalAccountId || !displayName) {
+      setSocialError(
+        "BINDING_ID_EXTERNAL_ACCOUNT_ID_AND_DISPLAY_NAME_REQUIRED"
+      );
+      return;
+    }
+
+    const existing =
+      socialProfiles.find(
+        (binding) => binding.bindingId === bindingId
+      ) ??
+      (lookupResult?.bindingId === bindingId
+        ? lookupResult
+        : null);
+
+    const now = new Date().toISOString();
+
+    setSocialLoading(true);
+    setSocialError(null);
+    setSocialMessage(null);
+
+    try {
+      const saved = await upsertGrowthSocialProfile({
+        bindingId,
+        provider: socialForm.provider,
+        accountType: socialForm.accountType,
+        externalAccountId,
+        displayName,
+        ...(socialForm.handle.trim()
+          ? { handle: socialForm.handle.trim() }
+          : {}),
+        ...(socialForm.profileUrl.trim()
+          ? { profileUrl: socialForm.profileUrl.trim() }
+          : {}),
+        connectionState: socialForm.connectionState,
+        isActive: socialForm.isActive,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+        ...(socialForm.connectionState === "CONNECTED"
+          ? { connectedAt: existing?.connectedAt ?? now }
+          : {}),
+        ...(existing?.lastVerifiedAt
+          ? { lastVerifiedAt: existing.lastVerifiedAt }
+          : {}),
+      });
+
+      setSocialProfiles((current) => {
+        const remaining = current.filter(
+          (binding) => binding.bindingId !== saved.bindingId
+        );
+
+        return [...remaining, saved].sort((left, right) =>
+          left.displayName.localeCompare(right.displayName)
+        );
+      });
+
+      setLookupResult(saved);
+      setLookupBindingId(saved.bindingId);
+      setSocialMessage(`Binding ${saved.bindingId} saved.`);
+    } catch (candidateError) {
+      setSocialError(normalizeError(candidateError));
+    } finally {
+      setSocialLoading(false);
+    }
+  };
 
   const verifyReadiness = async () => {
     if (loading) {
@@ -378,6 +585,258 @@ export default function GrowthPage() {
               consola. Readiness únicamente confirma su binding seguro.
             </p>
           </article>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 md:p-7">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
+              Managed Social Profiles
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-white">
+              Perfiles sociales gobernados
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+              Metadatos administrados con growth.social.manage.
+              El tenant se resuelve en servidor. No conecta proveedores,
+              no lee secretos y no publica contenido.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={loadSocialProfiles}
+            disabled={socialLoading}
+            className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-5 py-3 text-sm font-bold text-cyan-200 disabled:opacity-60"
+          >
+            {socialLoading ? "Procesando..." : "Recargar perfiles"}
+          </button>
+        </div>
+
+        {socialError ? (
+          <div className="mt-5 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">
+            {socialError.includes("permission-denied")
+              ? "Acceso denegado por el servidor: se requiere growth.social.manage."
+              : socialError}
+          </div>
+        ) : null}
+
+        {socialMessage ? (
+          <div className="mt-5 rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-4 text-sm text-emerald-200">
+            {socialMessage}
+          </div>
+        ) : null}
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-2">
+          <div className="space-y-4">
+            <div className="flex gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+              <input
+                value={lookupBindingId}
+                onChange={(event) =>
+                  setLookupBindingId(event.target.value)
+                }
+                placeholder="Binding ID"
+                className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white"
+              />
+              <button
+                type="button"
+                onClick={lookupSocialProfile}
+                disabled={socialLoading}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                Buscar
+              </button>
+            </div>
+
+            {lookupResult ? (
+              <button
+                type="button"
+                onClick={() => editSocialProfile(lookupResult)}
+                className="text-left text-sm font-semibold text-cyan-300"
+              >
+                {lookupResult.displayName} ·{" "}
+                {lookupResult.connectionState} · Editar
+              </button>
+            ) : null}
+
+            {socialProfiles.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-700 p-5 text-sm text-slate-400">
+                No hay perfiles cargados en esta sesión.
+              </div>
+            ) : (
+              socialProfiles.map((binding) => (
+                <article
+                  key={binding.bindingId}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5"
+                >
+                  <p className="text-xs text-slate-500">
+                    {binding.provider} · {binding.accountType}
+                  </p>
+                  <p className="mt-2 font-semibold text-white">
+                    {binding.displayName}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {binding.bindingId} · {binding.connectionState}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => editSocialProfile(binding)}
+                    className="mt-4 text-xs font-semibold text-cyan-300"
+                  >
+                    Editar binding
+                  </button>
+                </article>
+              ))
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+            <p className="font-semibold text-white">
+              Crear o actualizar binding
+            </p>
+
+            <div className="mt-5 grid gap-4">
+              <input
+                value={socialForm.bindingId}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    bindingId: event.target.value,
+                  }))
+                }
+                placeholder="Binding ID"
+                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white"
+              />
+
+              <select
+                value={socialForm.provider}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    provider:
+                      event.target.value as GrowthSocialProvider,
+                  }))
+                }
+                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white"
+              >
+                <option value="LINKEDIN">LinkedIn</option>
+                <option value="INSTAGRAM">Instagram</option>
+                <option value="FACEBOOK">Facebook</option>
+                <option value="YOUTUBE">YouTube</option>
+              </select>
+
+              <select
+                value={socialForm.accountType}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    accountType:
+                      event.target.value as GrowthSocialAccountType,
+                  }))
+                }
+                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white"
+              >
+                <option value="PROFILE">Profile</option>
+                <option value="ORGANIZATION">Organization</option>
+                <option value="PAGE">Page</option>
+                <option value="CHANNEL">Channel</option>
+              </select>
+
+              <input
+                value={socialForm.externalAccountId}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    externalAccountId: event.target.value,
+                  }))
+                }
+                placeholder="External account ID"
+                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white"
+              />
+
+              <input
+                value={socialForm.displayName}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    displayName: event.target.value,
+                  }))
+                }
+                placeholder="Display name"
+                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white"
+              />
+
+              <input
+                value={socialForm.handle}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    handle: event.target.value,
+                  }))
+                }
+                placeholder="Handle (optional)"
+                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white"
+              />
+
+              <input
+                value={socialForm.profileUrl}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    profileUrl: event.target.value,
+                  }))
+                }
+                placeholder="Profile URL (optional)"
+                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white"
+              />
+
+              <select
+                value={socialForm.connectionState}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    connectionState:
+                      event.target.value as GrowthSocialConnectionState,
+                  }))
+                }
+                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white"
+              >
+                <option value="PENDING">Pending</option>
+                <option value="CONNECTED">Connected metadata state</option>
+                <option value="DISCONNECTED">Disconnected</option>
+                <option value="REVOKED">Revoked</option>
+                <option value="ERROR">Error</option>
+              </select>
+
+              <label className="flex items-center gap-3 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={socialForm.isActive}
+                  onChange={(event) =>
+                    setSocialForm((current) => ({
+                      ...current,
+                      isActive: event.target.checked,
+                    }))
+                  }
+                />
+                Binding activo
+              </label>
+
+              <button
+                type="button"
+                onClick={saveSocialProfile}
+                disabled={socialLoading}
+                className="rounded-xl bg-cyan-400 px-5 py-3 text-sm font-bold text-slate-950 disabled:opacity-60"
+              >
+                {socialLoading ? "Guardando..." : "Guardar binding"}
+              </button>
+
+              <p className="text-xs leading-5 text-slate-500">
+                No inicia OAuth, no conecta cuentas y no publica.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
