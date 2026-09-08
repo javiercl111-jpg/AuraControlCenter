@@ -126,6 +126,9 @@ describe('AI-02H1D.4 integration architecture', () => {
             'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
             'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
             'composition/authorityProvisioning/previewAuthorityProvisioningComposition.ts',
+            'composition/socialProfiles/GrowthSocialProfileManagementCallableRuntimeV1.ts',
+            'growth/social/profiles/FirestoreGrowthSocialProfileBindingRepositoryV1.ts',
+            'growth/social/profiles/tests/FirestoreGrowthSocialProfileBindingRepositoryV1.test.ts',
             'infrastructure/firestore/authorityProvisioning/FirestoreAuthorityProvisioningAdapter.ts',
           ].includes(
             relative(productionFunctionsRoot, path).replaceAll(
