@@ -1160,3 +1160,4 @@ export { emitDiscoveryCompletedNotification } from "./notifications/emitDiscover
 export { markNotificationAsRead } from "./notifications/markNotificationAsRead";
 // --- Growth LinkedIn Runtime ---
 export { growthLinkedInRuntimeReadinessV1 } from "./composition/linkedin/GrowthLinkedInProductionCallableRuntimeV1";
+export { growthLinkedInOrganizationAccessV1 } from "./composition/linkedin/GrowthLinkedInProductionOrganizationAccessCallableRuntimeV1";
