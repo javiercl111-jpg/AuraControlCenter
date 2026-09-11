@@ -3,6 +3,7 @@ export type GrowthLinkedInServerCredentialKindV1 =
 
 export interface GrowthLinkedInServerCredentialRequestV1 {
   readonly tenantId: string;
+  readonly bindingId?: string;
   readonly credentialKind: GrowthLinkedInServerCredentialKindV1;
 }
 

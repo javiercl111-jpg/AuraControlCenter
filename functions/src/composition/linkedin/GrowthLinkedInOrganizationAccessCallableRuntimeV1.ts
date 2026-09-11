@@ -1,10 +1,14 @@
 import {
-  getFirestore,
-} from 'firebase-admin/firestore';
+  growthLinkedInAccessTokenSecretV1,
+} from '../../infrastructure/linkedin/credentials/GrowthLinkedInFirebaseSecretSourceV1';
 
 import {
-  defineSecret,
-} from 'firebase-functions/params';
+  GROWTH_LINKEDIN_INTEGRATION_TENANT_V1,
+  createGrowthLinkedInCredentialBoundaryV1,
+} from './GrowthLinkedInRuntimeCompositionV1';
+import {
+  getFirestore,
+} from 'firebase-admin/firestore';
 
 import {
   HttpsError,
@@ -21,11 +25,6 @@ import {
   readGrowthLinkedInOrganizationAccessV1,
 } from '../../infrastructure/linkedin/read/GrowthLinkedInOrganizationAccessReaderV1';
 
-const GROWTH_LINKEDIN_ORGANIZATION_ACCESS_TOKEN_V1 =
-  defineSecret(
-    'GROWTH_LINKEDIN_ACCESS_TOKEN',
-  );
-
 export type GrowthLinkedInOrganizationAccessEnvironmentV1 =
   | 'PREVIEW'
   | 'PRODUCTION';
@@ -40,7 +39,7 @@ export function createGrowthLinkedInOrganizationAccessCallableRuntimeV1(
     {
       ...callableOptions,
       secrets: [
-        GROWTH_LINKEDIN_ORGANIZATION_ACCESS_TOKEN_V1,
+        growthLinkedInAccessTokenSecretV1,
       ],
     },
     async (request) => {
@@ -79,8 +78,15 @@ export function createGrowthLinkedInOrganizationAccessCallableRuntimeV1(
       }
 
       const accessToken =
-        GROWTH_LINKEDIN_ORGANIZATION_ACCESS_TOKEN_V1
-          .value();
+        (
+          await createGrowthLinkedInCredentialBoundaryV1()
+            .acquire({
+              tenantId:
+                GROWTH_LINKEDIN_INTEGRATION_TENANT_V1,
+              credentialKind:
+                'ACCESS_TOKEN',
+            })
+        ).accessToken;
 
       if (!accessToken.trim()) {
         throw new HttpsError(
