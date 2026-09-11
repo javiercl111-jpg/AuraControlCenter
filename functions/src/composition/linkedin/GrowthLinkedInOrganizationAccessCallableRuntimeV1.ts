@@ -34,6 +34,7 @@ export function createGrowthLinkedInOrganizationAccessCallableRuntimeV1(
   callableOptions: Readonly<CallableOptions>,
   expectedEnvironment:
     GrowthLinkedInOrganizationAccessEnvironmentV1,
+  assertRuntime?: () => unknown,
 ) {
   return onCall(
     {
@@ -43,6 +44,8 @@ export function createGrowthLinkedInOrganizationAccessCallableRuntimeV1(
       ],
     },
     async (request) => {
+      assertRuntime?.();
+
       if (!request.auth) {
         throw new HttpsError(
           'unauthenticated',
