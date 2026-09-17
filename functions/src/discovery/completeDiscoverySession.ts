@@ -5,6 +5,7 @@ import { defineSecret } from "firebase-functions/params";
 import { ProspectResolutionEngine } from "../prospects/ProspectResolutionEngine";
 import { AcquisitionSource, MergePayload, ProspectOrigin } from "../prospects/types";
 import {
+  DefaultExecutiveDiscoveryAdapter,
   EXECUTIVE_DISCOVERY_ADAPTER_VERSION,
 } from "./executive-intelligence/adapter/DefaultExecutiveDiscoveryAdapter";
 import type { ExecutiveDiscoveryAdapter } from
@@ -12,9 +13,11 @@ import type { ExecutiveDiscoveryAdapter } from
 import { EXECUTIVE_DISCOVERY_CAPABILITY_VERSION } from
   "./executive-intelligence/contracts/ExecutiveDiscoveryApiRequest";
 import {
-  ExecutiveDiscoveryTransportError,
-  ExecutiveDiscoveryTransportErrorCode,
-} from "./executive-intelligence/contracts/ExecutiveDiscoveryTransportError";
+  HttpExecutiveDiscoveryApiClient,
+} from "./executive-intelligence/client/HttpExecutiveDiscoveryApiClient";
+import {
+  GoogleOidcExecutiveDiscoveryRequestSignerV1,
+} from "./executive-intelligence/client/GoogleOidcExecutiveDiscoveryRequestSignerV1";
 import {
   buildLegacyDiscoveryDiagnosis,
   executiveDiscoveryEndpointParam,
@@ -70,11 +73,17 @@ function withoutShadowControlledFields(
   return cleanPayload;
 }
 
-function createSecurityGatedShadowAdapter(): ExecutiveDiscoveryAdapter {
-  throw new ExecutiveDiscoveryTransportError({
-    code: ExecutiveDiscoveryTransportErrorCode.AUTHENTICATION_REQUIRED,
-    message: "Executive Discovery service authentication is not configured.",
-    retryable: false,
+function createOidcShadowAdapter(): ExecutiveDiscoveryAdapter {
+  const endpoint = executiveDiscoveryEndpointParam.value().trim();
+  const signer = new GoogleOidcExecutiveDiscoveryRequestSignerV1({
+    audience: endpoint,
+  });
+  const apiClient = new HttpExecutiveDiscoveryApiClient({
+    endpoint,
+    signer,
+  });
+  return new DefaultExecutiveDiscoveryAdapter({
+    apiClient,
   });
 }
 
@@ -311,8 +320,8 @@ export const completeDiscoverySession = onCall(
             correlationId,
             flags,
             endpointConfigured,
-            authenticationMode: "UNCONFIGURED",
-            adapterFactory: createSecurityGatedShadowAdapter,
+            authenticationMode: "OIDC_SERVICE_ACCOUNT",
+            adapterFactory: createOidcShadowAdapter,
             persistence: {
               persist: async (record: DiscoveryShadowPersistenceRecord) => {
                 await db.collection("discovery_sessions")

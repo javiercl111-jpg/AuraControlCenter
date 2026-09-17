@@ -65,6 +65,7 @@ export type DiscoveryShadowAdapterStage =
 
 export type DiscoveryShadowAuthenticationMode =
   | "DEVELOPMENT_BEARER"
+  | "OIDC_SERVICE_ACCOUNT"
   | "UNCONFIGURED";
 
 interface ShadowExecutionBase {
