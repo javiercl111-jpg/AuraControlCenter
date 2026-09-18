@@ -190,6 +190,10 @@ function translateBootstrapActor(
     return 'SYSTEM';
   }
 
+  if (authority.actor.actorType === 'SERVICE') {
+    return 'EXTERNAL_SYSTEM';
+  }
+
   throw new GovernedBoundaryError(
     'INVALID_ACTOR_CONTEXT',
     'Authoritative actor is not supported by Pipeline Bootstrap',

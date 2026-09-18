@@ -494,6 +494,18 @@ function isSafeIdentifier(value: unknown): value is string {
   );
 }
 
+function isSafeProvenanceSourceId(value: unknown): value is string {
+  return (
+    isSafeIdentifier(value) ||
+    (
+      typeof value === 'string' &&
+      value === value.trim() &&
+      value.length <= 180 &&
+      /^discovery_sessions\/[A-Za-z0-9][A-Za-z0-9._:|-]*#[A-Za-z0-9][A-Za-z0-9._:|-]*$/.test(value)
+    )
+  );
+}
+
 function isFinitePositiveInteger(value: unknown): value is number {
   return (
     typeof value === 'number' &&
@@ -843,7 +855,7 @@ export function validatePipelineBootstrapProvenance(
       error('INVALID_PROVENANCE', 'Bootstrap provenance source type is invalid')
     );
   }
-  if (!isSafeIdentifier(record.sourceId)) {
+  if (!isSafeProvenanceSourceId(record.sourceId)) {
     errors.push(
       error('INVALID_PROVENANCE', 'Bootstrap provenance source is invalid')
     );

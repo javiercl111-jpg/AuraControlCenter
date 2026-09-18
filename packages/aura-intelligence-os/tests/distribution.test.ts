@@ -277,11 +277,17 @@ describe('Aura Intelligence OS reproducible Functions distribution', () => {
       )
     );
 
+    expect(importers).toHaveLength(22);
     expect(importers).toEqual([
       'composition/authorityDarkComposition/authorityDarkCompositionTypes.ts',
       'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionFactory.ts',
       'composition/authorityDarkHandlerComposition/authorityDarkHandlerCompositionTypes.ts',
       'composition/authorityProvisioning/previewAuthorityProvisioningComposition.ts',
+      'composition/discoveryIntelligence/FirestoreOidcServiceIdentityBindingResolverV1.ts',
+      'composition/discoveryIntelligence/OidcServiceIdentityVerifierV1.ts',
+      'composition/discoveryIntelligence/TrustedDiscoveryBoundaryInvocationContextProviderV1.ts',
+      'composition/discoveryIntelligence/createExecutiveDiscoveryReceiverCompositionV1.ts',
+      'composition/discoveryIntelligence/createGovernedDiscoveryRuntimeCompositionV1.ts',
       'composition/socialProfiles/GrowthSocialProfileManagementCallableRuntimeV1.ts',
       'growth/social/profiles/FirestoreGrowthSocialProfileBindingRepositoryV1.ts',
       'growth/social/profiles/tests/FirestoreGrowthSocialProfileBindingRepositoryV1.test.ts',

@@ -427,25 +427,33 @@ describe('AI-02H0C BootstrapBoundaryAdapter', () => {
     });
   });
 
-  it('15. rejects bridge SERVICE because Bootstrap has no equivalent actor', async () => {
+  it('15. maps bridge SERVICE to Bootstrap EXTERNAL_SYSTEM while preserving SERVICE authority', async () => {
     const harness = createAdapterHarness();
-    await expect(
-      harness.adapter.execute(
-        createInternalInput(createBusinessPayload(), {
-          authoritativeContext: createAuthoritativeContext({
-            actor: {
-              actorType: 'SERVICE',
-              actorId: 'service-authoritative',
-            },
-          }),
-        })
-      )
-    ).rejects.toMatchObject({
-      code: 'INVALID_ACTOR_CONTEXT',
-    });
-    expect(harness.calls).toHaveLength(0);
-  });
+    const result = await harness.adapter.execute(
+      createInternalInput(createBusinessPayload(), {
+        authoritativeContext: createAuthoritativeContext({
+          actor: {
+            actorType: 'SERVICE',
+            actorId: 'service-authoritative',
+          },
+        }),
+      })
+    );
 
+    expect(harness.calls).toHaveLength(1);
+    expect(harness.calls[0].context.requestedBy).toEqual({
+      requesterId: 'service-authoritative',
+      actorType: 'EXTERNAL_SYSTEM',
+    });
+    expect(result.rawData).toMatchObject({
+      authority: {
+        actor: {
+          actorType: 'SERVICE',
+          actorId: 'service-authoritative',
+        },
+      },
+    });
+  });
   it('16. clones and freezes valid payload while preserving AbortSignal identity', async () => {
     const payload = createBusinessPayload();
     const controller = new AbortController();

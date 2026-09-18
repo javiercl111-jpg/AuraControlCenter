@@ -152,23 +152,58 @@ describe('BootstrapBoundaryInputMapperV1', () => {
     });
   });
 
-  it('3. rejects SERVICE authority fail-closed', () => {
-    expect(() =>
-      mapBootstrapBoundaryEnvelopeToPipelineInputV1(
-        createEnvelope(
-          createAuthoritativeContext({
-            actor: {
-              actorType: 'SERVICE',
-              actorId: 'service-authoritative',
-            },
-          }),
-        ),
-      ),
-    ).toThrowError(
-      expect.objectContaining({
-        code: 'INVALID_ACTOR_CONTEXT',
-      }),
-    );
+  it('3. projects SERVICE only at the Bootstrap requester boundary', () => {
+    const context = createAuthoritativeContext({
+      actor: { actorType: 'SERVICE', actorId: 'service-authoritative' },
+    });
+    const payload = createBusinessPayload();
+    payload.facts[0].provenance.sourceId =
+      'discovery_sessions/session-1#dossier.industry';
+    const envelope = createEnvelope(context, payload);
+    const result = mapBootstrapBoundaryEnvelopeToPipelineInputV1(envelope);
+    expect(context.actor.actorType).toBe('SERVICE');
+    expect(envelope.authority.actor).toEqual({
+      actorType: 'SERVICE',
+      actorId: 'service-authoritative',
+    });
+    expect(result.context.requestedBy).toEqual({
+      actorType: 'EXTERNAL_SYSTEM',
+      requesterId: 'service-authoritative',
+    });
+    expect(result.tenantId).toBe(context.tenantId);
+    expect(result.correlationId).toBe(context.correlationId);
+    expect(result.facts[0].provenance).toMatchObject({
+      tenantId: context.tenantId,
+      correlationId: context.correlationId,
+      sourceId: 'discovery_sessions/session-1#dossier.industry',
+    });
+    for (const actorType of ['USER', 'SYSTEM'] as const) {
+      const candidate = createEnvelope(createAuthoritativeContext({
+        actor: { actorType, actorId: 'canonical-actor' },
+      }));
+      expect(candidate.authority.actor.actorType).toBe(
+        actorType === 'USER' ? 'HUMAN' : 'SYSTEM',
+      );
+      expect(mapBootstrapBoundaryEnvelopeToPipelineInputV1(candidate)
+        .context.requestedBy.actorType).toBe(actorType);
+    }
+    for (const invalid of [undefined, null, '', 'USER', 'EXTERNAL_SYSTEM']) {
+      const malformed = {
+        ...envelope,
+        authority: { ...envelope.authority, actor: { ...envelope.authority.actor } },
+      };
+      Object.defineProperty(malformed.authority.actor, 'actorType', { value: invalid });
+      expect(() => mapBootstrapBoundaryEnvelopeToPipelineInputV1(malformed))
+        .toThrowError(expect.objectContaining({ code: 'INVALID_ACTOR_CONTEXT' }));
+    }
+    expect(() => createBootstrapBoundaryBridgeAuthorityV1({ ...context, actor: null })).toThrow();
+    expect(() => createEnvelope(context, { ...payload, tenantId: 'spoofed' })).toThrow();
+    for (const sourceId of ['unrelated#field', ' discovery_sessions/s#f', 'discovery_sessions/s#f#x', `discovery_sessions/${'s'.repeat(180)}#f`]) {
+      const invalidPayload = createBusinessPayload();
+      invalidPayload.facts[0].provenance.sourceId = sourceId;
+      expect(() => mapBootstrapBoundaryEnvelopeToPipelineInputV1(createEnvelope(context, invalidPayload))).toThrow();
+    }
+    expect(envelope.authority.actor.actorType).toBe('SERVICE');
   });
 
   it('4. derives tenant and correlation provenance only from authority', () => {

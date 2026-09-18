@@ -510,6 +510,10 @@ export {
 } from './serverPolicy/validators';
 
 export {
+  AuthoritativeFeaturePolicyProducerV1,
+} from './serverPolicy/AuthoritativeFeaturePolicyProducerV1';
+
+export {
   InMemoryAuthoritativeFeaturePolicyProducer,
 } from './serverPolicy/InMemoryAuthoritativeFeaturePolicyProducer';
 

@@ -29,6 +29,16 @@ export const TRUSTED_CONSUMER_REGISTRY_V1: TrustedConsumerRegistryV1 =
           'Aura Growth governed shadow consumer',
         contractVersion: '1',
       }),
+      AURA_DISCOVERY: Object.freeze({
+        id: 'AURA_DISCOVERY',
+        version: '1',
+        enabled: true,
+        allowedTransports: Object.freeze(['HTTPS_FUNCTION'] as const),
+        allowedExecutionModes: Object.freeze(['SHADOW_ONLY'] as const),
+        description:
+          'Aura Discovery governed shadow consumer',
+        contractVersion: '1',
+      }),
     }),
   });
 
@@ -60,6 +70,19 @@ export const TRUSTED_SOURCE_REGISTRY_V1: TrustedSourceRegistryV1 =
         allowedExecutionModes: Object.freeze(['SHADOW_ONLY'] as const),
         description:
           'Aura Growth governed shadow source',
+        contractVersion: '1',
+      }),
+      AURA_DISCOVERY: Object.freeze({
+        id: 'AURA_DISCOVERY',
+        version: '1',
+        enabled: true,
+        allowedConsumerIds: Object.freeze([
+          'AURA_DISCOVERY',
+        ] as const),
+        allowedTransports: Object.freeze(['HTTPS_FUNCTION'] as const),
+        allowedExecutionModes: Object.freeze(['SHADOW_ONLY'] as const),
+        description:
+          'Aura Discovery governed shadow source',
         contractVersion: '1',
       }),
     }),

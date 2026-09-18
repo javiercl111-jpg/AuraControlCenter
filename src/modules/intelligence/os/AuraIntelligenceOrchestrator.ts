@@ -719,7 +719,8 @@ export class AuraIntelligenceOrchestrator {
     startedAtMs: number,
     startedAtString: string,
     results: Partial<Record<PipelineStageId, PipelineStageResult<unknown>>>,
-    errors: SerializableAuraOSError[] = []
+    errors: SerializableAuraOSError[] = [],
+    output?: PipelineAggregatedState
   ) {
     const completedAt = this.dependencies.clock.toISOString();
     results[stage] = {
@@ -729,7 +730,8 @@ export class AuraIntelligenceOrchestrator {
       completedAt,
       durationMs: this.dependencies.clock.now() - startedAtMs,
       errors,
-      warnings: []
+      warnings: [],
+      ...(output === undefined ? {} : { output })
     };
   }
 
@@ -879,7 +881,7 @@ export class AuraIntelligenceOrchestrator {
       else if (osError.code === ErrorCodes.STAGE_TIMEOUT || osError.code === ErrorCodes.PIPELINE_TIMEOUT) status = 'TIMED_OUT';
     }
 
-    this.recordLogicalStageResult('EXECUTIVE_REASONING', status, startedAtMs, startedAtString, results, errors);
+    this.recordLogicalStageResult('EXECUTIVE_REASONING', status, startedAtMs, startedAtString, results, errors, status === 'SUCCEEDED' ? nextState : undefined);
     const completedAt = this.dependencies.clock.toISOString();
 
     return {
@@ -934,7 +936,7 @@ export class AuraIntelligenceOrchestrator {
       else if (osError.code === ErrorCodes.STAGE_TIMEOUT || osError.code === ErrorCodes.PIPELINE_TIMEOUT) status = 'TIMED_OUT';
     }
 
-    this.recordLogicalStageResult('EXECUTIVE_DOSSIER', status, startedAtMs, startedAtString, results, errors);
+    this.recordLogicalStageResult('EXECUTIVE_DOSSIER', status, startedAtMs, startedAtString, results, errors, status === 'SUCCEEDED' ? nextState : undefined);
     const completedAt = this.dependencies.clock.toISOString();
 
     return {
@@ -992,7 +994,7 @@ export class AuraIntelligenceOrchestrator {
       else if (osError.code === ErrorCodes.STAGE_TIMEOUT || osError.code === ErrorCodes.PIPELINE_TIMEOUT) status = 'TIMED_OUT';
     }
 
-    this.recordLogicalStageResult('TRANSFORMATION_ASSESSMENT', status, startedAtMs, startedAtString, results, errors);
+    this.recordLogicalStageResult('TRANSFORMATION_ASSESSMENT', status, startedAtMs, startedAtString, results, errors, status === 'SUCCEEDED' ? nextState : undefined);
     const completedAt = this.dependencies.clock.toISOString();
 
     return {

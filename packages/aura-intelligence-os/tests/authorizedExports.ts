@@ -300,6 +300,7 @@ export const AUTHORIZED_SERVER_RUNTIME_EXPORTS = Object.freeze([
   'GovernedExecutionBoundary',
   'IDENTITY_CLAIMS_PROJECTION_VERSION',
   'IDENTITY_RESOLUTION_CONTRACT_VERSION',
+  'AuthoritativeFeaturePolicyProducerV1',
   'InMemoryAuthoritativeFeaturePolicyProducer',
   'InMemoryAuthorityMutationRepository',
   'NEUTRAL_AUTHENTICATION_TRANSPORTS',
