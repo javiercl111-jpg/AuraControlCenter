@@ -44,6 +44,18 @@ export const PRODUCTION_GROWTH_LINKEDIN_CALLABLE_OPTIONS_V1 =
           true,
       }) satisfies Readonly<CallableOptions>,
 
+    growthLinkedInOrganizationAccessV1:
+      Object.freeze({
+        region:
+          PRODUCTION_GROWTH_LINKEDIN_REGION_V1,
+
+        serviceAccount:
+          PRODUCTION_GROWTH_LINKEDIN_SERVICE_ACCOUNT_V1,
+
+        enforceAppCheck:
+          true,
+      }) satisfies Readonly<CallableOptions>,
+
     growthSocialProfileManagementV1:
       Object.freeze({
         region:

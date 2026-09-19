@@ -31,6 +31,32 @@ type ReadinessResult = {
   checkedAt: string;
 };
 
+type LinkedInOrganizationAccessRecord = {
+  organization: string;
+  role: string;
+  state: string;
+};
+
+type LinkedInOrganizationAccessResponse = {
+  status?: string;
+  tenantId?: string;
+  principalId?: string;
+  httpStatus?: number;
+  organizationCount?: number;
+  organizations?: LinkedInOrganizationAccessRecord[];
+  linkedInConnection?: string;
+  publication?: string;
+};
+
+type LinkedInOrganizationAccessResult = {
+  certified: boolean;
+  status: string;
+  principalMatch: boolean;
+  organizationCount: number;
+  organizations: LinkedInOrganizationAccessRecord[];
+  checkedAt: string;
+};
+
 type SocialProfileFormState = {
   bindingId: string;
   provider: GrowthSocialProvider;
@@ -297,6 +323,89 @@ export default function GrowthPage() {
     }
   };
 
+  const [
+    organizationAccessLoading,
+    setOrganizationAccessLoading,
+  ] = useState(false);
+
+  const [
+    organizationAccessResult,
+    setOrganizationAccessResult,
+  ] = useState<LinkedInOrganizationAccessResult | null>(null);
+
+  const [
+    organizationAccessError,
+    setOrganizationAccessError,
+  ] = useState<string | null>(null);
+
+  const verifyLinkedInOrganizationAccess = async () => {
+    if (organizationAccessLoading) {
+      return;
+    }
+
+    const user = auth.currentUser;
+
+    setOrganizationAccessError(null);
+    setOrganizationAccessResult(null);
+
+    if (!user) {
+      setOrganizationAccessError(
+        "AUTHENTICATED_USER_REQUIRED"
+      );
+      return;
+    }
+
+    setOrganizationAccessLoading(true);
+
+    try {
+      const callable = httpsCallable<
+        Record<string, never>,
+        LinkedInOrganizationAccessResponse
+      >(
+        functions,
+        "growthLinkedInOrganizationAccessV1"
+      );
+
+      const response = await callable({});
+      const data = response.data;
+
+      const organizations =
+        Array.isArray(data.organizations)
+          ? data.organizations
+          : [];
+
+      const principalMatch =
+        data.principalId === user.uid;
+
+      const organizationCount =
+        typeof data.organizationCount === "number"
+          ? data.organizationCount
+          : organizations.length;
+
+      const certified =
+        data.status === "LINKEDIN_ORGANIZATION_ACCESS_OK" &&
+        data.tenantId === "aura_root" &&
+        principalMatch &&
+        organizationCount > 0 &&
+        data.publication === "NOT_EXECUTED";
+
+      setOrganizationAccessResult({
+        certified,
+        status: data.status ?? "MISSING",
+        principalMatch,
+        organizationCount,
+        organizations,
+        checkedAt: new Date().toISOString(),
+      });
+    } catch (candidateError) {
+      setOrganizationAccessError(
+        normalizeError(candidateError)
+      );
+    } finally {
+      setOrganizationAccessLoading(false);
+    }
+  };
+
   const verifyReadiness = async () => {
     if (loading) {
       return;
@@ -502,6 +611,110 @@ export default function GrowthPage() {
         {error ? (
           <div className="mt-5 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">
             {error}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-3xl border border-emerald-400/15 bg-slate-900/70 p-6 md:p-7">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-300">
+              LinkedIn organization access
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-white">
+              Validación read-only de LinkedIn
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+              Consulta únicamente las organizaciones donde el token administrado
+              tiene acceso ADMINISTRATOR aprobado. No publica, no modifica
+              LinkedIn y nunca devuelve el access token al navegador.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={verifyLinkedInOrganizationAccess}
+            disabled={organizationAccessLoading}
+            className="inline-flex min-w-52 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-5 py-3 text-sm font-bold text-emerald-200 disabled:opacity-60"
+          >
+            {organizationAccessLoading
+              ? "Validando..."
+              : "Validar acceso LinkedIn"}
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Access
+            </p>
+            <p className="mt-2 font-semibold text-white">
+              {organizationAccessResult
+                ? organizationAccessResult.certified
+                  ? "CONFIRMED"
+                  : "REVIEW_REQUIRED"
+                : "NOT_CHECKED"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Principal match
+            </p>
+            <p className="mt-2 font-semibold text-white">
+              {organizationAccessResult
+                ? organizationAccessResult.principalMatch
+                  ? "YES"
+                  : "NO"
+                : "NOT_CHECKED"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Approved admin organizations
+            </p>
+            <p className="mt-2 font-semibold text-white">
+              {organizationAccessResult?.organizationCount ?? 0}
+            </p>
+          </div>
+        </div>
+
+        {organizationAccessResult ? (
+          <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Result
+            </p>
+            <p className="mt-2 text-sm font-semibold text-white">
+              {organizationAccessResult.status}
+            </p>
+
+            {organizationAccessResult.organizations.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {organizationAccessResult.organizations.map(
+                  (organization) => (
+                    <div
+                      key={`${organization.organization}-${organization.role}`}
+                      className="rounded-xl border border-slate-800 px-4 py-3 text-sm text-slate-300"
+                    >
+                      {organization.organization} · {organization.role} ·{" "}
+                      {organization.state}
+                    </div>
+                  )
+                )}
+              </div>
+            ) : null}
+
+            <p className="mt-4 text-xs text-slate-500">
+              Checked at {organizationAccessResult.checkedAt}. Publication:
+              NOT_EXECUTED.
+            </p>
+          </div>
+        ) : null}
+
+        {organizationAccessError ? (
+          <div className="mt-5 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">
+            {organizationAccessError}
           </div>
         ) : null}
       </section>

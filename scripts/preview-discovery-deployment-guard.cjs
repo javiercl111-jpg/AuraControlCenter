@@ -157,19 +157,34 @@ for (const handler of allowlist) {
       ? "functions/src/composition/socialProfiles/GrowthSocialProfileManagementPreviewCallableRuntimeV1.ts"
       : handler === "growthLinkedInRuntimeReadinessV1"
         ? "functions/src/composition/linkedin/GrowthLinkedInPreviewCallableRuntimeV1.ts"
-        : handler === "createCrmLead"
-          ? "functions/src/crm/createCrmLead.ts"
-          : `functions/src/discovery/${handler}.ts`;
+        : handler === "growthLinkedInOrganizationAccessV1"
+          ? "functions/src/composition/linkedin/GrowthLinkedInPreviewOrganizationAccessCallableRuntimeV1.ts"
+          : handler === "createCrmLead"
+            ? "functions/src/crm/createCrmLead.ts"
+            : `functions/src/discovery/${handler}.ts`;
   const handlerSource = read(sourcePath);
   const compositionRuntimeBinding =
     handler === "growthSocialProfileManagementV1" ||
     handler === "growthLinkedInRuntimeReadinessV1";
+  const organizationRuntimeBinding =
+    handler === "growthLinkedInOrganizationAccessV1";
   const runtimeAssertionPresent =
     compositionRuntimeBinding
       ? /assertRuntime\s*:\s*assertPreviewDiscoveryRuntimeV1\b/.test(handlerSource)
-      : handlerSource.includes("assertPreviewDiscoveryRuntimeV1();");
+      : organizationRuntimeBinding
+        ? /createGrowthLinkedInOrganizationAccessCallableRuntimeV1\s*\([\s\S]*?\bassertPreviewDiscoveryRuntimeV1\s*,?\s*\)/.test(handlerSource)
+        : handlerSource.includes("assertPreviewDiscoveryRuntimeV1();");
   if (!runtimeAssertionPresent) {
     fail(`PREVIEW_GUARD_RUNTIME_ASSERTION_MISSING:${handler}`);
+  }
+  const organizationFactorySource = organizationRuntimeBinding
+    ? read("functions/src/composition/linkedin/GrowthLinkedInOrganizationAccessCallableRuntimeV1.ts")
+    : null;
+  if (
+    organizationRuntimeBinding &&
+    !organizationFactorySource.includes("assertRuntime?.();")
+  ) {
+    fail(`PREVIEW_GUARD_RUNTIME_ASSERTION_INVOCATION_MISSING:${handler}`);
   }
   const optionsBindingPattern = new RegExp(
     `PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1\\s*\\.\\s*${handler}\\b`,
@@ -180,9 +195,11 @@ for (const handler of allowlist) {
   const secretDeclarationSource =
     handler === "growthLinkedInRuntimeReadinessV1"
       ? read("functions/src/infrastructure/linkedin/credentials/GrowthLinkedInFirebaseSecretSourceV1.ts")
-      : handlerSource;
+      : organizationRuntimeBinding
+        ? organizationFactorySource
+        : handlerSource;
   const literalSecretParams = [...secretDeclarationSource.matchAll(
-    /defineSecret\(\s*["']([^"']+)["']\s*\)/g,
+    /defineSecret\(\s*["']([^"']+)["']\s*,?\s*\)/g,
   )].map((match) => match[1]);
   const constantSecretParams = [...secretDeclarationSource.matchAll(
     /defineSecret\(\s*([A-Za-z_$][\w$]*)\s*,?\s*\)/g,

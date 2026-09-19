@@ -7,5 +7,9 @@ export {
 } from "./composition/linkedin/GrowthLinkedInProductionCallableRuntimeV1";
 
 export {
+  growthLinkedInOrganizationAccessV1,
+} from "./composition/linkedin/GrowthLinkedInProductionOrganizationAccessCallableRuntimeV1";
+
+export {
   growthSocialProfileManagementV1,
 } from "./composition/socialProfiles/GrowthSocialProfileManagementProductionCallableRuntimeV1";
