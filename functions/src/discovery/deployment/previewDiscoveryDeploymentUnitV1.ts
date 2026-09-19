@@ -1,4 +1,4 @@
-import type { CallableOptions } from "firebase-functions/v2/https";
+import type { CallableOptions, HttpsOptions } from "firebase-functions/v2/https";
 
 import {
   resolveRuntimeEnvironmentV1,
@@ -19,12 +19,20 @@ export const PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1 = Object.freeze([
   "resolveDiscoverySession",
   "evaluateConversation",
   "completeDiscoverySession",
+  "evaluateExecutiveDiscoveryV1",
   "growthLinkedInRuntimeReadinessV1",
+  "growthLinkedInOrganizationAccessV1",
   "growthSocialProfileManagementV1",
 ] as const);
 
 export type PreviewDiscoveryHandlerNameV1 =
   (typeof PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1)[number];
+
+export type PreviewDiscoveryHttpHandlerNameV1 =
+  Extract<PreviewDiscoveryHandlerNameV1, "evaluateExecutiveDiscoveryV1">;
+
+export type PreviewDiscoveryCallableHandlerNameV1 =
+  Exclude<PreviewDiscoveryHandlerNameV1, PreviewDiscoveryHttpHandlerNameV1>;
 
 const serviceAccount = (name: string): string =>
   `${name}@${PREVIEW_DISCOVERY_PROJECT_ID_V1}.iam.gserviceaccount.com`;
@@ -36,7 +44,9 @@ export const PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1 = Object.freeze({
   resolveDiscoverySession: serviceAccount("preview-discovery-session-rt"),
   evaluateConversation: serviceAccount("preview-conversation-runtime"),
   completeDiscoverySession: serviceAccount("preview-discovery-complete-rt"),
+  evaluateExecutiveDiscoveryV1: serviceAccount("preview-conversation-runtime"),
   growthLinkedInRuntimeReadinessV1: serviceAccount("preview-growth-linkedin-rt"),
+  growthLinkedInOrganizationAccessV1: serviceAccount("preview-growth-linkedin-rt"),
   growthSocialProfileManagementV1: serviceAccount("preview-growth-social-rt"),
 } satisfies Record<PreviewDiscoveryHandlerNameV1, string>);
 
@@ -67,7 +77,14 @@ export const PREVIEW_DISCOVERY_SECRET_BINDINGS_V1 = Object.freeze({
       secretResource: "discovery-hmac-secret-preview",
     }),
   ]),
+  evaluateExecutiveDiscoveryV1: Object.freeze([]),
   growthLinkedInRuntimeReadinessV1: Object.freeze([
+    Object.freeze({
+      secretParamName: "GROWTH_LINKEDIN_ACCESS_TOKEN",
+      secretResource: "GROWTH_LINKEDIN_ACCESS_TOKEN",
+    }),
+  ]),
+  growthLinkedInOrganizationAccessV1: Object.freeze([
     Object.freeze({
       secretParamName: "GROWTH_LINKEDIN_ACCESS_TOKEN",
       secretResource: "GROWTH_LINKEDIN_ACCESS_TOKEN",
@@ -80,7 +97,7 @@ export const PREVIEW_DISCOVERY_SECRET_BINDINGS_V1 = Object.freeze({
 >);
 
 const callableOptions = (
-  handler: PreviewDiscoveryHandlerNameV1,
+  handler: PreviewDiscoveryCallableHandlerNameV1,
 ): Readonly<CallableOptions> => Object.freeze({
   region: PREVIEW_DISCOVERY_REGION_V1,
   serviceAccount: PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1[handler],
@@ -95,8 +112,27 @@ export const PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1 = Object.freeze({
   evaluateConversation: callableOptions("evaluateConversation"),
   completeDiscoverySession: callableOptions("completeDiscoverySession"),
   growthLinkedInRuntimeReadinessV1: callableOptions("growthLinkedInRuntimeReadinessV1"),
+  growthLinkedInOrganizationAccessV1: callableOptions("growthLinkedInOrganizationAccessV1"),
   growthSocialProfileManagementV1: callableOptions("growthSocialProfileManagementV1"),
-} satisfies Record<PreviewDiscoveryHandlerNameV1, Readonly<CallableOptions>>);
+} satisfies Record<PreviewDiscoveryCallableHandlerNameV1, Readonly<CallableOptions>>);
+export const PREVIEW_EXECUTIVE_DISCOVERY_RECEIVER_CALLER_SERVICE_ACCOUNT_V1 =
+  serviceAccount("preview-discovery-complete-rt");
+
+export const PREVIEW_EXECUTIVE_DISCOVERY_RECEIVER_INVOKER_V1 =
+  `serviceAccount:${PREVIEW_EXECUTIVE_DISCOVERY_RECEIVER_CALLER_SERVICE_ACCOUNT_V1}`;
+
+export const PREVIEW_DISCOVERY_HTTP_OPTIONS_V1 = Object.freeze({
+  evaluateExecutiveDiscoveryV1: Object.freeze({
+    region: PREVIEW_DISCOVERY_REGION_V1,
+    serviceAccount:
+      PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1.evaluateExecutiveDiscoveryV1,
+    invoker: PREVIEW_EXECUTIVE_DISCOVERY_RECEIVER_INVOKER_V1,
+    cors: false,
+  }) satisfies Readonly<HttpsOptions>,
+} satisfies Record<
+  PreviewDiscoveryHttpHandlerNameV1,
+  Readonly<HttpsOptions>
+>);
 
 export const PREVIEW_DISCOVERY_FORBIDDEN_EXPORTS_V1 = Object.freeze([
   "generateDiscoveryReport",
@@ -134,7 +170,10 @@ export interface PreviewDiscoveryDeploymentCandidateV1 {
   readonly handlers: Readonly<Record<string, {
     readonly region: string;
     readonly serviceAccount: string;
+    readonly transport: "CALLABLE" | "HTTP_OIDC";
     readonly enforceAppCheck: boolean;
+    readonly invoker?: string;
+    readonly cors?: boolean;
     readonly secretBindings: readonly PreviewDiscoverySecretBindingV1[];
   }>>;
 }
@@ -216,10 +255,46 @@ export function assertPreviewDiscoveryDeploymentCandidateV1(
         "PREVIEW_DEPLOYMENT_PRODUCTION_IDENTITY_FORBIDDEN",
       );
     }
-    if (!actual.enforceAppCheck) {
-      throw new PreviewDiscoveryDeploymentUnitErrorV1(
-        "PREVIEW_DEPLOYMENT_APP_CHECK_REQUIRED",
-      );
+    if (handler === "evaluateExecutiveDiscoveryV1") {
+      if (actual.transport !== "HTTP_OIDC") {
+        throw new PreviewDiscoveryDeploymentUnitErrorV1(
+          "PREVIEW_DEPLOYMENT_TRANSPORT_MISMATCH",
+        );
+      }
+      if (actual.enforceAppCheck) {
+        throw new PreviewDiscoveryDeploymentUnitErrorV1(
+          "PREVIEW_DEPLOYMENT_HTTP_OIDC_APP_CHECK_FORBIDDEN",
+        );
+      }
+      if (
+        actual.invoker !== PREVIEW_EXECUTIVE_DISCOVERY_RECEIVER_INVOKER_V1
+      ) {
+        throw new PreviewDiscoveryDeploymentUnitErrorV1(
+          "PREVIEW_DEPLOYMENT_INVOKER_MISMATCH",
+        );
+      }
+      if (actual.cors !== false) {
+        throw new PreviewDiscoveryDeploymentUnitErrorV1(
+          "PREVIEW_DEPLOYMENT_CORS_MISMATCH",
+        );
+      }
+    }
+    if (handler !== "evaluateExecutiveDiscoveryV1") {
+      if (actual.transport !== "CALLABLE") {
+        throw new PreviewDiscoveryDeploymentUnitErrorV1(
+          "PREVIEW_DEPLOYMENT_TRANSPORT_MISMATCH",
+        );
+      }
+      if (!actual.enforceAppCheck) {
+        throw new PreviewDiscoveryDeploymentUnitErrorV1(
+          "PREVIEW_DEPLOYMENT_APP_CHECK_REQUIRED",
+        );
+      }
+      if (actual.invoker !== undefined || actual.cors !== undefined) {
+        throw new PreviewDiscoveryDeploymentUnitErrorV1(
+          "PREVIEW_DEPLOYMENT_CALLABLE_HTTP_METADATA_FORBIDDEN",
+        );
+      }
     }
     if (!equalSecretBindings(
       actual.secretBindings,

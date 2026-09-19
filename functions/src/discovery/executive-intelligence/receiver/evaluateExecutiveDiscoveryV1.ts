@@ -1,6 +1,7 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
+import { PREVIEW_DISCOVERY_HTTP_OPTIONS_V1, assertPreviewDiscoveryRuntimeV1 } from "../../deployment/previewDiscoveryDeploymentUnitV1";
 import { createExecutiveDiscoveryReceiverCompositionV1, ExecutiveDiscoveryReceiverFailureV1, EXECUTIVE_DISCOVERY_MAX_BODY_BYTES_V1 } from "../../../composition/discoveryIntelligence/createExecutiveDiscoveryReceiverCompositionV1";
 import { isExecutiveDiscoveryApiRequest } from "../adapter/validation";
 import type { ExecutiveDiscoveryApiResponse } from "../contracts/ExecutiveDiscoveryApiResponse";
@@ -34,10 +35,11 @@ export function createExecutiveDiscoveryHttpHandlerV1(resolveComposition: () => 
   };
 }
 const productionHandler = createExecutiveDiscoveryHttpHandlerV1(() => {
+  assertPreviewDiscoveryRuntimeV1();
   if (getApps().length === 0) initializeApp();
   return createExecutiveDiscoveryReceiverCompositionV1({ firestore: getFirestore() });
 });
-export const evaluateExecutiveDiscoveryV1 = onRequest({ region: "us-central1", cors: false }, async (request, response) => {
+export const evaluateExecutiveDiscoveryV1 = onRequest(PREVIEW_DISCOVERY_HTTP_OPTIONS_V1.evaluateExecutiveDiscoveryV1, async (request, response) => {
   const result = await productionHandler(request);
   response.set("Cache-Control", "no-store").status(result.status).json(result.body);
 });

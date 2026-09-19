@@ -82,11 +82,26 @@ const handlers = {};
 for (const handler of allowlist) {
   const endpoint = deployment[handler]?.__endpoint;
   if (!endpoint) fail("PREVIEW_GUARD_ENDPOINT_METADATA_MISSING");
+  const httpOidc = handler === "evaluateExecutiveDiscoveryV1";
+  if (httpOidc && !endpoint.httpsTrigger) {
+    fail("PREVIEW_GUARD_HTTP_TRIGGER_METADATA_MISSING");
+  }
+  const callableOptions = httpOidc
+    ? undefined
+    : contract.PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1[handler];
+  const httpOptions = httpOidc
+    ? contract.PREVIEW_DISCOVERY_HTTP_OPTIONS_V1[handler]
+    : undefined;
+  const invokers = endpoint.httpsTrigger?.invoker || [];
   handlers[handler] = {
     region: Array.isArray(endpoint.region) ? endpoint.region[0] : endpoint.region,
     serviceAccount: endpoint.serviceAccountEmail,
+    transport: httpOidc ? "HTTP_OIDC" : "CALLABLE",
     enforceAppCheck:
-      contract.PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1[handler].enforceAppCheck === true,
+      httpOidc ? false : callableOptions?.enforceAppCheck === true,
+    invoker:
+      httpOidc && invokers.length === 1 ? invokers[0] : undefined,
+    cors: httpOidc ? httpOptions?.cors : undefined,
     secretBindings: (endpoint.secretEnvironmentVariables || [])
       .map((secret) => ({
         secretParamName: secret.key,
@@ -141,6 +156,10 @@ const sourceFiles = [
   "functions/src/discovery/resolveDiscoverySession.ts",
   "functions/src/intelligence/evaluateConversation.ts",
   "functions/src/discovery/completeDiscoverySession.ts",
+  "functions/src/discovery/executive-intelligence/receiver/evaluateExecutiveDiscoveryV1.ts",
+  "functions/src/composition/linkedin/GrowthLinkedInOrganizationAccessCallableRuntimeV1.ts",
+  "functions/src/composition/linkedin/GrowthLinkedInPreviewOrganizationAccessCallableRuntimeV1.ts",
+  "functions/src/infrastructure/linkedin/read/GrowthLinkedInOrganizationAccessReaderV1.ts",
   "functions/src/discovery/discoveryCapabilityHandlerSupport.ts",
 ];
 const deploymentSource = sourceFiles.map(read).join("\n");
@@ -153,34 +172,45 @@ if (/export\s+\{\s*(generateDiscoveryReport|requestExecutiveDocument|emitDiscove
 for (const handler of allowlist) {
   const sourcePath = handler === "evaluateConversation"
     ? "functions/src/intelligence/evaluateConversation.ts"
-    : handler === "growthSocialProfileManagementV1"
-      ? "functions/src/composition/socialProfiles/GrowthSocialProfileManagementPreviewCallableRuntimeV1.ts"
-      : handler === "growthLinkedInRuntimeReadinessV1"
-        ? "functions/src/composition/linkedin/GrowthLinkedInPreviewCallableRuntimeV1.ts"
-        : handler === "createCrmLead"
-          ? "functions/src/crm/createCrmLead.ts"
-          : `functions/src/discovery/${handler}.ts`;
+    : handler === "evaluateExecutiveDiscoveryV1"
+      ? "functions/src/discovery/executive-intelligence/receiver/evaluateExecutiveDiscoveryV1.ts"
+      : handler === "growthSocialProfileManagementV1"
+        ? "functions/src/composition/socialProfiles/GrowthSocialProfileManagementPreviewCallableRuntimeV1.ts"
+        : handler === "growthLinkedInRuntimeReadinessV1"
+          ? "functions/src/composition/linkedin/GrowthLinkedInPreviewCallableRuntimeV1.ts"
+          : handler === "growthLinkedInOrganizationAccessV1"
+            ? "functions/src/composition/linkedin/GrowthLinkedInPreviewOrganizationAccessCallableRuntimeV1.ts"
+            : handler === "createCrmLead"
+              ? "functions/src/crm/createCrmLead.ts"
+              : `functions/src/discovery/${handler}.ts`;
   const handlerSource = read(sourcePath);
   const compositionRuntimeBinding =
     handler === "growthSocialProfileManagementV1" ||
     handler === "growthLinkedInRuntimeReadinessV1";
   const runtimeAssertionPresent =
-    compositionRuntimeBinding
-      ? /assertRuntime\s*:\s*assertPreviewDiscoveryRuntimeV1\b/.test(handlerSource)
-      : handlerSource.includes("assertPreviewDiscoveryRuntimeV1();");
+    handler === "growthLinkedInOrganizationAccessV1"
+      ? /\bassertPreviewDiscoveryRuntimeV1\b/.test(handlerSource)
+      : compositionRuntimeBinding
+        ? /assertRuntime\s*:\s*assertPreviewDiscoveryRuntimeV1\b/.test(handlerSource)
+        : handlerSource.includes("assertPreviewDiscoveryRuntimeV1();");
   if (!runtimeAssertionPresent) {
     fail(`PREVIEW_GUARD_RUNTIME_ASSERTION_MISSING:${handler}`);
   }
+  const optionsNamespace = handler === "evaluateExecutiveDiscoveryV1"
+    ? "PREVIEW_DISCOVERY_HTTP_OPTIONS_V1"
+    : "PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1";
   const optionsBindingPattern = new RegExp(
-    `PREVIEW_DISCOVERY_CALLABLE_OPTIONS_V1\\s*\\.\\s*${handler}\\b`,
+    `${optionsNamespace}\\s*\\.\\s*${handler}\\b`,
   );
   if (!optionsBindingPattern.test(handlerSource)) {
     fail(`PREVIEW_GUARD_OPTIONS_BINDING_MISSING:${handler}`);
   }
-  const secretDeclarationSource =
-    handler === "growthLinkedInRuntimeReadinessV1"
-      ? read("functions/src/infrastructure/linkedin/credentials/GrowthLinkedInFirebaseSecretSourceV1.ts")
-      : handlerSource;
+  const linkedInSecretConsumer =
+    handler === "growthLinkedInRuntimeReadinessV1" ||
+    handler === "growthLinkedInOrganizationAccessV1";
+  const secretDeclarationSource = linkedInSecretConsumer
+    ? read("functions/src/infrastructure/linkedin/credentials/GrowthLinkedInFirebaseSecretSourceV1.ts")
+    : handlerSource;
   const literalSecretParams = [...secretDeclarationSource.matchAll(
     /defineSecret\(\s*["']([^"']+)["']\s*\)/g,
   )].map((match) => match[1]);

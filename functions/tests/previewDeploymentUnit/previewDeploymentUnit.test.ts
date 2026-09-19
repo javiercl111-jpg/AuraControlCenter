@@ -9,10 +9,12 @@ import {
   PREVIEW_DISCOVERY_DEPLOY_TARGET_V1,
   PREVIEW_DISCOVERY_ENVIRONMENT_V1,
   PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1,
+  PREVIEW_DISCOVERY_HTTP_OPTIONS_V1,
   PREVIEW_DISCOVERY_PROJECT_ID_V1,
   PREVIEW_DISCOVERY_REGION_V1,
   PREVIEW_DISCOVERY_SECRET_BINDINGS_V1,
   PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1,
+  PREVIEW_EXECUTIVE_DISCOVERY_RECEIVER_INVOKER_V1,
   assertPreviewDiscoveryDeploymentCandidateV1,
   assertPreviewDiscoveryRuntimeV1,
   type PreviewDiscoveryDeploymentCandidateV1,
@@ -30,14 +32,22 @@ function validCandidate(): PreviewDiscoveryDeploymentCandidateV1 {
     deployTarget: PREVIEW_DISCOVERY_DEPLOY_TARGET_V1,
     exports: [...PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1],
     handlers: Object.fromEntries(PREVIEW_DISCOVERY_HANDLER_ALLOWLIST_V1.map(
-      (handler) => [handler, {
-        region: PREVIEW_DISCOVERY_REGION_V1,
-        serviceAccount: PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1[handler],
-        enforceAppCheck: true,
-        secretBindings: PREVIEW_DISCOVERY_SECRET_BINDINGS_V1[handler].map(
-          (binding) => ({ ...binding }),
-        ),
-      }],
+      (handler) => {
+        const httpOidc = handler === "evaluateExecutiveDiscoveryV1";
+        return [handler, {
+          region: PREVIEW_DISCOVERY_REGION_V1,
+          serviceAccount: PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1[handler],
+          transport: httpOidc ? ("HTTP_OIDC" as const) : ("CALLABLE" as const),
+          enforceAppCheck: !httpOidc,
+          invoker: httpOidc
+            ? PREVIEW_EXECUTIVE_DISCOVERY_RECEIVER_INVOKER_V1
+            : undefined,
+          cors: httpOidc ? false : undefined,
+          secretBindings: PREVIEW_DISCOVERY_SECRET_BINDINGS_V1[handler].map(
+            (binding) => ({ ...binding }),
+          ),
+        }];
+      },
     )),
   };
 }
@@ -243,6 +253,59 @@ describe("Preview Discovery deployment unit", () => {
     const deployedHandlers = declarations.map(([path]) => source(path)).join("\n");
     expect(deployedHandlers).not.toMatch(
       /defineSecret\(["'](?:IDEMPOTENCY_SECRET|GEMINI_API_KEY|DISCOVERY_HMAC_SECRET)["']\)/,
+    );
+  });
+  it("23 pins the executive receiver to private OIDC Preview options", () => {
+    const options =
+      PREVIEW_DISCOVERY_HTTP_OPTIONS_V1.evaluateExecutiveDiscoveryV1;
+    expect(options.region).toBe(PREVIEW_DISCOVERY_REGION_V1);
+    expect(options.serviceAccount).toBe(
+      PREVIEW_DISCOVERY_SERVICE_ACCOUNTS_V1.evaluateExecutiveDiscoveryV1,
+    );
+    expect(options.invoker).toBe(
+      PREVIEW_EXECUTIVE_DISCOVERY_RECEIVER_INVOKER_V1,
+    );
+    expect(options.invoker).toMatch(/^serviceAccount:/);
+    expect(options.cors).toBe(false);
+  });
+
+  it("24 rejects an incorrect executive receiver invoker", () => {
+    expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
+      (candidate) => Object.assign(
+        candidate.handlers.evaluateExecutiveDiscoveryV1,
+        { invoker: "serviceAccount:wrong@aura-intel-preview.iam.gserviceaccount.com" },
+      ),
+    ))).toThrowError("PREVIEW_DEPLOYMENT_INVOKER_MISMATCH");
+  });
+
+  it("25 rejects App Check substitution for the OIDC receiver", () => {
+    expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
+      (candidate) => Object.assign(
+        candidate.handlers.evaluateExecutiveDiscoveryV1,
+        { enforceAppCheck: true },
+      ),
+    ))).toThrowError("PREVIEW_DEPLOYMENT_HTTP_OIDC_APP_CHECK_FORBIDDEN");
+  });
+
+  it("26 rejects callable transport for the OIDC receiver", () => {
+    expect(() => assertPreviewDiscoveryDeploymentCandidateV1(changed(
+      (candidate) => Object.assign(
+        candidate.handlers.evaluateExecutiveDiscoveryV1,
+        { transport: "CALLABLE" },
+      ),
+    ))).toThrowError("PREVIEW_DEPLOYMENT_TRANSPORT_MISMATCH");
+  });
+
+  it("27 binds receiver source to Preview runtime and HTTP options", () => {
+    const receiver = source(
+      "functions/src/discovery/executive-intelligence/receiver/evaluateExecutiveDiscoveryV1.ts",
+    );
+    expect(receiver).toContain("assertPreviewDiscoveryRuntimeV1();");
+    expect(receiver).toContain(
+      "PREVIEW_DISCOVERY_HTTP_OPTIONS_V1.evaluateExecutiveDiscoveryV1",
+    );
+    expect(receiver).not.toContain(
+      'onRequest({ region: "us-central1", cors: false }',
     );
   });
 });
